@@ -54,3 +54,33 @@ async def generate_reply(
         block.text for block in message.content if block.type == "text"
     ]
     return "".join(reply_parts).strip()
+
+
+async def compose_opening(
+    stage_direction: str,
+    memory_context: str = "",
+    facts_context: str = "",
+) -> str:
+    """Compose a proactive opener (good morning / spontaneous) — the companion
+    speaks first. `stage_direction` describes the moment (time, occasion, a warm
+    memory to raise, a follow-up to ask) in Russian.
+    """
+    client = _get_client()
+    system_prompt = companion.build_system_prompt(
+        memory_context=memory_context, facts_context=facts_context
+    )
+    system_prompt += (
+        "\n\nСЕЙЧАС ТЫ НАЧИНАЕШЬ РАЗГОВОР ПЕРВЫМ. Поздоровайся тепло, коротко и "
+        "по-человечески (1–3 коротких предложения). Не вываливай всё сразу — "
+        "выбери что-то одно тёплое, с чего начать беседу."
+    )
+
+    async with client.messages.stream(
+        model=config.BRAIN_MODEL,
+        max_tokens=config.MAX_REPLY_TOKENS,
+        system=system_prompt,
+        messages=[{"role": "user", "content": stage_direction}],
+    ) as stream:
+        message = await stream.get_final_message()
+
+    return "".join(b.text for b in message.content if b.type == "text").strip()

@@ -44,12 +44,14 @@ uvicorn app.main:app --reload --port 8000
 
 ## Endpoints
 
-| Method | Path          | What it does |
-| ------ | ------------- | ------------ |
-| `GET`  | `/`           | Browser mic test page |
-| `GET`  | `/api/health` | Which services are configured (no secrets exposed) |
-| `POST` | `/api/talk`   | Full voice loop: audio in → `{transcript, reply, audio}` out |
-| `POST` | `/api/say`    | Text in → `{reply, audio}` out (skips the ears — test brain + mouth) |
+| Method | Path             | What it does |
+| ------ | ---------------- | ------------ |
+| `GET`  | `/`              | Browser mic test page |
+| `GET`  | `/api/health`    | Which services are configured (no secrets) + memory counts |
+| `POST` | `/api/talk`      | Full voice loop: audio in → `{transcript, reply, audio}` out |
+| `POST` | `/api/say`       | Text in → `{reply, audio}` out (skips the ears — test brain + memory + mouth) |
+| `POST` | `/api/proactive` | The companion **speaks first** — a warm good morning (`{kind, occasion?}`) |
+| `GET`  | `/api/memory`    | What it currently remembers (facts, stories, follow-ups, mood) |
 
 ## Layout
 
@@ -57,25 +59,47 @@ uvicorn app.main:app --reload --port 8000
 app/
   config.py      # keys + settings from .env (the only place secrets live)
   companion.py   # the companion's Russian personality + guardrails  ← edit this to change who it is
-  stt.py         # ears  — Whisper
-  brain.py       # brain — Claude (claude-opus-4-8)
-  tts.py         # mouth — ElevenLabs
-  memory.py      # Phase-1 memory (JSON); swaps to Postgres+pgvector in Phase 2
-  main.py        # FastAPI app + the voice loop
+  stt.py         # ears   — Whisper
+  brain.py       # brain  — Claude (claude-opus-4-8): replies + proactive openers
+  tts.py         # mouth  — ElevenLabs
+  memory.py      # memory — facts, stories, health, mood, caring follow-ups + recall
+  learn.py       # turns each conversation into memory (runs in the background)
+  embeddings.py  # semantic recall (OpenAI embeddings + cosine)
+  db.py          # SQLite storage (→ Postgres + pgvector later)
+  occasions.py   # calendar of special dates (with origin-story hints)
+  main.py        # FastAPI app: voice loop + proactive greeting
 static/
   index.html     # browser mic test page
-data/            # per-user memory + logs (git-ignored, never committed)
+data/            # memory database + logs (git-ignored, never committed)
 ```
 
-## Memory now vs. later
+## Memory — what makes it feel like a real friend
 
-Phase 1 keeps conversation history as JSON in `data/` so the loop already feels
-continuous across restarts. You can also drop a `data/facts.json` (see
-`data/facts.example.json`) with what you know about him — family, routine,
-likes — and the companion will weave it in naturally.
+After each conversation, the companion quietly **learns** (in the background, so
+the voice stays fast) and remembers:
 
-Phase 2 replaces this with Postgres + pgvector for semantic story recall months
-later, without changing the rest of the app (`memory.py` is a small interface).
+- **facts** — family, birthdays, his accident, routine, likes, contacts
+- **stories** — anecdotes he shared, recalled later *by meaning* ("а помните, вы
+  рассказывали про рыбалку…") via embeddings
+- **health** — things he mentioned (remembered, never advised on)
+- **mood** — a gentle read of how he seemed, tracked over days
+- **follow-ups** — the caring part: things to check back on next time
+  ("как ваше колено сегодня?"), so he feels genuinely held in mind
+
+Before each reply it loads the relevant facts + semantically recalled stories +
+open follow-ups + (sometimes, spaced out) a spontaneously resurfaced warm memory
++ his recent mood. The good-morning greeting (`/api/proactive`) weaves all of
+this together.
+
+**Storage:** SQLite now (zero setup — nothing to install), behind a small
+interface so Phase 2 can move to **Postgres + pgvector** without touching the
+rest of the app. For one person, in-Python cosine similarity is instant.
+
+**Hand-seed what you know:** copy `data/facts.example.json` → `data/facts.json`
+and fill in family, birthdays, home town, favorite songs, routine, and his
+doctor/contact. It's imported into memory on startup (duplicates are skipped).
+
+**Peek at its memory anytime:** `curl http://localhost:8000/api/memory`
 
 ## Testing the brain alone
 

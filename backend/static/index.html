@@ -57,6 +57,8 @@
       .mic.recording { background: linear-gradient(135deg, var(--rec) 0%, #ff9a6b 100%); animation: pulse 1.3s infinite; }
       @keyframes pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(255,107,107,0.5);} 50% { box-shadow: 0 0 0 18px rgba(255,107,107,0);} }
       .hint { color: var(--dim); font-size: 13px; margin-top: 12px; min-height: 18px; }
+      .ghost { margin-top: 14px; background: transparent; border: 1px solid var(--border); color: var(--dim); padding: 9px 16px; border-radius: 999px; font-size: 13.5px; cursor: pointer; }
+      .ghost:hover { color: var(--text); border-color: var(--accent); }
 
       .convo { margin-top: 22px; display: flex; flex-direction: column; gap: 12px; }
       .msg { padding: 12px 15px; border-radius: 16px; line-height: 1.5; font-size: 15px; max-width: 85%; white-space: pre-wrap; }
@@ -88,6 +90,7 @@
       <div class="mic-area">
         <button class="mic" id="mic">Говорить</button>
         <div class="hint" id="hint">Нажмите, чтобы начать запись</div>
+        <button class="ghost" id="morning">☀️ Пусть companion поздоровается первым</button>
       </div>
 
       <div class="convo" id="convo"></div>
@@ -146,6 +149,26 @@
         }
       }
       loadHealth();
+
+      // --- proactive good-morning (the companion speaks first) ---
+      document.getElementById("morning").onclick = async () => {
+        hint.textContent = "Companion начинает разговор…";
+        try {
+          const r = await fetch("/api/proactive", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ session_id: SESSION_ID, kind: "morning" }),
+          });
+          const data = await r.json();
+          if (!r.ok) throw new Error(data.detail || "Ошибка");
+          addMsg("bot", "Companion", data.reply);
+          playAudio(data.audio_base64, data.audio_mime);
+        } catch (e) {
+          addMsg("bot", "Ошибка", String(e.message || e));
+        } finally {
+          hint.textContent = "Нажмите, чтобы начать запись";
+        }
+      };
 
       // --- text test (brain + mouth, skips ears) ---
       document.getElementById("textSend").onclick = sendText;

@@ -24,6 +24,11 @@ BRAIN_MODEL: str = os.getenv("ANTHROPIC_MODEL", "claude-opus-4-8")
 OPENAI_API_KEY: str | None = os.getenv("OPENAI_API_KEY")
 WHISPER_MODEL: str = os.getenv("WHISPER_MODEL", "whisper-1")
 
+# --- Memory: embeddings for semantic story recall (reuses the OpenAI key) --
+EMBEDDING_MODEL: str = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
+# Smaller dimension = lighter storage + faster similarity, still strong for one user.
+EMBEDDING_DIM: int = int(os.getenv("EMBEDDING_DIM", "512"))
+
 # --- The mouth: ElevenLabs --------------------------------------------------
 ELEVENLABS_API_KEY: str | None = os.getenv("ELEVENLABS_API_KEY")
 # A warm multilingual voice. Swap for a Russian-suited voice from the
@@ -46,6 +51,10 @@ MAX_REPLY_TOKENS: int = int(os.getenv("MAX_REPLY_TOKENS", "400"))
 # Where per-user memory + logs live (git-ignored).
 DATA_DIR: Path = Path(os.getenv("DATA_DIR", Path(__file__).resolve().parent.parent / "data"))
 DATA_DIR.mkdir(parents=True, exist_ok=True)
+
+# The memory database (SQLite now; a clean interface so Phase 2 can move to
+# Postgres + pgvector without touching the rest of the app).
+DB_PATH: Path = Path(os.getenv("DB_PATH", DATA_DIR / "companion.db"))
 
 
 def service_status() -> dict[str, bool]:

@@ -41,9 +41,11 @@ Open **http://localhost:8000**, press the button, and speak Russian. See
 
 ## Build phases (from PLAN.md)
 
-1. ✅ **Talking loop** — wake word → Whisper → Claude → ElevenLabs (browser test page first) ← *we are here*
-2. **Memory** — Postgres + pgvector (facts + story recall)
-3. **Proactive/daily** — greetings, reminders, story recall
+1. ✅ **Talking loop** — Whisper → Claude → ElevenLabs (browser test page)
+2. ✅ **Memory** — facts + semantic story recall + spontaneous resurfacing +
+   caring follow-ups + mood (SQLite now → Postgres + pgvector later)
+3. 🔨 **Proactive/daily** — good-morning greeting done ← *we are here*; reminders &
+   scheduler next
 4. **Family & safety** — voice messages, "call my son", health alerts
 5. **Polish** — photos on screen, mood/health tracking, doctor summary
 
