@@ -1,89 +1,52 @@
-# AI Companion 🫶
+# Voice Companion 👴🎙️
 
-A warm, thoughtful **AI chat companion** powered by Claude — someone to talk to,
-think out loud with, or just pass the time. Built with Next.js and streaming
-responses so replies feel alive as they arrive.
+A warm, talking friend for my great-grandad — in **Russian**, **voice only**.
+He speaks, it listens, and it speaks back in a gentle Russian voice. It
+remembers his stories and can start a conversation on its own.
 
-![tech](https://img.shields.io/badge/Next.js-16-black) ![tech](https://img.shields.io/badge/React-19-blue) ![tech](https://img.shields.io/badge/Claude-Opus_4.8-8A2BE2)
+> Full vision, decisions, and roadmap: **[PLAN.md](./PLAN.md)**.
 
-## Features
+## The parts (like a person)
 
-- 💬 **Real-time streaming** — the companion's replies stream in token by token.
-- 🎭 **A real personality** — warm, curious, and present (fully customizable).
-- 🧠 **Conversation memory** — remembers the thread of your chat within a session.
-- 🎨 **Polished UI** — gradient glass design, typing indicator, auto-growing input.
-- 🔒 **Key stays server-side** — your API key never reaches the browser.
+| Part | Job | Powered by |
+| ---- | --- | ---------- |
+| 🧠 **Brain** | thinks, remembers, replies warmly | **Claude** (`claude-opus-4-8`) |
+| 👂 **Ears** | hears messy, elderly Russian | **Whisper** (OpenAI) |
+| 🗣️ **Mouth** | warm Russian voice | **ElevenLabs** |
+| 📔 **Memory** | remembers stories, family, routine | file-based now → Postgres + pgvector later |
 
-## Getting started
+## Where we are
 
-### 1. Add your API key
+We build the **backend first** (works on any computer, testable in a browser),
+then the iPhone app on the Mac. This repo currently contains **Phase 1: the
+talking loop** — record his voice in the browser, hear the companion reply.
+
+```
+backend/   ← Python + FastAPI: the brain, ears, mouth, and a browser mic test page
+ios/       ← (later) the SwiftUI iPhone app
+PLAN.md    ← the plan (source of truth)
+```
+
+## Try it (once you have API keys)
 
 ```bash
-cp .env.example .env.local
+cd backend
+cp .env.example .env        # then paste in your Anthropic, OpenAI, ElevenLabs keys
+./run.sh                    # sets up a venv, installs deps, starts the server
 ```
 
-Then edit `.env.local` and set your key (get one at
-[console.anthropic.com](https://console.anthropic.com/)):
+Open **http://localhost:8000**, press the button, and speak Russian. See
+[backend/README.md](./backend/README.md) for details.
 
-```
-ANTHROPIC_API_KEY=sk-ant-...
-```
+## Build phases (from PLAN.md)
 
-### 2. Install & run
-
-```bash
-npm install
-npm run dev
-```
-
-Open [http://localhost:3000](http://localhost:3000) and start talking. 🎉
-
-## Configuration
-
-All optional, set in `.env.local`:
-
-| Variable                     | Default          | What it does                          |
-| ---------------------------- | ---------------- | ------------------------------------- |
-| `ANTHROPIC_API_KEY`          | _(required)_     | Your Anthropic API key.               |
-| `ANTHROPIC_MODEL`            | `claude-opus-4-8`| Which Claude model to use.            |
-| `NEXT_PUBLIC_COMPANION_NAME` | `Aria`           | Your companion's name.                |
-
-## How it works
-
-```
-Browser (app/page.tsx)
-   │  POST /api/chat  { messages: [...] }
-   ▼
-API route (app/api/chat/route.ts)
-   │  streams from Claude via @anthropic-ai/sdk
-   ▼
-Claude (claude-opus-4-8)  ──►  tokens stream back to the browser
-```
-
-- **`lib/companion.ts`** — the companion's name and personality (system prompt).
-  This is the file to edit to change who your companion *is*.
-- **`app/api/chat/route.ts`** — server route that proxies to Claude and streams
-  the response. Your API key lives here, never in the browser.
-- **`app/page.tsx`** — the chat interface.
-
-## Make it yours
-
-Want a different vibe? Open `lib/companion.ts` and rewrite the system prompt —
-a witty study buddy, a calm mentor, an in-character role-play companion. The
-whole personality lives in that one file.
-
-## Project structure
-
-```
-app/
-  api/chat/route.ts   # streaming Claude endpoint
-  layout.tsx          # root layout + metadata
-  page.tsx            # chat UI (client component)
-  globals.css         # styling
-lib/
-  companion.ts        # name + personality
-```
+1. ✅ **Talking loop** — wake word → Whisper → Claude → ElevenLabs (browser test page first) ← *we are here*
+2. **Memory** — Postgres + pgvector (facts + story recall)
+3. **Proactive/daily** — greetings, reminders, story recall
+4. **Family & safety** — voice messages, "call my son", health alerts
+5. **Polish** — photos on screen, mood/health tracking, doctor summary
 
 ---
 
-Built with [Claude Code](https://claude.com/claude-code).
+Guardrails, always on: **never medical advice** ("давайте позвоним вашему
+врачу"), always **honest that it's an AI**, health data kept private.
