@@ -4,7 +4,8 @@ A warm, talking friend for my great-grandad — in **Russian**, **voice only**.
 He speaks, it listens, and it speaks back in a gentle Russian voice. It
 remembers his stories and can start a conversation on its own.
 
-> Full vision, decisions, and roadmap: **[PLAN.md](./PLAN.md)**.
+> **Who the companion is** (its soul & character): **[docs/VISION.md](./docs/VISION.md)**
+> **Decisions, architecture, roadmap:** **[PLAN.md](./PLAN.md)**
 
 ## The parts (like a person)
 
