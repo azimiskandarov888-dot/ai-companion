@@ -20,6 +20,25 @@ warmth and a spark of interest in the day.
 
 ---
 
+## How he uses it — the interaction model (important)
+
+He **cannot type, cannot read, and cannot press anything.** The companion is
+**voice only** — it only *hears* and *speaks*. Any screen, button, or text is for
+developers/family, never for him.
+
+**He always speaks first. The companion never initiates.** When he wakes up, he
+just talks to the phone — even from outside the app, launched hands-free by voice
+like Siri (*«Привет, доброе утро, как дела?»*) — and the companion answers and
+keeps the conversation flowing. The "good morning" is *him* greeting it, and it
+responding warmly — not the app announcing anything.
+
+> This **supersedes** the earlier plan's "starts talking on its own" / proactive
+> greetings. No unprompted speech, ever. Special dates (Women's Day, etc.) are
+> still remembered, but mentioned **reactively** — woven warmly into a reply once
+> he's already talking, never as an unprompted announcement.
+
+---
+
 ## In your words (preserved verbatim — do not lose this)
 
 > over all this must be an ia companion for my great grandfather. he is so old

@@ -44,10 +44,15 @@ Open **http://localhost:8000**, press the button, and speak Russian. See
 1. ✅ **Talking loop** — Whisper → Claude → ElevenLabs (browser test page)
 2. ✅ **Memory** — facts + semantic story recall + spontaneous resurfacing +
    caring follow-ups + mood (SQLite now → Postgres + pgvector later)
-3. 🔨 **Proactive/daily** — good-morning greeting done ← *we are here*; reminders &
-   scheduler next
-4. **Family & safety** — voice messages, "call my son", health alerts
-5. **Polish** — photos on screen, mood/health tracking, doctor summary
+3. 🔨 **iPhone app** ← *next* — voice only, launched hands-free by voice (Siri),
+   always-listening kiosk when docked at home. **He always speaks first; the
+   companion only ever responds — it never initiates.**
+4. **Family & safety** — family voice messages, "call my son", quiet alerts if he
+   goes silent or seems persistently low
+5. **Polish** — mood/health tracking over time, a simple doctor summary
+
+> **Interaction model (locked):** voice only — no typing, no reading, no buttons.
+> He talks; it answers. See [docs/VISION.md](./docs/VISION.md).
 
 ---
 

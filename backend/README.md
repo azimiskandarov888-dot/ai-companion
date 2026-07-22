@@ -49,9 +49,12 @@ uvicorn app.main:app --reload --port 8000
 | `GET`  | `/`              | Browser mic test page |
 | `GET`  | `/api/health`    | Which services are configured (no secrets) + memory counts |
 | `POST` | `/api/talk`      | Full voice loop: audio in → `{transcript, reply, audio}` out |
-| `POST` | `/api/say`       | Text in → `{reply, audio}` out (skips the ears — test brain + memory + mouth) |
-| `POST` | `/api/proactive` | The companion **speaks first** — a warm good morning (`{kind, occasion?}`) |
+| `POST` | `/api/say`       | Text in → `{reply, audio}` out (**dev only** — he never types; test brain + memory + mouth) |
 | `GET`  | `/api/memory`    | What it currently remembers (facts, stories, follow-ups, mood) |
+
+> **Voice only, and he always speaks first.** The companion only responds — it
+> never initiates. Special dates are mentioned reactively (woven into a reply),
+> never announced.
 
 ## Layout
 

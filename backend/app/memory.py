@@ -31,10 +31,15 @@ from . import db, embeddings
 RECENT_TURNS = 20
 # How many semantically-recalled stories to surface per reply.
 RECALL_K = 4
-# Chance of spontaneously resurfacing an old warm memory in a normal reply.
-RESURFACE_CHANCE = 0.35
+# Chance of spontaneously resurfacing an old warm memory in a reply.
+RESURFACE_CHANCE = 0.25
 # A follow-up stops being raised after it's been surfaced this many times.
 FOLLOW_UP_MAX_SURFACES = 2
+# Don't check back on something in the same conversation — wait at least this long
+# (so "как ваше колено?" comes next time he talks, not two sentences later).
+FOLLOW_UP_MIN_AGE = 3 * 3600
+# Once raised, don't raise the same follow-up again for this long.
+FOLLOW_UP_COOLDOWN = 12 * 3600
 # Follow-ups older than this (seconds) are considered stale and dropped.
 FOLLOW_UP_MAX_AGE = 21 * 24 * 3600
 
@@ -211,15 +216,28 @@ def resurface(exclude: set[int] | None = None) -> dict | None:
     return dict(chosen)
 
 
-def open_follow_ups(limit: int = 3) -> list[dict]:
-    """Caring things to check back on — not too old, not already over-raised."""
-    cutoff = time.time() - FOLLOW_UP_MAX_AGE
+def due_follow_ups(limit: int = 1) -> list[dict]:
+    """Caring things that are *due* to be checked back on now.
+
+    Only surfaces a follow-up that was created a while ago (not the same
+    conversation), isn't stale, hasn't been over-raised, and isn't on cooldown
+    from a recent mention. This is what makes it check back the *next* time he
+    talks without ever nagging.
+    """
+    now = time.time()
     with db.connect() as conn:
         rows = conn.execute(
             "SELECT * FROM memories WHERE kind='follow_up' AND status='open' "
-            "AND created_ts > ? AND recall_count < ? "
+            "AND created_ts < ? AND created_ts > ? AND recall_count < ? "
+            "AND (last_recalled_ts IS NULL OR last_recalled_ts < ?) "
             "ORDER BY created_ts ASC LIMIT ?",
-            (cutoff, FOLLOW_UP_MAX_SURFACES, limit),
+            (
+                now - FOLLOW_UP_MIN_AGE,
+                now - FOLLOW_UP_MAX_AGE,
+                FOLLOW_UP_MAX_SURFACES,
+                now - FOLLOW_UP_COOLDOWN,
+                limit,
+            ),
         ).fetchall()
     return [dict(r) for r in rows]
 
@@ -258,10 +276,13 @@ def counts() -> dict[str, int]:
 async def build_reply_context(
     session_id: str,
     query_text: str,
-    *,
-    for_greeting: bool = False,
 ) -> tuple[str, str]:
-    """Return (facts_context, memory_context) strings for the system prompt."""
+    """Return (facts_context, memory_context) strings for the system prompt.
+
+    He always speaks first; this assembles what the companion should have in mind
+    when it answers: known facts + semantically recalled stories + (sometimes) a
+    spontaneously resurfaced warm memory + any *due* caring follow-up + recent mood.
+    """
     facts = facts_context()
 
     used: set[int] = set()
@@ -276,8 +297,8 @@ async def build_reply_context(
             + "\n".join(lines)
         )
 
-    # A gentle, spaced "remember when…" — always in greetings, sometimes in chat.
-    if for_greeting or random.random() < RESURFACE_CHANCE:
+    # A gentle, spaced "а помните…" — sometimes, out of nowhere.
+    if random.random() < RESURFACE_CHANCE:
         r = resurface(exclude=used)
         if r:
             used.add(r["id"])
@@ -286,17 +307,13 @@ async def build_reply_context(
                 f"- {_fmt(r)}"
             )
 
-    # Caring follow-ups — check back on what he mentioned before.
-    fups = open_follow_ups(limit=1 if not for_greeting else 2)
-    if fups:
-        lines = [f"- {r['content']}" for r in fups]
+    # A caring follow-up that's due — check back on what he mentioned before.
+    for fup in due_follow_ups(limit=1):
         sections.append(
             "По-доброму поинтересуйся, как дела с тем, о чём он говорил раньше:\n"
-            + "\n".join(lines)
+            f"- {fup['content']}"
         )
-        if for_greeting:
-            for r in fups:
-                surface_follow_up(r["id"])
+        surface_follow_up(fup["id"])
 
     mood = latest_mood()
     if mood:

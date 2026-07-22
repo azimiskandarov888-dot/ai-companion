@@ -1,4 +1,7 @@
-"""FastAPI app — the voice loop, memory, and the proactive good-morning.
+"""FastAPI app — the voice loop and memory.
+
+Voice only. HE always speaks first (even by launching the app hands-free, like
+Siri); the companion only ever *responds*. It never initiates.
 
 Talking loop (with memory):
     audio → 👂 Whisper → [recall facts + stories + follow-ups + mood]
@@ -6,18 +9,16 @@ Talking loop (with memory):
           → (in the background) learn new facts/stories/follow-ups
 
 Endpoints:
-    GET  /               → browser mic test page
-    GET  /api/health     → which services are configured + memory counts
-    POST /api/talk       → audio in  → {transcript, reply, audio}
-    POST /api/say        → text in   → {reply, audio}  (skip the ears)
-    POST /api/proactive  → the companion speaks first (good morning / spontaneous)
-    GET  /api/memory     → what it currently remembers (for you to inspect)
+    GET  /            → browser mic test page (a developer tool — he never sees a screen)
+    GET  /api/health  → which services are configured + memory counts
+    POST /api/talk    → audio in  → {transcript, reply, audio}   (the real loop)
+    POST /api/say     → text in   → {reply, audio}   (dev only: test brain+memory без микрофона)
+    GET  /api/memory  → what it currently remembers (for you to inspect)
 """
 
 from __future__ import annotations
 
 import base64
-import datetime as dt
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -68,6 +69,17 @@ async def _think_and_speak(
     memory.log_turn(session_id, "user", user_text)
 
     facts_ctx, mem_ctx = await memory.build_reply_context(session_id, user_text)
+
+    # If today is a special date, let the companion mention it warmly — but only
+    # in reply to him (it never speaks first).
+    occ = occasions.occasion_for()
+    if occ:
+        note = (
+            f"Сегодня {occ['name']}. {occ['note']} "
+            "Если это уместно и к слову — тепло упомяни это сам."
+        )
+        mem_ctx = f"{mem_ctx}\n\n{note}".strip() if mem_ctx else note
+
     history = memory.recent_turns(session_id)
 
     reply = await brain.generate_reply(
@@ -133,67 +145,6 @@ async def say(req: SayRequest, background_tasks: BackgroundTasks) -> JSONRespons
     except RuntimeError as e:
         raise HTTPException(status_code=503, detail=str(e))
     return JSONResponse({"transcript": text, **result})
-
-
-class ProactiveRequest(BaseModel):
-    session_id: str = "default"
-    kind: str = "morning"  # morning | spontaneous
-    # Optional override so you can test a special-date greeting on any day,
-    # e.g. {"occasion": "8 Марта"}.
-    occasion: str | None = None
-
-
-@app.post("/api/proactive")
-async def proactive(
-    req: ProactiveRequest, background_tasks: BackgroundTasks
-) -> JSONResponse:
-    """The companion starts the conversation first — a warm good morning that
-    weaves in a memory, a caring follow-up, his mood, and any special date."""
-    facts_ctx, mem_ctx = await memory.build_reply_context(
-        req.session_id, "", for_greeting=True
-    )
-
-    now = dt.datetime.now()
-    part_of_day = (
-        "утро" if now.hour < 12 else "день" if now.hour < 18 else "вечер"
-    )
-    occ = occasions.occasion_for(now.date())
-    occasion_line = ""
-    if req.occasion:
-        occasion_line = f"Сегодня особый день: {req.occasion}. "
-    elif occ:
-        occasion_line = f"Сегодня {occ['name']}. {occ['note']} "
-
-    if req.kind == "morning":
-        stage = (
-            f"Сейчас {part_of_day}. Ты сам начинаешь разговор — тёпло поздоровайся "
-            f"и пожелай доброго утра. {occasion_line}"
-        )
-    else:
-        stage = (
-            f"Сейчас {part_of_day}. Ты сам, по-дружески, заводишь разговор. "
-            f"{occasion_line}"
-        )
-
-    try:
-        reply = await brain.compose_opening(
-            stage_direction=stage, memory_context=mem_ctx, facts_context=facts_ctx
-        )
-    except RuntimeError as e:
-        raise HTTPException(status_code=503, detail=str(e))
-
-    memory.log_turn(req.session_id, "assistant", reply)
-
-    audio_b64 = ""
-    audio_mime = "audio/mpeg"
-    try:
-        audio_b64 = base64.b64encode(await tts.synthesize(reply)).decode("ascii")
-    except RuntimeError:
-        pass  # voice optional here; text greeting still returned
-
-    return JSONResponse(
-        {"reply": reply, "audio_base64": audio_b64, "audio_mime": audio_mime}
-    )
 
 
 @app.get("/api/memory")
