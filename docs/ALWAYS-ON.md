@@ -77,26 +77,30 @@ attention (resting, or docked in a stand). The rich experience.
 **without opening the app**; Siri speaks the reply as an overlay and he stays in
 Telegram / the film.
 
-### Honest tradeoffs on Mode B
-- **One question → one answer** each time (not a continuous open mic; he re-says
-  "Hey Siri, Bob" per turn).
-- The reply will most likely be in **Siri's Russian voice, not Bob's warm
-  ElevenLabs voice** — reliably playing our own audio over another foreground app
-  from a background intent is not a supported iOS capability. We can *prototype*
-  playing Bob's real voice there, but treat it as **uncertain until tested on the
-  Mac**.
-- Russian Siri quality/recognition applies in this mode.
+### What research confirms (as of 2026)
+- Siri **can trigger the app to run in the background without opening it**
+  (App Intent with `openAppWhenRun = false`, "supports background execution"). ✓
+- **Background audio is a permitted task**, so the app *can* speak while in the
+  background. ✓ — but starting audio playback specifically *from a
+  background-launched intent* has known reliability quirks; **must test on a real
+  device.**
+- **iOS 27 App Intents 2.0 supports multi-turn conversation** — Siri can keep a
+  back-and-forth going with the app in the background, not just one-shot. ✓
 
-### Not possible on iPhone
-Our app itself listening in the background and answering over his movie in Bob's
-voice, with no Siri involved. Only Siri crosses between apps.
+### Honest catches (settle these on the Mac + a real iPhone)
+- He must say **"Hey Siri" first** — Apple reserves the wake word; "Hey Bob"
+  alone is impossible.
+- **Voice is the open question.** The reliable answer speaks in **Siri's Russian
+  voice.** Getting **Bob's warm ElevenLabs voice** to play from a background
+  intent is *possible in principle* (background audio is allowed) but finicky —
+  prove it on a real device before relying on it.
+- The **phone must be on.** Locked screen = fine; fully powered-off = nothing
+  hears (not even Siri).
+- Locked-phone background-intent behavior has documented edge cases — test it.
+- Siri is always the "ear"; the app never listens on its own. (Exactly the plan.)
 
 ### Net shape
-Bob's **full warm voice** when he opens / docks it (Mode A); **quick
-Siri-voiced answers** when he's mid-something-else (Mode B). Together these cover
-both real scenarios (chatting while resting; quick questions during Telegram or a
-movie).
-
-**Build risk to retire early (on the Mac):** whether a background App Intent can
-play ElevenLabs audio. If yes, Mode B gets Bob's voice too; if no, Mode B stays
-Siri-voiced. Prototype this first before committing to Mode B's design.
+Siri wakes Bob → Bob **runs and speaks in the background**, no app on screen, and
+(on iOS 27) can hold a back-and-forth. The one thing to settle by testing is
+**whose voice** the background answers use — Bob's warm voice (hoped) vs Siri's
+(the sure thing).
