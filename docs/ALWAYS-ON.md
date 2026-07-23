@@ -180,3 +180,46 @@ the main way he'll use it anyway.
   **Longest ≈4s**. So the max is ~**4 seconds** — there is **no way** to reach 30s
   or a minute in Siri mode. Set it to Longest so Siri doesn't cut him off
   mid-sentence, but this mode stays for **quick questions**, not slow chats.
+
+---
+
+## The floating-window idea (his PiP idea — a real upgrade + a correction)
+
+His idea: like YouTube's little floating window that keeps playing after you
+leave the app — run Bob as a small always-on-top window that keeps listening
+while he uses other apps.
+
+**A version of this genuinely works — and it beats the Siri path.** It also
+**corrects** an earlier oversimplification ("in the background only Siri can
+hear"): that's only true when Bob is *fully closed*. If Bob is **already running
+and keeps an audio session alive**, it can keep listening in the background.
+
+### How (researched)
+- iOS lets an app **keep recording (microphone) in the background** if it started
+  the mic **in the foreground** and has the **"audio" background mode**. It then
+  keeps listening even after he switches to Telegram / YouTube.
+- **Picture-in-Picture (PiP)** keeps the app alive with a small visible window
+  (the mini-screen/logo he pictured). PiP is officially for video, so using it
+  for a companion is a *trick* — fine for our **sideloaded private app** (no App
+  Store review).
+- Result: open Bob once → it keeps listening in its **own** logic (wake word
+  "Боб", 1-minute window, Bob's **warm voice**) → he can use other apps with
+  Bob's little window on top. Siri no longer needed while another app is open.
+
+### Honest catches (must test on a real iPhone)
+- Bob must be **opened once** to start the mic (can't cold-start from fully
+  closed). After that it persists. Reopen if the phone reboots or he force-quits
+  it from the app switcher.
+- The **mic stays on continuously** (orange dot always shows; uses battery) →
+  keep it **plugged in / docked**. It can't sleep-then-wake the mic in the
+  background.
+- **Other apps' sound** (a YouTube video) vs Bob listening/speaking needs careful
+  audio handling (duck/mix) — testable.
+- iOS may kill background apps under memory pressure → verify stability on the
+  real phone.
+
+### Net
+**Yes — Bob can float in a small window and keep listening while he uses other
+apps, in his own warm voice.** Conditions: keep it plugged in/docked, and open
+it once. This is the **best answer yet** for "use Bob during Telegram or a
+movie" — and it leans on our own app, not Siri's limits.
