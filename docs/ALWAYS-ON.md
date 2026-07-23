@@ -143,3 +143,30 @@ it will **not** butt into his conversation with his wife.
   that isn't addressed to "Боб".
 - **Locked / inside another app:** Vocal Shortcut "Боб" → triggers Bob, no
   "Hey Siri".
+
+---
+
+## Conversation flow (how it should FEEL)
+
+His two rules: (1) say the name and the message **together**; (2) **don't repeat
+the name every sentence** — a generous pause is okay (he's old and slow).
+
+In the **docked / app-open** mode we control the microphone, so all of this is
+ours to build exactly as he wants:
+
+- **One breath:** *"Боб, как дела?"* → the app hears the whole sentence, wakes on
+  "Боб", **and answers the question.** Not two steps.
+- **Rolling listen window (~1 min, tunable):** after that, the app keeps
+  listening. Whatever he says goes straight to Bob — **no "Боб" needed.** Every
+  time he *or* Bob speaks, the 1-minute timer resets, so ~10-second pauses are
+  fine. Only after ~1 minute of real silence does it sleep and need "Боб" again.
+
+**Works like this:**
+> «Боб, доброе утро.» — «Доброе утро! Хороший денёк, правда?» — «да, а ты как?»
+> — «Хорошо, а вы?» — «прекрасно…» *(пауза 10 сек)* «а как прошёл твой вчерашний
+> день?»  ← no "Боб" after the first one.
+
+In the **locked / other-app (Siri)** mode Siri owns the mic and its window is
+only seconds, so there he re-triggers more often and the one-breath capture is
+less clean. **The smooth flowing version lives in the docked setup** — which is
+the main way he'll use it anyway.
