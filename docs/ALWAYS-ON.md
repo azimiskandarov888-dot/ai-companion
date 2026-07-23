@@ -170,3 +170,13 @@ In the **locked / other-app (Siri)** mode Siri owns the mic and its window is
 only seconds, so there he re-triggers more often and the one-breath capture is
 less clean. **The smooth flowing version lives in the docked setup** — which is
 the main way he'll use it anyway.
+
+### How long can the pause be? (researched)
+- **Docked / app-open (our mic):** anything we want — **30s, 60s, more.** We set
+  the rolling window in our own code. This is where patient, slow, pause-filled
+  conversation lives.
+- **Locked / other-app (Siri's mic):** Apple's only lever is
+  Settings → Accessibility → Siri → **Siri Pause Time**: Default ≈2s, Longer ≈3s,
+  **Longest ≈4s**. So the max is ~**4 seconds** — there is **no way** to reach 30s
+  or a minute in Siri mode. Set it to Longest so Siri doesn't cut him off
+  mid-sentence, but this mode stays for **quick questions**, not slow chats.
