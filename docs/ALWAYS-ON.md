@@ -104,3 +104,42 @@ Siri wakes Bob → Bob **runs and speaks in the background**, no app on screen, 
 (on iOS 27) can hold a back-and-forth. The one thing to settle by testing is
 **whose voice** the background answers use — Bob's warm voice (hoped) vs Siri's
 (the sure thing).
+
+---
+
+## The wake word: can it be just "Bob" (not "Hey Siri, Bob")?
+
+**Yes — this is the good news.** "Hey Siri, Bob" was only the most basic option.
+
+### Two ways to say just "Боб"
+
+1. **iOS 18 "Vocal Shortcuts"** (Settings → Accessibility → Vocal Shortcuts).
+   Record a custom word in his own voice (e.g. **"Боб"**) → it runs a Shortcut →
+   triggers Bob. **No "Hey Siri" first. Works even when the phone is locked.**
+   Runs **on-device.** This is the system-wide way to drop "Hey Siri".
+2. **Our own wake word when the app is open** (Picovoice Porcupine, on-device):
+   while the app runs (docked kiosk), it listens for **"Боб"** itself. He just
+   says *"Боб, как дела?"* and Bob answers — no Siri at all.
+
+### Privacy (his concern) — it does NOT listen to everything
+None of these record or eavesdrop. Wake-word tech (Siri / Vocal Shortcuts /
+Porcupine) only listens *for the trigger word* on-device and **discards the
+rest** — exactly like "Hey Siri". So Bob answers **only when called by name**;
+it will **not** butt into his conversation with his wife.
+
+### Honest catches
+- **Battery:** always-listening uses battery → keep the phone plugged in / docked
+  (already the plan). Apple suggests turning Vocal Shortcuts off when unused.
+- **iOS 18+** for Vocal Shortcuts.
+- "Боб" is a *trigger*. Smoothest full conversation: **"Боб" → app opens → talk
+  freely** in Bob's warm voice, continuously, no Siri. A stay-inside-Telegram
+  fully-background chat is prototype-able via the Shortcuts app but fiddlier.
+- Recognition trains on **his** voice (good for his accent); a slightly longer,
+  distinct phrase (e.g. *"Привет, Боб"*) reduces false triggers.
+
+### Cleanest setup (combines everything)
+- **Docked at home (main use):** app open, listening for its own wake word "Боб"
+  → *"Боб, …"* → warm-voice conversation, continuous, no Siri, ignores everything
+  that isn't addressed to "Боб".
+- **Locked / inside another app:** Vocal Shortcut "Боб" → triggers Bob, no
+  "Hey Siri".
