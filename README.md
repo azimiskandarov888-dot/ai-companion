@@ -4,8 +4,10 @@ A warm, talking friend for my great-grandad — in **Russian**, **voice only**.
 He speaks, it listens, and it speaks back in a gentle Russian voice. It
 remembers his stories and can start a conversation on its own.
 
+> **Complete build blueprint** (start here): **[docs/BUILD-PLAN.md](./docs/BUILD-PLAN.md)**
 > **Who the companion is** (its soul & character): **[docs/VISION.md](./docs/VISION.md)**
-> **Decisions, architecture, roadmap:** **[PLAN.md](./PLAN.md)**
+> **Always-on listening design** (iOS research): **[docs/ALWAYS-ON.md](./docs/ALWAYS-ON.md)**
+> **The family's original plan:** **[PLAN.md](./PLAN.md)**
 
 ## The parts (like a person)
 
