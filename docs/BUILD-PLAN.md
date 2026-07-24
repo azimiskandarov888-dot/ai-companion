@@ -39,7 +39,10 @@ are mentioned **reactively** (only once he's already talking).
 
 ---
 
-## 2. Who Bob is (character — summary; full detail in VISION.md)
+## 2. Who Bob is (character — summary; full detail in VISION.md + BOB-PERSONA.md)
+
+> **Bob's full life story, habits, moods, cast, and honesty/safety rules live in
+> `docs/BOB-PERSONA.md` — the character bible. Read it before coding the persona.**
 
 - Warm, alive, a little witty, genuinely curious. **Has its own character, own
   opinions, own story** — not a mirror of him.
