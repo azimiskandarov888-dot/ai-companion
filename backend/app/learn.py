@@ -1,17 +1,21 @@
 """Learning — turn each conversation into lasting memory.
 
-After the companion replies, this runs in the background (so it never slows the
-spoken response). It asks the brain to read the exchange and pull out what a
-caring friend would remember about *him*:
+After Bob replies, this runs in the background (so it never slows the spoken
+response). It reads the exchange and pulls out:
 
-  - facts       (family, birthdays, his accident, routine, likes, contacts)
-  - stories     (anecdotes / topics he shared — embedded for later recall)
-  - health      (things he mentioned about his health — remembered, not advised)
-  - mood        (a gentle read of how he seemed)
-  - follow_ups  (things to check back on next time)
+  About the ELDER (owner='elder'):
+    - facts       (family, birthdays, his accident, routine, likes, contacts)
+    - stories     (anecdotes he shared — embedded for later recall)
+    - health      (things he mentioned — remembered, never advised on)
+    - mood        (a gentle read of how he seemed)
+    - follow_ups  (things to check back on next time)
 
-Robust by design: if extraction or parsing fails, we simply skip learning for
-that turn — the conversation itself is never affected.
+  About BOB himself (owner='bob'):
+    - bob_facts   (durable new details Bob revealed about his OWN life, so he
+                   stays consistent — e.g. "друг Бена зовут Бен, ему 73").
+
+Robust by design: if extraction or parsing fails, we skip learning for that
+turn — the conversation itself is never affected.
 """
 
 from __future__ import annotations
@@ -33,18 +37,19 @@ def _get_client() -> AsyncAnthropic:
     return _client
 
 
-_EXTRACTION_SYSTEM = """Ты ведёшь память о пожилом человеке для его тёплого друга-companion.
-Прочитай последний обмен репликами и выпиши только то, что стоит ЗАПОМНИТЬ О ЧЕЛОВЕКЕ (не о companion, не общие факты о мире).
+_EXTRACTION_SYSTEM = """Ты ведёшь память для тёплого друга-собеседника (его зовут Боб) и его пожилого собеседника.
+Прочитай последний обмен репликами и выпиши, что стоит запомнить.
 
 Отвечай ТОЛЬКО в формате JSON, без пояснений и без текста вокруг. Все значения — по-русски. Если чего-то нет — пустой список или пустая строка.
 
 Формат:
 {
-  "facts": [{"category": "семья|здоровье|распорядок|интересы|контакты|прочее", "value": "короткий факт"}],
-  "stories": [{"title": "короткое название", "summary": "1-2 предложения: что он рассказал"}],
-  "health": ["что он упомянул о самочувствии (без диагнозов и советов)"],
-  "mood": "одно-два слова о его настроении, или пусто",
-  "follow_ups": ["о чём по-доброму спросить в следующий раз"]
+  "facts": [{"category": "семья|здоровье|распорядок|интересы|контакты|прочее", "value": "короткий факт О ЧЕЛОВЕКЕ (не о Бобе)"}],
+  "stories": [{"title": "короткое название", "summary": "1-2 предложения: что ЧЕЛОВЕК рассказал о себе"}],
+  "health": ["что ЧЕЛОВЕК упомянул о своём самочувствии (без диагнозов и советов)"],
+  "mood": "одно-два слова о настроении ЧЕЛОВЕКА, или пусто",
+  "follow_ups": ["о чём по-доброму спросить ЧЕЛОВЕКА в следующий раз"],
+  "bob_facts": ["новые устойчивые детали, которые БОБ рассказал О СВОЕЙ жизни (имена, места, факты) — чтобы он не противоречил себе потом"]
 }
 
 Записывай только заметное и настоящее. Не выдумывай. Мелкую болтовню пропускай."""
@@ -69,17 +74,19 @@ async def learn_from_exchange(
 
 async def _extract(user_text: str, assistant_text: str) -> dict:
     client = _get_client()
-    existing = memory.facts_context() or "(пока ничего)"
+    known_elder = memory.facts_context("elder") or "(пока ничего)"
+    known_bob = memory.bob_self_context() or "(пока ничего)"
     prompt = (
-        f"Что уже известно о человеке (не повторяй это):\n{existing}\n\n"
+        f"Что уже известно о ЧЕЛОВЕКЕ (не повторяй это):\n{known_elder}\n\n"
+        f"Что уже известно о БОБЕ (не повторяй это):\n{known_bob}\n\n"
         f"Последний обмен репликами:\n"
         f"ЧЕЛОВЕК: {user_text}\n"
-        f"COMPANION: {assistant_text}\n\n"
+        f"БОБ: {assistant_text}\n\n"
         "Выпиши новое, что стоит запомнить, в требуемом JSON."
     )
     message = await client.messages.create(
         model=config.BRAIN_MODEL,
-        max_tokens=700,
+        max_tokens=800,
         system=_EXTRACTION_SYSTEM,
         messages=[{"role": "user", "content": prompt}],
     )
@@ -90,43 +97,60 @@ async def _extract(user_text: str, assistant_text: str) -> dict:
 def _parse_json(text: str) -> dict:
     # Tolerate accidental code fences or surrounding prose.
     if "```" in text:
-        text = text.split("```")[1]
-        if text.startswith("json"):
-            text = text[4:]
+        parts = text.split("```")
+        if len(parts) >= 2:
+            text = parts[1]
+            if text.lstrip().startswith("json"):
+                text = text.lstrip()[4:]
     start, end = text.find("{"), text.rfind("}")
-    if start == -1 or end == -1:
+    if start == -1 or end == -1 or end < start:
         return {}
-    return json.loads(text[start : end + 1])
+    try:
+        data = json.loads(text[start : end + 1])
+    except json.JSONDecodeError:
+        return {}
+    return data if isinstance(data, dict) else {}
 
 
 async def _store(data: dict) -> None:
-    for fact in data.get("facts", []) or []:
+    # --- About the elder ---
+    for fact in data.get("facts") or []:
+        if not isinstance(fact, dict):
+            continue
         cat = (fact.get("category") or "прочее").strip()
         val = (fact.get("value") or "").strip()
         if val:
-            memory.add_memory("fact", f"{cat}: {val}", title=cat, importance=2)
+            memory.add_memory("fact", f"{cat}: {val}", owner="elder", title=cat, importance=2)
 
-    for story in data.get("stories", []) or []:
+    for story in data.get("stories") or []:
+        if not isinstance(story, dict):
+            continue
         title = (story.get("title") or "").strip() or None
         summary = (story.get("summary") or "").strip()
         if summary:
             emb = await _safe_embed(f"{title or ''} {summary}")
-            memory.add_memory("story", summary, title=title, embedding=emb)
+            memory.add_memory("story", summary, owner="elder", title=title, embedding=emb)
 
-    for note in data.get("health", []) or []:
+    for note in data.get("health") or []:
         note = (note or "").strip()
         if note:
             emb = await _safe_embed(note)
-            memory.add_memory("health", note, embedding=emb, importance=2)
+            memory.add_memory("health", note, owner="elder", embedding=emb, importance=2)
 
     mood = (data.get("mood") or "").strip()
     if mood:
-        memory.add_memory("mood", mood)
+        memory.add_memory("mood", mood, owner="elder")
 
-    for fup in data.get("follow_ups", []) or []:
+    for fup in data.get("follow_ups") or []:
         fup = (fup or "").strip()
         if fup:
-            memory.add_memory("follow_up", fup, status="open", importance=2)
+            memory.add_memory("follow_up", fup, owner="elder", status="open", importance=2)
+
+    # --- About Bob himself (consistency) ---
+    for bf in data.get("bob_facts") or []:
+        bf = (bf or "").strip()
+        if bf:
+            memory.add_memory("fact", bf, owner="bob", importance=2)
 
 
 async def _safe_embed(text: str) -> list[float] | None:

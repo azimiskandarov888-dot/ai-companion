@@ -1,22 +1,21 @@
 """The companion's memory — what makes it feel like a real friend.
 
-What it holds (in SQLite, via db.py):
-  - facts      : durable truths about him (family, birthdays, his accident,
-                 routine, likes, doctor/contacts).
-  - stories    : anecdotes and topics he shared, embedded for semantic recall
-                 days or months later ("а помните, вы рассказывали про…").
-  - health     : health things he mentioned (never advice — just remembered).
-  - mood       : a gentle read of his mood each conversation, tracked over time.
-  - follow_up  : things a caring friend checks back on ("как ваше колено сегодня?").
+Two owners share the store (see db.py):
+  - owner='elder' : memory ABOUT the great-grandad — facts, stories, health,
+                    mood, and caring follow-ups. This is what gets recalled to
+                    make him feel known.
+  - owner='bob'   : durable details Bob has revealed about his OWN life, so he
+                    stays consistent about himself (Ben stays 73, etc.).
+
+Kinds: fact | story | health | mood | follow_up.
 
 How it's used:
-  - Before each reply → build_reply_context() loads relevant facts + semantically
-    recalled stories + open follow-ups + (sometimes) a spontaneously resurfaced
-    warm memory + recent mood, and hands them to the brain.
-  - After each reply → learn.py extracts new facts/stories/etc. in the background.
+  - Before each reply → facts_context('elder') + bob_self_context() +
+    build_memory_context() load what Bob should have in mind.
+  - After each reply → learn.py extracts new memories in the background.
 
-This module is a small, storage-agnostic interface. Phase 2 can replace the
-SQLite/cosine internals with Postgres + pgvector without changing its callers.
+Storage-agnostic on purpose. A later phase can swap SQLite/cosine for
+Postgres + pgvector without changing callers.
 """
 
 from __future__ import annotations
@@ -31,12 +30,14 @@ from . import db, embeddings
 RECENT_TURNS = 20
 # How many semantically-recalled stories to surface per reply.
 RECALL_K = 4
+# Only keep recalled stories at least this related (cosine) to what he just said.
+RECALL_MIN_SCORE = 0.2
 # Chance of spontaneously resurfacing an old warm memory in a reply.
 RESURFACE_CHANCE = 0.25
 # A follow-up stops being raised after it's been surfaced this many times.
 FOLLOW_UP_MAX_SURFACES = 2
 # Don't check back on something in the same conversation — wait at least this long
-# (so "как ваше колено?" comes next time he talks, not two sentences later).
+# (so "как твоё колено?" comes next time he talks, not two sentences later).
 FOLLOW_UP_MIN_AGE = 3 * 3600
 # Once raised, don't raise the same follow-up again for this long.
 FOLLOW_UP_COOLDOWN = 12 * 3600
@@ -72,6 +73,7 @@ def add_memory(
     kind: str,
     content: str,
     *,
+    owner: str = "elder",
     title: str | None = None,
     embedding: list[float] | None = None,
     importance: int = 1,
@@ -84,15 +86,16 @@ def add_memory(
         return None
     with db.connect() as conn:
         dup = conn.execute(
-            "SELECT id FROM memories WHERE kind=? AND content=? LIMIT 1",
-            (kind, content),
+            "SELECT id FROM memories WHERE owner=? AND kind=? AND content=? LIMIT 1",
+            (owner, kind, content),
         ).fetchone()
         if dup:
             return None
         cur = conn.execute(
-            "INSERT INTO memories(kind, title, content, importance, status, "
-            "embedding, meta, created_ts, recall_count) VALUES (?,?,?,?,?,?,?,?,0)",
+            "INSERT INTO memories(owner, kind, title, content, importance, status, "
+            "embedding, meta, created_ts, recall_count) VALUES (?,?,?,?,?,?,?,?,?,0)",
             (
+                owner,
                 kind,
                 title,
                 content,
@@ -119,23 +122,29 @@ def _mark_recalled(ids: list[int]) -> None:
 
 
 # --------------------------------------------------------------------------- #
-# Recall
+# Facts
 # --------------------------------------------------------------------------- #
-def facts_context() -> str:
-    """All known facts about him — always worth having in context (small)."""
+def facts_context(owner: str = "elder") -> str:
+    """The known facts for an owner, formatted for the prompt."""
     with db.connect() as conn:
         rows = conn.execute(
-            "SELECT content FROM memories WHERE kind='fact' "
-            "ORDER BY importance DESC, created_ts ASC"
+            "SELECT content FROM memories WHERE kind='fact' AND owner=? "
+            "ORDER BY importance DESC, created_ts ASC",
+            (owner,),
         ).fetchall()
     return "\n".join(f"- {r['content']}" for r in rows)
 
 
-def seed_facts_from_file(path=None) -> int:
-    """Import hand-written facts from data/facts.json into memory (once).
+def bob_self_context() -> str:
+    """Durable details Bob has said about his own life (to stay consistent)."""
+    return facts_context(owner="bob")
 
-    Lets family pre-load what they know about him — family, birthdays, routine,
-    his doctor/contact. Safe to run every startup: duplicates are skipped.
+
+def seed_facts_from_file(path=None) -> int:
+    """Import hand-written facts about the elder from data/facts.json (once).
+
+    Lets family pre-load what they know — family, birthdays, routine, his
+    doctor/contact. Safe to run every startup: duplicates are skipped.
     """
     from . import config
 
@@ -146,6 +155,8 @@ def seed_facts_from_file(path=None) -> int:
         data = json.loads(path.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError):
         return 0
+    if not isinstance(data, dict):
+        return 0
     added = 0
     for key, value in data.items():
         if isinstance(value, (list, tuple)):
@@ -155,39 +166,41 @@ def seed_facts_from_file(path=None) -> int:
     return added
 
 
-def _rows(kinds: tuple[str, ...]) -> list:
+# --------------------------------------------------------------------------- #
+# Recall (the elder's memory)
+# --------------------------------------------------------------------------- #
+def _rows(kinds: tuple[str, ...], owner: str = "elder") -> list:
     marks = ",".join("?" for _ in kinds)
     with db.connect() as conn:
         return conn.execute(
-            f"SELECT * FROM memories WHERE kind IN ({marks})", kinds
+            f"SELECT * FROM memories WHERE owner=? AND kind IN ({marks})",
+            (owner, *kinds),
         ).fetchall()
 
 
 async def recall_relevant(
     query_text: str, k: int = RECALL_K, exclude: set[int] | None = None
 ) -> list[dict]:
-    """Semantically recall the stories/health notes most relevant to `query_text`."""
+    """Semantically recall the elder's stories/health notes most relevant now."""
     exclude = exclude or set()
     rows = [r for r in _rows(("story", "health")) if r["id"] not in exclude]
     if not rows:
         return []
 
+    q = None
     if embeddings.available() and query_text.strip():
         try:
             q = await embeddings.embed(query_text)
         except Exception:
             q = None
-    else:
-        q = None
 
     if q is not None:
-        scored = []
-        for r in rows:
-            emb = json.loads(r["embedding"]) if r["embedding"] else None
-            scored.append((embeddings.cosine(q, emb), r))
+        scored = [
+            (embeddings.cosine(q, json.loads(r["embedding"]) if r["embedding"] else None), r)
+            for r in rows
+        ]
         scored.sort(key=lambda t: t[0], reverse=True)
-        # Only keep genuinely related memories.
-        picked = [r for score, r in scored[:k] if score > 0.2]
+        picked = [r for score, r in scored[:k] if score > RECALL_MIN_SCORE]
     else:
         # No embeddings → fall back to the most recent stories.
         picked = sorted(rows, key=lambda r: r["created_ts"], reverse=True)[:k]
@@ -197,14 +210,11 @@ async def recall_relevant(
 
 
 def resurface(exclude: set[int] | None = None) -> dict | None:
-    """Pick a warm story he hasn't been reminded of in a while (spaced recall).
-
-    This is the "out of nowhere, remember when…" magic — gentle and not repetitive.
-    """
+    """Pick a warm story he hasn't been reminded of in a while (spaced recall)."""
     exclude = exclude or set()
     with db.connect() as conn:
         rows = conn.execute(
-            "SELECT * FROM memories WHERE kind='story' "
+            "SELECT * FROM memories WHERE owner='elder' AND kind='story' "
             "ORDER BY (last_recalled_ts IS NULL) DESC, last_recalled_ts ASC, "
             "created_ts ASC LIMIT 5"
         ).fetchall()
@@ -217,19 +227,13 @@ def resurface(exclude: set[int] | None = None) -> dict | None:
 
 
 def due_follow_ups(limit: int = 1) -> list[dict]:
-    """Caring things that are *due* to be checked back on now.
-
-    Only surfaces a follow-up that was created a while ago (not the same
-    conversation), isn't stale, hasn't been over-raised, and isn't on cooldown
-    from a recent mention. This is what makes it check back the *next* time he
-    talks without ever nagging.
-    """
+    """Caring things that are *due* to be checked back on now (never nagging)."""
     now = time.time()
     with db.connect() as conn:
         rows = conn.execute(
-            "SELECT * FROM memories WHERE kind='follow_up' AND status='open' "
-            "AND created_ts < ? AND created_ts > ? AND recall_count < ? "
-            "AND (last_recalled_ts IS NULL OR last_recalled_ts < ?) "
+            "SELECT * FROM memories WHERE owner='elder' AND kind='follow_up' "
+            "AND status='open' AND created_ts < ? AND created_ts > ? "
+            "AND recall_count < ? AND (last_recalled_ts IS NULL OR last_recalled_ts < ?) "
             "ORDER BY created_ts ASC LIMIT ?",
             (
                 now - FOLLOW_UP_MIN_AGE,
@@ -256,48 +260,42 @@ def surface_follow_up(follow_up_id: int) -> None:
 def latest_mood() -> str | None:
     with db.connect() as conn:
         row = conn.execute(
-            "SELECT content FROM memories WHERE kind='mood' "
+            "SELECT content FROM memories WHERE owner='elder' AND kind='mood' "
             "ORDER BY created_ts DESC LIMIT 1"
         ).fetchone()
     return row["content"] if row else None
 
 
-def counts() -> dict[str, int]:
+def counts(owner: str = "elder") -> dict[str, int]:
     with db.connect() as conn:
         rows = conn.execute(
-            "SELECT kind, COUNT(*) AS n FROM memories GROUP BY kind"
+            "SELECT kind, COUNT(*) AS n FROM memories WHERE owner=? GROUP BY kind",
+            (owner,),
         ).fetchall()
     return {r["kind"]: r["n"] for r in rows}
 
 
 # --------------------------------------------------------------------------- #
-# Assemble everything the brain should know before it replies / greets
+# Assemble the elder-memory block for the system prompt
 # --------------------------------------------------------------------------- #
-async def build_reply_context(
-    session_id: str,
-    query_text: str,
-) -> tuple[str, str]:
-    """Return (facts_context, memory_context) strings for the system prompt.
+async def build_memory_context(session_id: str, query_text: str) -> str:
+    """Recalled stories + (sometimes) a resurfaced memory + a due follow-up + mood.
 
-    He always speaks first; this assembles what the companion should have in mind
-    when it answers: known facts + semantically recalled stories + (sometimes) a
-    spontaneously resurfaced warm memory + any *due* caring follow-up + recent mood.
+    Facts are fetched separately (facts_context). He always speaks first; this is
+    what Bob should have in mind when he answers.
     """
-    facts = facts_context()
-
     used: set[int] = set()
     sections: list[str] = []
 
     relevant = await recall_relevant(query_text, exclude=used)
     used.update(r["id"] for r in relevant)
     if relevant:
-        lines = [f"- {_fmt(r)}" for r in relevant]
+        lines = "\n".join(f"- {_fmt(r)}" for r in relevant)
         sections.append(
-            "Из ваших прошлых бесед (можешь мягко вспомнить, если к слову):\n"
-            + "\n".join(lines)
+            "Из ваших прошлых бесед (можешь мягко вспомнить, если к слову):\n" + lines
         )
 
-    # A gentle, spaced "а помните…" — sometimes, out of nowhere.
+    # A gentle, spaced "а помнишь…" — sometimes, out of nowhere.
     if random.random() < RESURFACE_CHANCE:
         r = resurface(exclude=used)
         if r:
@@ -319,7 +317,7 @@ async def build_reply_context(
     if mood:
         sections.append(f"Его настроение в последнее время: {mood}.")
 
-    return facts, "\n\n".join(sections)
+    return "\n\n".join(sections)
 
 
 def _fmt(row: dict) -> str:

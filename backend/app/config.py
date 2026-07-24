@@ -56,6 +56,11 @@ DATA_DIR.mkdir(parents=True, exist_ok=True)
 # Postgres + pgvector without touching the rest of the app).
 DB_PATH: Path = Path(os.getenv("DB_PATH", DATA_DIR / "companion.db"))
 
+# Bob's persona lives in DATA (editable JSON) so his name, home, story, cast,
+# and habits can be changed anytime WITHOUT touching code. If the file is
+# absent, a built-in default persona is used. See app/persona.py.
+PERSONA_PATH: Path = Path(os.getenv("PERSONA_PATH", DATA_DIR / "persona.json"))
+
 
 def service_status() -> dict[str, bool]:
     """Which of the three 'senses' are configured (no secrets exposed)."""

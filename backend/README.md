@@ -61,19 +61,22 @@ uvicorn app.main:app --reload --port 8000
 ```
 app/
   config.py      # keys + settings from .env (the only place secrets live)
-  companion.py   # the companion's Russian personality + guardrails  ← edit this to change who it is
+  companion.py   # STABLE behavior: warmth, the "third way" honesty, safety guardrails
+  persona.py     # WHO Bob is (name, home, story, cast, habits) — loaded from editable data
   stt.py         # ears   — Whisper
-  brain.py       # brain  — Claude (claude-opus-4-8): replies + proactive openers
+  brain.py       # brain  — Claude (claude-opus-4-8): produces the reply
   tts.py         # mouth  — ElevenLabs
-  memory.py      # memory — facts, stories, health, mood, caring follow-ups + recall
+  memory.py      # memory — facts, stories, health, mood, follow-ups (owner: elder | bob)
   learn.py       # turns each conversation into memory (runs in the background)
   embeddings.py  # semantic recall (OpenAI embeddings + cosine)
-  db.py          # SQLite storage (→ Postgres + pgvector later)
-  occasions.py   # calendar of special dates (with origin-story hints)
-  main.py        # FastAPI app: voice loop + proactive greeting
+  db.py          # SQLite storage + migrations (→ Postgres + pgvector later)
+  occasions.py   # calendar of special dates (with origin-story hints, mentioned reactively)
+  main.py        # FastAPI app: the voice loop
+tests/           # pytest suite (memory, persona, behavior, occasions, db, api)
+conftest.py      # test fixtures (isolated temp DB per test)
 static/
   index.html     # browser mic test page
-data/            # memory database + logs (git-ignored, never committed)
+data/            # memory DB + persona.json + facts.json (git-ignored, never committed)
 ```
 
 ## Memory — what makes it feel like a real friend
@@ -91,8 +94,9 @@ the voice stays fast) and remembers:
 
 Before each reply it loads the relevant facts + semantically recalled stories +
 open follow-ups + (sometimes, spaced out) a spontaneously resurfaced warm memory
-+ his recent mood. The good-morning greeting (`/api/proactive`) weaves all of
-this together.
++ his recent mood + today's occasion — all woven into a reply (Bob never speaks
+first). Bob also keeps a small **self-memory** (`owner='bob'`) of what he's said
+about his own life, so he stays consistent.
 
 **Storage:** SQLite now (zero setup — nothing to install), behind a small
 interface so Phase 2 can move to **Postgres + pgvector** without touching the
@@ -104,6 +108,22 @@ doctor/contact. It's imported into memory on startup (duplicates are skipped).
 
 **Peek at its memory anytime:** `curl http://localhost:8000/api/memory`
 
+## Bob's persona — change his story anytime (no code)
+
+Who Bob *is* — name, home, backstory, friends, habits, opinions, his current
+life — lives in editable data, **not** in code. To set or change him:
+
+```bash
+cp data/persona.example.json data/persona.json   # then edit persona.json
+```
+
+Edit it whenever you like (after deciding the real story with your family) and
+restart — no code changes. If the file is absent, a safe built-in default is
+used. The *stable* parts (warmth, the honesty "third way", safety guardrails)
+live in `app/companion.py`; the *changeable* character lives in the JSON.
+
+Full character design: [../docs/BOB-PERSONA.md](../docs/BOB-PERSONA.md).
+
 ## Testing the brain alone
 
 No microphone needed — test the brain + voice with text:
@@ -113,3 +133,16 @@ curl -s -X POST http://localhost:8000/api/say \
   -H "Content-Type: application/json" \
   -d '{"text":"Здравствуй! Как тебя зовут?"}' | python3 -m json.tool
 ```
+
+## Running the tests
+
+```bash
+source .venv/bin/activate
+pip install -r requirements-dev.txt
+python -m pytest -q
+```
+
+The suite covers memory (owner isolation, semantic recall, follow-up lifecycle),
+the persona assembly, the behavior/guardrail rules (incl. that Bob never
+confesses to being a machine), occasions, the DB migration, and every endpoint
+(with the AI services mocked).

@@ -1,0 +1,54 @@
+"""Behavior rules: the 'third way' honesty, the guardrails, and prompt assembly.
+
+These protect the two most important correctness properties:
+  1. Bob never confesses to being a machine, and never claims to be human.
+  2. The safety guardrails are always present in the prompt.
+"""
+
+from __future__ import annotations
+
+from app import companion
+
+
+def test_third_way_honesty_present():
+    rules = companion.BEHAVIOR_RULES
+    # Never confess machine-ness…
+    assert "не говоришь, что ты программа" in rules
+    # …and never claim to be a flesh-and-blood human.
+    assert "НЕ утверждаешь напрямую, будто ты человек" in rules
+
+
+def test_old_confession_line_is_gone():
+    # The previous version told Bob to admit being an AI — that must be gone.
+    assert "Ты честен, что ты искусственный интеллект" not in companion.BEHAVIOR_RULES
+    assert "скажи об этом мягко и по-доброму" not in companion.BEHAVIOR_RULES
+
+
+def test_guardrails_present():
+    rules = companion.BEHAVIOR_RULES
+    assert "не давай медицинских советов" in rules
+    assert "не проси денег" in rules
+    assert "не обещай того, что должно случиться в его настоящем мире" in rules
+    assert "мостик к живой жизни" in rules  # points him back to real family
+
+
+def test_build_system_prompt_injects_all_parts():
+    prompt = companion.build_system_prompt(
+        persona_block="ТЫ — Боб. Живёшь у моря.",
+        elder_facts="- любит рыбалку",
+        bob_facts="- у Боба есть кот Мурзик",
+        memory_context="Вы вспоминали про Волгу.",
+        elder_name="Иван",
+    )
+    assert companion.BEHAVIOR_RULES.split("\n")[0] in prompt  # behavior first
+    assert "Живёшь у моря" in prompt
+    assert "любит рыбалку" in prompt
+    assert "кот Мурзик" in prompt
+    assert "Волгу" in prompt
+    assert "Иван" in prompt
+
+
+def test_build_system_prompt_minimal():
+    # With nothing injected it still returns the behavior rules cleanly.
+    prompt = companion.build_system_prompt()
+    assert prompt.strip() == companion.BEHAVIOR_RULES.strip()

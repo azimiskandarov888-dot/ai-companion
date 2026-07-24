@@ -4,18 +4,20 @@ Two tables:
   - turns:    the raw conversation log (nothing is ever lost).
   - memories: what the companion has *learned* — facts, stories, health notes,
               mood, and caring follow-ups — with an optional embedding for
-              semantic recall.
+              semantic recall. The `owner` column separates memory about the
+              elder ('elder') from Bob's own life-details ('bob'), so Bob stays
+              consistent about himself without polluting the elder's memory.
 
 SQLite keeps this zero-setup (no database to install) and is more than enough
-for one person. It is wrapped behind this module + memory.py so Phase 2 can
-swap in Postgres + pgvector without changing the rest of the app.
+for one person. It is wrapped behind this module + memory.py so a later phase
+can swap in Postgres + pgvector without changing the rest of the app.
 """
 
 from __future__ import annotations
 
 import sqlite3
-from contextlib import contextmanager
 from collections.abc import Iterator
+from contextlib import contextmanager
 
 from . import config
 
@@ -31,6 +33,7 @@ CREATE INDEX IF NOT EXISTS idx_turns_session ON turns(session_id, ts);
 
 CREATE TABLE IF NOT EXISTS memories (
     id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    owner             TEXT NOT NULL DEFAULT 'elder',  -- 'elder' | 'bob'
     kind              TEXT NOT NULL,     -- fact | story | health | mood | follow_up
     title             TEXT,
     content           TEXT NOT NULL,
@@ -42,13 +45,30 @@ CREATE TABLE IF NOT EXISTS memories (
     last_recalled_ts  REAL,
     recall_count      INTEGER DEFAULT 0
 );
-CREATE INDEX IF NOT EXISTS idx_memories_kind ON memories(kind, status);
 """
 
 
 def init_db() -> None:
     with connect() as conn:
+        # 1) Create tables (fresh installs get the full schema, incl. `owner`).
         conn.executescript(_SCHEMA)
+        # 2) Upgrade older databases that predate a column.
+        _migrate(conn)
+        # 3) Only now build indexes that reference migrated columns — otherwise
+        #    an index ON `owner` would fail on a pre-`owner` database.
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_memories_owner_kind "
+            "ON memories(owner, kind, status)"
+        )
+
+
+def _migrate(conn: sqlite3.Connection) -> None:
+    """Add columns introduced after a DB was first created (dev-safe)."""
+    cols = {row["name"] for row in conn.execute("PRAGMA table_info(memories)")}
+    if "owner" not in cols:
+        conn.execute(
+            "ALTER TABLE memories ADD COLUMN owner TEXT NOT NULL DEFAULT 'elder'"
+        )
 
 
 @contextmanager

@@ -1,18 +1,18 @@
 """FastAPI app — the voice loop and memory.
 
-Voice only. HE always speaks first (even by launching the app hands-free, like
-Siri); the companion only ever *responds*. It never initiates.
+Voice only. HE always speaks first (even by launching the app hands-free); Bob
+only ever *responds* — never initiates.
 
-Talking loop (with memory):
-    audio → 👂 Whisper → [recall facts + stories + follow-ups + mood]
+Talking loop (with memory + persona):
+    audio → 👂 Whisper → [persona + recalled facts/stories/follow-ups/mood]
           → 🧠 Claude → 🗣️ ElevenLabs → audio
-          → (in the background) learn new facts/stories/follow-ups
+          → (in the background) learn new memories
 
 Endpoints:
     GET  /            → browser mic test page (a developer tool — he never sees a screen)
     GET  /api/health  → which services are configured + memory counts
     POST /api/talk    → audio in  → {transcript, reply, audio}   (the real loop)
-    POST /api/say     → text in   → {reply, audio}   (dev only: test brain+memory без микрофона)
+    POST /api/say     → text in   → {reply, audio}   (dev only: test brain+memory)
     GET  /api/memory  → what it currently remembers (for you to inspect)
 """
 
@@ -26,7 +26,7 @@ from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, UploadF
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 
-from . import brain, config, db, learn, memory, occasions, stt, tts
+from . import brain, companion, config, db, learn, memory, occasions, persona, stt, tts
 
 
 @asynccontextmanager
@@ -36,7 +36,7 @@ async def _lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="Voice Companion", version="0.2.0", lifespan=_lifespan)
+app = FastAPI(title="Voice Companion", version="0.3.0", lifespan=_lifespan)
 
 _STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 
@@ -52,12 +52,13 @@ async def health() -> JSONResponse:
     return JSONResponse(
         {
             "ok": True,
-            "companion_name": config.COMPANION_NAME,
+            "companion_name": persona.persona_name(),
             "language": config.LANGUAGE,
             "brain_model": config.BRAIN_MODEL,
             "services": services,
             "all_ready": all(services.values()),
-            "memory": memory.counts(),
+            "memory": memory.counts("elder"),
+            "bob_self_facts": memory.counts("bob").get("fact", 0),
         }
     )
 
@@ -65,13 +66,17 @@ async def health() -> JSONResponse:
 async def _think_and_speak(
     session_id: str, user_text: str, background_tasks: BackgroundTasks
 ) -> dict[str, str]:
-    """Shared path: recall → reply → speak, then learn in the background."""
+    """Shared path: recall → assemble prompt → reply → speak, then learn."""
     memory.log_turn(session_id, "user", user_text)
 
-    facts_ctx, mem_ctx = await memory.build_reply_context(session_id, user_text)
+    # Assemble everything Bob should have in mind.
+    persona_block = persona.build_persona_block()
+    elder_facts = memory.facts_context("elder")
+    bob_facts = memory.bob_self_context()
+    mem_ctx = await memory.build_memory_context(session_id, user_text)
 
-    # If today is a special date, let the companion mention it warmly — but only
-    # in reply to him (it never speaks first).
+    # If today is a special date, let Bob mention it warmly — but only in reply
+    # to him (he never speaks first).
     occ = occasions.occasion_for()
     if occ:
         note = (
@@ -80,11 +85,16 @@ async def _think_and_speak(
         )
         mem_ctx = f"{mem_ctx}\n\n{note}".strip() if mem_ctx else note
 
-    history = memory.recent_turns(session_id)
-
-    reply = await brain.generate_reply(
-        history=history, memory_context=mem_ctx, facts_context=facts_ctx
+    system_prompt = companion.build_system_prompt(
+        persona_block=persona_block,
+        elder_facts=elder_facts,
+        bob_facts=bob_facts,
+        memory_context=mem_ctx,
+        elder_name=config.ELDER_NAME,
     )
+
+    history = memory.recent_turns(session_id)
+    reply = await brain.generate_reply(history, system_prompt)
 
     memory.log_turn(session_id, "assistant", reply)
     # Learn from this exchange after the response is sent (keeps the voice fast).
@@ -152,12 +162,13 @@ async def memory_dump() -> JSONResponse:
     """A window into what the companion currently remembers (for inspection)."""
     with db.connect() as conn:
         rows = conn.execute(
-            "SELECT kind, title, content, status, recall_count, created_ts "
+            "SELECT owner, kind, title, content, status, recall_count, created_ts "
             "FROM memories ORDER BY created_ts DESC LIMIT 200"
         ).fetchall()
     return JSONResponse(
         {
-            "counts": memory.counts(),
+            "elder": memory.counts("elder"),
+            "bob": memory.counts("bob"),
             "memories": [dict(r) for r in rows],
         }
     )

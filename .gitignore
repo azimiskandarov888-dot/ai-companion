@@ -18,6 +18,7 @@ env/
 backend/data/*
 !backend/data/.gitkeep
 !backend/data/facts.example.json
+!backend/data/persona.example.json
 
 # OS / editor
 .DS_Store

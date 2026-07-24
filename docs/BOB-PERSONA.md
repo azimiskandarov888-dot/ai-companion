@@ -251,7 +251,18 @@ Before he goes live, decide together:
 
 ## 12. Where this lives in the build
 
-- Encoded later in `backend/app/companion.py` (warmth) + a new `persona.py`
-  (this biography + rules) + memory `owner` scope + the daily life-tick (§8).
-- Referenced from `docs/BUILD-PLAN.md` (§2 Character) and `docs/VISION.md`.
-- **No code yet** — this is the design. Build it in the persona phase.
+The **mechanism is built** (the specific *story* stays a placeholder until the
+family decides it):
+
+- `backend/app/companion.py` — the **stable** behavior: warmth, the "third way"
+  honesty (never confess to being a machine, never claim to be human), and the
+  safety guardrails from §9. Enforced and unit-tested.
+- `backend/app/persona.py` + `backend/data/persona.json` — **WHO Bob is, as
+  editable data.** Change his name, home, story, cast, habits anytime by editing
+  the JSON — no code changes. (`data/persona.example.json` is the template.)
+- `backend/app/memory.py` — the `owner='bob'` scope gives Bob a **self-memory**
+  so improvised details stay consistent (§8).
+- **Still to build:** the daily *life-state* simulation (§7 — moods + ongoing
+  threads that evolve day to day). For now, the editable `current_life` field in
+  `persona.json` holds "what's going on in Bob's life."
+- Referenced from `docs/BUILD-PLAN.md` (§2) and `docs/VISION.md`.
