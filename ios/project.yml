@@ -1,0 +1,34 @@
+# XcodeGen spec — generates BobCompanion.xcodeproj from these source files.
+#
+# This is the OPTIONAL convenience path. If you have XcodeGen
+# (`brew install xcodegen`), run `xcodegen generate` in this folder and open the
+# resulting BobCompanion.xcodeproj. If you'd rather not install anything, follow
+# the "Create the project by hand in Xcode" steps in README.md instead — the
+# Swift files are identical either way.
+
+name: BobCompanion
+options:
+  bundleIdPrefix: com.yourfamily
+  deploymentTarget:
+    iOS: "18.0"
+  createIntermediateGroups: true
+
+targets:
+  BobCompanion:
+    type: application
+    platform: iOS
+    sources:
+      - path: BobCompanion
+    info:
+      path: BobCompanion/App/Info.plist
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.yourfamily.bobcompanion
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        GENERATE_INFOPLIST_FILE: NO
+        SWIFT_VERSION: "5.0"
+        TARGETED_DEVICE_FAMILY: "1"    # iPhone
+        # Fill these in with your Apple Developer team to run on a real device:
+        # DEVELOPMENT_TEAM: XXXXXXXXXX
+        # CODE_SIGN_STYLE: Automatic

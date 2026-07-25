@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- Why we need the mic. Shown to the family once, in Russian. -->
+    <key>NSMicrophoneUsageDescription</key>
+    <string>Боб слушает, только когда вы говорите с ним, чтобы отвечать вам вслух.</string>
+
+    <!-- Needed to reach the backend running on your Mac over local Wi-Fi. -->
+    <key>NSLocalNetworkUsageDescription</key>
+    <string>Приложение отправляет ваш голос на домашний сервер, чтобы Боб мог ответить.</string>
+
+    <!-- Keep audio alive. Foreground docked use needs this for reliable capture;
+         it's also the foundation for the later background/floating-window layer. -->
+    <key>UIBackgroundModes</key>
+    <array>
+        <string>audio</string>
+    </array>
+
+    <!-- DEV ONLY: the test backend is plain http on the LAN. For production use
+         https and remove NSAllowsArbitraryLoads. NSAllowsLocalNetworking permits
+         http to a local IP without opening everything up. -->
+    <key>NSAppTransportSecurity</key>
+    <dict>
+        <key>NSAllowsLocalNetworking</key>
+        <true/>
+        <key>NSAllowsArbitraryLoads</key>
+        <true/>
+    </dict>
+
+    <!-- Docked device: stay awake, portrait, no idle sleep. -->
+    <key>UIApplicationSupportsIndefinitePreciseLocationRequirement</key>
+    <false/>
+    <key>UISupportedInterfaceOrientations</key>
+    <array>
+        <string>UIInterfaceOrientationPortrait</string>
+    </array>
+    <key>UIRequiresPersistentWiFi</key>
+    <true/>
+</dict>
+</plist>

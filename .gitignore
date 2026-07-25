@@ -26,5 +26,14 @@ backend/data/*
 .idea/
 .vscode/
 
+# Xcode / iOS build output (generated on the Mac — never commit)
+ios/**/xcuserdata/
+ios/**/*.xcuserstate
+ios/DerivedData/
+ios/build/
+*.xcodeproj/project.xcworkspace/xcuserdata/
+# The .xcodeproj is generated from project.yml by XcodeGen (or created in Xcode).
+ios/*.xcodeproj
+
 # Logs
 *.log
