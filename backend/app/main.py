@@ -100,12 +100,19 @@ async def _think_and_speak(
     # Learn from this exchange after the response is sent (keeps the voice fast).
     background_tasks.add_task(learn.learn_from_exchange, session_id, user_text, reply)
 
-    audio_bytes = await tts.synthesize(reply)
-    return {
-        "reply": reply,
-        "audio_base64": base64.b64encode(audio_bytes).decode("ascii"),
-        "audio_mime": "audio/mpeg",
-    }
+    # The mouth is optional. With an ElevenLabs key we return warm spoken audio.
+    # Without one (MVP / browser testing), we return no audio and let the client
+    # speak the reply with its own free voice — so testing needs only Whisper +
+    # Claude. "voice" tells the client which path to take.
+    if tts.configured():
+        audio_bytes = await tts.synthesize(reply)
+        return {
+            "reply": reply,
+            "audio_base64": base64.b64encode(audio_bytes).decode("ascii"),
+            "audio_mime": "audio/mpeg",
+            "voice": "server",
+        }
+    return {"reply": reply, "audio_base64": "", "audio_mime": "", "voice": "client"}
 
 
 @app.post("/api/talk")

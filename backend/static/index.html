@@ -121,11 +121,29 @@
         el.scrollIntoView({ behavior: "smooth", block: "end" });
       }
 
-      function playAudio(base64, mime) {
-        if (!base64) return;
-        const audio = new Audio("data:" + (mime || "audio/mpeg") + ";base64," + base64);
-        audio.play().catch(() => {});
+      // Speak Bob's reply. If the server sent audio (ElevenLabs configured),
+      // play it. Otherwise (MVP: no ElevenLabs) use the browser's OWN free voice
+      // so you can test the whole loop with only Whisper + Claude — no cost mouth.
+      function speak(data) {
+        if (data.audio_base64) {
+          const audio = new Audio(
+            "data:" + (data.audio_mime || "audio/mpeg") + ";base64," + data.audio_base64
+          );
+          audio.play().catch(() => {});
+          return;
+        }
+        if (data.reply && "speechSynthesis" in window) {
+          const u = new SpeechSynthesisUtterance(data.reply);
+          u.lang = "ru-RU";
+          const ru = speechSynthesis.getVoices().find((v) => v.lang && v.lang.startsWith("ru"));
+          if (ru) u.voice = ru;
+          u.rate = 0.95; // a touch slower, kinder for an elderly listener
+          speechSynthesis.cancel();
+          speechSynthesis.speak(u);
+        }
       }
+      // Voices can load late in some browsers; nudge them.
+      if ("speechSynthesis" in window) speechSynthesis.getVoices();
 
       // --- health ---
       async function loadHealth() {
@@ -133,14 +151,22 @@
           const r = await fetch("/api/health");
           const h = await r.json();
           const s = h.services;
-          const pill = (ok) =>
-            '<span class="pill ' + (ok ? "ok" : "no") + '">' + (ok ? "готово" : "нет ключа") + "</span>";
+          const pill = (ok, yes, no, cls) =>
+            '<span class="pill ' + ((ok ? "ok" : (cls || "no"))) + '">' + (ok ? yes : no) + "</span>";
+          // For an MVP browser test you only need the brain + ears. The mouth is
+          // optional — without an ElevenLabs key the browser speaks for free.
+          const canTest = s.brain_claude && s.ears_whisper;
+          const voicePill = s.mouth_elevenlabs
+            ? pill(true, "ElevenLabs", "", "ok")
+            : '<span class="pill ok">браузер (бесплатно)</span>';
           statusEl.innerHTML =
             "<b>" + h.companion_name + "</b> · модель " + h.brain_model +
-            "<br>🧠 Мозг (Claude)" + pill(s.brain_claude) +
-            " &nbsp; 👂 Уши (Whisper)" + pill(s.ears_whisper) +
-            " &nbsp; 🗣️ Голос (ElevenLabs)" + pill(s.mouth_elevenlabs) +
-            (h.all_ready ? "" : "<br><small>Добавьте недостающие ключи в backend/.env и перезапустите сервер.</small>");
+            "<br>🧠 Мозг (Claude)" + pill(s.brain_claude, "готово", "нужен ключ") +
+            " &nbsp; 👂 Уши (Whisper)" + pill(s.ears_whisper, "готово", "нужен ключ") +
+            " &nbsp; 🗣️ Голос" + voicePill +
+            (canTest
+              ? "<br><small>Готово к тесту в браузере.</small>"
+              : "<br><small>Добавьте ключи Claude и OpenAI в backend/.env и перезапустите сервер.</small>");
         } catch (e) {
           statusEl.textContent = "Не удалось связаться с сервером.";
         }
@@ -168,7 +194,7 @@
           const data = await r.json();
           if (!r.ok) throw new Error(data.detail || "Ошибка");
           addMsg("bot", "Companion", data.reply);
-          playAudio(data.audio_base64, data.audio_mime);
+          speak(data);
         } catch (e) {
           addMsg("bot", "Ошибка", String(e.message || e));
         } finally {
@@ -233,7 +259,7 @@
           else addMsg("user", "Вы", "(речь не распознана)");
           if (data.reply) {
             addMsg("bot", "Companion", data.reply);
-            playAudio(data.audio_base64, data.audio_mime);
+            speak(data);
           }
         } catch (e) {
           addMsg("bot", "Ошибка", String(e.message || e));

@@ -14,6 +14,13 @@ from . import config
 _API_BASE = "https://api.elevenlabs.io/v1/text-to-speech"
 
 
+def configured() -> bool:
+    """Is the ElevenLabs 'mouth' set up? If not, the browser speaks for free
+    (MVP path) — see static/index.html. On the phone the app would need a real
+    voice, but for browser testing this keeps costs to just Whisper + Claude."""
+    return bool(config.ELEVENLABS_API_KEY and config.ELEVENLABS_VOICE_ID)
+
+
 async def synthesize(text: str) -> bytes:
     """Turn the companion's reply text into spoken audio (MP3 bytes)."""
     if not config.ELEVENLABS_API_KEY:

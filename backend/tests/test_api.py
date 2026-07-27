@@ -28,6 +28,7 @@ def client(monkeypatch):
 
     monkeypatch.setattr(brain, "generate_reply", fake_reply)
     monkeypatch.setattr(tts, "synthesize", fake_tts)
+    monkeypatch.setattr(tts, "configured", lambda: True)  # simulate a real voice
     monkeypatch.setattr(stt, "transcribe", fake_stt)
     monkeypatch.setattr(learn, "learn_from_exchange", fake_learn)
 
@@ -61,6 +62,16 @@ def test_say_happy_path(client):
 
 def test_say_empty_is_400(client):
     assert client.post("/api/say", json={"text": "   "}).status_code == 400
+
+
+def test_say_without_voice_falls_back_to_client(client, monkeypatch):
+    # MVP path: no ElevenLabs configured → no server audio, and the client is
+    # told to speak the reply itself (the browser's free voice).
+    monkeypatch.setattr(tts, "configured", lambda: False)
+    data = client.post("/api/say", json={"text": "привет", "session_id": "t4"}).json()
+    assert data["reply"] == "Тёплый ответ от Боба."
+    assert data["audio_base64"] == ""
+    assert data["voice"] == "client"
 
 
 def test_talk_happy_path(client):
