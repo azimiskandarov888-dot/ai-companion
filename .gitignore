@@ -13,6 +13,17 @@ env/
 *.env
 !.env.example
 
+# Safety net for loose files people paste keys into by mistake. Real keys belong
+# ONLY in backend/.env (ignored above). These names must never be committed.
+api keys
+api keys.*
+api-keys*
+apikeys*
+keys.txt
+secrets.txt
+*.secret
+*secret*.txt
+
 # Runtime data (conversation logs, audio, per-user memory).
 # Ignore the *contents* but keep the folder + templates tracked.
 backend/data/*
