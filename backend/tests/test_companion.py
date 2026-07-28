@@ -32,6 +32,18 @@ def test_guardrails_present():
     assert "мостик к живой жизни" in rules  # points him back to real family
 
 
+def test_length_and_word_rules_present():
+    rules = companion.BEHAVIOR_RULES
+    # Keep replies short by default, and short on a plain greeting.
+    assert "не говори лишнего" in rules
+    assert "Утро — это просто утро" in rules
+    # Plain, simple words — not literary/bookish, not slang.
+    assert "простыми, обычными словами" in rules
+    assert "молодёжного сленга" in rules
+    # Idioms only occasionally, never whole sentences of them.
+    assert "не вставляй их в каждый ответ" in rules
+
+
 def test_build_system_prompt_injects_all_parts():
     prompt = companion.build_system_prompt(
         persona_block="ТЫ — Боб. Живёшь у моря.",
