@@ -1,7 +1,7 @@
 // Records one thing he says, and knows when he's finished.
 //
 // It watches the microphone loudness. When he starts talking it records; when he
-// goes quiet for a moment (AppConfig.silenceHang) it stops and hands back the
+// goes quiet for a moment (AppConfig.endOfSpeechSilence) it stops and hands back the
 // audio file. If nobody speaks for a while it reports a quiet timeout so the
 // conversation loop can keep waiting patiently.
 //
@@ -16,16 +16,17 @@ final class SpeechRecorder {
 
     enum Outcome {
         case utterance(URL)     // he said something — here's the recording
-        case quietTimeout       // nobody spoke within `idleTimeout`
+        case quietTimeout       // nobody spoke within `beginSpeakingPatience`
         case failed(String)     // couldn't record
     }
 
     private var recorder: AVAudioRecorder?
 
-    /// Listen until he finishes an utterance, or until `idleTimeout` of silence.
-    /// - Parameter idleTimeout: how long to wait in silence before giving up this
-    ///   round (the loop just calls again, so this only controls responsiveness).
-    func captureUtterance(idleTimeout: TimeInterval = 30) async -> Outcome {
+    /// Listen until he finishes an utterance, or until the "before" patience
+    /// (AppConfig.beginSpeakingPatience) of silence passes with no speech. The
+    /// conversation loop just calls this again on a quiet timeout, so he is never
+    /// rushed into speaking.
+    func captureUtterance() async -> Outcome {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("utterance-\(UUID().uuidString).m4a")
 
@@ -79,12 +80,15 @@ final class SpeechRecorder {
 
             if heardSpeech {
                 speechElapsed += tick
-                // He paused long enough, or hit the safety cap → utterance done.
-                if silenceElapsed >= config.silenceHang || speechElapsed >= config.maxUtterance {
+                // AFTER (short): he paused long enough → utterance done. Or the
+                // safety cap on a very long utterance.
+                if silenceElapsed >= config.endOfSpeechSilence || speechElapsed >= config.maxUtterance {
                     finishRecorder()
                     return .utterance(url)
                 }
-            } else if elapsed >= idleTimeout {
+            } else if elapsed >= config.beginSpeakingPatience {
+                // BEFORE (long): he hasn't started yet. Give up this cycle; the
+                // loop calls us again, so he still has all the time he needs.
                 finishRecorder()
                 try? FileManager.default.removeItem(at: url)
                 return .quietTimeout

@@ -35,10 +35,27 @@ final class AppConfig {
     }
 
     // --- Conversation feel (see docs/ALWAYS-ON.md "Conversation flow") ----------
+    //
+    // Two kinds of pause in a hands-free chat:
+    //
+    //   Bob speaks ─▶│◀── BEFORE ──▶│ he speaks │◀── AFTER ──▶│ Bob speaks
+    //                 (long: give      (he talks)   (short: reply
+    //                  him time to                   promptly)
+    //                  start)
+    //
+    // BEFORE is LONG — he's old and needs time to gather his thoughts, so never
+    // rush him into speaking. AFTER is SHORT — once he's clearly finished, Bob
+    // answers promptly without an awkward wait.
 
-    /// A pause longer than this (seconds) ends his utterance and sends it.
-    /// He is old and slow — keep this generous so he isn't cut off mid-sentence.
-    var silenceHang: TimeInterval = 1.4
+    /// BEFORE — after Bob finishes, how long to keep waiting patiently for him to
+    /// begin. Long on purpose. (The loop keeps re-listening past this, so he is
+    /// never cut off for taking his time; this just paces each listen cycle.)
+    var beginSpeakingPatience: TimeInterval = 60
+
+    /// AFTER — once he has started talking and then goes quiet, how little
+    /// silence means "he's finished" so Bob can answer. Short — but not so short
+    /// it clips him between words. Tune on his real voice.
+    var endOfSpeechSilence: TimeInterval = 1.2
 
     /// Loudness (dBFS) above which we count audio as speech, not room noise.
     /// Less negative = stricter. Tune on his real device and room.
