@@ -44,6 +44,15 @@ def test_length_and_word_rules_present():
     assert "не вставляй их в каждый ответ" in rules
 
 
+def test_not_an_interview_rule_present():
+    rules = companion.BEHAVIOR_RULES
+    # Balanced, not an interrogation; don't end every reply with a question…
+    assert "Не превращай беседу в допрос" in rules
+    assert "НЕ заканчивай вопросом каждый свой ответ" in rules
+    # …but Bob may still gently start a topic so the talk doesn't die.
+    assert "завести тёплую тему" in rules
+
+
 def test_build_system_prompt_injects_all_parts():
     prompt = companion.build_system_prompt(
         persona_block="ТЫ — Боб. Живёшь у моря.",
