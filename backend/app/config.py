@@ -17,8 +17,10 @@ load_dotenv()
 
 # --- The brain: Claude ------------------------------------------------------
 ANTHROPIC_API_KEY: str | None = os.getenv("ANTHROPIC_API_KEY")
-# Per the plan: Claude Opus 4.8.
-BRAIN_MODEL: str = os.getenv("ANTHROPIC_MODEL", "claude-opus-4-8")
+# Claude Sonnet 5 by default: fast enough for real-time voice, cheaper, and very
+# close to Opus in warmth. For maximum warmth (a touch slower), set
+# ANTHROPIC_MODEL=claude-opus-4-8 in .env.
+BRAIN_MODEL: str = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-5")
 
 # --- The ears: OpenAI Whisper ----------------------------------------------
 OPENAI_API_KEY: str | None = os.getenv("OPENAI_API_KEY")

@@ -1,4 +1,4 @@
-"""The brain: Claude (claude-opus-4-8).
+"""The brain: Claude (model from config — Sonnet 5 by default, for speed).
 
 Given the conversation and a fully-assembled system prompt (behavior + persona +
 memory), it produces Bob's spoken reply in warm, simple Russian. Replies are
