@@ -44,6 +44,15 @@ def test_length_and_word_rules_present():
     assert "не вставляй их в каждый ответ" in rules
 
 
+def test_human_speech_disfluencies_present():
+    rules = companion.BEHAVIOR_RULES
+    # Natural hesitations and think-aloud openers (covers a small pause too)…
+    assert "дай вспомнить" in rules
+    # …and real-person self-corrections.
+    assert "поправляй сам себя" in rules
+    assert "не переигрывай" in rules  # but only a little — not broken speech
+
+
 def test_not_an_interview_rule_present():
     rules = companion.BEHAVIOR_RULES
     # Balanced, not an interrogation; don't end every reply with a question…
