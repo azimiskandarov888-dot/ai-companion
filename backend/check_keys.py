@@ -1,0 +1,97 @@
+"""Quick check that your API keys work — without ever showing them.
+
+Run it from the `backend` folder, with your virtual environment active:
+
+    python check_keys.py
+
+It reads your keys from .env, gently pings Claude and OpenAI, and tells you in
+plain words whether each one works. It never prints the key itself.
+"""
+
+from __future__ import annotations
+
+from app import config
+
+
+def _classify(error: Exception) -> str:
+    """Turn a provider error into a plain-language reason."""
+    name = type(error).__name__.lower()
+    msg = str(error).lower()
+    if "authentication" in name or "permissiondenied" in name or "401" in msg or "invalid x-api-key" in msg:
+        return "rejected"
+    if any(word in msg for word in ("credit", "billing", "quota", "insufficient", "balance")):
+        return "no_credit"
+    if "notfound" in name or "not_found" in msg:
+        return "not_found"
+    return "unreachable"
+
+
+def check_claude() -> bool:
+    if not config.ANTHROPIC_API_KEY:
+        print("🧠 Claude (brain): нет ключа в .env  → добавьте ANTHROPIC_API_KEY")
+        return False
+    try:
+        import anthropic
+
+        client = anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY)
+        client.messages.create(
+            model=config.BRAIN_MODEL,
+            max_tokens=1,
+            messages=[{"role": "user", "content": "hi"}],
+        )
+        print("🧠 Claude (brain): ✅ ключ работает")
+        return True
+    except Exception as error:  # noqa: BLE001 — friendly report, not a crash
+        reason = _classify(error)
+        if reason == "rejected":
+            print("🧠 Claude (brain): ❌ ключ ОТКЛОНЁН — неверный или устаревший ключ")
+        elif reason == "no_credit":
+            print("🧠 Claude (brain): ⚠️ ключ верный, но НЕТ КРЕДИТОВ — пополните баланс на console.anthropic.com")
+        elif reason == "not_found":
+            print(f"🧠 Claude (brain): ⚠️ ключ работает, но модель '{config.BRAIN_MODEL}' недоступна")
+        else:
+            print(f"🧠 Claude (brain): ⚠️ не удалось связаться с Claude ({type(error).__name__})")
+        return False
+
+
+def check_openai() -> bool:
+    if not config.OPENAI_API_KEY:
+        print("👂 Whisper (ears): нет ключа в .env  → добавьте OPENAI_API_KEY")
+        return False
+    try:
+        import openai
+
+        client = openai.OpenAI(api_key=config.OPENAI_API_KEY)
+        client.models.list()  # cheap call that just proves the key authenticates
+        print("👂 Whisper (ears): ✅ ключ работает")
+        return True
+    except Exception as error:  # noqa: BLE001
+        reason = _classify(error)
+        if reason == "rejected":
+            print("👂 Whisper (ears): ❌ ключ ОТКЛОНЁН — неверный или устаревший ключ")
+        elif reason == "no_credit":
+            print("👂 Whisper (ears): ⚠️ ключ верный, но НЕТ КРЕДИТОВ — пополните баланс на platform.openai.com")
+        else:
+            print(f"👂 Whisper (ears): ⚠️ не удалось связаться с OpenAI ({type(error).__name__})")
+        return False
+
+
+def main() -> None:
+    print("Проверяю ключи (сами ключи не показываю)…\n")
+    brain_ok = check_claude()
+    ears_ok = check_openai()
+
+    if config.ELEVENLABS_API_KEY:
+        print("🗣️ Голос: ключ ElevenLabs задан (тёплый голос).")
+    else:
+        print("🗣️ Голос: пусто → браузер озвучит бесплатно (для MVP это нормально).")
+
+    print()
+    if brain_ok and ears_ok:
+        print("✅ Всё готово — откройте http://localhost:8000 и поговорите с Бобом.")
+    else:
+        print("Исправьте пункт(ы) с ❌/⚠️ выше и запустите проверку снова.")
+
+
+if __name__ == "__main__":
+    main()
