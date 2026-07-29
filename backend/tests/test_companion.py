@@ -44,6 +44,16 @@ def test_length_and_word_rules_present():
     assert "не вставляй их в каждый ответ" in rules
 
 
+def test_games_present():
+    rules = companion.BEHAVIOR_RULES
+    assert "ИГРЫ И ЗАБАВЫ" in rules
+    # A rich menu, not just one or two games…
+    for game in ("В слова", "Города", "данетки", "продолжи пословицу", "угадай песню", "загадай число"):
+        assert game in rules
+    # …played warmly, never to win.
+    assert "без соревнования" in rules
+
+
 def test_news_and_weather_rule_present():
     rules = companion.BEHAVIOR_RULES
     assert "НОВОСТИ И ПОГОДА" in rules
