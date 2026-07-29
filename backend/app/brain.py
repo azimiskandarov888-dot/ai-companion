@@ -16,6 +16,13 @@ from . import config
 
 _client: AsyncAnthropic | None = None
 
+# Web search lets Bob share real, current news and weather when the elder asks —
+# woven into his own casual talk (see companion.py "НОВОСТИ И ПОГОДА"). Claude
+# only uses it when current info is genuinely needed, so ordinary chat adds no
+# search latency or cost. Capped so one question can't spiral into many searches.
+# (web_search_20260209 is supported on the default model, Sonnet 5, and on Opus.)
+_WEB_SEARCH_TOOL = {"type": "web_search_20260209", "name": "web_search", "max_uses": 3}
+
 
 def _get_client() -> AsyncAnthropic:
     global _client
@@ -42,12 +49,23 @@ async def generate_reply(
 
     # Streaming keeps us safe against timeouts and lets us add sentence-level
     # TTS streaming later. For now we collect the full reply.
-    async with client.messages.stream(
-        model=config.BRAIN_MODEL,
-        max_tokens=config.MAX_REPLY_TOKENS,
-        system=system_prompt,
-        messages=history,
-    ) as stream:
-        message = await stream.get_final_message()
+    messages = list(history)
+    message = None
+    for _ in range(3):  # allow a couple of server-side web-search continuations
+        async with client.messages.stream(
+            model=config.BRAIN_MODEL,
+            max_tokens=config.MAX_REPLY_TOKENS,
+            system=system_prompt,
+            messages=messages,
+            tools=[_WEB_SEARCH_TOOL],
+        ) as stream:
+            message = await stream.get_final_message()
+        # If the server-side search loop paused, feed its progress back and
+        # continue; otherwise we're done.
+        if message.stop_reason != "pause_turn":
+            break
+        messages = messages + [{"role": "assistant", "content": message.content}]
 
+    if message is None:
+        return ""
     return "".join(b.text for b in message.content if b.type == "text").strip()

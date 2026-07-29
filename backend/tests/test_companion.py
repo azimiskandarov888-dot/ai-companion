@@ -44,6 +44,16 @@ def test_length_and_word_rules_present():
     assert "не вставляй их в каждый ответ" in rules
 
 
+def test_news_and_weather_rule_present():
+    rules = companion.BEHAVIOR_RULES
+    assert "НОВОСТИ И ПОГОДА" in rules
+    # Delivered like a person keeping up, not a news reader…
+    assert "не как диктор" in rules
+    assert "не ссылайся на источники" in rules
+    # …and bad news handled gently.
+    assert "не пугай его" in rules
+
+
 def test_human_speech_disfluencies_present():
     rules = companion.BEHAVIOR_RULES
     # Natural hesitations and think-aloud openers (covers a small pause too)…
