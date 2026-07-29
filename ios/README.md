@@ -20,7 +20,14 @@ answers in his warm voice. **No typing, no reading, no buttons.**
   pauses (tunable — he's old and slow, so pauses are generous).
 - Sends his voice to the backend, plays Bob's reply, then listens again — a real
   back-and-forth, hands-free.
+- Speaks Bob's reply with the phone's **free built-in voice** when the backend
+  has no ElevenLabs key (the MVP) — exactly like the browser test. Add an
+  ElevenLabs key on the backend and it plays the warm ElevenLabs voice instead.
+  Either way Bob is never silent.
 - A hidden settings screen (long-press the face) to set the backend address.
+- The two conversation pauses are tuned as we agreed: a **long, patient wait**
+  before he speaks (he's never rushed) and a **short wait** after he finishes
+  before Bob replies.
 
 **Next layers (designed, not yet coded — see below and `docs/BUILD-PLAN.md`):**
 
@@ -136,7 +143,8 @@ ios/
     Audio/
       AudioSessionManager.swift    # record+playback session, mic permission
       SpeechRecorder.swift         # records one utterance, detects when he's done
-      AudioPlayer.swift            # plays Bob's returned voice
+      AudioPlayer.swift            # plays the backend's audio (ElevenLabs)
+      SpeechVoice.swift            # free on-device voice when the backend sends none
     Net/BackendClient.swift        # POST /api/talk (multipart), decodes reply+audio
     Conversation/
       ConversationController.swift  # the listen → think → speak loop

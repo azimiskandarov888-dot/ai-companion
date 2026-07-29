@@ -27,7 +27,8 @@ final class ConversationController: ObservableObject {
     @Published private(set) var lastHeard: String = ""
 
     private let recorder = SpeechRecorder()
-    private let player = AudioPlayer()
+    private let player = AudioPlayer()      // plays real audio from the backend (ElevenLabs)
+    private let voice = SpeechVoice()        // free on-device voice when no backend audio
     private var loop: Task<Void, Never>?
 
     private var client: BackendClient {
@@ -46,6 +47,7 @@ final class ConversationController: ObservableObject {
         loop = nil
         recorder.cancel()
         player.stop()
+        voice.stop()
         AudioSessionManager.deactivate()
         status = .idle
     }
@@ -102,14 +104,29 @@ final class ConversationController: ObservableObject {
             lastHeard = response.transcript
             lastReply = response.reply
 
-            if let base64 = response.audioBase64,
-               let audio = Data(base64Encoded: base64) {
+            // Speak Bob's reply. If the backend sent real audio (ElevenLabs),
+            // play it; otherwise (MVP, no ElevenLabs) speak it with the free
+            // on-device voice — exactly like the browser does. Never stay silent.
+            if let audio = decodedAudio(from: response) {
                 status = .speaking
                 await player.play(data: audio)
+            } else if !response.reply.isEmpty {
+                status = .speaking
+                await voice.speak(response.reply)
             }
         } catch {
             status = .problem(error.localizedDescription)
             try? await Task.sleep(nanoseconds: 2_000_000_000)
         }
+    }
+
+    /// Real audio from the backend, or nil if it sent none (an empty string is
+    /// the MVP path with no ElevenLabs → we speak with the on-device voice).
+    private func decodedAudio(from response: TalkResponse) -> Data? {
+        guard let base64 = response.audioBase64,
+              !base64.isEmpty,
+              let data = Data(base64Encoded: base64),
+              !data.isEmpty else { return nil }
+        return data
     }
 }
