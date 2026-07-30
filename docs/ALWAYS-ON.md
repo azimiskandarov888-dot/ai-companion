@@ -69,7 +69,7 @@ iOS permits.
 
 **Mode A — open & talk (full warm Bob voice).**
 *«Эй Siri, Боб»* launches the app; then a continuous, flowing conversation in
-Bob's warm ElevenLabs Russian voice, with full memory. Best when he's giving it
+Bob's warm Russian voice, with full memory. Best when he's giving it
 attention (resting, or docked in a stand). The rich experience.
 
 **Mode B — quick answer *without leaving* his current app (Telegram, a movie).**
@@ -91,7 +91,7 @@ Telegram / the film.
 - He must say **"Hey Siri" first** — Apple reserves the wake word; "Hey Bob"
   alone is impossible.
 - **Voice is the open question.** The reliable answer speaks in **Siri's Russian
-  voice.** Getting **Bob's warm ElevenLabs voice** to play from a background
+  voice.** Getting **Bob's warm voice** to play from a background
   intent is *possible in principle* (background audio is allowed) but finicky —
   prove it on a real device before relying on it.
 - The **phone must be on.** Locked screen = fine; fully powered-off = nothing

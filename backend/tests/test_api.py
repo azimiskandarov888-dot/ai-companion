@@ -1,6 +1,6 @@
 """Endpoint tests — the voice loop wired end to end, with services mocked.
 
-The AI services (Claude, Whisper, ElevenLabs) are replaced with fast fakes so we
+The AI services (Claude, Whisper, and the voice) are replaced with fast fakes so we
 test the orchestration (persona + memory + logging), not the network.
 """
 
@@ -65,7 +65,7 @@ def test_say_empty_is_400(client):
 
 
 def test_say_without_voice_falls_back_to_client(client, monkeypatch):
-    # MVP path: no ElevenLabs configured → no server audio, and the client is
+    # MVP path: no voice provider configured → no server audio, and the client is
     # told to speak the reply itself (the browser's free voice).
     monkeypatch.setattr(tts, "configured", lambda: False)
     data = client.post("/api/say", json={"text": "привет", "session_id": "t4"}).json()

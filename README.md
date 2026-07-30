@@ -16,7 +16,7 @@ remembers his stories and can start a conversation on its own.
 | ---- | --- | ---------- |
 | 🧠 **Brain** | thinks, remembers, replies warmly | **Claude** (`claude-opus-4-8`) |
 | 👂 **Ears** | hears messy, elderly Russian | **Whisper** (OpenAI) |
-| 🗣️ **Mouth** | warm Russian voice | **ElevenLabs** |
+| 🗣️ **Mouth** | warm Russian voice | **Fish Audio** (default; ElevenLabs optional) |
 | 📔 **Memory** | remembers stories, family, routine | file-based now → Postgres + pgvector later |
 
 ## Where we are
@@ -35,7 +35,7 @@ PLAN.md    ← the plan (source of truth)
 
 ```bash
 cd backend
-cp .env.example .env        # then paste in your Anthropic, OpenAI, ElevenLabs keys
+cp .env.example .env        # then paste in your Anthropic, OpenAI, and Fish Audio keys
 ./run.sh                    # sets up a venv, installs deps, starts the server
 ```
 
@@ -44,7 +44,7 @@ Open **http://localhost:8000**, press the button, and speak Russian. See
 
 ## Build phases (from PLAN.md)
 
-1. ✅ **Talking loop** — Whisper → Claude → ElevenLabs (browser test page)
+1. ✅ **Talking loop** — Whisper → Claude → Fish Audio (browser test page)
 2. ✅ **Memory** — facts + semantic story recall + spontaneous resurfacing +
    caring follow-ups + mood (SQLite now → Postgres + pgvector later)
 3. 🔨 **iPhone app** ← *next* — voice only, launched hands-free by voice (Siri),

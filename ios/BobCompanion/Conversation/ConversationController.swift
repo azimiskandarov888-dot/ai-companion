@@ -27,7 +27,7 @@ final class ConversationController: ObservableObject {
     @Published private(set) var lastHeard: String = ""
 
     private let recorder = SpeechRecorder()
-    private let player = AudioPlayer()      // plays real audio from the backend (ElevenLabs)
+    private let player = AudioPlayer()      // plays real audio from the backend (Fish Audio)
     private let voice = SpeechVoice()        // free on-device voice when no backend audio
     private var loop: Task<Void, Never>?
 
@@ -104,8 +104,8 @@ final class ConversationController: ObservableObject {
             lastHeard = response.transcript
             lastReply = response.reply
 
-            // Speak Bob's reply. If the backend sent real audio (ElevenLabs),
-            // play it; otherwise (MVP, no ElevenLabs) speak it with the free
+            // Speak Bob's reply. If the backend sent real audio (Fish Audio),
+            // play it; otherwise (MVP, no voice key) speak it with the free
             // on-device voice — exactly like the browser does. Never stay silent.
             if let audio = decodedAudio(from: response) {
                 status = .speaking
@@ -121,7 +121,7 @@ final class ConversationController: ObservableObject {
     }
 
     /// Real audio from the backend, or nil if it sent none (an empty string is
-    /// the MVP path with no ElevenLabs → we speak with the on-device voice).
+    /// the MVP path with no voice key → we speak with the on-device voice).
     private func decodedAudio(from response: TalkResponse) -> Data? {
         guard let base64 = response.audioBase64,
               !base64.isEmpty,

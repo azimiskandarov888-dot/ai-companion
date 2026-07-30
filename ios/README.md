@@ -21,9 +21,9 @@ answers in his warm voice. **No typing, no reading, no buttons.**
 - Sends his voice to the backend, plays Bob's reply, then listens again — a real
   back-and-forth, hands-free.
 - Speaks Bob's reply with the phone's **free built-in voice** when the backend
-  has no ElevenLabs key (the MVP) — exactly like the browser test. Add an
-  ElevenLabs key on the backend and it plays the warm ElevenLabs voice instead.
-  Either way Bob is never silent.
+  has no voice key (the MVP) — exactly like the browser test. Configure the
+  backend voice (**Fish Audio**) and it plays that warm voice instead. Either
+  way Bob is never silent.
 - A hidden settings screen (long-press the face) to set the backend address.
 - The two conversation pauses are tuned as we agreed: a **long, patient wait**
   before he speaks (he's never rushed) and a **short wait** after he finishes
@@ -121,7 +121,7 @@ This app (Swift/SwiftUI)            Backend (Python, already built)      Paid AI
 ────────────────────────            ──────────────────────────────      ────────────────
 records his voice ───── audio ────▶ POST /api/talk ─▶ Whisper  (ears) ─▶ text
 plays Bob's reply ◀──── audio ─────           │        Claude  (brain) ─▶ reply (as Bob)
-                                              └─────── ElevenLabs (mouth) ─▶ voice
+                                              └─────── Fish Audio (mouth) ─▶ voice
 ```
 
 - **The app holds no secrets.** Every API key lives on the backend
@@ -143,7 +143,7 @@ ios/
     Audio/
       AudioSessionManager.swift    # record+playback session, mic permission
       SpeechRecorder.swift         # records one utterance, detects when he's done
-      AudioPlayer.swift            # plays the backend's audio (ElevenLabs)
+      AudioPlayer.swift            # plays the backend's audio (Fish Audio)
       SpeechVoice.swift            # free on-device voice when the backend sends none
     Net/BackendClient.swift        # POST /api/talk (multipart), decodes reply+audio
     Conversation/

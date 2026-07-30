@@ -1,7 +1,7 @@
 // The iPhone's own built-in voice, used when the backend sends no audio (the
-// MVP path: no ElevenLabs key → the client speaks for free). This mirrors what
+// MVP path: no voice key → the client speaks for free). This mirrors what
 // the browser test page does with the browser's free voice, so Bob is never
-// silent. Add an ElevenLabs key on the backend and it sends real warm audio
+// silent. Configure the backend voice (Fish Audio) and it sends real warm audio
 // instead, and this isn't used.
 
 import AVFoundation

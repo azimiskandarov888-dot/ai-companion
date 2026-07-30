@@ -5,7 +5,7 @@ only ever *responds* — never initiates.
 
 Talking loop (with memory + persona):
     audio → 👂 Whisper → [persona + recalled facts/stories/follow-ups/mood]
-          → 🧠 Claude → 🗣️ ElevenLabs → audio
+          → 🧠 Claude → 🗣️ Fish Audio → audio
           → (in the background) learn new memories
 
 Endpoints:
@@ -101,7 +101,8 @@ async def _think_and_speak(
     # Learn from this exchange after the response is sent (keeps the voice fast).
     background_tasks.add_task(learn.learn_from_exchange, session_id, user_text, reply)
 
-    # The mouth is optional. With an ElevenLabs key we return warm spoken audio.
+    # The mouth is optional. With a voice provider configured (Fish Audio) we
+    # return warm spoken audio.
     # Without one (MVP / browser testing), we return no audio and let the client
     # speak the reply with its own free voice — so testing needs only Whisper +
     # Claude. "voice" tells the client which path to take.

@@ -24,7 +24,7 @@ So:
 ### The parts (like a person)
 - **Brain** (thinks + remembers) = **Claude**
 - **Ears** (hears messy old Russian) = **Whisper** (OpenAI)
-- **Mouth** (warm Russian voice) = **ElevenLabs**
+- **Mouth** (warm Russian voice) = **Fish Audio** (default; ElevenLabs optional)
 - **Memory** (stores everything) = a database (storage is cheap, not a problem)
 
 We mix the best from each company. We are not locked to one.
@@ -51,7 +51,7 @@ Before trusting the "ears," we test it with a **real recording of his voice**.
 So we can move fast, create these and save the API keys:
 1. **Anthropic** (Claude brain) → console.anthropic.com
 2. **OpenAI** (Whisper ears) → platform.openai.com
-3. **ElevenLabs** (Russian voice) → elevenlabs.io
+3. **Fish Audio** (Russian voice) → fish.audio
 4. **Picovoice** (wake word) → picovoice.ai
 5. **Apple Developer** account (~$99/yr) to put the app on his iPhone → developer.apple.com
 
@@ -80,7 +80,7 @@ Note: this chat does not copy itself to the Mac — this file is the handoff. No
 - **Backend:** **Python + FastAPI**. Holds all API keys, orchestrates the voice loop, owns memory + the proactive scheduler. Build and test this FIRST (works on any OS, incl. a browser mic test page).
   - **STT (ears):** OpenAI **Whisper** primary (best for elderly/noisy Russian). Optional **Deepgram** streaming for lower latency later.
   - **Brain:** **Claude Opus 4.8** (`claude-opus-4-8`) via Anthropic API. Holds personality + reads memory before each reply.
-  - **TTS (mouth):** **ElevenLabs** streaming, warm multilingual Russian voice.
+  - **TTS (mouth):** **Fish Audio** (open-weight, cheaper), warm Russian voice; ElevenLabs optional.
   - Target round-trip latency ~1–1.5s (fine for an elderly user).
 - **Memory (Postgres + pgvector):**
   - *Facts table:* name, family tree, birthdays, meds, doctors, conditions, routine, preferences.
@@ -92,7 +92,7 @@ Note: this chat does not copy itself to the Mac — this file is the handoff. No
 - **Reminiscence / life-review** is a deliberate feature (clinically supported for elderly depression), not filler.
 
 **Build phases:**
-1. Talking loop (wake word → Whisper → Claude → ElevenLabs). Browser mic test page first.
+1. Talking loop (wake word → Whisper → Claude → Fish Audio). Browser mic test page first.
 2. Memory (Postgres + pgvector; facts + story recall).
 3. Proactive/daily (scheduler, greetings, reminders, story recall).
 4. Family & safety (family voice messages, "call my son", silence/health alerts).

@@ -81,8 +81,8 @@ def main() -> None:
     brain_ok = check_claude()
     ears_ok = check_openai()
 
-    if config.ELEVENLABS_API_KEY:
-        print("🗣️ Голос: ключ ElevenLabs задан (тёплый голос).")
+    if config.tts_configured():
+        print(f"🗣️ Голос: {config.TTS_PROVIDER} настроен.")
     else:
         print("🗣️ Голос: пусто → браузер озвучит бесплатно (для MVP это нормально).")
 

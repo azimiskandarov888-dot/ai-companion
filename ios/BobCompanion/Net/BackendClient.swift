@@ -1,6 +1,6 @@
 // Talks to our backend. Sends his recorded voice to POST /api/talk and gets back
 // { transcript, reply, audio }. The backend does the ears (Whisper), the brain
-// (Claude, in Bob's persona), and the mouth (ElevenLabs). This app never sees an
+// (Claude, in Bob's persona), and the mouth (Fish Audio). This app never sees an
 // API key.
 
 import Foundation

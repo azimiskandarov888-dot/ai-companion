@@ -28,7 +28,7 @@ Related docs (all in this repo):
 | Build machine | **Mac** (Xcode) |
 | Brain | **Claude** `claude-opus-4-8` |
 | Ears | **OpenAI Whisper** (Russian) |
-| Mouth | **ElevenLabs** — warm, neutral Russian voice (no cloning) |
+| Mouth | **Fish Audio** (default) — cheaper, open-weight, good Russian; ElevenLabs optional |
 | Memory | SQLite now → **Postgres + pgvector** later (same interface) |
 | Wake word | **"Боб"** — not "Hey Siri, Bob" (see §3) |
 | Cost | Not a concern — use the best tools |
@@ -129,7 +129,7 @@ mic capture ─────────────────┼── audio �
 rolling listen window        │                     │
 floating PiP window          │                     ├─ load memory (facts/stories/…)
 play Bob's voice ◀───────────┘◀── audio ───         ├─ Claude (brain) ──▶ reply
-Vocal Shortcut / Siri launch                        ├─ ElevenLabs (mouth) ──▶ audio
+Vocal Shortcut / Siri launch                        ├─ Fish Audio (mouth) ──▶ audio
                                                     └─ background: learn new memories
                                               SQLite memory (→ Postgres+pgvector)
 ```
@@ -149,7 +149,7 @@ work, degrades gracefully without keys, memory logic tested.
 - `companion.py` — Bob's Russian personality + guardrails.
 - `stt.py` — Whisper (Russian).
 - `brain.py` — Claude `claude-opus-4-8`, short warm replies (streaming).
-- `tts.py` — ElevenLabs (voice id configurable).
+- `tts.py` — Fish Audio (default) or ElevenLabs, chosen by TTS_PROVIDER.
 - `memory.py` — facts / stories / health / mood / follow-ups; semantic recall;
   spontaneous resurfacing; due-follow-up logic (checks back later, no nagging).
 - `learn.py` — background extraction of new memories after each exchange.
@@ -241,7 +241,7 @@ multi-turn if used.
     VM or an always-on machine at home). Decide later.
 - **The phone:** a dedicated iPhone in a **stand, plugged in**, Guided Access
   kiosk, docked by his chair/bed. iOS 18+.
-- **Accounts/keys needed:** Anthropic, OpenAI, ElevenLabs, **Picovoice** (wake
+- **Accounts/keys needed:** Anthropic, OpenAI, Fish Audio (voice), **Picovoice** (wake
   word), **Apple Developer** (~$99/yr, to install on his iPhone).
 
 ---
@@ -282,6 +282,6 @@ design:
 
 - **Bob's final name** and how it's said (wake-word phrase).
 - **His name** / how he likes to be addressed.
-- **The ElevenLabs voice** (warm Russian) — the family will choose with him.
+- **The voice** — a warm Russian voice on Fish Audio — the family will choose with him.
 - **Backend hosting** for 24/7 (home server vs cloud).
 - Confirm his **iPhone model / iOS version** (needs 18+).

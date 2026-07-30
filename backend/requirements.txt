@@ -7,4 +7,4 @@ python-dotenv==1.0.1
 # AI services
 anthropic>=0.112.0      # Brain — Claude (claude-opus-4-8)
 openai>=1.60.0          # Ears — Whisper speech-to-text
-httpx>=0.27.0           # Mouth — ElevenLabs text-to-speech (raw HTTP)
+httpx>=0.27.0           # Mouth — Fish Audio / ElevenLabs text-to-speech (raw HTTP)
