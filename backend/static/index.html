@@ -156,8 +156,10 @@
           // For an MVP browser test you only need the brain + ears. The mouth is
           // optional — without an ElevenLabs key the browser speaks for free.
           const canTest = s.brain_claude && s.ears_whisper;
-          const voicePill = s.mouth_elevenlabs
-            ? pill(true, "ElevenLabs", "", "ok")
+          const providerLabel = h.tts_provider === "fish" ? "Fish Audio"
+            : h.tts_provider === "elevenlabs" ? "ElevenLabs" : "голос";
+          const voicePill = s.mouth
+            ? '<span class="pill ok">' + providerLabel + "</span>"
             : '<span class="pill ok">браузер (бесплатно)</span>';
           statusEl.innerHTML =
             "<b>" + h.companion_name + "</b> · модель " + h.brain_model +

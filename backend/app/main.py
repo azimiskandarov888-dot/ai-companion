@@ -55,6 +55,7 @@ async def health() -> JSONResponse:
             "companion_name": persona.persona_name(),
             "language": config.LANGUAGE,
             "brain_model": config.BRAIN_MODEL,
+            "tts_provider": tts.provider_name(),
             "services": services,
             "all_ready": all(services.values()),
             "memory": memory.counts("elder"),

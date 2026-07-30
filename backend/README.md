@@ -7,13 +7,14 @@ exists.
 ## The talking loop (Phase 1)
 
 ```
-🎙️ recorded audio  →  👂 Whisper (STT, ru)  →  🧠 Claude (reply, ru)  →  🗣️ ElevenLabs (TTS)  →  🔊 audio back
+🎙️ recorded audio  →  👂 Whisper (STT, ru)  →  🧠 Claude (reply, ru)  →  🗣️ Fish Audio / ElevenLabs (TTS)  →  🔊 audio back
 ```
 
 ## Setup
 
 **1. Get your keys** (see [../PLAN.md](../PLAN.md) → "GET THESE READY"):
-Anthropic, OpenAI, ElevenLabs.
+Anthropic (brain), OpenAI/Whisper (ears), and a voice — Fish Audio (default) or
+ElevenLabs.
 
 **2. Configure:**
 
@@ -65,7 +66,7 @@ app/
   persona.py     # WHO Bob is (name, home, story, cast, habits) — loaded from editable data
   stt.py         # ears   — Whisper
   brain.py       # brain  — Claude (claude-opus-4-8): produces the reply
-  tts.py         # mouth  — ElevenLabs
+  tts.py         # mouth  — Fish Audio (default) or ElevenLabs, chosen by TTS_PROVIDER
   memory.py      # memory — facts, stories, health, mood, follow-ups (owner: elder | bob)
   learn.py       # turns each conversation into memory (runs in the background)
   embeddings.py  # semantic recall (OpenAI embeddings + cosine)

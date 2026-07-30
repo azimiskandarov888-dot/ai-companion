@@ -31,15 +31,40 @@ EMBEDDING_MODEL: str = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
 # Smaller dimension = lighter storage + faster similarity, still strong for one user.
 EMBEDDING_DIM: int = int(os.getenv("EMBEDDING_DIM", "512"))
 
-# --- The mouth: ElevenLabs --------------------------------------------------
+# --- The mouth: text-to-speech ---------------------------------------------
+# Which voice provider speaks Bob's replies:
+#   "fish"       — Fish Audio (cheaper, open-weight, fast). The default.
+#   "elevenlabs" — ElevenLabs (warm, cloud-only).
+#   ""/"none"    — no server voice → the client speaks with its own free voice
+#                  (the MVP path).
+# NOTE: this is only the VOICE. The EARS stay on Whisper above — Fish Audio's
+# speech-to-text does NOT support Russian, so it can't replace Whisper.
+TTS_PROVIDER: str = os.getenv("TTS_PROVIDER", "fish").strip().lower()
+
+# Fish Audio (https://fish.audio) — the default voice.
+FISH_API_KEY: str | None = os.getenv("FISH_API_KEY")
+# The voice to speak in — a "reference_id" from the Fish Audio voice library:
+# pick a warm Russian voice on fish.audio and paste its id here. Empty string
+# uses Fish's default voice.
+FISH_VOICE_ID: str = os.getenv("FISH_VOICE_ID", "")
+# Fish model version, sent as the `model` HTTP header. "s1" is stable; set
+# FISH_MODEL=s2-pro (or the current name) for the newest open-weight model.
+FISH_MODEL: str = os.getenv("FISH_MODEL", "s1")
+
+# ElevenLabs (alternative voice). Used when TTS_PROVIDER=elevenlabs. A warm
+# multilingual voice; default = "Sarah". eleven_multilingual_v2 handles Russian.
 ELEVENLABS_API_KEY: str | None = os.getenv("ELEVENLABS_API_KEY")
-# A warm multilingual voice. Swap for a Russian-suited voice from the
-# ElevenLabs voice library. Default = "Sarah" (a gentle, warm preset).
-ELEVENLABS_VOICE_ID: str = os.getenv(
-    "ELEVENLABS_VOICE_ID", "EXAVITQu4vr4xnSDxMaL"
-)
-# eleven_multilingual_v2 handles Russian well.
+ELEVENLABS_VOICE_ID: str = os.getenv("ELEVENLABS_VOICE_ID", "EXAVITQu4vr4xnSDxMaL")
 ELEVENLABS_MODEL: str = os.getenv("ELEVENLABS_MODEL", "eleven_multilingual_v2")
+
+
+def tts_configured() -> bool:
+    """Is the selected voice provider set up? If not, the client speaks free."""
+    if TTS_PROVIDER == "fish":
+        return bool(FISH_API_KEY)
+    if TTS_PROVIDER == "elevenlabs":
+        return bool(ELEVENLABS_API_KEY) and bool(ELEVENLABS_VOICE_ID)
+    return False
 
 # --- General ----------------------------------------------------------------
 LANGUAGE: str = os.getenv("COMPANION_LANGUAGE", "ru")
@@ -69,5 +94,5 @@ def service_status() -> dict[str, bool]:
     return {
         "brain_claude": bool(ANTHROPIC_API_KEY),
         "ears_whisper": bool(OPENAI_API_KEY),
-        "mouth_elevenlabs": bool(ELEVENLABS_API_KEY) and bool(ELEVENLABS_VOICE_ID),
+        "mouth": tts_configured(),
     }

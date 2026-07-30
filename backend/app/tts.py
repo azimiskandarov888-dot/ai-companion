@@ -1,8 +1,13 @@
-"""The mouth: text-to-speech via ElevenLabs.
+"""The mouth: text-to-speech.
 
-We call the ElevenLabs HTTP API directly (no extra SDK) and return MP3 bytes.
-eleven_multilingual_v2 speaks natural Russian; the voice id is configurable so
-you can pick a warm, neutral Russian-suited voice from the ElevenLabs library.
+Two providers, chosen by config.TTS_PROVIDER:
+  - "fish"       Fish Audio — cheaper, open-weight, fast, good Russian. Default.
+  - "elevenlabs" ElevenLabs — warm, cloud-only.
+Both return MP3 bytes, so the rest of the app doesn't care which spoke.
+
+If no provider is configured, main.py falls back to letting the client speak
+with its own free voice (the MVP path). The EARS stay on Whisper regardless —
+Fish Audio's speech-to-text doesn't support Russian (see stt.py).
 """
 
 from __future__ import annotations
@@ -11,26 +16,76 @@ import httpx
 
 from . import config
 
-_API_BASE = "https://api.elevenlabs.io/v1/text-to-speech"
+_FISH_API_URL = "https://api.fish.audio/v1/tts"
+_ELEVENLABS_API_BASE = "https://api.elevenlabs.io/v1/text-to-speech"
 
 
 def configured() -> bool:
-    """Is the ElevenLabs 'mouth' set up? If not, the browser speaks for free
-    (MVP path) — see static/index.html. On the phone the app would need a real
-    voice, but for browser testing this keeps costs to just Whisper + Claude."""
-    return bool(config.ELEVENLABS_API_KEY and config.ELEVENLABS_VOICE_ID)
+    """Is the selected voice provider set up? (Single source of truth: config.)"""
+    return config.tts_configured()
+
+
+def provider_name() -> str:
+    """Which voice is speaking — for the health endpoint (no secrets)."""
+    return config.TTS_PROVIDER or "none"
 
 
 async def synthesize(text: str) -> bytes:
-    """Turn the companion's reply text into spoken audio (MP3 bytes)."""
-    if not config.ELEVENLABS_API_KEY:
-        raise RuntimeError(
-            "ELEVENLABS_API_KEY is not set — the 'mouth' (ElevenLabs) is not configured."
-        )
+    """Turn Bob's reply into spoken audio (MP3 bytes), via the chosen provider."""
     if not text.strip():
         raise ValueError("Nothing to say — empty text passed to synthesize().")
 
-    url = f"{_API_BASE}/{config.ELEVENLABS_VOICE_ID}"
+    if config.TTS_PROVIDER == "fish":
+        if not config.FISH_API_KEY:
+            raise RuntimeError(
+                "FISH_API_KEY is not set — the Fish Audio voice is not configured."
+            )
+        return await _synthesize_fish(text)
+
+    if config.TTS_PROVIDER == "elevenlabs":
+        if not (config.ELEVENLABS_API_KEY and config.ELEVENLABS_VOICE_ID):
+            raise RuntimeError(
+                "ELEVENLABS_API_KEY / ELEVENLABS_VOICE_ID not set — the ElevenLabs "
+                "voice is not configured."
+            )
+        return await _synthesize_elevenlabs(text)
+
+    raise RuntimeError(
+        f"No voice provider configured (TTS_PROVIDER={config.TTS_PROVIDER!r})."
+    )
+
+
+async def _synthesize_fish(text: str) -> bytes:
+    """Fish Audio TTS. POST /v1/tts with the model in a header; returns MP3 bytes."""
+    headers = {
+        "Authorization": f"Bearer {config.FISH_API_KEY}",
+        "Content-Type": "application/json",
+        # Fish selects the model version via this header (e.g. "s1", "s2-pro").
+        "model": config.FISH_MODEL,
+    }
+    payload: dict = {
+        "text": text,
+        "format": "mp3",
+        "mp3_bitrate": 128,
+        "normalize": True,   # tidy punctuation/numbers for natural speech
+        "latency": "normal",
+    }
+    # A chosen voice from the Fish library; omit to use Fish's default voice.
+    if config.FISH_VOICE_ID:
+        payload["reference_id"] = config.FISH_VOICE_ID
+
+    async with httpx.AsyncClient(timeout=60.0) as http:
+        resp = await http.post(_FISH_API_URL, headers=headers, json=payload)
+        if resp.status_code != 200:
+            raise RuntimeError(
+                f"Fish Audio TTS failed ({resp.status_code}): {resp.text[:300]}"
+            )
+        return resp.content
+
+
+async def _synthesize_elevenlabs(text: str) -> bytes:
+    """ElevenLabs TTS (eleven_multilingual_v2 handles Russian). Returns MP3 bytes."""
+    url = f"{_ELEVENLABS_API_BASE}/{config.ELEVENLABS_VOICE_ID}"
     headers = {
         "xi-api-key": config.ELEVENLABS_API_KEY,
         "accept": "audio/mpeg",
@@ -47,13 +102,10 @@ async def synthesize(text: str) -> bytes:
             "use_speaker_boost": True,
         },
     }
-
     async with httpx.AsyncClient(timeout=60.0) as http:
         resp = await http.post(url, headers=headers, json=payload)
         if resp.status_code != 200:
-            # ElevenLabs returns JSON error detail on failure.
-            detail = resp.text[:300]
             raise RuntimeError(
-                f"ElevenLabs TTS failed ({resp.status_code}): {detail}"
+                f"ElevenLabs TTS failed ({resp.status_code}): {resp.text[:300]}"
             )
         return resp.content
