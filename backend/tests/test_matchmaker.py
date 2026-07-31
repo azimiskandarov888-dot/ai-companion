@@ -45,6 +45,7 @@ def test_friend_is_created_and_becomes_the_persona(pen):
     created = asyncio.run(
         matchmaker.create_companion(
             "Люблю футбол, старые фильмы и архитектуру.",
+            wishes="Хотел бы кого-то спокойного, кто много читает.",
             age="около 60",
             gender="мужчина",
             origin="Грузия",
@@ -52,6 +53,7 @@ def test_friend_is_created_and_becomes_the_persona(pen):
     )
     # The reveal: he has his own name — and the user's wishes reached the pen.
     assert created["name"] == "Фёдор"
+    assert "кого-то спокойного, кто много читает" in pen[0]
     assert "возраст: около 60" in pen[0]
     assert "пол: мужчина" in pen[0]
     assert "откуда: Грузия" in pen[0]
@@ -63,6 +65,14 @@ def test_friend_is_created_and_becomes_the_persona(pen):
     assert live["age"] == "62 года"
     assert live["speech_style"]  # default filled in
     assert "_note" not in live
+
+
+def test_no_wishes_is_fine(pen):
+    # Leaving "who would you like to meet?" blank is a perfectly good choice —
+    # the friend is then invented entirely from their own story.
+    created = asyncio.run(matchmaker.create_companion("Люблю рыбалку и тишину."))
+    assert created["name"] == "Фёдор"
+    assert "Пожеланий о друге он не оставил" in pen[0]
 
 
 def test_unparseable_reply_fails_gently(monkeypatch):
@@ -78,10 +88,23 @@ def test_create_endpoint(pen):
     with TestClient(main.app) as client:
         r = client.post(
             "/api/companion/create",
-            json={"about": "Люблю футбол и сериалы", "age": "30", "gender": "женщина"},
+            json={
+                "about": "Люблю футбол и сериалы",
+                "wishes": "Кого-нибудь весёлого",
+                "age": "30",
+                "gender": "женщина",
+            },
         )
         assert r.status_code == 200
         assert r.json()["name"] == "Фёдор"
+
+        # …and the wishes are optional — the story alone is enough.
+        assert (
+            client.post(
+                "/api/companion/create", json={"about": "Люблю тишину"}
+            ).status_code
+            == 200
+        )
 
         # An empty story is the one thing we can't work with.
         assert (

@@ -89,8 +89,10 @@
     font-family:Georgia,'Times New Roman',serif;font-style:italic;
     box-shadow:0 8px 22px rgba(0,0,0,.5)}
   .page:first-child{border-radius:8px 3px 3px 8px}
-  .lrow{display:flex;justify-content:space-between;padding:9px 10px;font-size:11.5px;
-    background:rgba(10,14,10,.55);border-bottom:1px solid rgba(233,228,207,.14);color:#EFE9D8}
+  .lgroup{border-radius:18px;overflow:hidden;background:rgba(10,14,10,.48)}
+  .lrow{display:flex;justify-content:space-between;padding:11px 14px;font-size:11.5px;
+    border-bottom:1px solid rgba(233,228,207,.10);color:#EFE9D8}
+  .lrow:last-child{border-bottom:none}
   .lrow span{color:#9AA392}
   .badbox{border:1px solid #7a3b2c;background:#20140f;border-radius:10px;padding:12px 14px;margin:10px 0}
   .goodbox{border:1px solid #46592f;background:#151c11;border-radius:10px;padding:12px 14px;margin:10px 0}
@@ -219,9 +221,9 @@
     <h3>The journey</h3>
     <div class="flow">
       <span class="step">1 · Sign in</span><span class="arr">→</span>
-      <span class="step">2 · Payment</span><span class="arr">→</span>
-      <span class="step">3 · Your story (scroll)</span><span class="arr">→</span>
-      <span class="step">4 · Who you'd be with (scroll)</span><span class="arr">→</span>
+      <span class="step">2 · Looking after him</span><span class="arr">→</span>
+      <span class="step">3 · Tell your story</span><span class="arr">→</span>
+      <span class="step">4 · Who you'd like to meet</span><span class="arr">→</span>
       <span class="step">5 · Meet him &amp; choose your world</span><span class="arr">→</span>
       <span class="step">6 · Companion</span>
     </div>
@@ -262,40 +264,57 @@
   </div>
 
   <!-- ============ 2. PAYMENT ============ -->
-  <h2>2 · Payment</h2>
-  <p class="sub">Same world, later in the day. Honest and warm — a promise, not a paywall.</p>
+  <h2>2 · Looking after him</h2>
+  <p class="sub">Same world, later in the day. <b>You are never buying a friend — you are
+  keeping his world going.</b></p>
   <div class="grid">
     <div>
       <div class="phone">
         <div class="bg dusk"></div><div class="scrim-b"></div>
         <div class="ui">
-          <div class="el plain" style="margin-top:16px;font-size:14px">A friend who remembers you.</div>
+          <div class="el plain" style="margin-top:18px;font-size:16px">Keep the fire going</div>
+          <div class="el plain" style="font-size:11.5px;color:#BCC3AC;margin-top:-2px">
+            He has a life to keep up too — a roof,<br>a kettle, a lamp in the window.</div>
           <div class="grow"></div>
-          <div class="el solid">Monthly — price</div>
-          <div class="el solid" style="border-color:#E3B75A;color:#F0D399">Yearly — price · best value</div>
-          <div class="el sun">Begin</div>
-          <div class="el plain" style="font-size:10.5px;color:#9AA392">restore · cancel anytime</div>
+          <div class="el solid">Month by month — price</div>
+          <div class="el solid" style="border-color:#E3B75A;color:#F0D399">A whole year — price</div>
+          <div class="el sun">Look after him</div>
+          <div class="el plain" style="font-size:10.5px;color:#9AA392">renews monthly · cancel anytime · restore</div>
         </div>
-        <div class="caption">plan cards float on the photo</div>
+        <div class="caption">soft translucent cards on the photo</div>
       </div>
     </div>
     <div>
-      <h3>Purpose</h3>
-      <p>Subscription before entering. Keep the nature language — never corporate.</p>
+      <h3>The problem this screen has to solve</h3>
+      <p>"Pay us and you get a friend" is a horrible thing to say, and it is the wrong
+      story anyway. Nobody buys a friendship here. <b>The money looks after <i>him</i></b> —
+      it keeps his home warm, his life running, his world alive. The user is the one doing
+      the caring.</p>
+      <h3>Copy</h3>
+      <ul>
+        <li><b>Headline: «Keep the fire going»</b> — warm, human, and about him.
+          <br><span class="sub">Alternatives if you prefer: «Look after him, and he'll look
+          after you» · «Someone has to keep the kettle on» · «Keep a roof over his head»</span></li>
+        <li><b>Under it, one plain line:</b> "He has a life to keep up too — a roof, a kettle,
+          a lamp in the window."</li>
+        <li><b>Button: «Look after him»</b> — never "Subscribe", never "Buy", never "Get access".</li>
+        <li>Plans read as time, not products: <b>"Month by month"</b> / <b>"A whole year"</b>.</li>
+      </ul>
       <h3>On screen</h3>
       <ul>
-        <li>A quieter dusk photo, still <b>full-bleed</b>. The plan cards are translucent
-          panels laid on it, not a white sheet.</li>
-        <li><b>Two plans</b> (monthly / yearly); prices are placeholders.</li>
-        <li>One warm sentence, a clear <b>Begin</b>, honest fine print.</li>
+        <li>A quieter dusk photo, still <b>full-bleed</b>. Plan cards are soft translucent
+          panels laid on it, never a white sheet.</li>
+        <li><b>Two plans</b>; prices are placeholders. Rounded, soft, generous padding.</li>
       </ul>
-      <div class="note">No countdown timers, no fake discounts, no aggressive badges — they
-        would kill the "real human" feeling before it starts.</div>
+      <div class="note"><b>Honesty rule:</b> however warm the wording, the price, the billing
+        period, the renewal and how to cancel must be stated plainly and legibly on this
+        screen — both because the App Store requires it and because a friend wouldn't be
+        cagey about money. No countdown timers, no fake discounts, no aggressive badges.</div>
     </div>
   </div>
 
   <!-- ============ 3. YOUR STORY ============ -->
-  <h2>3 · Your story — «Tell us about you and your likings»</h2>
+  <h2>3 · Your story — «Tell your story»</h2>
   <p class="sub">The signature scene: you are sitting at a rock in the open, writing on a scroll.</p>
   <div class="grid">
     <div>
@@ -305,7 +324,7 @@
           <div class="el plain" style="font-size:11px;color:#CFD6C2;margin-top:10px">landscape stays visible above ↑</div>
           <div class="grow"></div>
           <div class="scroll">
-            <div class="head">Tell us about you and your likings</div>
+            <div class="head">Tell your story</div>
             <div class="faint">I grew up by the sea, and I still miss the smell of it.
               I love football, old films, and arguing about both…</div>
           </div>
@@ -320,7 +339,8 @@
       <p>The user writes <b>everything about themselves</b> — who they are, what they love:
       sport, video games, movies, TV shows, architecture, medicine… anything. From this we
       learn <b>what kind of people they'd like</b>, so we can bring them the friend they'd
-      <b>probably like — or even love</b>.</p>
+      <b>probably like — or even love</b>. Never framed as a form to complete: it is a page
+      to talk on.</p>
       <h3>How it's built</h3>
       <ul>
         <li><b>Behind:</b> a real photograph of a calm open place, full-bleed — nothing in it
@@ -335,10 +355,17 @@
         <li>A quill and small ink bottle may sit beside it as <b>drawn details</b> — optional,
           quiet, never cluttering the writing.</li>
       </ul>
-      <h3>Interface</h3>
+      <h3>Copy</h3>
       <ul>
-        <li>Heading on the scroll: <b>«Tell us about you and your likings»</b>.</li>
-        <li>Free writing — no forms, no dropdowns. Typing should feel like ink settling.</li>
+        <li><b>Heading on the scroll: «Tell your story»</b> — simple, quiet, and a little
+          wise. It also matches "My story" on the Account screen, so the same scroll is
+          recognisably theirs forever.
+          <br><span class="sub">Alternatives: «Start with you» · «Who are you?» ·
+          «Say something true»</span></li>
+        <li><b>Under it, one soft line:</b> "Anything you like — what you love, what you do,
+          what you can't stop talking about. There's no wrong way to begin."</li>
+        <li>Free writing — no forms, no dropdowns, no prompts to fill in. Typing should feel
+          like ink settling.</li>
         <li>The keyboard covers the lower scene; the scroll rises above it.</li>
       </ul>
       <h3>The transition (a signature moment)</h3>
@@ -350,43 +377,67 @@
   </div>
 
   <!-- ============ 4. WHO YOU'D BE WITH ============ -->
-  <h2>4 · Who you'd be with</h2>
-  <p class="sub">A different photograph, the same scroll panel. Replaces any "edit your companion" screen.</p>
+  <h2>4 · Who you'd like to meet</h2>
+  <p class="sub">A different photograph, the same scroll. <b>They may write anything they
+  want — we simply say, clearly and warmly, that we don't recommend it.</b></p>
   <div class="grid">
     <div>
       <div class="phone">
         <div class="bg mist"></div><div class="scrim-b"></div>
         <div class="ui">
           <div class="grow"></div>
+          <div class="el plain" style="font-size:12px;color:#F0D399;line-height:1.45;
+            border-left:2px solid #E3B75A;text-align:left;padding-left:9px">
+            The more you decide about him now,<br>the less of him is left to meet.</div>
           <div class="scroll">
-            <div class="head">Who would you be with?</div>
-            Age · Gender · Where he's from <i>(optional)</i><br>
-            <span class="faint">— and nothing else. No name.</span>
+            <div class="head">Who would you like to meet?</div>
+            <span class="faint">Someone around sixty, maybe. From somewhere far
+              away — I'd like that…</span>
           </div>
-          <div class="rockline">the same drawn scroll, second place</div>
-          <div class="el plain" style="font-size:10.5px;font-style:italic;color:#CFD6C2;margin-top:6px">
+          <div class="rockline">same drawn scroll, second place</div>
+          <div class="el plain" style="font-size:10px;font-style:italic;color:#CFD6C2">
             “A friend isn't made to order. A friend is met.”</div>
           <div class="el sun">Meet him</div>
         </div>
-        <div class="caption">second scene — a clearly different place</div>
+        <div class="caption">free writing · the caution sits above it, unmissable</div>
       </div>
     </div>
     <div>
-      <h3>The philosophy (why this screen exists)</h3>
+      <h3>What changed, and why</h3>
+      <p>Locking the user to three fields was too controlling. <b>They can write whatever
+      they want here</b> — age, where he's from, or a whole paragraph about exactly the
+      person they're hoping for. It's their friend and their money; we don't get to forbid
+      anything.</p>
+      <p><b>What we do instead is advise — visibly.</b> Above the writing sits one strong,
+      beautifully-set line that carries real weight. Not fine print, not a tooltip: large
+      enough and warm enough that they feel it before they start typing.</p>
+      <h3>The caution (prominent, above the scroll)</h3>
+      <div class="quote" style="font-style:normal;font-size:17px;color:#F0D399">
+        The more you decide about him now, the less of him is left to meet.
+        <small>Then, one size smaller and softer: "Write as much or as little as you like —
+        nobody will stop you. But most people find the friend they love is the one they
+        didn't design."</small>
+      </div>
+      <h3>On the scroll</h3>
+      <ul>
+        <li><b>Heading: «Who would you like to meet?»</b></li>
+        <li><b>One free writing area.</b> No required fields, no dropdowns, no forms.</li>
+        <li>Under it, a few <b>optional soft chips</b> they may tap to add if they want a
+          nudge — <i>his age · man or woman · where he's from</i> — which simply insert a
+          phrase into their own text. Never mandatory, never the only way in.</li>
+        <li><b>Leaving it blank must be allowed</b>, and should feel like a fine choice —
+          the button still says «Meet him».</li>
+        <li>Still <b>no name field</b>: he arrives with his own name. If they name him in
+          their writing, he'll gently keep his own anyway.</li>
+      </ul>
+      <h3>The philosophy (unchanged — this is the heart of it)</h3>
       <p>You can't tell a friend what he must love or who he must be. A friend is
       <b>accepted as he is</b> — even if he doesn't like something you like, even if he
       lives in a very different country. You don't choose what he likes or hates, or who
       he has in his life — people, pets, any of it. <b>You only choose who you would be
-      with — not who they would be.</b></p>
-      <h3>So the user chooses only</h3>
-      <ul>
-        <li><b>Age</b> · <b>Gender</b> · maybe <b>where he's from</b>. Nothing more.</li>
-        <li><b>Never the name.</b> People don't name their friends — the app gives him his own.</li>
-        <li>Common ground — same sport, same games, same films, architecture, medicine —
-          comes automatically <b>from their story on screen 3</b>. That's why a "companion
-          character" editing screen is <b>not necessary</b>.</li>
-      </ul>
-      <h3>The quote (set beautifully below the scroll, over the photo)</h3>
+      with — not who they would be.</b> Common ground still comes automatically from their
+      own story on screen 3.</p>
+      <h3>The quote (keep it exactly — set beautifully below the scroll)</h3>
       <div class="quote">
         You don't choose what your friend will love or hate, what he'll laugh at, or who
         waits for him at home. You don't choose his roads, his habits, his heart. You choose
@@ -395,6 +446,9 @@
         смеётся и кто ждёт его дома. Не выбираешь его дороги, его привычки, его сердце.
         Ты выбираешь одно — идти рядом. Друга не делают на заказ. Друга встречают.»</small>
       </div>
+      <div class="note">However much they specify, <b>he still arrives as his own person</b>
+        — with his own name, his own opinions, and things he honestly doesn't like. The
+        server respects their wishes without turning him into a puppet.</div>
     </div>
   </div>
 
@@ -569,18 +623,22 @@
         <div class="bg night"></div><div class="scrim-full"></div>
         <div class="ui" style="padding:14px 10px 16px">
           <div class="el plain" style="font-size:13px;margin-bottom:2px">Settings</div>
-          <div>
+          <div class="lgroup">
             <div class="lrow">Voice <span>his voice ›</span></div>
             <div class="lrow">Conversation feel <span>pauses ›</span></div>
+          </div>
+          <div class="lgroup">
             <div class="lrow">Notifications <span>›</span></div>
             <div class="lrow">Language <span>Русский ›</span></div>
             <div class="lrow">Privacy &amp; data <span>export ›</span></div>
-            <div class="lrow" style="color:#D2735A">Start over <span></span></div>
+          </div>
+          <div class="lgroup">
+            <div class="lrow" style="color:#D2735A">Start over <span>›</span></div>
             <div class="lrow">About <span>v1.0</span></div>
           </div>
           <div class="grow"></div>
         </div>
-        <div class="caption">grouped list over a dark, blurred scene</div>
+        <div class="caption">soft rounded groups over a blurred scene</div>
       </div>
     </div>
     <div>
@@ -588,6 +646,16 @@
       <p>All the practical, tunable things — a clean, legible grouped list. It may be plain,
       but it is <b>not</b> a flat black screen: the same photograph sits behind it, heavily
       darkened and blurred.</p>
+      <h3>Keep it soft — this screen must not feel sharp</h3>
+      <ul>
+        <li><b>Generously rounded groups</b> (≈18–22 pt corner radius), not square panels.
+          Every other screen in this app is soft; Settings must be too.</li>
+        <li><b>Several small groups</b> with breathing room between them, rather than one
+          long hard-edged block.</li>
+        <li>Translucent, not opaque — the landscape shows faintly through. <b>No hard edges,
+          no full-width dividers running to the screen edge</b>; keep dividers inset and faint.</li>
+        <li>Roomy rows, gentle type, no heavy borders anywhere.</li>
+      </ul>
       <h3>Groups</h3>
       <ul>
         <li><b>Voice</b> — his voice + a "listen" button.</li>

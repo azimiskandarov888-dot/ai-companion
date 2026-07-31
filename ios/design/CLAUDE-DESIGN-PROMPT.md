@@ -58,15 +58,20 @@ waveforms, no mic icons, no robot glow, no "generating…" — ever.
   (`rgba(10,14,10,.82)` → transparent by ~70% height).
 - Motion described, not animated: scrolls roll up and drift out of frame, pages turn,
   the orb wanders and settles. Gentle, spring-based. Respect Reduce Motion.
+- **Softness is a rule, not a mood.** Nothing in this app has hard, square edges —
+  generously rounded corners (≈18–22 pt) on every panel, card, and group, translucent
+  surfaces rather than opaque ones, inset faint dividers rather than full-width lines.
+  **This includes Settings**, which must feel as soft as the rest, not like a stock form.
 - **Do NOT design the orb.** Wherever the spec shows it, use a plain placeholder
   circle — the owner paints the real orb separately.
 - Built in **SwiftUI, iOS 18+** — keep it buildable (full-bleed photos with subtle
   parallax, native components and material blurs over them).
 
 **Screens to design (all nine, from the spec — every one full-bleed):**
-1. Sign in (landscape photo) · 2. Payment · 3. Your story — «Tell us about you and
-your likings» (the drawn scroll over a landscape photo) · 4. Who you'd be with
-(second scroll, second photo; age/gender/origin only — no name; the quote below the scroll) ·
+1. Sign in (landscape photo) · 2. Looking after him (the subscription, framed as caring
+for him — never "buy a friend") · 3. Your story — «Tell your story» (the drawn scroll over
+a landscape photo) · 4. Who you'd like to meet (second scroll, second photo; free writing,
+with a prominent caution above it and the quote below) ·
 5. Meet him & choose your world (Regular orb vs Living scene) · 6. Companion (both
 modes, states: resting/listening/thinking/speaking) · 7. The Companion's Diary (the
 handmade book) · 8. Account / Profile (landscape photo) · 9. Settings (an ordinary

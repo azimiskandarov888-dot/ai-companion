@@ -184,18 +184,20 @@ async def say(req: SayRequest, background_tasks: BackgroundTasks) -> JSONRespons
 
 
 class CreateCompanionRequest(BaseModel):
-    about: str  # «Tell us about you and your likings» — the user's free writing
-    age: str = ""  # who they'd be WITH: age…
-    gender: str = ""  # …gender…
-    origin: str = ""  # …and maybe where he's from. Never a name.
+    about: str  # «Tell your story» — the user's free writing about themselves
+    wishes: str = ""  # «Who would you like to meet?» — free writing, may be empty
+    age: str = ""  # the optional chips that screen offers…
+    gender: str = ""
+    origin: str = ""  # …never a name: he arrives with his own.
 
 
 @app.post("/api/companion/create")
 async def companion_create(req: CreateCompanionRequest) -> JSONResponse:
-    """From the user's story + their few choices, the friend walks in.
+    """From the user's story, and whatever they asked for, the friend walks in.
 
-    His name, character, likes, and people are his own — created to share
-    common ground with the user, never designed or named by them.
+    They may describe him as much or as little as they like — including not at
+    all. However much they specify, he still arrives as his own person, with his
+    own name, opinions, and things he honestly doesn't like.
     """
     if not req.about.strip():
         raise HTTPException(
@@ -204,6 +206,7 @@ async def companion_create(req: CreateCompanionRequest) -> JSONResponse:
     try:
         p = await matchmaker.create_companion(
             req.about,
+            wishes=req.wishes.strip(),
             age=req.age.strip(),
             gender=req.gender.strip(),
             origin=req.origin.strip(),
