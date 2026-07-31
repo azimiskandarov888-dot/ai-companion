@@ -2,8 +2,8 @@
 
 Copy everything below the line into Claude design and attach **three things**:
 `product-spec.html` (structure and content of every screen), `palette.html` (the finished
-color system), and **your six photographs**. Make the photos first — the designs are laid
-directly on them. The orb is NOT part of this job — leave it as a plain placeholder circle.
+color system), and **your six landscape photographs**. Choose the photos first (see
+`PHOTOS.md`) — the designs are laid directly on them. The orb is NOT part of this job — leave it as a plain placeholder circle.
 
 ---
 
@@ -65,8 +65,8 @@ waveforms, no mic icons, no robot glow, no "generating…" — ever.
 
 **Screens to design (all nine, from the spec — every one full-bleed):**
 1. Sign in (landscape photo) · 2. Payment · 3. Your story — «Tell us about you and
-your likings» (scroll + rock + quill + ink in a landscape) · 4. Who you'd be with
-(second scroll scene; age/gender/origin only — no name; the quote below the scroll) ·
+your likings» (the drawn scroll over a landscape photo) · 4. Who you'd be with
+(second scroll, second photo; age/gender/origin only — no name; the quote below the scroll) ·
 5. Meet him & choose your world (Regular orb vs Living scene) · 6. Companion (both
 modes, states: resting/listening/thinking/speaking) · 7. The Companion's Diary (the
 handmade book) · 8. Account / Profile (landscape photo) · 9. Settings (an ordinary
@@ -85,9 +85,9 @@ list — but still over the photo, blurred and darkened).
 **For the final set, include:**
 - Every screen shown **full-bleed**, with the status bar and home indicator over the photo.
 - The Companion screen in its four states, in both modes (placeholder circle only).
-- For the **Living scene** mode, note which parts of the photo must be **separate
-  layers** (sky · far hills · tree · rock · foreground) so the orb can sit on the rock,
-  pass behind the tree, and the scene can drift with gentle parallax.
+- For the **Living scene** mode, note which parts of the photo I should cut into
+  **separate layers** (sky · far hills · tree · foreground) so the orb can settle on the
+  ground, pass behind the tree, and the scene can drift with gentle parallax.
 - The scroll-to-scroll **transition moment** between screens 3 → 4 (a key frame or two).
 - The Diary as an open book spread with handwritten-feeling text.
 - A short build note per screen: type sizes, colors, key components.
