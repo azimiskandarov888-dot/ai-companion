@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>A Living Friend — Product &amp; Screen Spec (v4)</title>
+<title>A Living Friend — Product &amp; Screen Spec (v5)</title>
 <style>
   :root{
     --bg:#0E1210; --panel:#1B211A; --panel2:#161B15; --line:#2E3729; --ink-on-dark:#EFE9D8;
@@ -109,7 +109,7 @@
 <div class="wrap">
 
   <h1>A Living Friend — Product &amp; Screen Spec</h1>
-  <p class="sub" style="margin-bottom:4px">v4 · Everything a designer needs to make this
+  <p class="sub" style="margin-bottom:4px">v5 · Everything a designer needs to make this
   beautiful, and everything a developer needs to build it.</p>
   <p class="sub"><b>This is the "what &amp; where," not the final look.</b> Working codename:
   <i>Bob</i> — but every user's friend gets <b>his own name</b>, so nobody's friend is
@@ -119,7 +119,7 @@
     <a href="#rule">The one rule</a><a href="#what">What this is</a><a href="#soul">The soul</a>
     <a href="#color">Colour</a><a href="#vertical">Vertical placement</a><a href="#type">Type</a>
     <a href="#shape">Shape &amp; space</a><a href="#motion">Motion</a><a href="#parts">Components</a>
-    <a href="#map">Navigation</a><a href="#screens">The nine screens</a><a href="#states">States &amp; edge cases</a>
+    <a href="#map">Navigation</a><a href="#screens">The eight screens</a><a href="#states">States &amp; edge cases</a>
     <a href="#a11y">Accessibility</a><a href="#copy">Copy deck</a><a href="#server">What's real</a>
     <a href="#deliver">Deliverables</a>
   </div>
@@ -223,7 +223,7 @@
       <li>The eye doesn't rest at the true middle. The <b>optical centre of a rectangle sits
         slightly above it</b> — about <b>46 %</b> from the top rather than 50 %. Anything placed
         at exact centre reads as <i>slightly low</i>.</li>
-      <li>So the <b>orb</b> (screens 5–6) and the <b>scroll</b> (screens 3–4) are centred on
+      <li>So the <b>orb</b> (the companion screen) and the <b>scroll</b> (screens 3–4) are centred on
         <b>45–46 % of screen height</b>.</li>
       <li>It's a <b>small</b> nudge — not the top third, which is too high for a resting gaze
         and the worst zone for touch.</li>
@@ -339,8 +339,8 @@
         full width in the lower third. One per screen.</li>
       <li><b>Secondary button</b> — outlined in leaf, transparent fill.</li>
       <li><b>Quiet button</b> — translucent dark panel, sage label.</li>
-      <li><b>Choice card</b> (plans, Quiet vs Living scene) — translucent, 20 pt radius, a warm
-        border and a small tick when selected. Selection must be obvious without colour alone.</li>
+      <li><b>Choice card</b> (the two plans) — translucent, 20 pt radius, a warm border and a
+        small tick when selected. Selection must be obvious without colour alone.</li>
       <li><b>Soft chip</b> — small pill, used for the optional hints on screen 4.</li>
       <li><b>List group</b> — rounded 20 pt, translucent, inset faint dividers, roomy rows.</li>
       <li><b>Orb</b> — <b>placeholder circle only.</b> The owner is making the real one.</li>
@@ -357,14 +357,17 @@
       <span class="step">2 Take care of him</span><span class="arr">→</span>
       <span class="step">3 Tell your story</span><span class="arr">→</span>
       <span class="step">4 Who you'd like to meet</span><span class="arr">→</span>
-      <span class="step">5 Meet him</span><span class="arr">→</span>
-      <span class="step">6 Companion</span>
+      <span class="step">5 Companion</span>
     </div>
+    <div class="note"><b>Nobody introduces him.</b> There is deliberately no "meet your
+      companion" screen — the app doesn't announce his name or describe his character. He does
+      that himself, in the first conversation, the way a person would. Screen 4 ends and the
+      companion screen opens; he says hello and tells you who he is.</div>
     <h3>Every time after that</h3>
-    <p>The app opens <b>straight to 6 · Companion</b>. Nothing else. From there, three quiet
+    <p>The app opens <b>straight to 5 · Companion</b>. Nothing else. From there, three quiet
     ways out, and each returns with a downward swipe:</p>
     <ul>
-      <li><b>7 · His Diary</b> · <b>8 · Account</b> · <b>9 · Settings</b></li>
+      <li><b>6 · His Diary</b> · <b>7 · Account</b> · <b>8 · Settings</b></li>
       <li>The designer chooses the gesture and placement — a small mark, an edge swipe, a long
         press. It must be <b>findable but never noisy</b>: the companion screen has to stay
         empty enough to live with all day.</li>
@@ -373,7 +376,7 @@
     <div class="note">There is no tab bar. A tab bar would turn a friend into an app.</div>
   </div>
 
-  <h2 id="screens">The nine screens</h2>
+  <h2 id="screens">The eight screens</h2>
 
   <!-- ============ 1. SIGN IN ============ -->
   <h2><span class="num">1 ·</span> Sign in</h2>
@@ -608,7 +611,9 @@
         <li><b>The caution stays visible while they write</b> — it's short, and it's the point.</li>
         <li><b>The quote</b> is read before they begin; it may fade as the keyboard rises and
           return when it goes down.</li>
-        <li>«Meet him» moves to the bar above the keyboard while writing.</li>
+        <li>«Meet him» moves to the bar above the keyboard while writing. Tapping it goes
+          <b>straight to the companion screen</b> — no introduction screen in between; he
+          introduces himself, out loud, in his own words.</li>
       </ul>
       <h3>The philosophy — the heart of the product</h3>
       <p>You can't tell a friend what he must love or who he must be. A friend is <b>accepted as
@@ -631,76 +636,20 @@
     </div>
   </div>
 
-  <!-- ============ 5. MEET HIM ============ -->
-  <h2><span class="num">5 ·</span> Meet him &amp; choose your world</h2>
-  <p class="sub">He arrives — then you choose how you'll see him from now on.</p>
+  <!-- ============ 6. COMPANION ============ -->
+  <h2><span class="num">5 ·</span> Companion — the main screen</h2>
+  <p class="sub">Where the friendship lives — and after onboarding, the only screen the app
+  ever opens to.</p>
   <div class="grid">
     <div>
       <div class="phone">
-        <div class="bg clearing"></div><div class="scrim-b"></div>
+        <div class="bg night"></div>
         <div class="optline" style="top:45%" data-l="45%"></div>
-        <div class="ui">
-          <div class="grow"></div>
-          <div class="orb" style="margin-top:-16px">orb<br>placeholder</div>
-          <div class="el plain" style="margin-top:10px;font-size:14px">His name is <b>Fyodor</b>.</div>
-          <div class="el plain" style="font-size:10.5px;color:#BCC3AC">a few warm words about him</div>
-          <div class="grow"></div>
-          <div class="rowz">
-            <div class="el solid" style="text-align:center;font-size:10.5px">Quiet<br><span style="color:#9AA392">him, alone</span></div>
-            <div class="el solid" style="text-align:center;font-size:10.5px">Living scene<br><span style="color:#9AA392">him, out here</span></div>
-          </div>
-          <div class="el sun">Start talking</div>
+        <div class="ui" style="justify-content:center">
+          <div class="orb rest" style="margin-top:-40px">orb<br>placeholder</div>
+          <div class="el plain" style="font-size:11px;color:#8A9280;margin-top:14px">слушаю</div>
         </div>
-      </div>
-    </div>
-    <div>
-      <h3>Purpose</h3>
-      <p>The app <b>introduces the friend it found</b>, built from their story and whatever they
-      asked for. <b>His name — chosen by the app, never by the user</b> — is revealed here, with a
-      few warm words about who he is.</p>
-      <h3>Choose how the companion screen looks</h3>
-      <ul>
-        <li><b>Quiet</b> — the orb close and central, the scene deeply darkened behind him, almost
-          night. Still a photograph, just hushed.</li>
-        <li><b>Living scene</b> — the orb <b>lives in the landscape</b>: settles on the ground,
-          rests behind the tree, drifts while speaking.</li>
-        <li>Both are changeable later in Settings — this is a first impression, not a commitment.</li>
-      </ul>
-      <h3>Placement</h3>
-      <ul>
-        <li>The orb's centre sits on the <b>optical centre, ~45 % of screen height</b>.</li>
-        <li>His name and the warm words sit just below him; the two choices and «Start talking»
-          stay in the <b>lower third</b>.</li>
-      </ul>
-      <div class="note"><b>The orb is a placeholder circle everywhere in this spec.</b> The owner
-        is making the real one. Design around it, not it.</div>
-    </div>
-  </div>
-
-  <!-- ============ 6. COMPANION ============ -->
-  <h2><span class="num">6 ·</span> Companion — the main screen</h2>
-  <p class="sub">Where the friendship lives. Both looks are the same place, differently lit.</p>
-  <div class="grid">
-    <div>
-      <div class="phones">
-        <div class="phone sm">
-          <div class="bg night"></div>
-          <div class="optline" style="top:45%" data-l="45%"></div>
-          <div class="ui" style="justify-content:center">
-            <div class="orb rest" style="width:66px;height:66px;margin-top:-32px">orb</div>
-          </div>
-          <div class="caption">A · Quiet — orb on the optical centre</div>
-        </div>
-        <div class="phone sm">
-          <div class="bg clearing"></div><div class="scrim-b"></div>
-          <div class="optline" style="top:45%" data-l="45%"></div>
-          <div class="orb abs" style="left:26px;top:41%">orb</div>
-          <div class="ui">
-            <div class="grow"></div>
-            <div class="el plain" style="font-size:9.5px;color:#CFD6C2">he settles · drifts · rests</div>
-          </div>
-          <div class="caption">B · Living scene — full daylight place</div>
-        </div>
+        <div class="caption">the place at night · orb on the optical centre</div>
       </div>
     </div>
     <div>
@@ -727,22 +676,24 @@
       </ul>
       <h3>On screen</h3>
       <ul>
-        <li>Both modes are <b>full-bleed photographs</b>. Mode A is the same world at night —
-          never a flat black rectangle.</li>
-        <li><b>Mode A:</b> the orb's centre sits on the <b>optical centre (~45 %)</b>.</li>
-        <li><b>Mode B:</b> he moves, so he isn't pinned — but his <b>resting place and the centre
-          of his wandering</b> stay near that height, and he never settles in the bottom quarter
-          where a thumb would cover him.</li>
+        <li><b>One look, not two.</b> The landscape photograph, <b>deeply darkened toward
+          night</b>, full-bleed — hushed enough to leave open for hours, but never a flat black
+          rectangle. You can still tell where you are.</li>
+        <li>The orb's centre sits on the <b>optical centre (~45 % of screen height)</b>.</li>
+        <li>Optionally a <b>single soft status word</b> below him. Nothing else at all.</li>
         <li>Quiet, tucked-away ways into <b>Diary · Account · Settings</b> — findable, never noisy.</li>
-        <li>Optional and lovely: the scene <b>follows his real time of day</b>.</li>
       </ul>
+      <div class="note"><b>Later, not now:</b> a "living scene" where he walks the landscape in
+        daylight and rests behind a tree. It needs the photo cut into parallax layers and the orb
+        animated through them — a lovely second version, but out of scope for the first release.
+        Design the one calm screen well.</div>
       <div class="note">No chat log, no transcript bubbles, no send button — he's a friend in the
         room, not an app mid-session.</div>
     </div>
   </div>
 
   <!-- ============ 7. DIARY ============ -->
-  <h2><span class="num">7 ·</span> His Diary</h2>
+  <h2><span class="num">6 ·</span> His Diary</h2>
   <p class="sub">Not a "memory screen" — his own book, in which he writes about his friend.</p>
   <div class="grid">
     <div>
@@ -789,7 +740,7 @@
   </div>
 
   <!-- ============ 8. ACCOUNT ============ -->
-  <h2><span class="num">8 ·</span> Account</h2>
+  <h2><span class="num">7 ·</span> Account</h2>
   <p class="sub">Your own things — still standing in the world, on a blurred pass of the scene.</p>
   <div class="grid">
     <div>
@@ -829,7 +780,7 @@
   </div>
 
   <!-- ============ 9. SETTINGS ============ -->
-  <h2><span class="num">9 ·</span> Settings</h2>
+  <h2><span class="num">8 ·</span> Settings</h2>
   <p class="sub">The ordinary screen — an ordinary list, but still standing in the same place.</p>
   <div class="grid">
     <div>
@@ -840,8 +791,7 @@
           <div class="lgroup">
             <div class="lrow">His voice <span>listen ›</span></div>
             <div class="lrow">How he talks <span>pauses ›</span></div>
-            <div class="lrow">How you see him <span>Living scene ›</span></div>
-          </div>
+            </div>
           <div class="lgroup">
             <div class="lrow">Notifications <span>›</span></div>
             <div class="lrow">Language <span>Русский ›</span></div>
@@ -874,7 +824,6 @@
         <li><b>His voice</b> — which voice, with a "listen" button.</li>
         <li><b>How he talks</b> — the two pauses: how long he waits for you to begin, and how
           quickly he answers once you stop.</li>
-        <li><b>How you see him</b> — Quiet or Living scene.</li>
         <li><b>Notifications · Language · Privacy &amp; data</b> (export / delete everything).</li>
         <li><b>Start over</b> — parting with a friend is serious. Confirm it like it matters:
           a slow, plain sheet that says what will be lost, in his name.</li>
@@ -950,15 +899,12 @@
       <tr><td class="k">4 · caution 2</td><td>Write as much or as little as you like — nobody will stop you. But most people find the friend they love is the one they didn't design.</td><td class="ru">Пиши сколько хочешь — никто не остановит. Но по-настоящему близким чаще становится тот, кого не придумывали.</td></tr>
       <tr><td class="k">4 · chips</td><td>his age · man or woman · where he's from</td><td class="ru">возраст · мужчина или женщина · откуда он</td></tr>
       <tr><td class="k">4 · button</td><td>Meet him</td><td class="ru">Познакомиться</td></tr>
-      <tr><td class="k">5 · reveal</td><td>His name is Fyodor.</td><td class="ru">Его зовут Фёдор.</td></tr>
-      <tr><td class="k">5 · choices</td><td>Quiet · Living scene</td><td class="ru">Тихо · Живая сцена</td></tr>
-      <tr><td class="k">5 · button</td><td>Start talking</td><td class="ru">Начать разговор</td></tr>
-      <tr><td class="k">6 · status</td><td>listening · thinking · speaking</td><td class="ru">слушаю · думаю · говорю</td></tr>
-      <tr><td class="k">6 · offline</td><td>I can't hear you just now.</td><td class="ru">Сейчас я тебя не слышу.</td></tr>
-      <tr><td class="k">7 · title</td><td>Fyodor's diary</td><td class="ru">Дневник Фёдора</td></tr>
-      <tr><td class="k">7 · empty</td><td>We've only just met. I hardly know my new friend yet — but I have a good feeling. Let this book start on a blank page: everything that matters is still ahead.</td><td class="ru">Мы только-только познакомились. Я ещё почти ничего не знаю о моём новом друге — но у меня хорошее предчувствие. Пусть эта книга начнётся с чистой страницы: всё главное у нас впереди.</td></tr>
-      <tr><td class="k">8 · rows</td><td>You · My story · Subscription · Sign out</td><td class="ru">Ты · Моя история · Подписка · Выйти</td></tr>
-      <tr><td class="k">9 · rows</td><td>His voice · How he talks · How you see him · Notifications · Language · Privacy &amp; data · Start over · About</td><td class="ru">Его голос · Как он говорит · Каким ты его видишь · Уведомления · Язык · Данные · Начать заново · О приложении</td></tr>
+      <tr><td class="k">5 · status</td><td>listening · thinking · speaking</td><td class="ru">слушаю · думаю · говорю</td></tr>
+      <tr><td class="k">5 · offline</td><td>I can't hear you just now.</td><td class="ru">Сейчас я тебя не слышу.</td></tr>
+      <tr><td class="k">6 · title</td><td>Fyodor's diary</td><td class="ru">Дневник Фёдора</td></tr>
+      <tr><td class="k">6 · empty</td><td>We've only just met. I hardly know my new friend yet — but I have a good feeling. Let this book start on a blank page: everything that matters is still ahead.</td><td class="ru">Мы только-только познакомились. Я ещё почти ничего не знаю о моём новом друге — но у меня хорошее предчувствие. Пусть эта книга начнётся с чистой страницы: всё главное у нас впереди.</td></tr>
+      <tr><td class="k">7 · rows</td><td>You · My story · Subscription · Sign out</td><td class="ru">Ты · Моя история · Подписка · Выйти</td></tr>
+      <tr><td class="k">8 · rows</td><td>His voice · How he talks · Notifications · Language · Privacy &amp; data · Start over · About</td><td class="ru">Его голос · Как он говорит · Уведомления · Язык · Данные · Начать заново · О приложении</td></tr>
     </table>
     <div class="note">Copy is draft — the <b>feeling</b> is what's fixed. If a better line exists,
       propose it, but never make it clever at the cost of being warm.</div>
@@ -993,7 +939,7 @@
     </ul>
     <h3>Also true</h3>
     <ul>
-      <li>Design all nine as <b>one world</b>: one grade across the photos, one parchment-and-ink
+      <li>Design all eight as <b>one world</b>: one grade across the photos, one parchment-and-ink
         language for everything written, one quiet set of controls.</li>
       <li>The <b>orb stays a placeholder circle</b> — the owner is making the real one.</li>
       <li>Target <b>SwiftUI, iOS 18+</b>: full-bleed photos with subtle parallax, native components

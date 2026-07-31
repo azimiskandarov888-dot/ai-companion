@@ -1,10 +1,10 @@
-# Prompt for Claude design — v5
+# Prompt for Claude design — v6
 
 **Attach four things**, then paste everything below the line:
 
 1. `product-spec.html` — what goes on each screen, plus type, spacing, motion, states
 2. `palette.html` — the finished colour system
-3. Your **six landscape photographs** (see `PHOTOS.md` — choose and grade them first)
+3. Your **five graded photographs** (run `ios/design/grade/grade.py` first — the spec says which photo goes on which screen)
 4. *(optional)* any screen you already love the feel of, as a reference
 
 ---
@@ -12,7 +12,7 @@
 I'm building **a voice friend** — you talk out loud, and a warm, real-feeling friend answers.
 He remembers you, and he keeps a diary about you. It's for everyone, any age.
 
-I've attached the spec, the colour system, and my six photographs. **Design the nine screens.**
+I've attached the spec, the colour system, and my five graded photographs. **Design the eight screens.**
 The spec is the source of truth for *what goes where*; your job is to make it **beautiful,
 coherent, and buildable**.
 
@@ -47,7 +47,7 @@ are components *you* design, laid over the photo:
   a soft shadow so it rests on the world rather than floating. It's the **writing surface**:
   it holds live text, grows with Dynamic Type, scrolls internally, and **rolls up and drifts
   out of frame** when finished.
-- **The diary book** (screen 7) — an old hand-bound book, rough parchment pages, visible
+- **The diary book** (screen 6) — an old hand-bound book, rough parchment pages, visible
   stitching, worn boards. Nothing modern, no skeuomorphic gloss.
 
 ## Non-negotiables from the spec
@@ -76,40 +76,42 @@ are components *you* design, laid over the photo:
 - **SwiftUI, iOS 18+.** Keep everything buildable with native components and material blurs.
 - **Russian ships first**, and runs 15–20 % longer than English. Leave room in every button.
 
-## The nine screens
+## The eight screens
 
 1. **Sign in** — a meadow at first light, one warm line, sign-in buttons low
 2. **Take care of him** — the subscription, framed as *keeping him here*, never "buy a friend"
 3. **Tell your story** — the drawn scroll over a landscape; free writing
-4. **Who you'd like to meet** — second scroll, second place; free writing, with a **prominent
-   caution above it** ("The more you decide about him now, the less of him is left to meet")
-   and the friendship quote below
-5. **Meet him** — his name is revealed; choose *Quiet* or *Living scene*
-6. **Companion** — the hero. Both modes, four states (resting / listening / thinking / speaking)
-7. **His Diary** — the open book, plus its empty first-page state
-8. **Account** — blurred pass of a photo; profile, "My story", subscription
-9. **Settings** — deliberately ordinary, still over the photo, still soft
+4. **Who you'd like to meet** — the same place an hour later; free writing, with a
+   **prominent caution above it** ("The more you decide about him now, the less of him is
+   left to meet") and the friendship quote below
+5. **Companion** — the hero. One calm look: the landscape darkened toward night, the orb on
+   the optical centre, four states (resting / listening / thinking / speaking)
+6. **His Diary** — the open book, plus its empty first-page state
+7. **Account** — blurred pass of a photo; profile, "My story", subscription
+8. **Settings** — deliberately ordinary, still over the photo, still soft
+
+**There is no "meet your companion" screen, on purpose.** The app never announces his name
+or describes him — he does that himself, out loud, in the first conversation. Screen 4 ends
+and the companion screen opens.
 
 ## How I'd like you to work
 
 **First, two directions.** Propose **two genuinely different visual directions** for the whole
-world — not the same design twice. Show each applied to **the Companion screen (6, both modes)**
+world — not the same design twice. Show each applied to **the Companion screen (5)**
 *and* **the Your-story scroll scene (3)**, since those two carry the soul. One line each on what
 the direction is going for.
 
-**Then I'll pick one**, and you design all nine as one cohesive set — one type scale, one set of
+**Then I'll pick one**, and you design all eight as one cohesive set — one type scale, one set of
 components, one grade across the photos.
 
 ## In the final set, include
 
 - Every screen **full-bleed**, with the status bar and home indicator over the photo
-- The **Companion screen in all four states**, in both modes (placeholder circle only)
+- The **Companion screen in all four states** (placeholder circle only)
 - **Both keyboard states** for screen 3
 - The **scroll-to-scroll transition** between 3 → 4 — a key frame or two of it winding onto its
   roller and drifting out of frame
 - The **Diary** as an open spread, and its empty first page
-- For the **Living scene**, which parts of my photo to cut into layers (sky · far hills · tree ·
-  foreground) so the orb can settle on the ground and pass behind the tree
 - A short **build note per screen**: type sizes, colours, key components, spacing
 
 ## What I care about most
