@@ -35,7 +35,7 @@ quill, and a better ink bottle**.
 
 | | Tool | Why |
 |---|------|-----|
-| **1st choice** | **Google Gemini image editing** (Gemini app — upload the photo, paste the prompt) | Best at "change only this, keep everything else." No masking, no skills needed. Free to try. |
+| **1st choice** | **Google Gemini image editing** — the model nicknamed **"Nano Banana"**. In the Gemini app, upload the photo and paste the prompt; pick the **newest / Pro image model** offered. | Best at "change only this, keep everything else." No masking, no skills needed. Free to try. |
 | **2nd choice** | **Photoshop → Generative Fill** (Adobe Firefly) | You paint exactly where the rock goes and can hand-fix the seam afterwards. Safest licence for a paid app. Keep the prompt short — its box is small. |
 | **Avoid here** | ChatGPT image generation | It tends to redraw the *whole* picture, so your real photo stops being a real photo. |
 
@@ -90,6 +90,36 @@ Photorealistic, ordinary, understated — as if these objects were simply there 
 photo was taken. No glow, no rim light, no added highlights, no HDR, no extra sharpening,
 no text, no watermark; nothing polished, sculpted, or symmetrical.
 ```
+
+### ☁️ If your photo has soft, overcast, shadowless light
+
+**This is easier, not harder.** Hard sunlight is the difficult case, because every new
+shadow has to agree in direction *and* length. With soft light there are no hard shadows
+to match — the danger flips: the AI will try to drop a **sunny** rock into your **cloudy**
+scene, and that's what gives it away.
+
+So swap the "MATCH THE PHOTOGRAPH" paragraph for this one:
+
+```
+MATCH THE PHOTOGRAPH EXACTLY: the light is soft, diffuse, overcast midday light with no
+direct sun — so there are NO hard cast shadows anywhere in this image, and there must be
+none on the new objects either. Light the rock and the objects evenly and softly from
+above, with only gentle ambient shading: a soft dark contact shadow directly underneath
+each object where it touches the stone, and a soft darkening in the grass right under the
+rock. No long shadows, no sunlit edges, no bright specular highlights. Match the existing
+cool, muted, low-contrast colour, the slight atmospheric haze, the film grain, and the
+lens softness. The parchment must be a soft grey-cream at the same muted exposure as the
+rest of the photo — never bright white. The new objects must carry the same amount of
+focus or blur as anything else at their distance in the original photo.
+```
+
+**The single biggest tell in a muted photo is a bright white scroll.** Everything else in
+the frame is soft and low-contrast; a clean white rectangle will look pasted on even if
+the shape is perfect. If it comes out too bright, run a small second pass:
+*"Keep everything exactly as it is. Only make the parchment darker and softer, matching
+the muted exposure of the rest of the photo."*
+
+---
 
 **Short version** (for Photoshop's Generative Fill box, after masking the lower foreground):
 
