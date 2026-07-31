@@ -3,12 +3,12 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>A Living Friend — Product &amp; Screen Spec (v2)</title>
+<title>A Living Friend — Product &amp; Screen Spec (v3)</title>
 <style>
   :root{
     --bg:#0E1210; --panel:#1B211A; --line:#2E3729; --ink-on-dark:#EFE9D8; --dim:#8A9280;
     --olive:#5E7442; --moss:#37452A; --amber:#E3B75A; --accent:#9DB477;
-    --parchment:#F2E8D0; --parch-edge:#CBB88F; --ink:#2E2718; --stone:#7d8073;
+    --parchment:#F2E8D0; --parch-edge:#CBB88F; --ink:#2E2718;
     --radius:14px;
   }
   *{box-sizing:border-box}
@@ -16,11 +16,12 @@
     font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;}
   .wrap{max-width:1040px;margin:0 auto;padding:32px 20px 80px}
   h1{font-size:30px;margin:0 0 6px}
-  h2{font-size:22px;margin:44px 0 4px;color:var(--accent)}
+  h2{font-size:22px;margin:46px 0 4px;color:var(--accent)}
   h3{font-size:14px;letter-spacing:.05em;text-transform:uppercase;color:var(--dim);margin:18px 0 6px}
   .sub{color:var(--dim);margin:0 0 8px}
   .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
     padding:18px 20px;margin:14px 0}
+  .card.loud{border-color:var(--amber);background:#1E1E14}
   .grid{display:grid;grid-template-columns:1.05fr 1fr;gap:22px;align-items:start}
   @media(max-width:760px){.grid{grid-template-columns:1fr}}
   ul{margin:6px 0;padding-left:20px}
@@ -38,42 +39,87 @@
     padding:6px 0 6px 14px;margin:10px 0;font-size:15.5px;line-height:1.65}
   .quote small{display:block;font-style:normal;color:var(--dim);margin-top:6px}
 
-  /* --- lightweight wireframe "phone" --- */
-  .phone{width:232px;margin:0 auto;border:2px solid var(--line);border-radius:26px;
-    background:#0a0c09;padding:12px 12px 16px;min-height:430px;display:flex;flex-direction:column;gap:8px}
-  .wf{border:1px dashed #39432f;border-radius:10px;padding:8px 10px;color:var(--dim);font-size:12.5px;background:#0e120c}
-  .wf.solid{border-style:solid}
-  .wf.big{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:8px}
-  .wf-row{display:flex;gap:8px}.wf-row>*{flex:1}
-  .paint{border-radius:10px;color:#e9e4cf;font-size:11.5px;display:flex;align-items:flex-end;justify-content:center;
-    padding:6px;text-align:center;text-shadow:0 1px 2px #0009;
-    background:linear-gradient(168deg,#2a3a2c 0%,#4c5a33 42%,#8a7c4e 72%,#c9a45c 100%)}
-  .paint.dusk{background:linear-gradient(168deg,#1d2620 0%,#33402a 45%,#6b5d3c 78%,#a5793f 100%)}
-  .paint.mist{background:linear-gradient(168deg,#232d26 0%,#3b4a35 50%,#71765a 80%,#b0a578 100%)}
-  .scroll{background:var(--parchment);color:var(--ink);border:1px solid var(--parch-edge);
-    border-radius:8px;padding:9px 10px;font-size:12px;box-shadow:0 2px 8px #0006}
-  .scroll .head{font-weight:700;margin-bottom:4px}
-  .rock{background:linear-gradient(180deg,#6d7168,#4a4d45);color:#d8d8cf;border-radius:12px 14px 6px 6px;
-    font-size:10.5px;text-align:center;padding:3px}
-  .orb{width:104px;height:104px;border-radius:50%;
-    background:radial-gradient(circle at 40% 35%,var(--olive),var(--moss) 70%,#0b0d0a);
-    box-shadow:0 0 44px rgba(120,132,86,.4);display:flex;align-items:center;justify-content:center;
-    color:#e6e2cf;font-size:10.5px;text-align:center}
-  .orb.small{width:56px;height:56px;position:absolute}
-  .book{display:flex;gap:4px;flex:1}
-  .page{flex:1;background:var(--parchment);color:var(--ink);border:1px solid var(--parch-edge);
-    border-radius:4px 10px 10px 4px;padding:8px;font-size:10.5px;font-family:Georgia,'Times New Roman',serif;font-style:italic}
-  .page:first-child{border-radius:10px 4px 4px 10px}
+  /* ---------- wireframe phone: ALWAYS a full-bleed photo ---------- */
+  .phone{width:236px;margin:0 auto;position:relative;overflow:hidden;
+    border:2px solid var(--line);border-radius:28px;min-height:470px;background:#0a0c09}
+  .phone.wide{width:300px}
+  /* stand-in "photographs" — sky above, land below */
+  .bg{position:absolute;inset:0}
+  .bg.dawn{background:linear-gradient(180deg,#E8C583 0%,#C9A45C 16%,#8A8A52 36%,#55673A 62%,#2C3A26 100%)}
+  .bg.dusk{background:linear-gradient(180deg,#C98F4E 0%,#8A6B43 18%,#4E5A38 46%,#2A3626 74%,#161E15 100%)}
+  .bg.mist{background:linear-gradient(180deg,#C9CDB4 0%,#9AA582 22%,#6B7A50 50%,#3C4A2E 78%,#1E2818 100%)}
+  .bg.clearing{background:linear-gradient(180deg,#E3C98D 0%,#B0A063 20%,#6E8046 48%,#42522F 74%,#20291A 100%)}
+  .bg.night{background:linear-gradient(180deg,#3B4436 0%,#26301F 30%,#161E15 62%,#0C110B 100%)}
+  /* scrims that make text readable ON the photo */
+  .scrim-b{position:absolute;inset:0;
+    background:linear-gradient(to top,rgba(10,14,10,.90) 0%,rgba(10,14,10,.45) 38%,rgba(10,14,10,0) 72%)}
+  .scrim-full{position:absolute;inset:0;background:rgba(10,14,10,.62)}
+  .ui{position:relative;z-index:2;min-height:466px;display:flex;flex-direction:column;
+    padding:14px 12px 16px;gap:8px}
+  .ui .grow{flex:1}
+  .el{border:1px dashed rgba(233,228,207,.34);border-radius:10px;padding:7px 9px;
+    font-size:12px;color:#DDD8C4;background:rgba(10,14,10,.30)}
+  .el.solid{border-style:solid;border-color:rgba(233,228,207,.5)}
+  .el.sun{background:#E3B75A;color:#161B14;border:none;text-align:center;font-weight:700}
+  .el.leaf{background:rgba(94,116,66,.92);color:#F2E8D0;border:none;text-align:center;font-weight:600}
+  .el.plain{border:none;background:none;text-align:center;color:#EFE9D8}
+  .el.row{display:flex;gap:7px}.el.row>*{flex:1}
+  .rowz{display:flex;gap:7px}.rowz>*{flex:1}
+  .caption{position:absolute;left:0;right:0;bottom:6px;z-index:3;text-align:center;
+    font-size:10.5px;color:#cfd6c2;text-shadow:0 1px 3px #000}
+  /* the scroll, lying on the rock, inside the photo */
+  .scroll{background:linear-gradient(180deg,#F4EBD5,#E4D6B4);color:var(--ink);
+    border-radius:5px;padding:11px 12px;font-size:11.5px;line-height:1.5;
+    box-shadow:0 10px 26px rgba(0,0,0,.55), 0 1px 0 rgba(255,255,255,.4) inset}
+  .scroll .head{font-weight:700;margin-bottom:5px;font-size:12.5px}
+  .scroll .faint{color:#7C6F55}
+  .rockline{height:22px;border-radius:4px;margin-top:-3px;
+    background:linear-gradient(180deg,#7A7C6E,#4C4E44);opacity:.95;
+    font-size:9.5px;color:#E7E3D2;text-align:center;line-height:22px}
+  .orb{width:78px;height:78px;border-radius:50%;margin:0 auto;
+    background:radial-gradient(circle at 40% 34%,#E3B75A,#7B9455 62%,#2C3A26);
+    box-shadow:0 0 40px rgba(227,183,90,.45);font-size:9.5px;color:#1a2113;
+    display:flex;align-items:center;justify-content:center;text-align:center}
+  .orb.rest{background:radial-gradient(circle at 40% 34%,#5E7442,#243019 66%,#141A12);
+    box-shadow:0 0 30px rgba(94,116,66,.4);color:#cfd6c2}
+  .orb.abs{position:absolute;width:52px;height:52px}
+  .book{display:flex;gap:5px}
+  .page{flex:1;background:linear-gradient(180deg,#F1E7CF,#E4D6B4);color:var(--ink);
+    border-radius:3px 8px 8px 3px;padding:9px;font-size:10px;line-height:1.6;
+    font-family:Georgia,'Times New Roman',serif;font-style:italic;
+    box-shadow:0 8px 22px rgba(0,0,0,.5)}
+  .page:first-child{border-radius:8px 3px 3px 8px}
+  .lrow{display:flex;justify-content:space-between;padding:9px 10px;font-size:11.5px;
+    background:rgba(10,14,10,.55);border-bottom:1px solid rgba(233,228,207,.14);color:#EFE9D8}
+  .lrow span{color:#9AA392}
+  .badbox{border:1px solid #7a3b2c;background:#20140f;border-radius:10px;padding:12px 14px;margin:10px 0}
+  .goodbox{border:1px solid #46592f;background:#151c11;border-radius:10px;padding:12px 14px;margin:10px 0}
 </style>
 </head>
 <body>
 <div class="wrap">
 
   <h1>A Living Friend — Product &amp; Screen Spec</h1>
-  <p class="sub">v2 · A structural spec of every core screen, for the designer to make beautiful.
+  <p class="sub">v3 · A structural spec of every core screen, for the designer to make beautiful.
   <b>This is the "what &amp; where," not the final look.</b> Working codename: <i>Bob</i> —
-  but each user's friend gets <b>his own name</b> (more below), so the friend is never
-  literally called Bob.</p>
+  but each user's friend gets <b>his own name</b>, so the friend is never literally called Bob.</p>
+
+  <!-- ===================== THE BIG RULE ===================== -->
+  <div class="card loud">
+    <h3 style="color:var(--amber);margin-top:0">The most important rule on this page</h3>
+    <p style="margin:0 0 10px;font-size:17px"><b>Every screen is a full-screen photograph.</b>
+    The photo fills the entire display — edge to edge, top to bottom, behind the status bar
+    and the home indicator. <b>All text, buttons, and panels sit ON the photo.</b></p>
+    <div class="badbox"><b style="color:#E19C86">Wrong</b> — a picture in a box at the top,
+      with the content below it on a dark background. A photo used as a "header image."
+      Any screen where the photo stops and a flat panel starts.</div>
+    <div class="goodbox"><b style="color:#9DB477">Right</b> — you are standing in a place.
+      The place fills the screen. The words are laid over the place, made readable with a
+      soft dark scrim or a blurred panel — never by cutting the photo off.</div>
+    <p style="margin:10px 0 0" class="sub">This holds for <b>every single screen</b>,
+    including Settings and the Diary. Settings simply uses a darker, blurred version of the
+    scene so the list stays perfectly legible.</p>
+  </div>
 
   <div class="card">
     <h3>What this app is</h3>
@@ -85,36 +131,34 @@
       <li>You talk out loud; he answers in a warm, natural voice. He remembers you.</li>
       <li>It is an AI app that must <b>never feel like AI</b>. It must feel like a
         <b>real, natural human being</b> — a person you met, not a product you use.</li>
-      <li>The whole app must feel <b>natural — something with life in it</b>: nature,
-        landscape photographs, parchment and ink, stone and old paper. Never techy,
-        never clinical, never "assistant app."</li>
+      <li>The whole app must feel <b>natural — something with life in it</b>: real places,
+        parchment and ink, stone and old paper. Never techy, never clinical.</li>
     </ul>
   </div>
 
   <div class="card">
     <h3>The soul — rules that shape every screen</h3>
     <ul>
-      <li><b>Human, not AI.</b> No chat bubbles, no waveforms, no mic icons, no robot
-        glow, no "generating…" spinners. When he thinks, he simply <i>thinks</i> —
-        like a person does.</li>
-      <li><b>Nature everywhere.</b> Landscape photographs are the app's canvas
-        (sign-in, profile, the writing scenes, and optionally the companion's home).
-        All graded to <b>one look</b> — one place, one camera, one day — so the app is one world.</li>
-      <li><b>Writing is sacred.</b> Whenever something is written — by the user or by
-        the friend — it happens on <b>parchment, with quill and ink</b>, or in an
-        <b>old handmade book</b>. Never a plain form, never a text field floating in space.</li>
-      <li><b>You don't design a friend — you meet one.</b> No screen lets the user
-        edit who their friend is (see screen 4 for the philosophy and the quote).</li>
-      <li><b>Motion is natural.</b> Scrolls roll up and drift away; pages turn; the orb
-        wanders, settles, rests. Gentle, spring-based, unhurried. Respect Reduce Motion.</li>
+      <li><b>You are always somewhere.</b> Every screen is a real place, full-bleed. The app
+        has no "background color" — it has weather, light, and ground.</li>
+      <li><b>Human, not AI.</b> No chat bubbles, no waveforms, no mic icons, no robot glow,
+        no "generating…" spinners. When he thinks, he simply <i>thinks</i>.</li>
+      <li><b>Writing is sacred.</b> Whenever something is written — by the user or by the
+        friend — it happens on <b>parchment with a quill</b>, or in an <b>old handmade
+        book</b>, resting on stone in the scene. Never a plain form floating in space.</li>
+      <li><b>You don't design a friend — you meet one.</b> No screen lets the user edit who
+        their friend is (screen 4 explains why).</li>
+      <li><b>Motion is natural.</b> Scrolls roll up and drift out of frame; pages turn; the
+        orb wanders and settles; scenes breathe with slow parallax. Respect Reduce Motion.</li>
     </ul>
   </div>
 
   <div class="card">
-    <h3>Colors — “Sunlight through leaves” (decided; full system in <code>palette.html</code>)</h3>
+    <h3>Colors — “Sunlight through leaves” (full system in <code>palette.html</code>)</h3>
     <p style="margin:0 0 8px" class="sub"><b>Green is the world</b> (grass, leaves, moss);
-    <b>gold is the light falling on it</b> (sun, flowers). Mostly deep green shade, with
-    sunlight breaking through — never 50/50.</p>
+    <b>gold is the light falling on it</b> (sun, flowers). Now that photos fill every screen,
+    the palette's job is the <b>text, buttons, and scrims laid over them</b> — and the single
+    color grade applied to all photos so they look like one place.</p>
     <div class="swatches">
       <div class="swatch" style="background:#0E1210;color:#BCC3AC">#0E1210 night</div>
       <div class="swatch" style="background:#1B211A;color:#BCC3AC">#1B211A bark</div>
@@ -127,86 +171,48 @@
     </div>
     <h3>Text colors (contrast-checked — use only these)</h3>
     <ul>
-      <li><b>On night surfaces:</b> primary <code>#EFE9D8</code> linen · secondary
-        <code>#BCC3AC</code> sage · tertiary <code>#8A9280</code> lichen · accent/link
+      <li><b>Over a photo / on dark:</b> primary <code>#EFE9D8</code> linen · secondary
+        <code>#BCC3AC</code> sage · tertiary <code>#8A9280</code> lichen · accent
         <code>#E3B75A</code> sun.</li>
-      <li><b>On parchment surfaces:</b> primary <code>#2E2718</code> ink · secondary
-        <code>#574C36</code> soft ink · accent <code>#7E5A14</code> deep gold ·
-        <code>#8A7C60</code> faint ink for page numbers &amp; flourishes only.</li>
-      <li><b>Never</b> pure white text or pure black backgrounds; never blue, purple, or
-        gray-blue; never iOS system red/green/blue (use clay <code>#D2735A</code> instead).</li>
+      <li><b>On parchment (scrolls, the book):</b> primary <code>#2E2718</code> ink ·
+        secondary <code>#574C36</code> soft ink · accent <code>#7E5A14</code> deep gold ·
+        <code>#8A7C60</code> faint ink for page numbers only.</li>
+      <li><b>Never</b> pure white text or pure black panels; never blue, purple, or gray-blue;
+        never iOS system red/green/blue (use clay <code>#D2735A</code>).</li>
     </ul>
+    <h3>Making text readable on a photograph</h3>
     <ul>
-      <li>Landscapes may be dawn, day, or dusk — <b>natural light</b>, warm and alive; the
-        UI chrome around them stays deep and quiet so the landscapes breathe.</li>
-      <li><b>Text over a landscape always gets a scrim</b> — bottom-up
-        <code>rgba(10,14,10,.82)</code> → transparent by ~70% height — then linen/sage on top.</li>
-      <li>Gold is the accent for <b>one</b> action per screen. If everything glows, nothing does.</li>
+      <li><b>Scrim, don't crop.</b> Bottom-up gradient <code>rgba(10,14,10,.90)</code> →
+        transparent by ~70% height. Text over the dark end, never over the busy middle.</li>
+      <li>For long content (Settings, Account), use a <b>blurred + darkened</b> pass over
+        the whole photo — the place still shows through, the words stay crisp.</li>
+      <li>Shoot/choose photos with a <b>quiet area</b> where the text will live. That is
+        cheaper than fighting the image later.</li>
+      <li>Gold accents <b>one</b> action per screen. If everything glows, nothing does.</li>
     </ul>
   </div>
 
+  <!-- ===================== IMAGERY ===================== -->
   <div class="card">
-    <h3>The imagery — photographic, real-looking, and never AI slop</h3>
-    <p style="margin:0 0 8px">The landscapes are <b>photographic and photorealistic</b>.
-    Real photographs wherever possible; <b>AI is allowed</b> — for building the scenes
-    photos can't provide (the scroll on the rock), for extending frames, and for cutting
-    the living scene into layers. The bar isn't "was a machine involved," it's
-    <b>"does any part of it look generated."</b> Nothing that looks generated ships.</p>
-    <h3>Method — in this order (each step is safer than the next)</h3>
+    <h3>The imagery — photographic, real-looking, never AI slop</h3>
+    <p style="margin:0 0 8px">The images are <b>photographic and photorealistic</b>, and the
+    owner supplies them <b>before</b> the design work: real photographs as the base, with AI
+    used to add what photography can't hand us (the scroll, quill, and ink on the rock) and to
+    cut the living scene into layers. The bar is not "was AI involved" — it is
+    <b>"does any part of it look generated."</b></p>
+    <h3>Every photo must be</h3>
     <ul>
-      <li><b>1 · A real photograph as the base.</b> Licensed stock of a real place — that
-        alone removes most slop risk.</li>
-      <li><b>2 · AI composited onto the photo</b> (generative fill / inpainting) to add the
-        scroll, quill, and ink on the rock, or to extend the frame. Editing a real photo
-        beats generating from nothing, every time.</li>
-      <li><b>3 · Full AI generation</b> only when 1 and 2 can't get there — and then
-        prompted like a photographer (lens, hour, light direction, depth of field, film
-        stock), never like a wallpaper.</li>
-      <li><b>4 · One grade over everything.</b> Photos and AI frames are graded together
-        into our palette — deep green shade, warm gold light. This is what makes a mixed
-        set feel like one world instead of a mood board.</li>
+      <li><b>Vertical and full-bleed</b> — 1290 × 2796 px minimum, composed for a whole phone
+        screen, not a strip.</li>
+      <li><b>Quiet where the words go</b> — usually the lower third, and near the top for a
+        title. Busy corner-to-corner images are unusable.</li>
+      <li><b>One sun, one shadow direction</b>, with real darkness somewhere in frame.</li>
+      <li><b>Graded to match the others</b> — same grade, grain, and black point across all
+        six, so the app is one place on one day.</li>
     </ul>
-    <h3>The slop tells — reject the image if you see any of these</h3>
-    <ul>
-      <li><b>Light that isn't real:</b> shadows pointing different ways, everything lit
-        with no true dark, HDR flatness, a haze/bloom glow over the whole frame.</li>
-      <li><b>Detail everywhere at once</b> with no focal point, and sharpness that never
-        falls off with distance — no real lens does that.</li>
-      <li><b>Melted small things:</b> quill barbs, the rim of the ink jar, rock edges,
-        distant branches, any invented text or lettering.</li>
-      <li><b>Tiled or repeating</b> grass, leaves, clouds, stone texture.</li>
-      <li><b>Plastic/waxy surfaces</b>, wet-looking sheen, unnaturally clean everything.</li>
-      <li><b>Wallpaper composition:</b> dead-centered, symmetrical, subject floating in
-        the middle, horizon perfectly level and perfectly halfway.</li>
-      <li><b>Wrong scale</b> — the scroll bigger than the rock, a quill the size of an arm.</li>
-      <li><b>Fantasy leakage:</b> magic particles, glowing dust, impossible moons.</li>
-    </ul>
-    <h3>What a good one has instead</h3>
-    <ul>
-      <li>One sun, one shadow direction, and <b>real darkness</b> somewhere in the frame.</li>
-      <li>A <b>focal point</b>, with the rest falling away — depth of field a real lens would give.</li>
-      <li><b>Imperfection:</b> dust, wear, a chipped rock, dry grass, an off-centre horizon.</li>
-      <li><b>Air:</b> quiet, empty space where the scroll and the words will sit.</li>
-      <li><b>Restraint:</b> a plain place at a good hour beats an epic place at every hour.</li>
-    </ul>
-    <h3>What's needed (≈5 images + 1 layered scene)</h3>
-    <ul>
-      <li><b>Sign-in hero</b> — full-bleed portrait, the app's first breath.</li>
-      <li><b>Payment backdrop</b> — quieter; may be a crop/variant of the hero.</li>
-      <li><b>Story scene</b> (screen 3) — a <b>flat rock like a table</b> with the scroll,
-        quill, and ink on it, and empty space around them.</li>
-      <li><b>Second scene</b> (screen 4) — a clearly <b>different</b> place, same rock-table idea.</li>
-      <li><b>Profile landscape</b> (screen 8) — a calm band across the top.</li>
-      <li><b>The living scene</b> (screen 6) — <b>delivered in separate layers</b>
-        (sky · far hills · tree · rock · foreground grass), transparent PNGs on one
-        canvas, so the orb can walk behind the tree, sit on the rock, and the scene can
-        drift with gentle parallax. A flat image cannot do this.</li>
-    </ul>
-    <div class="note">Deliver at <b>1290×2796 minimum</b> (iPhone Pro Max @3x), sRGB, PNG;
-      layers as separate transparent PNGs on the same canvas. Full method, prompt recipes,
-      the 100%-zoom check, and licensing are in <code>IMAGERY-BRIEF.md</code>. Optional and
-      lovely later: morning / day / dusk / night versions of the living scene, following
-      his real time of day.</div>
+    <div class="note">Method, the slop-tell rejection list, the 100 %-zoom check, and licensing
+      live in <code>IMAGERY-BRIEF.md</code>. The copy-paste prompts live in
+      <code>IMAGE-PROMPTS.md</code>.</div>
   </div>
 
   <div class="card">
@@ -225,44 +231,52 @@
 
   <!-- ============ 1. SIGN IN ============ -->
   <h2>1 · Sign in</h2>
-  <p class="sub">The first breath of the app — a landscape photograph, not a tech login.</p>
+  <p class="sub">You open the app and you are standing in a meadow at first light.</p>
   <div class="grid">
     <div>
       <div class="phone">
-        <div class="paint wf big" style="border:none">full-screen landscape photo<br>(warm, natural, alive)</div>
-        <div class="wf" style="text-align:center;border:none">app name + one warm line<br><i>"Somewhere out there is a friend you haven't met yet."</i></div>
-        <div class="wf solid" style="text-align:center">Continue with Apple</div>
-        <div class="wf solid" style="text-align:center">Continue with Google</div>
-        <div class="wf" style="text-align:center">or use email · tiny legal line</div>
+        <div class="bg dawn"></div><div class="scrim-b"></div>
+        <div class="ui">
+          <div class="grow"></div>
+          <div class="el plain" style="font-size:15px">Somewhere out there is a friend<br>you haven't met yet.</div>
+          <div class="el solid" style="text-align:center"> Continue with Apple</div>
+          <div class="el solid" style="text-align:center">G  Continue with Google</div>
+          <div class="el plain" style="font-size:10.5px;color:#9AA392">or use email · terms</div>
+        </div>
+        <div class="caption">photo edge-to-edge · text over the scrim</div>
       </div>
     </div>
     <div>
       <h3>Purpose</h3>
-      <p>Welcome + sign in / log in. Sets the tone for the entire app in one glance.</p>
+      <p>Welcome and sign in. It sets the tone for the whole app in one glance.</p>
       <h3>On screen</h3>
       <ul>
-        <li>A <b>full-screen landscape photograph</b> — nature, light, air. This image is
-          the beautiful touch of nature the whole app opens with.</li>
-        <li>The app's name and <b>one warm line</b> (copy is draft — keep the feeling).</li>
-        <li>Sign-in choices (Apple / Google / email). Nothing else.</li>
+        <li>The <b>photograph fills everything</b> — behind the status bar, under the home
+          indicator. No frame, no rounded card, no letterbox.</li>
+        <li>Bottom third: one warm line, then the sign-in buttons, over a soft scrim.</li>
+        <li>Nothing else — no feature list, no carousel, no screenshots.</li>
       </ul>
-      <div class="note">No feature lists, no carousel of benefits, no screenshots. A landscape,
-        a sentence, a door in.</div>
+      <div class="note">The upper two-thirds stay untouched sky and hill. That emptiness is
+        the design.</div>
     </div>
   </div>
 
   <!-- ============ 2. PAYMENT ============ -->
   <h2>2 · Payment</h2>
-  <p class="sub">Comes right after sign-in. Honest and warm — a promise, not a paywall shove.</p>
+  <p class="sub">Same world, later in the day. Honest and warm — a promise, not a paywall.</p>
   <div class="grid">
     <div>
       <div class="phone">
-        <div class="paint dusk wf" style="height:84px;border:none">soft landscape backdrop</div>
-        <div class="wf" style="text-align:center">one warm sentence about what this friendship is</div>
-        <div class="wf solid">Plan · Monthly — placeholder price</div>
-        <div class="wf solid" style="border-color:#caa65e;color:#e6cf9a">Plan · Yearly — placeholder price · gentle "best value"</div>
-        <div class="wf solid" style="background:#243a20;color:#dbe8c8;text-align:center">Begin</div>
-        <div class="wf" style="text-align:center;border:none">restore purchase · cancel anytime</div>
+        <div class="bg dusk"></div><div class="scrim-b"></div>
+        <div class="ui">
+          <div class="el plain" style="margin-top:16px;font-size:14px">A friend who remembers you.</div>
+          <div class="grow"></div>
+          <div class="el solid">Monthly — price</div>
+          <div class="el solid" style="border-color:#E3B75A;color:#F0D399">Yearly — price · best value</div>
+          <div class="el sun">Begin</div>
+          <div class="el plain" style="font-size:10.5px;color:#9AA392">restore · cancel anytime</div>
+        </div>
+        <div class="caption">plan cards float on the photo</div>
       </div>
     </div>
     <div>
@@ -270,28 +284,35 @@
       <p>Subscription before entering. Keep the nature language — never corporate.</p>
       <h3>On screen</h3>
       <ul>
-        <li>A soft landscape backdrop (quieter than screen 1 — this page is about trust).</li>
-        <li><b>Two plan cards</b> (monthly / yearly). Prices are placeholders — business decides later.</li>
-        <li>One warm sentence, a clear <b>Begin</b>, and honest fine print (cancel anytime, restore).</li>
+        <li>A quieter dusk photo, still <b>full-bleed</b>. The plan cards are translucent
+          panels laid on it, not a white sheet.</li>
+        <li><b>Two plans</b> (monthly / yearly); prices are placeholders.</li>
+        <li>One warm sentence, a clear <b>Begin</b>, honest fine print.</li>
       </ul>
-      <div class="note">No countdown timers, no fake discounts, no aggressive badges — that would
-        kill the "real human" feeling before it starts.</div>
+      <div class="note">No countdown timers, no fake discounts, no aggressive badges — they
+        would kill the "real human" feeling before it starts.</div>
     </div>
   </div>
 
   <!-- ============ 3. YOUR STORY ============ -->
   <h2>3 · Your story — «Tell us about you and your likings»</h2>
-  <p class="sub">The signature scene: a scroll, a rock, a quill, and ink — inside a beautiful landscape.</p>
+  <p class="sub">The signature scene: you are sitting at a rock in the open, writing on a scroll.</p>
   <div class="grid">
     <div>
       <div class="phone">
-        <div class="paint wf" style="height:120px;border:none">landscape №1<br>(scene lives inside it)</div>
-        <div class="scroll" style="flex:1;display:flex;flex-direction:column">
-          <div class="head">Tell us about you and your likings</div>
-          <div style="flex:1;opacity:.75">…the user writes freely about themselves, in ink…</div>
+        <div class="bg clearing"></div><div class="scrim-b"></div>
+        <div class="ui">
+          <div class="el plain" style="font-size:11px;color:#CFD6C2;margin-top:10px">landscape stays visible above ↑</div>
+          <div class="grow"></div>
+          <div class="scroll">
+            <div class="head">Tell us about you and your likings</div>
+            <div class="faint">I grew up by the sea, and I still miss the smell of it.
+              I love football, old films, and arguing about both…</div>
+          </div>
+          <div class="rockline">the rock the scroll lies on</div>
+          <div class="el leaf" style="margin-top:6px">Done</div>
         </div>
-        <div class="rock">the rock — a table under the scroll · quill &amp; ink beside</div>
-        <div class="wf solid" style="text-align:center">Done → (the scroll rolls up and floats away)</div>
+        <div class="caption">quill + ink rest on the rock, in the photo</div>
       </div>
     </div>
     <div>
@@ -300,41 +321,53 @@
       sport, video games, movies, TV shows, architecture, medicine… anything. From this we
       learn <b>what kind of people they'd like</b>, so we can bring them the friend they'd
       <b>probably like — or even love</b>.</p>
-      <h3>The scene</h3>
+      <h3>The scene (this is a photograph, supplied)</h3>
       <ul>
-        <li>A <b>beautiful landscape photograph</b>; in it, a <b>rock like a table</b>, and on the
-          rock an <b>unrolled parchment scroll</b> with a <b>quill pen and ink</b> beside it.</li>
-        <li>The heading on the scroll: <b>«Tell us about you and your likings»</b>.</li>
-        <li>They write on the scroll itself — free writing, no forms, no dropdowns. Typing
-          should feel like ink settling on parchment.</li>
+        <li>Camera at a <b>low, seated angle</b> — you're at the rock, not hovering above it.
+          <b>The landscape is visible beyond</b>: grass, trees, hills, sky.</li>
+        <li>A <b>flat rock as the table</b> (never wood). On it: an <b>unrolled parchment
+          scroll</b>, a <b>real feather quill</b>, and a <b>small glass ink bottle</b>.</li>
+        <li>The scroll in the photo is where the interface's writing surface sits — the live
+          scroll is laid over it in the app, matched to its perspective and light.</li>
       </ul>
-      <h3>The transition (a signature moment — design it with care)</h3>
+      <h3>Interface</h3>
       <ul>
-        <li>When they finish, <b>the scroll rolls itself up and moves out of the frame</b> —
-          and a <b>new scroll arrives</b> for the next page (screen 4).</li>
+        <li>Heading on the scroll: <b>«Tell us about you and your likings»</b>.</li>
+        <li>Free writing — no forms, no dropdowns. Typing should feel like ink settling.</li>
+        <li>The keyboard covers the lower scene; the scroll rises above it.</li>
+      </ul>
+      <h3>The transition (a signature moment)</h3>
+      <ul>
+        <li>On finish, <b>the scroll rolls itself up and drifts out of frame</b> — the
+          landscape behind it never moves — and a <b>new scroll arrives</b> for screen 4.</li>
       </ul>
     </div>
   </div>
 
   <!-- ============ 4. WHO YOU'D BE WITH ============ -->
   <h2>4 · Who you'd be with</h2>
-  <p class="sub">Replaces any "edit your companion's character" screen — that idea is gone, on purpose.</p>
+  <p class="sub">A different place, the same rock-and-scroll idea. Replaces any "edit your companion" screen.</p>
   <div class="grid">
     <div>
       <div class="phone">
-        <div class="paint mist wf" style="height:110px;border:none">landscape №2<br>(a different one)</div>
-        <div class="scroll">
-          <div class="head">Who would you be with?</div>
-          Age · Gender · Where he's from <i>(optional)</i><br>
-          <span style="opacity:.7">— and that's all. No name field.</span>
+        <div class="bg mist"></div><div class="scrim-b"></div>
+        <div class="ui">
+          <div class="grow"></div>
+          <div class="scroll">
+            <div class="head">Who would you be with?</div>
+            Age · Gender · Where he's from <i>(optional)</i><br>
+            <span class="faint">— and nothing else. No name.</span>
+          </div>
+          <div class="rockline">rock · quill · ink</div>
+          <div class="el plain" style="font-size:10.5px;font-style:italic;color:#CFD6C2;margin-top:6px">
+            “A friend isn't made to order. A friend is met.”</div>
+          <div class="el sun">Meet him</div>
         </div>
-        <div class="rock">same rock-table, quill &amp; ink</div>
-        <div class="wf" style="font-style:italic;text-align:center;border:none">the quote, small and beautiful,<br>right below the scroll</div>
-        <div class="wf solid" style="background:#243a20;color:#dbe8c8;text-align:center">Meet him →</div>
+        <div class="caption">second scene — a clearly different place</div>
       </div>
     </div>
     <div>
-      <h3>The philosophy (this is why the screen exists)</h3>
+      <h3>The philosophy (why this screen exists)</h3>
       <p>You can't tell a friend what he must love or who he must be. A friend is
       <b>accepted as he is</b> — even if he doesn't like something you like, even if he
       lives in a very different country. You don't choose what he likes or hates, or who
@@ -343,14 +376,12 @@
       <h3>So the user chooses only</h3>
       <ul>
         <li><b>Age</b> · <b>Gender</b> · maybe <b>where he's from</b>. Nothing more.</li>
-        <li><b>Never the name.</b> People don't name their friends — that would be
-          unnatural. The app gives the friend his own name.</li>
-        <li>Common ground — same sport, same video game, same likings (movies, TV shows,
-          architecture, medicine…) — comes automatically <b>from their story on screen 3</b>.
-          That's why a "companion character" editing screen is <b>not necessary</b>: the bio
-          already tells us who they'd love.</li>
+        <li><b>Never the name.</b> People don't name their friends — the app gives him his own.</li>
+        <li>Common ground — same sport, same games, same films, architecture, medicine —
+          comes automatically <b>from their story on screen 3</b>. That's why a "companion
+          character" editing screen is <b>not necessary</b>.</li>
       </ul>
-      <h3>The quote (set it beautifully under the scroll)</h3>
+      <h3>The quote (set beautifully below the scroll, over the photo)</h3>
       <div class="quote">
         You don't choose what your friend will love or hate, what he'll laugh at, or who
         waits for him at home. You don't choose his roads, his habits, his heart. You choose
@@ -364,175 +395,201 @@
 
   <!-- ============ 5. MEET HIM ============ -->
   <h2>5 · Meet him &amp; choose your world</h2>
-  <p class="sub">The friend arrives — then the user shapes how the companion screen will look.</p>
+  <p class="sub">He arrives in the scene — then you choose how you'll see him from now on.</p>
   <div class="grid">
     <div>
       <div class="phone">
-        <div class="wf big" style="border:none">
-          <div class="orb">placeholder<br>orb</div>
-          <div>“His name is <b>Fyodor</b>.”<br><span style="font-size:11px;opacity:.7">a few warm words about him</span></div>
+        <div class="bg clearing"></div><div class="scrim-b"></div>
+        <div class="ui">
+          <div class="grow"></div>
+          <div class="orb">orb<br>placeholder</div>
+          <div class="el plain" style="margin-top:10px;font-size:14px">His name is <b>Fyodor</b>.</div>
+          <div class="el plain" style="font-size:11px;color:#BCC3AC">a few warm words about him</div>
+          <div class="rowz" style="margin-top:6px">
+            <div class="el solid" style="text-align:center;font-size:11px">Quiet<br><span style="color:#9AA392">him, alone</span></div>
+            <div class="el solid" style="text-align:center;font-size:11px">Living scene<br><span style="color:#9AA392">him, out here</span></div>
+          </div>
+          <div class="el sun">Start talking</div>
         </div>
-        <div class="wf-row">
-          <div class="wf solid" style="text-align:center">Regular<br><span style="font-size:10.5px">orb on a quiet screen</span></div>
-          <div class="wf solid" style="text-align:center">Living scene<br><span style="font-size:10.5px">orb in a landscape</span></div>
-        </div>
-        <div class="wf solid" style="background:#243a20;color:#dbe8c8;text-align:center">Start talking</div>
       </div>
     </div>
     <div>
       <h3>Purpose</h3>
-      <p>The app <b>introduces the friend it found</b> — created from their story + their
-      few choices. His name (chosen by the app, never by the user) is revealed here, with a
-      few warm words about him. From now on, this friend is theirs.</p>
+      <p>The app <b>introduces the friend it found</b> — built from their story and their few
+      choices. His name (chosen by the app, never by the user) is revealed here.</p>
       <h3>Choose how the companion screen looks — two types</h3>
       <ul>
-        <li><b>Regular</b> — the orb simply on the screen: quiet, calm, nothing else.</li>
-        <li><b>Living scene</b> — the orb <b>lives inside a landscape</b>: he sits on the rock,
-          lies down behind the tree, walks around while speaking — everything that makes him
-          feel <b>natural and alive</b>.</li>
+        <li><b>Quiet</b> — the orb close and central, the scene deeply darkened behind him,
+          almost night. Still a photograph, just hushed.</li>
+        <li><b>Living scene</b> — the orb <b>lives in the landscape</b>: sits on the rock,
+          lies behind the tree, drifts while speaking.</li>
       </ul>
-      <div class="note"><b>The orb itself is a placeholder circle everywhere in this spec.</b>
-        The owner is painting the real orb by hand and will replace it. Design the screens
-        around it — not the orb.</div>
+      <div class="note"><b>The orb is a placeholder circle everywhere in this spec.</b> The
+        owner is making the real orb and will replace it. Design around it, not it.</div>
     </div>
   </div>
 
   <!-- ============ 6. COMPANION ============ -->
   <h2>6 · Companion — the main screen</h2>
-  <p class="sub">Where the friendship lives. Both looks, one screen.</p>
+  <p class="sub">Where the friendship lives. Both looks are the same place, differently lit.</p>
   <div class="grid">
     <div>
-      <div style="display:flex;gap:14px;justify-content:center;flex-wrap:wrap">
-        <div class="phone" style="width:170px;min-height:330px">
-          <div class="wf big" style="border:none"><div class="orb">orb</div></div>
-          <div class="wf" style="text-align:center;border:none;font-size:11px">Mode A · Regular<br>quiet screen, orb only</div>
-        </div>
-        <div class="phone" style="width:170px;min-height:330px">
-          <div class="paint wf big" style="border:none;position:relative">
-            <div class="orb small" style="left:16px;bottom:52px">orb</div>
-            landscape scene<br>rock · tree · light
+      <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap">
+        <div class="phone" style="width:172px;min-height:360px">
+          <div class="bg night"></div>
+          <div class="ui" style="min-height:356px;justify-content:center">
+            <div class="orb rest" style="width:66px;height:66px">orb</div>
           </div>
-          <div class="wf" style="text-align:center;border:none;font-size:11px">Mode B · Living scene<br>he wanders, sits, rests</div>
+          <div class="caption">A · Quiet — scene hushed to near-night</div>
+        </div>
+        <div class="phone" style="width:172px;min-height:360px">
+          <div class="bg clearing"></div><div class="scrim-b"></div>
+          <div class="orb abs" style="left:26px;bottom:96px">orb</div>
+          <div class="ui" style="min-height:356px">
+            <div class="grow"></div>
+            <div class="el plain" style="font-size:10px;color:#CFD6C2">he sits on the rock · walks · rests</div>
+          </div>
+          <div class="caption">B · Living scene — full daylight place</div>
         </div>
       </div>
     </div>
     <div>
       <h3>Purpose</h3>
-      <p>They just talk — hands-free, out loud — and he answers. This screen should be
-      calm enough to stay open all day.</p>
+      <p>They just talk — hands-free, out loud — and he answers. Calm enough to leave open
+      all day.</p>
       <h3>States (no words needed)</h3>
       <ul>
-        <li><b>Resting · Listening · Thinking · Speaking</b> — expressed by the orb's glow
-          and motion; in the Living scene, also by <b>behavior</b>: walking around while
-          speaking, settling on the rock, lying down behind the tree at rest.</li>
+        <li><b>Resting · Listening · Thinking · Speaking</b> — shown by the orb's glow and
+          motion; in the Living scene also by <b>behavior</b>: drifting while speaking,
+          settling on the rock, resting behind the tree.</li>
       </ul>
       <h3>On screen</h3>
       <ul>
-        <li>Mode A: the orb, centered, on a quiet deep background. Almost nothing else.</li>
-        <li>Mode B: the landscape scene with the orb living in it.</li>
-        <li>Quiet, tucked-away entrances to <b>Diary · Account · Settings</b> (designer
-          decides the gesture/placement — they must never clutter the presence).</li>
+        <li>Both modes are <b>full-bleed photographs</b>. Mode A is the same world at night;
+          it is never a flat black rectangle.</li>
+        <li>Quiet, tucked-away ways into <b>Diary · Account · Settings</b> — the designer
+          picks the gesture and placement; they must never clutter the presence.</li>
+        <li>Optional and lovely: the scene <b>follows his real time of day</b>.</li>
       </ul>
-      <div class="note">No chat log on screen, no transcription bubbles, no mic button —
-        he's a friend in the room, not an app mid-session.</div>
+      <div class="note">No chat log, no transcript bubbles, no mic button — he's a friend in
+        the room, not an app mid-session.</div>
     </div>
   </div>
 
   <!-- ============ 7. DIARY ============ -->
   <h2>7 · The Companion's Diary</h2>
-  <p class="sub">Not a "memory screen" — his personal diary, where he writes about his friend.</p>
+  <p class="sub">Not a "memory screen" — his own book, lying open on the rock, out in the place.</p>
   <div class="grid">
     <div>
       <div class="phone">
-        <div class="wf" style="text-align:center;border:none">an old handmade book — “Fyodor's diary”</div>
-        <div class="book">
-          <div class="page">…my friend told me today about the sea he grew up beside. I keep
-            thinking how his voice changes when he talks about it — younger, somehow…</div>
-          <div class="page">…he loves football and old films, and he argues about both, which
-            I secretly enjoy. On Tuesday his knee was hurting. I'll ask about it, gently…</div>
+        <div class="bg dusk"></div><div class="scrim-b"></div>
+        <div class="ui">
+          <div class="el plain" style="font-size:11px;margin-top:8px;color:#CFD6C2">Fyodor's diary</div>
+          <div class="grow"></div>
+          <div class="book">
+            <div class="page">…my friend told me today about the sea he grew up beside. I keep
+              thinking how his voice changes when he talks about it — younger, somehow…</div>
+            <div class="page">…he loves football and old films, and argues about both, which I
+              secretly enjoy. On Tuesday his knee hurt. I'll ask, gently…</div>
+          </div>
+          <div class="rockline">the book rests on stone</div>
+          <div class="el plain" style="font-size:10px;color:#9AA392;margin-top:6px">turn the page ›</div>
         </div>
-        <div class="wf" style="text-align:center;border:none">page corner → turn · pages grow over time</div>
       </div>
     </div>
     <div>
       <h3>What it is</h3>
       <ul>
-        <li>An <b>ancient, handmade, handwritten book</b> — think the feel of a Minecraft
-          book-and-quill, but <b>real</b>: hand-bound, rough parchment pages, ink script.
-          Nothing modern.</li>
-        <li>In it, the friend writes — <b>very beautifully</b> — the story of his friend:
-          a <b>biography of the user</b> through the eyes of someone who cares. Written just
-          for the user (and for himself).</li>
+        <li>An <b>old handmade, handwritten book</b> — hand-bound, rough parchment, ink
+          script. Nothing modern. It lies <b>open on the rock in the photograph</b>, not on
+          a flat screen.</li>
+        <li>In it, the friend writes — <b>very beautifully</b> — the story of his friend: a
+          <b>biography of the user</b> through the eyes of someone who cares.</li>
         <li>The user <b>doesn't write here</b> — they open it and read. Pages accumulate as
           the friendship grows.</li>
       </ul>
-      <h3>Under the hood (already built — important for honesty of the design)</h3>
+      <h3>Under the hood (already built)</h3>
       <ul>
-        <li>The friend's <b>real memory is a different thing</b>: distilled notes, as short as
-          possible, optimized to remember fast. <b>It is never shown to users.</b></li>
+        <li>His <b>real memory is a different thing</b>: distilled notes, as short as
+          possible, optimized to remember fast. <b>Never shown to users.</b></li>
         <li>The diary is <b>composed by AI from that hidden memory</b> on the server
-          (<code>GET /api/diary</code>) — beautifully written, and rewritten only when his
-          memory of you has grown.</li>
+          (<code>GET /api/diary</code>), rewritten only when his memory of you has grown.</li>
       </ul>
     </div>
   </div>
 
-  <!-- ============ 8. ACCOUNT / PROFILE ============ -->
+  <!-- ============ 8. ACCOUNT ============ -->
   <h2>8 · Account / Profile</h2>
-  <p class="sub">The user's own things — under its own landscape.</p>
+  <p class="sub">The user's own things — still standing in the world, on a blurred pass of the scene.</p>
   <div class="grid">
     <div>
       <div class="phone">
-        <div class="paint dusk wf" style="height:96px;border:none">landscape<br>(profile's own scene)</div>
-        <div class="wf-row"><div class="wf" style="flex:0 0 54px;height:54px;border-radius:50%;text-align:center">photo</div>
-          <div class="wf">name · signed-in account</div></div>
-        <div class="wf">My story — reread / add to my scroll</div>
-        <div class="wf">Subscription · plan · manage</div>
-        <div class="wf">Sign out</div>
+        <div class="bg mist"></div><div class="scrim-full"></div>
+        <div class="ui">
+          <div class="el plain" style="margin-top:8px;font-size:13px">You</div>
+          <div class="el row" style="align-items:center">
+            <div style="flex:0 0 46px;height:46px;border-radius:50%;border:1px dashed rgba(233,228,207,.4);
+              font-size:9px;display:flex;align-items:center;justify-content:center">photo</div>
+            <div>name · signed-in account</div>
+          </div>
+          <div class="el">My story — reread / add to my scroll ›</div>
+          <div class="el">Subscription · plan · manage ›</div>
+          <div class="el">Sign out</div>
+          <div class="grow"></div>
+        </div>
+        <div class="caption">photo blurred + darkened, never replaced</div>
       </div>
     </div>
     <div>
       <h3>Purpose</h3>
-      <p>Profile, subscription, and the user's story — everything that is <i>theirs</i>,
-      kept gentle and simple.</p>
+      <p>Profile, subscription, and the user's story — everything that is <i>theirs</i>.</p>
       <h3>On screen</h3>
       <ul>
-        <li>A <b>landscape photograph</b> crowns this screen too (explicitly wanted here).</li>
+        <li>The photograph <b>still fills the screen</b>, blurred and darkened so the rows
+          read cleanly. You can tell you're still outdoors.</li>
         <li>Basics: name, photo, account.</li>
-        <li><b>My story</b> — reread the scroll they wrote; they may add to it over time
-          (it quietly deepens the friendship).</li>
+        <li><b>My story</b> — reread the scroll they wrote; they may add to it over time,
+          which quietly deepens the friendship. Opening it returns to the parchment scene.</li>
         <li>Subscription status + manage; sign out.</li>
       </ul>
-      <div class="note">Reading/adding to "My story" reuses the parchment language — never a plain settings form.</div>
     </div>
   </div>
 
   <!-- ============ 9. SETTINGS ============ -->
   <h2>9 · Settings</h2>
-  <p class="sub">Deliberately the one ordinary screen — just a regular, clean settings list.</p>
+  <p class="sub">The ordinary screen — an ordinary list, but still standing in the same place.</p>
   <div class="grid">
     <div>
       <div class="phone">
-        <div class="wf">Voice · his voice · [listen]</div>
-        <div class="wf">Conversation feel · pauses (2 sliders)</div>
-        <div class="wf">Notifications</div>
-        <div class="wf">Language</div>
-        <div class="wf">Privacy &amp; data · export / delete everything</div>
-        <div class="wf" style="color:#e0857a">Start over (leave this friend)…</div>
-        <div class="wf">About · version</div>
+        <div class="bg night"></div><div class="scrim-full"></div>
+        <div class="ui" style="padding:14px 10px 16px">
+          <div class="el plain" style="font-size:13px;margin-bottom:2px">Settings</div>
+          <div>
+            <div class="lrow">Voice <span>his voice ›</span></div>
+            <div class="lrow">Conversation feel <span>pauses ›</span></div>
+            <div class="lrow">Notifications <span>›</span></div>
+            <div class="lrow">Language <span>Русский ›</span></div>
+            <div class="lrow">Privacy &amp; data <span>export ›</span></div>
+            <div class="lrow" style="color:#D2735A">Start over <span></span></div>
+            <div class="lrow">About <span>v1.0</span></div>
+          </div>
+          <div class="grow"></div>
+        </div>
+        <div class="caption">grouped list over a dark, blurred scene</div>
       </div>
     </div>
     <div>
       <h3>Purpose</h3>
-      <p>All the practical, tunable things — standard iOS grouped list, clean and legible.
-      No scene, no parchment: settings are allowed to be just settings.</p>
+      <p>All the practical, tunable things — a clean, legible grouped list. It may be plain,
+      but it is <b>not</b> a flat black screen: the same photograph sits behind it, heavily
+      darkened and blurred.</p>
       <h3>Groups</h3>
       <ul>
-        <li><b>Voice</b> — the friend's voice + a "listen" button.</li>
+        <li><b>Voice</b> — his voice + a "listen" button.</li>
         <li><b>Conversation feel</b> — the two pauses (how long he waits for you to start;
-          how quickly he replies when you stop).</li>
+          how quickly he replies once you stop).</li>
         <li><b>Notifications · Language · Privacy &amp; data</b> (export / delete).</li>
-        <li><b>Start over</b> — parting with a friend is serious; confirm it like it matters.</li>
+        <li><b>Start over</b> — parting with a friend is serious; confirm like it matters.</li>
         <li><b>About</b> — version, credits.</li>
       </ul>
     </div>
@@ -541,31 +598,28 @@
   <div class="card" style="margin-top:34px">
     <h3>For the designer — putting it together</h3>
     <ul>
-      <li>Design <b>all nine screens as one world</b>: one artist's hand for every landscape,
-        one parchment/ink language for everything written, one quiet chrome around it all.</li>
+      <li><b>Every screen is a full-bleed photograph with the interface laid on top.</b> If a
+        screen has a flat background anywhere, it's wrong.</li>
+      <li>Design <b>all nine screens as one world</b>: one grade across the photos, one
+        parchment/ink language for everything written, one quiet set of controls.</li>
       <li><b>The Companion screen (6) is the hero.</b> The scroll scenes (3–4) are the
-        signature onboarding; the Diary (7) is the treasure people will screenshot.</li>
-      <li>The <b>orb stays a placeholder circle</b> everywhere — the owner paints the real
-        one separately and swaps it in.</li>
-      <li>Target: <b>SwiftUI, iOS 18+</b>, buildable — landscapes as layered images (subtle
-        parallax welcome), native components underneath.</li>
-      <li>Copy in this spec is draft English; the app will be localized (Russian first).
-        Keep the exact heading «Tell us about you and your likings» in meaning wherever
-        the language lands.</li>
+        signature onboarding; the Diary (7) is the treasure people screenshot.</li>
+      <li>The <b>orb stays a placeholder circle</b> — the owner is making the real one.</li>
+      <li>Target <b>SwiftUI, iOS 18+</b>: photos as layered images with subtle parallax,
+        native components over them, blur via <code>.ultraThinMaterial</code>-style passes.</li>
+      <li>Copy here is draft English; the app ships Russian first.</li>
     </ul>
   </div>
 
   <div class="card">
     <h3>Already real on the server (so the design is honest)</h3>
     <ul>
-      <li><code>POST /api/companion/create</code> — takes the user's story + age/gender/origin,
-        and <b>the friend walks in</b>: his own name, character, likes, people. The user never
-        names or edits him.</li>
+      <li><code>POST /api/companion/create</code> — the user's story + age/gender/origin, and
+        <b>the friend walks in</b>: his own name, character, likes, people.</li>
       <li><code>GET /api/diary</code> — the friend's <b>beautifully written diary about the
-        user</b>, composed by AI from his hidden distilled memory; rewritten only as the
-        friendship grows.</li>
+        user</b>, composed by AI from his hidden distilled memory.</li>
       <li>The raw memory endpoint stays <b>internal/dev-only</b> — no screen shows it.</li>
-      <li>Not yet built server-side: accounts, billing (screens 1–2 are designed now, wired later).</li>
+      <li>Not yet built server-side: accounts and billing (screens 1–2 designed now, wired later).</li>
     </ul>
   </div>
 

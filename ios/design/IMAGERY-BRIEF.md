@@ -116,61 +116,11 @@ If an image needs an explanation to survive, it fails.
 
 ---
 
-## Prompt recipes
+## Prompts
 
-Photographic language only. Generate several, keep one. Add the negative list to every
-prompt.
-
-**Universal negative:**
-`HDR, oversaturated, glowing, bloom, haze, lens flare, sunbeams, god rays, symmetrical,
-centered, plastic, waxy, glossy, hyperdetailed, ultra sharp, fantasy, magical, glowing
-particles, text, letters, watermark, logo, heavy vignette, tilt-shift, oversharpened,
-cartoon, 3d render, cgi, illustration`
-
-**1 · Sign-in hero**
-> Photograph of a quiet green hillside meadow with a few scattered trees, early morning,
-> low side light from the left, long soft shadows across dry gold grass. Shot on 35 mm
-> film, 50 mm lens, f/8, natural color, fine grain. Warm muted palette of mossy green
-> and pale gold. Empty sky in the upper half. No people, no buildings. Vertical.
-
-**2 · Payment backdrop**
-> Photograph of a wide calm valley at dusk, warm low sun behind distant hills, deep
-> green shadow in the foreground. 35 mm film, 85 mm lens, f/5.6, soft natural contrast,
-> fine grain. Muted and quiet, mostly shadow with one band of warm light. Vertical, room
-> at the bottom for text.
-
-**3 · Story scene** *(best made by step 2 — inpaint onto a real photo of a rock)*
-> Photograph of a weathered flat granite boulder in a sunlit meadow, an old parchment
-> scroll unrolled across the stone, a goose-feather quill and a small glass ink bottle
-> resting beside it. Late afternoon side light from the right, long soft shadows. 35 mm
-> film, 50 mm lens, f/8, deep focus, natural color, fine grain. Dry gold grass, mossy
-> green shade. Plenty of empty space above the rock. No people. Vertical.
-
-**4 · Second scene** — same as #3, a clearly different place:
-> …a low flat stone at the edge of a birch wood, soft overcast light, damp green moss,
-> cooler and quieter than the meadow…
-
-**5 · Profile band**
-> Photograph of a calm treeline and open field under a soft sky, midday, gentle light.
-> 35 mm film, 50 mm lens, f/8, fine grain. Simple, uncluttered, horizontal band
-> composition with empty sky. No focal drama.
-
-**6 · The living scene** *(generate the full frame first, then cut it into layers)*
-> Photograph of a small clearing: a large old tree on the left, a flat sitting rock in
-> the middle distance, open grass between them, gentle hills behind, late afternoon
-> light from the left, long shadows. 35 mm film, 35 mm lens, f/8, deep focus, natural
-> color, fine grain. Calm, uncluttered, generous empty ground in the centre. No people.
-> Vertical.
-
-Then separate it into **five transparent PNGs on one canvas**, back to front:
-`sky` · `far` (distant hills/treeline) · `tree` (the orb passes behind it) · `rock` (the
-orb sits on it — its top edge must read as a surface) · `fore` (grass the orb passes
-behind). Use generative fill to paint what's *behind* each layer you lift out. Keep
-detail modest near the seams — parallax moves these a few pixels, and over-detail
-betrays the cut.
-
-*Optional, later, and lovely:* morning / day / dusk / night versions of this same scene,
-so it follows his real time of day.
+All six copy-paste prompts — including the corrected rock/scroll scene (low angle, on
+stone, landscape behind) — live in **`IMAGE-PROMPTS.md`**. Layer-cutting for the living
+scene is there too.
 
 ---
 
@@ -199,6 +149,8 @@ method 3.
 
 ## Files
 
+- **Vertical and full-bleed.** Every photo covers a whole phone screen — never a header
+  strip, never a card. Compose with a **quiet area where the text will sit**.
 - **1290 × 2796 px minimum** (iPhone Pro Max @3x); larger is fine, we downscale.
 - **sRGB**, PNG. Layers: transparent PNGs, all on the identical canvas size.
 - Ship a flattened preview of the living scene so the composition can be checked.

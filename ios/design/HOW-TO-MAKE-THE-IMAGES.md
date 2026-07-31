@@ -7,8 +7,14 @@ Two different AIs do two different jobs. Don't mix them up:
 | Design the **screens** (layout, buttons, text) | **Claude design** |
 | Make the **6 pictures** (landscapes, the rock scene) | **an image AI** (below) |
 
-Claude design does not make photos. It draws the screens and leaves a grey box
-where each picture goes. You fill those boxes with the pictures you make here.
+Claude design does not make photos.
+
+**Order changed — make the pictures FIRST.** Then send them to Claude design with the
+spec, so it designs the screens directly on your real photographs instead of on grey
+boxes. The result will be far better.
+
+**Every picture covers the whole phone screen.** Not a small picture at the top with a
+dark background below — the photo is the screen, and the text sits on top of it.
 
 ---
 
@@ -49,38 +55,21 @@ Go to **unsplash.com** or **pexels.com** and download big versions of:
 Pick calm, plain, real places. Not dramatic mountains. Make sure there is **empty
 space** where text will go.
 
-### 2. Add the scroll to the rock photo
+### 2. Add the scroll, quill, and ink to the rock photo
 
-Open the rock photo in Photoshop (or Gemini). Select the top of the rock. Paste this:
+Open the rock photo in Photoshop (or Gemini), select the flat top of the rock, and paste
+the edit prompt from **`IMAGE-PROMPTS.md`**.
 
-> Add an old parchment scroll lying unrolled flat on this rock, with a goose feather
-> quill and a small glass ink bottle beside it. Match the light already in the photo:
-> same sun direction, same shadow length, same softness. Same grain and sharpness as the
-> rest of the photo. Nothing written on the scroll. Photorealistic, natural, slightly
-> worn and dusty.
-
-Make 4 versions. Keep the one where **the shadow goes the same way as the other
-shadows** in the photo. Then zoom to 100% and check the feather and the ink jar are not
-melted.
+Make 4 versions. Keep the one where **the shadows go the same way as the other shadows**
+in the photo. Then zoom to 100 % and check the feather, the nib, and the ink bottle rim
+are not melted.
 
 Do the same for the second scene photo.
 
-### 3. Only if you can't find a good photo — make one
+### 3. Only if you can't find a good photo — make the whole thing
 
-Paste this into Midjourney (change the place for each picture):
-
-> Photograph of a quiet green hillside meadow with a few scattered trees, early morning,
-> low side light from the left, long soft shadows across dry gold grass. Shot on 35 mm
-> film, 50 mm lens, f/8, natural color, fine grain. Warm muted palette of mossy green
-> and pale gold. Empty sky in the upper half. No people, no buildings. Vertical.
-
-And always add this at the end so it doesn't look fake:
-
-> --no HDR, oversaturated, glowing, bloom, lens flare, god rays, symmetrical, plastic,
-> glossy, hyperdetailed, fantasy, magical, glowing particles, text, watermark, cartoon,
-> 3d render, cgi, illustration
-
-More ready-made prompts for each picture are in `IMAGERY-BRIEF.md`.
+Every prompt you need is in **`IMAGE-PROMPTS.md`**, one per picture, ready to paste,
+with the "don't make it fake" list to add at the end.
 
 ### 4. Make all 6 look like one place
 
@@ -106,6 +95,8 @@ too clean. (Full list in `IMAGERY-BRIEF.md`.)
 
 ## What to do first
 
-Send everything to Claude design **now** — you don't need the pictures yet. While it
-works, collect the real photos from step 1. When the designs come back you'll know the
-exact shape and crop each picture needs, and then you do steps 2–6.
+1. Collect the 6 real photos (step 1) — free, today.
+2. Add the scroll, quill, and ink to the two rock photos (step 2).
+3. Grade all six the same (step 4) and check them (step 5).
+4. **Then** send Claude design: the prompt, `product-spec.html`, `palette.html`, **and
+   your six pictures**. It will design the screens on top of the real images.
