@@ -47,22 +47,30 @@ Go to **unsplash.com** or **pexels.com** and download big versions of:
 |-----|--------------|
 | Sign-in | `green hillside morning`, `meadow golden hour` |
 | Payment | `valley dusk`, `hills sunset calm` |
-| Story scene | `flat rock meadow`, `boulder grass field` |
-| Second scene | `birch forest moss`, `stone woodland` |
+| Story scene | `meadow low angle`, `grass field close up horizon` — **no rock needed, we add it** |
+| Second scene | `birch forest floor`, `woodland clearing light` — **no rock needed** |
 | Profile | `treeline field`, `open meadow sky` |
 | Living scene | `clearing tree rock`, `lone tree meadow` |
 
 Pick calm, plain, real places. Not dramatic mountains. Make sure there is **empty
 space** where text will go.
 
-### 2. Add the scroll, quill, and ink to the rock photo
+### 2. Build the rock scene — two edits, not one
 
-Open the rock photo in Photoshop (or Gemini), select the flat top of the rock, and paste
-the edit prompt from **`IMAGE-PROMPTS.md`**.
+**You won't find a photo of a table-like rock. Don't look for one — add the rock with
+AI.** Keep the landscape real (grass and trees are the hard part to fake); a rock is the
+easy part, because no shape is "wrong."
 
-Make 4 versions. Keep the one where **the shadows go the same way as the other shadows**
-in the photo. Then zoom to 100 % and check the feather, the nib, and the ink bottle rim
-are not melted.
+**First** select the lower part of the photo, near the camera, and add the rock. Let it
+run off the bottom edge — that makes it feel close and real.
+**Then**, separately, select the flat top of your new rock and add the scroll, quill, and
+ink. Doing both in one go makes a mess.
+
+Both prompts are in **`IMAGE-PROMPTS.md`**.
+
+Each time: make 4 versions, keep the one where **the shadows go the same way as the other
+shadows**. Check the rock has a dark shadow where it touches the grass, and that the grass
+overlaps its base — otherwise it looks like a sticker.
 
 Do the same for the second scene photo.
 
