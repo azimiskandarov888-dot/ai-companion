@@ -6,9 +6,9 @@
 <title>A Living Friend — Product &amp; Screen Spec (v2)</title>
 <style>
   :root{
-    --bg:#0b0d0a; --panel:#141712; --line:#242a1f; --ink-on-dark:#ece8da; --dim:#9aa392;
-    --olive:#5b6242; --moss:#31371f; --amber:#caa65e; --accent:#a3ad83;
-    --parchment:#e9dfc7; --parch-edge:#cdbb92; --ink:#3a2f22; --stone:#7d8073;
+    --bg:#0E1210; --panel:#1B211A; --line:#2E3729; --ink-on-dark:#EFE9D8; --dim:#8A9280;
+    --olive:#5E7442; --moss:#37452A; --amber:#E3B75A; --accent:#9DB477;
+    --parchment:#F2E8D0; --parch-edge:#CBB88F; --ink:#2E2718; --stone:#7d8073;
     --radius:14px;
   }
   *{box-sizing:border-box}
@@ -111,22 +111,37 @@
   </div>
 
   <div class="card">
-    <h3>Colors of nature</h3>
+    <h3>Colors — “Sunlight through leaves” (decided; full system in <code>palette.html</code>)</h3>
+    <p style="margin:0 0 8px" class="sub"><b>Green is the world</b> (grass, leaves, moss);
+    <b>gold is the light falling on it</b> (sun, flowers). Mostly deep green shade, with
+    sunlight breaking through — never 50/50.</p>
     <div class="swatches">
-      <div class="swatch" style="background:#0b0d0a;color:#889">#0b0d0a night forest</div>
-      <div class="swatch" style="background:#5b6242;color:#e9e4cf">#5b6242 dark olive</div>
-      <div class="swatch" style="background:#31371f;color:#cfd6b8">#31371f deep moss</div>
-      <div class="swatch" style="background:#7d8073">#7d8073 stone</div>
-      <div class="swatch" style="background:#e9dfc7">#e9dfc7 parchment</div>
-      <div class="swatch" style="background:#cdbb92">#cdbb92 aged edge</div>
-      <div class="swatch" style="background:#3a2f22;color:#d9c9a3">#3a2f22 ink</div>
-      <div class="swatch" style="background:#caa65e">#caa65e warm amber</div>
+      <div class="swatch" style="background:#0E1210;color:#BCC3AC">#0E1210 night</div>
+      <div class="swatch" style="background:#1B211A;color:#BCC3AC">#1B211A bark</div>
+      <div class="swatch" style="background:#4A5C36;color:#F2E8D0">#4A5C36 leaf 600</div>
+      <div class="swatch" style="background:#7B9455;color:#161B14">#7B9455 leaf 400</div>
+      <div class="swatch" style="background:#E3B75A;color:#161B14">#E3B75A sun 400</div>
+      <div class="swatch" style="background:#F2E8D0;color:#2E2718">#F2E8D0 parchment</div>
+      <div class="swatch" style="background:#2E2718;color:#F2E8D0">#2E2718 ink</div>
+      <div class="swatch" style="background:#D2735A;color:#161B14">#D2735A clay</div>
     </div>
+    <h3>Text colors (contrast-checked — use only these)</h3>
     <ul>
-      <li>Deep, refined, <b>luxury-car olive</b> — dark and understated, never bright or grassy.</li>
+      <li><b>On night surfaces:</b> primary <code>#EFE9D8</code> linen · secondary
+        <code>#BCC3AC</code> sage · tertiary <code>#8A9280</code> lichen · accent/link
+        <code>#E3B75A</code> sun.</li>
+      <li><b>On parchment surfaces:</b> primary <code>#2E2718</code> ink · secondary
+        <code>#574C36</code> soft ink · accent <code>#7E5A14</code> deep gold ·
+        <code>#8A7C60</code> faint ink for page numbers &amp; flourishes only.</li>
+      <li><b>Never</b> pure white text or pure black backgrounds; never blue, purple, or
+        gray-blue; never iOS system red/green/blue (use clay <code>#D2735A</code> instead).</li>
+    </ul>
+    <ul>
       <li>Landscapes may be dawn, day, or dusk — <b>natural light</b>, warm and alive; the
         UI chrome around them stays deep and quiet so the paintings breathe.</li>
-      <li>Parchment + ink carry all reading &amp; writing; amber is the touch of warmth (sun, candle, brass).</li>
+      <li><b>Text over a painting always gets a scrim</b> — bottom-up
+        <code>rgba(10,14,10,.82)</code> → transparent by ~70% height — then linen/sage on top.</li>
+      <li>Gold is the accent for <b>one</b> action per screen. If everything glows, nothing does.</li>
     </ul>
   </div>
 

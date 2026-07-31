@@ -9,13 +9,15 @@ struct BreathingFace: View {
 
     @State private var breathe = false
 
+    /// Sunlight rises as he wakes up and speaks: deep moss at rest → grass while
+    /// he listens → a low gold shimmer while he thinks → full sun as he talks.
     private var color: Color {
         switch status {
-        case .idle:       return Color(red: 0.55, green: 0.60, blue: 0.70)
-        case .listening:  return Color(red: 0.40, green: 0.70, blue: 0.55) // warm green
-        case .thinking:   return Color(red: 0.85, green: 0.70, blue: 0.35) // amber
-        case .speaking:   return Color(red: 0.45, green: 0.62, blue: 0.85) // soft blue
-        case .problem:    return Color(red: 0.80, green: 0.45, blue: 0.40) // muted red
+        case .idle:       return Theme.leaf600   // resting — deep moss
+        case .listening:  return Theme.leaf400   // grass brightening
+        case .thinking:   return Theme.sun500    // low gold shimmer
+        case .speaking:   return Theme.sun400    // full sunlight
+        case .problem:    return Theme.clay      // clay, never an alarm red
         }
     }
 

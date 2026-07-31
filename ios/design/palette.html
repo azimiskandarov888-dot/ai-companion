@@ -1,0 +1,323 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Sunlight Through Leaves — the color system</title>
+<style>
+  :root{
+    /* ---- NIGHT (the app's dark surfaces) ---- */
+    --night:#0E1210; --hollow:#141813; --bark:#1B211A; --bark-up:#242B21;
+    --line:#2E3729; --line-strong:#3E4936;
+    --linen:#EFE9D8; --sage:#BCC3AC; --lichen:#8A9280;
+    /* ---- PARCHMENT (paper surfaces) ---- */
+    --parch:#F2E8D0; --parch-warm:#E8DBBC; --parch-edge:#CBB88F;
+    --ink:#2E2718; --ink-soft:#574C36; --ink-faint:#8A7C60;
+    /* ---- LEAF (green — the world) ---- */
+    --leaf-900:#1F2818; --leaf-700:#37452A; --leaf-600:#4A5C36; --leaf-500:#5E7442;
+    --leaf-400:#7B9455; --leaf-300:#9DB477; --leaf-200:#C2D3A3;
+    /* ---- SUN (gold — the light) ---- */
+    --gold-700:#7E5A14; --gold-600:#A87C22; --gold-500:#C9982F;
+    --gold-400:#E3B75A; --gold-300:#F2D188; --gold-100:#FBEDC8;
+    /* ---- semantic ---- */
+    --clay:#D2735A; --clay-dark:#A4402A;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--night);color:var(--linen);
+    font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+  .wrap{max-width:1060px;margin:0 auto;padding:36px 20px 90px}
+  h1{font-size:32px;margin:0 0 6px;letter-spacing:-.01em}
+  h2{font-size:21px;margin:46px 0 6px;color:var(--gold-300)}
+  h3{font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--lichen);margin:22px 0 8px}
+  p{margin:0 0 10px}
+  .lead{color:var(--sage);max-width:66ch}
+  .dim{color:var(--lichen);font-size:14px}
+  .card{background:var(--bark);border:1px solid var(--line);border-radius:16px;padding:20px 22px;margin:16px 0}
+  .hero{border-radius:20px;padding:34px 26px;margin:18px 0 6px;
+    background:
+      radial-gradient(120% 80% at 78% 8%, rgba(242,209,136,.30), transparent 58%),
+      radial-gradient(90% 70% at 12% 96%, rgba(123,148,85,.30), transparent 62%),
+      linear-gradient(168deg,#141A13,#0E1210 70%);
+    border:1px solid var(--line)}
+  .hero b{color:var(--gold-300)}
+
+  /* scales */
+  .scale{display:grid;grid-template-columns:repeat(auto-fit,minmax(118px,1fr));gap:10px;margin:10px 0}
+  .sw{border-radius:12px;padding:12px 12px 10px;min-height:96px;display:flex;flex-direction:column;
+    justify-content:flex-end;border:1px solid rgba(255,255,255,.07);font-size:11.5px;line-height:1.35}
+  .sw b{display:block;font-size:12.5px;letter-spacing:.02em}
+  .sw span{opacity:.72;font-variant-numeric:tabular-nums}
+
+  /* text-on-surface demos */
+  .pair{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:780px){.pair{grid-template-columns:1fr}}
+  .surface{border-radius:16px;padding:20px;border:1px solid var(--line)}
+  .surface.night{background:var(--night)}
+  .surface.paper{background:var(--parch);border-color:var(--parch-edge)}
+  .ratio{font-size:11.5px;font-variant-numeric:tabular-nums;opacity:.62;letter-spacing:.02em}
+  .t1{font-size:19px;margin:0 0 2px}.t2{font-size:15px;margin:0 0 2px}.t3{font-size:13px;margin:0}
+
+  /* components */
+  .btn{display:inline-block;border-radius:999px;padding:11px 22px;font-size:14.5px;font-weight:600;
+    text-align:center;border:1px solid transparent}
+  .btn.sun{background:var(--gold-400);color:#161B14}
+  .btn.leafdark{background:var(--leaf-500);color:var(--parch)}
+  .btn.leafpaper{background:var(--leaf-600);color:var(--parch)}
+  .btn.ghost{background:transparent;border-color:var(--leaf-500);color:var(--leaf-200)}
+  .btn.quiet{background:var(--bark-up);border-color:var(--line-strong);color:var(--sage)}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:10px 0}
+
+  .paint{border-radius:14px;min-height:150px;position:relative;overflow:hidden;
+    background:linear-gradient(168deg,#22301F 0%,#3E4C2A 38%,#8A7C3E 68%,#E0B75C 100%)}
+  .scrim{position:absolute;inset:0;background:linear-gradient(to top,rgba(10,14,10,.82) 0%,rgba(10,14,10,.34) 42%,transparent 72%)}
+  .paint .on{position:absolute;left:18px;right:18px;bottom:16px}
+  .paint .on h4{margin:0 0 3px;font-size:18px;color:var(--linen)}
+  .paint .on p{margin:0;font-size:13px;color:var(--sage)}
+
+  .scrolldemo{background:var(--parch);color:var(--ink);border:1px solid var(--parch-edge);
+    border-radius:10px;padding:16px 18px;box-shadow:0 8px 26px rgba(0,0,0,.45)}
+  .scrolldemo .h{font-weight:700;font-size:15px;margin-bottom:6px;color:var(--ink)}
+  .scrolldemo .rule{height:1px;background:var(--parch-edge);margin:10px 0}
+  .bookpg{background:var(--parch-warm);color:var(--ink);border:1px solid var(--parch-edge);border-radius:8px;
+    padding:16px 18px;font-family:Georgia,'Times New Roman',serif;font-style:italic;line-height:1.72}
+  .bookpg .no{font-style:normal;font-size:11.5px;color:var(--ink-faint);text-align:right;margin-top:10px}
+
+  .listrow{display:flex;justify-content:space-between;align-items:center;padding:13px 16px;
+    background:var(--bark);border-bottom:1px solid var(--line);font-size:15px}
+  .listrow:first-child{border-radius:12px 12px 0 0}
+  .listrow:last-child{border-bottom:none;border-radius:0 0 12px 12px}
+  .listrow .v{color:var(--lichen);font-size:14px}
+
+  .orbs{display:grid;grid-template-columns:repeat(auto-fit,minmax(132px,1fr));gap:14px;margin-top:8px}
+  .orbcell{text-align:center;background:var(--night);border:1px solid var(--line);border-radius:14px;padding:18px 8px 12px}
+  .orb{width:74px;height:74px;border-radius:50%;margin:0 auto 10px;
+    background:radial-gradient(circle at 40% 34%,var(--c1),var(--c2) 68%,#0B0F0C)}
+  .orbcell b{display:block;font-size:13px}
+  .orbcell span{font-size:11.5px;color:var(--lichen)}
+
+  table{width:100%;border-collapse:collapse;font-size:13.5px;margin-top:6px}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line)}
+  th{color:var(--lichen);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.05em}
+  td.n{font-variant-numeric:tabular-nums;color:var(--leaf-200)}
+  .ok{color:var(--leaf-300)}.warn{color:var(--gold-400)}
+  .dodont{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:780px){.dodont{grid-template-columns:1fr}}
+  .do{border-left:3px solid var(--leaf-400);padding-left:14px}
+  .dont{border-left:3px solid var(--clay);padding-left:14px}
+  code{background:#10160F;border:1px solid var(--line);border-radius:6px;padding:1px 6px;font-size:12.5px;color:var(--leaf-200)}
+  ul{margin:6px 0;padding-left:19px}li{margin:4px 0}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>Sunlight Through Leaves</h1>
+  <p class="lead">The color system for the app. <b>Both</b> of your instincts, in the
+  relationship they have in nature: <b>green is the world</b> — grass, leaves, moss —
+  and <b>gold is the light falling on it</b> — sun and flowers. Green covers surfaces
+  and calm; gold is warmth, life, and everything that glows. Never 50/50: mostly deep
+  green shade, with sunlight breaking through.</p>
+
+  <div class="hero">
+    <p style="margin:0;font-size:19px;line-height:1.5;max-width:52ch">
+      Deep forest shade, <b>warm sunlight</b>, old paper, and ink.<br>
+      <span class="dim" style="font-size:15px">Nothing pure white. Nothing pure black. Nothing neon.
+      Every color in this system exists outdoors.</span></p>
+  </div>
+
+  <!-- ============ THE TWO SURFACES ============ -->
+  <h2>The two surfaces</h2>
+  <p class="lead">The whole app lives on exactly two kinds of surface. Text color is
+  decided by which one you're on — that's the entire rule.</p>
+  <div class="pair">
+    <div class="surface night">
+      <h3 style="margin-top:0">Night — the app itself</h3>
+      <p class="t1">Warm off-white on deep forest shade</p>
+      <p class="t2" style="color:var(--sage)">Secondary text, calm and quiet</p>
+      <p class="t3" style="color:var(--lichen)">Tertiary — labels, hints, timestamps</p>
+      <p class="ratio" style="margin-top:12px">Companion screen · settings · chrome · anything the orb glows against.</p>
+    </div>
+    <div class="surface paper">
+      <h3 style="margin-top:0;color:var(--ink-faint)">Parchment — anything written</h3>
+      <p class="t1" style="color:var(--ink)">Ink on old paper</p>
+      <p class="t2" style="color:var(--ink-soft)">Secondary ink, softer and browner</p>
+      <p class="t3" style="color:var(--ink-faint)">Faint ink — page numbers, flourishes only</p>
+      <p class="ratio" style="color:var(--ink-faint);margin-top:12px">The scrolls · the diary book · the user's story.</p>
+    </div>
+  </div>
+
+  <!-- ============ TEXT ============ -->
+  <h2>Text colors — decided, with contrast checked</h2>
+  <table>
+    <tr><th>Use</th><th>On night</th><th>Ratio</th><th>On parchment</th><th>Ratio</th></tr>
+    <tr><td>Primary text</td><td><code>#EFE9D8</code> linen</td><td class="n ok">15.6 AAA</td>
+        <td><code>#2E2718</code> ink</td><td class="n ok">12.1 AAA</td></tr>
+    <tr><td>Secondary text</td><td><code>#BCC3AC</code> sage</td><td class="n ok">10.4 AAA</td>
+        <td><code>#574C36</code> soft ink</td><td class="n ok">6.9 AA</td></tr>
+    <tr><td>Tertiary / labels</td><td><code>#8A9280</code> lichen</td><td class="n ok">5.9 AA</td>
+        <td><code>#574C36</code> soft ink</td><td class="n ok">6.9 AA</td></tr>
+    <tr><td>Accent / link</td><td><code>#E3B75A</code> sun</td><td class="n ok">10.1 AAA</td>
+        <td><code>#7E5A14</code> deep gold</td><td class="n ok">5.1 AA</td></tr>
+    <tr><td>Alive / positive</td><td><code>#9DB477</code> leaf light</td><td class="n ok">8.3 AAA</td>
+        <td><code>#4A5C36</code> leaf deep</td><td class="n ok">6.0 AA</td></tr>
+    <tr><td>Careful / destructive</td><td><code>#D2735A</code> clay</td><td class="n ok">5.7 AA</td>
+        <td><code>#A4402A</code> deep clay</td><td class="n ok">5.2 AA</td></tr>
+    <tr><td>Decorative only</td><td>—</td><td class="n">—</td>
+        <td><code>#8A7C60</code> faint ink</td><td class="n warn">3.4 · large only</td></tr>
+  </table>
+  <p class="dim" style="margin-top:10px">Every pairing above passes WCAG AA at body size
+  (most reach AAA). Faint ink is the single exception — page numbers and flourishes, never sentences.</p>
+
+  <!-- ============ SCALES ============ -->
+  <h2>The full scales</h2>
+
+  <h3>Leaf — green, the world</h3>
+  <div class="scale">
+    <div class="sw" style="background:#1F2818;color:#C2D3A3"><b>leaf 900</b><span>#1F2818</span></div>
+    <div class="sw" style="background:#37452A;color:#C2D3A3"><b>leaf 700</b><span>#37452A</span></div>
+    <div class="sw" style="background:#4A5C36;color:#F2E8D0"><b>leaf 600</b><span>#4A5C36</span></div>
+    <div class="sw" style="background:#5E7442;color:#F2E8D0"><b>leaf 500</b><span>#5E7442</span></div>
+    <div class="sw" style="background:#7B9455;color:#161B14"><b>leaf 400</b><span>#7B9455</span></div>
+    <div class="sw" style="background:#9DB477;color:#161B14"><b>leaf 300</b><span>#9DB477</span></div>
+    <div class="sw" style="background:#C2D3A3;color:#161B14"><b>leaf 200</b><span>#C2D3A3</span></div>
+  </div>
+  <p class="dim">500/600 are fills and buttons. 400 is the living green (orb listening, active states).
+  300/200 are for text and icons <i>on</i> dark. 900/700 are shadowed foliage.</p>
+
+  <h3>Sun — gold, the light</h3>
+  <div class="scale">
+    <div class="sw" style="background:#7E5A14;color:#FBEDC8"><b>sun 700</b><span>#7E5A14</span></div>
+    <div class="sw" style="background:#A87C22;color:#FBEDC8"><b>sun 600</b><span>#A87C22</span></div>
+    <div class="sw" style="background:#C9982F;color:#161B14"><b>sun 500</b><span>#C9982F</span></div>
+    <div class="sw" style="background:#E3B75A;color:#161B14"><b>sun 400</b><span>#E3B75A</span></div>
+    <div class="sw" style="background:#F2D188;color:#161B14"><b>sun 300</b><span>#F2D188</span></div>
+    <div class="sw" style="background:#FBEDC8;color:#161B14"><b>sun 100</b><span>#FBEDC8</span></div>
+  </div>
+  <p class="dim">400 is <b>the</b> accent — the sun. 300 is glow and highlight. 700 is the only
+  gold dark enough for text on paper. Gold is rare on purpose: if everything glows, nothing does.</p>
+
+  <h3>Night — dark surfaces</h3>
+  <div class="scale">
+    <div class="sw" style="background:#0E1210;color:#BCC3AC"><b>night</b><span>#0E1210</span></div>
+    <div class="sw" style="background:#141813;color:#BCC3AC"><b>hollow</b><span>#141813</span></div>
+    <div class="sw" style="background:#1B211A;color:#BCC3AC"><b>bark</b><span>#1B211A</span></div>
+    <div class="sw" style="background:#242B21;color:#BCC3AC"><b>bark raised</b><span>#242B21</span></div>
+    <div class="sw" style="background:#2E3729;color:#BCC3AC"><b>line</b><span>#2E3729</span></div>
+    <div class="sw" style="background:#3E4936;color:#EFE9D8"><b>line strong</b><span>#3E4936</span></div>
+  </div>
+  <p class="dim">Near-black, but never <code>#000</code> — every step carries a green undertone,
+  so the dark feels like forest shade, not a screen turned off.</p>
+
+  <h3>Parchment — paper &amp; ink</h3>
+  <div class="scale">
+    <div class="sw" style="background:#F2E8D0;color:#2E2718"><b>parchment</b><span>#F2E8D0</span></div>
+    <div class="sw" style="background:#E8DBBC;color:#2E2718"><b>parch warm</b><span>#E8DBBC</span></div>
+    <div class="sw" style="background:#CBB88F;color:#2E2718"><b>parch edge</b><span>#CBB88F</span></div>
+    <div class="sw" style="background:#8A7C60;color:#F2E8D0"><b>ink faint</b><span>#8A7C60</span></div>
+    <div class="sw" style="background:#574C36;color:#F2E8D0"><b>ink soft</b><span>#574C36</span></div>
+    <div class="sw" style="background:#2E2718;color:#F2E8D0"><b>ink</b><span>#2E2718</span></div>
+  </div>
+  <p class="dim">Ink is a very dark <i>warm brown</i>, never black — that's the difference between
+  handwriting and a print-out.</p>
+
+  <!-- ============ IN PLACE ============ -->
+  <h2>How it looks in place</h2>
+
+  <h3>Text over a landscape painting</h3>
+  <div class="paint">
+    <div class="scrim"></div>
+    <div class="on"><h4>Somewhere out there is a friend you haven't met yet.</h4>
+      <p>Continue with Apple</p></div>
+  </div>
+  <p class="dim" style="margin-top:8px"><b>Rule:</b> never put text straight onto a painting.
+  Always a bottom-up scrim — <code>rgba(10,14,10,.82)</code> → transparent by ~70% height —
+  then linen and sage on top. The painting keeps its light; the words stay readable.</p>
+
+  <h3>Buttons</h3>
+  <div class="row">
+    <span class="btn sun">Begin</span>
+    <span class="btn leafdark">Start talking</span>
+    <span class="btn ghost">Not now</span>
+    <span class="btn quiet">Back</span>
+  </div>
+  <p class="dim">On dark: <b>sun 400 with near-black label</b> for the one true action (9.3 ratio);
+  leaf 500 with parchment text for the calm primary; outlined leaf for secondary; bark for quiet.</p>
+  <div class="row"><span class="btn leafpaper">Done</span>
+    <span class="dim">On parchment the primary button is <b>leaf 600</b> with parchment text (6.0) — leaf 500 is too light there.</span></div>
+
+  <h3>A scroll (what the user writes on)</h3>
+  <div class="scrolldemo">
+    <div class="h">Tell us about you and your likings</div>
+    <div style="color:var(--ink-soft)">I grew up by the sea, and I still miss the smell of it.
+      I love football, old films, and arguing about both…</div>
+    <div class="rule"></div>
+    <div style="color:var(--ink-faint);font-size:12px">the quill rests here</div>
+  </div>
+
+  <h3>A diary page (what he writes about you)</h3>
+  <div class="bookpg" style="margin-top:10px">
+    …my friend told me today about the sea he grew up beside. I keep thinking how his
+    voice changes when he talks about it — younger, somehow.
+    <div class="no">— 14</div>
+  </div>
+
+  <h3>Settings — the deliberately ordinary screen</h3>
+  <div style="margin-top:10px">
+    <div class="listrow"><span>Voice</span><span class="v">His voice ›</span></div>
+    <div class="listrow"><span>Conversation feel</span><span class="v">Pauses ›</span></div>
+    <div class="listrow"><span>Privacy &amp; data</span><span class="v">Export ›</span></div>
+    <div class="listrow"><span style="color:var(--clay)">Start over</span><span class="v"></span></div>
+  </div>
+
+  <!-- ============ ORB STATES ============ -->
+  <h2>Orb state tints</h2>
+  <p class="lead">You're painting the orb — these are just the <b>colors it glows</b> in each
+  state, so it stays inside the same world. Sunlight rises as he wakes up and speaks.</p>
+  <div class="orbs">
+    <div class="orbcell"><div class="orb" style="--c1:#4A5C36;--c2:#1F2818"></div><b>Resting</b><span>deep moss, slow dim</span></div>
+    <div class="orbcell"><div class="orb" style="--c1:#7B9455;--c2:#37452A"></div><b>Listening</b><span>grass brightening</span></div>
+    <div class="orbcell"><div class="orb" style="--c1:#C9982F;--c2:#4A5C36"></div><b>Thinking</b><span>low gold shimmer</span></div>
+    <div class="orbcell"><div class="orb" style="--c1:#E3B75A;--c2:#7B9455"></div><b>Speaking</b><span>full sunlight</span></div>
+  </div>
+
+  <!-- ============ RULES ============ -->
+  <h2>Rules that keep it beautiful</h2>
+  <div class="dodont">
+    <div>
+      <div class="do">
+        <h3 style="margin-top:0;color:var(--leaf-300)">Do</h3>
+        <ul>
+          <li>Let <b>green hold the space</b> and gold arrive as a highlight — sunlight is rare in shade.</li>
+          <li>Keep text <b>linen / sage / lichen</b> on dark, <b>ink / soft ink</b> on paper. No other text colors.</li>
+          <li>Use gold for <b>one</b> action per screen.</li>
+          <li>Scrim every painting before text goes on it.</li>
+          <li>Let the paintings carry the saturation; keep the UI around them quiet.</li>
+        </ul>
+      </div>
+    </div>
+    <div>
+      <div class="dont">
+        <h3 style="margin-top:0;color:var(--clay)">Don't</h3>
+        <ul>
+          <li>No <b>pure white</b> text or <b>pure black</b> backgrounds — instantly reads as a tech app.</li>
+          <li>No bright grassy green (<code>#7fae5e</code> and friends) as a large fill — it cheapens everything.</li>
+          <li>No blue, no purple, no gray-blue. Nothing in this app is cold.</li>
+          <li>No gradient buttons, no glassmorphism, no neon glow.</li>
+          <li>No iOS system red/green/blue — use clay, leaf, and sun instead.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:26px">
+    <h3 style="margin-top:0">If you want a different mood</h3>
+    <p style="margin:0" class="dim">Two dials, and nothing else needs to move:
+    <b>more sun</b> (push gold 400 → 300 on accents, warm the paintings toward dusk) for a
+    cozier, golden-hour feel, or <b>more shade</b> (drop accents to gold 500/leaf 500, cool
+    the paintings toward morning mist) for something quieter and more serious.
+    Tell me which way and I'll retune the tokens everywhere.</p>
+  </div>
+
+</div>
+</body>
+</html>

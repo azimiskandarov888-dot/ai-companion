@@ -32,6 +32,10 @@ struct SettingsView: View {
                         .foregroundStyle(.secondary)
                 }
             }
+            // Settings is deliberately the one ordinary screen — a native grouped
+            // list. It just wears the same forest colors as everything else.
+            .scrollContentBackground(.hidden)
+            .background(Theme.night)
             .navigationTitle("Настройки")
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
@@ -44,6 +48,8 @@ struct SettingsView: View {
                     }
                 }
             }
+            .tint(Theme.sun400)
         }
+        .preferredColorScheme(.dark)
     }
 }

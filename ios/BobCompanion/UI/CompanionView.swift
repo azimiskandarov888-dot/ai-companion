@@ -23,14 +23,14 @@ struct CompanionView: View {
 
     var body: some View {
         ZStack {
-            Color(red: 0.09, green: 0.10, blue: 0.13).ignoresSafeArea()
+            Theme.night.ignoresSafeArea()
 
             VStack(spacing: 44) {
                 BreathingFace(status: conversation.status)
 
                 Text(statusWord)
                     .font(.system(size: 26, weight: .light, design: .rounded))
-                    .foregroundStyle(.white.opacity(0.55))
+                    .foregroundStyle(Theme.lichen)
                     .animation(.easeInOut, value: statusWord)
 
                 #if DEBUG
@@ -39,11 +39,11 @@ struct CompanionView: View {
                 VStack(spacing: 8) {
                     if !conversation.lastHeard.isEmpty {
                         Text("он: \(conversation.lastHeard)")
-                            .foregroundStyle(.white.opacity(0.35))
+                            .foregroundStyle(Theme.lichen)
                     }
                     if !conversation.lastReply.isEmpty {
                         Text("Боб: \(conversation.lastReply)")
-                            .foregroundStyle(.white.opacity(0.5))
+                            .foregroundStyle(Theme.sage)
                     }
                 }
                 .font(.system(size: 14))
