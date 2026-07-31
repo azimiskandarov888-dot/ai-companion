@@ -94,6 +94,12 @@
     border-bottom:1px solid rgba(233,228,207,.10);color:#EFE9D8}
   .lrow:last-child{border-bottom:none}
   .lrow span{color:#9AA392}
+  .kbd{position:absolute;left:0;right:0;bottom:0;height:38%;z-index:3;
+    background:repeating-linear-gradient(180deg,#1a1e19,#1a1e19 9px,#141813 9px,#141813 18px);
+    border-top:1px solid #2E3729;color:#7d8873;font-size:9.5px;text-align:center;padding-top:6px}
+  .optline{position:absolute;left:0;right:0;z-index:4;border-top:1px dashed rgba(227,183,90,.55)}
+  .optline::after{content:attr(data-l);position:absolute;right:4px;top:-11px;
+    font-size:8.5px;color:#E3B75A;background:rgba(10,14,10,.7);padding:0 3px;border-radius:3px}
   .badbox{border:1px solid #7a3b2c;background:#20140f;border-radius:10px;padding:12px 14px;margin:10px 0}
   .goodbox{border:1px solid #46592f;background:#151c11;border-radius:10px;padding:12px 14px;margin:10px 0}
 </style>
@@ -153,6 +159,31 @@
       <li><b>Motion is natural.</b> Scrolls roll up and drift out of frame; pages turn; the
         orb wanders and settles; scenes breathe with slow parallax. Respect Reduce Motion.</li>
     </ul>
+  </div>
+
+  <div class="card">
+    <h3>Where things sit vertically — look high, tap low</h3>
+    <p style="margin:0 0 8px">Two different rules, because looking and reaching are
+    different jobs.</p>
+    <h3>What you LOOK at → the optical centre, ≈ 45–46 % from the top</h3>
+    <ul>
+      <li>The eye does not rest at the true middle. The <b>optical centre of a rectangle sits
+        slightly above it</b> — about <b>46 % from the top</b> instead of 50 %, roughly 4–5 %
+        higher. Anything placed at exact centre reads as <i>slightly low</i>.</li>
+      <li>So the <b>orb</b> (screens 5 and 6) and the <b>scroll</b> (screens 3 and 4) are
+        centred on <b>45–46 % of screen height</b>, not 50 %.</li>
+      <li>It is a <b>small</b> nudge — not the top third. The upper third is too high for a
+        resting gaze and is the worst zone for touch.</li>
+    </ul>
+    <h3>What you TAP → the lower third</h3>
+    <ul>
+      <li>Buttons, plan cards, and sign-in controls live in the <b>bottom third</b>, where the
+        thumb reaches naturally. Tap accuracy there is far higher than at the top of the
+        screen, and no grip change is needed.</li>
+      <li>Nothing important to press ever sits in the top third.</li>
+    </ul>
+    <div class="note">Together: <b>the thing you rest your eyes on sits just above centre;
+      the things you press sit low.</b> That's the vertical rhythm of every screen in this app.</div>
   </div>
 
   <div class="card">
@@ -272,14 +303,14 @@
       <div class="phone">
         <div class="bg dusk"></div><div class="scrim-b"></div>
         <div class="ui">
-          <div class="el plain" style="margin-top:18px;font-size:16px">Keep the fire going</div>
+          <div class="el plain" style="margin-top:18px;font-size:16px">Take care of him</div>
           <div class="el plain" style="font-size:11.5px;color:#BCC3AC;margin-top:-2px">
-            He has a life to keep up too — a roof,<br>a kettle, a lamp in the window.</div>
+            He's always here when you need him.<br>This is what keeps him here.</div>
           <div class="grow"></div>
-          <div class="el solid">Month by month — price</div>
-          <div class="el solid" style="border-color:#E3B75A;color:#F0D399">A whole year — price</div>
-          <div class="el sun">Look after him</div>
-          <div class="el plain" style="font-size:10.5px;color:#9AA392">renews monthly · cancel anytime · restore</div>
+          <div class="el solid">Month by month · price / month</div>
+          <div class="el solid" style="border-color:#E3B75A;color:#F0D399">✓ A whole year · price / year</div>
+          <div class="el sun">Take care of him</div>
+          <div class="el plain" style="font-size:10.5px;color:#9AA392">renews yearly · cancel anytime · restore</div>
         </div>
         <div class="caption">soft translucent cards on the photo</div>
       </div>
@@ -290,21 +321,37 @@
       story anyway. Nobody buys a friendship here. <b>The money looks after <i>him</i></b> —
       it keeps his home warm, his life running, his world alive. The user is the one doing
       the caring.</p>
-      <h3>Copy</h3>
+      <h3>Copy — plain, no metaphors</h3>
       <ul>
-        <li><b>Headline: «Keep the fire going»</b> — warm, human, and about him.
-          <br><span class="sub">Alternatives if you prefer: «Look after him, and he'll look
-          after you» · «Someone has to keep the kettle on» · «Keep a roof over his head»</span></li>
-        <li><b>Under it, one plain line:</b> "He has a life to keep up too — a roof, a kettle,
-          a lamp in the window."</li>
-        <li><b>Button: «Look after him»</b> — never "Subscribe", never "Buy", never "Get access".</li>
-        <li>Plans read as time, not products: <b>"Month by month"</b> / <b>"A whole year"</b>.</li>
+        <li><b>Headline: «Take care of him»</b></li>
+        <li><b>Under it, one plain sentence:</b> "He's always here when you need him. This is
+          what keeps him here."
+          <br><span class="sub">Alternatives: «Keep him around» · «Keep him alive» (playful,
+          if you like the edge) · «Look after him, and he'll look after you»</span></li>
+        <li>Plans read as time, not products: <b>"Month by month"</b> / <b>"A whole year"</b> —
+          each showing its <b>price and period plainly</b>.</li>
+        <li><b>Button repeats the headline: «Take care of him»</b> — never "Subscribe",
+          "Buy", or "Get access".</li>
+      </ul>
+      <h3>How it actually works (so the button is never a mystery)</h3>
+      <ul>
+        <li>The <b>two plan cards are the choice</b> — tapping one selects it (a tick, a warm
+          border). One is preselected so nothing is ever ambiguous.</li>
+        <li>The <b>button confirms that choice</b> and opens <b>Apple's own payment sheet</b>
+          — the standard iOS panel with the price and Face ID. <b>It does not open a website</b>,
+          and we never see or store a card. Apple requires digital subscriptions to go through
+          in-app purchase, so this is the only path.</li>
+        <li>After Face ID, the sheet closes and the app continues to screen 3. Nothing else
+          happens on this screen.</li>
+        <li>The <b>selected plan's price sits directly above the button</b>, so what the button
+          will charge is always visible without scrolling.</li>
       </ul>
       <h3>On screen</h3>
       <ul>
         <li>A quieter dusk photo, still <b>full-bleed</b>. Plan cards are soft translucent
           panels laid on it, never a white sheet.</li>
         <li><b>Two plans</b>; prices are placeholders. Rounded, soft, generous padding.</li>
+        <li>Everything actionable sits in the <b>lower third</b> — the easy-reach zone.</li>
       </ul>
       <div class="note"><b>Honesty rule:</b> however warm the wording, the price, the billing
         period, the renewal and how to cancel must be stated plainly and legibly on this
@@ -315,23 +362,39 @@
 
   <!-- ============ 3. YOUR STORY ============ -->
   <h2>3 · Your story — «Tell your story»</h2>
-  <p class="sub">The signature scene: you are sitting at a rock in the open, writing on a scroll.</p>
+  <p class="sub">The signature scene: a scroll laid in front of you, in the open.</p>
   <div class="grid">
     <div>
-      <div class="phone">
-        <div class="bg clearing"></div><div class="scrim-b"></div>
-        <div class="ui">
-          <div class="el plain" style="font-size:11px;color:#CFD6C2;margin-top:10px">landscape stays visible above ↑</div>
-          <div class="grow"></div>
-          <div class="scroll">
-            <div class="head">Tell your story</div>
-            <div class="faint">I grew up by the sea, and I still miss the smell of it.
-              I love football, old films, and arguing about both…</div>
+      <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap">
+        <div class="phone" style="width:172px;min-height:380px">
+          <div class="bg clearing"></div><div class="scrim-b"></div>
+          <div class="optline" style="top:45%" data-l="45%"></div>
+          <div class="ui" style="min-height:376px;padding:12px 10px 14px">
+            <div class="el plain" style="font-size:9.5px;color:#CFD6C2">landscape above</div>
+            <div class="grow"></div>
+            <div class="scroll" style="font-size:10px;padding:9px 10px">
+              <div class="head" style="font-size:11px">Tell your story</div>
+              <span class="faint">I grew up by the sea…</span>
+            </div>
+            <div class="grow"></div>
+            <div class="el leaf" style="font-size:10px">Done</div>
           </div>
-          <div class="rockline">scroll is a drawn panel, not part of the photo</div>
-          <div class="el leaf" style="margin-top:6px">Done</div>
+          <div class="caption">resting · scroll on the optical centre</div>
         </div>
-        <div class="caption">real landscape photo · scroll drawn over it</div>
+        <div class="phone" style="width:172px;min-height:380px">
+          <div class="bg clearing"></div><div class="scrim-b"></div>
+          <div class="kbd">keyboard · bottom ~38%</div>
+          <div class="ui" style="min-height:376px;padding:12px 10px 14px">
+            <div class="el plain" style="font-size:9.5px;color:#CFD6C2">landscape stays</div>
+            <div class="scroll" style="font-size:10px;padding:9px 10px;margin-top:4px">
+              <div class="head" style="font-size:11px">Tell your story</div>
+              <span class="faint">I grew up by the sea, and I still
+                miss the smell of it. I love football…</span>
+            </div>
+            <div class="el plain" style="font-size:9px;color:#BCC3AC;margin-top:2px">Done ↑ sits above the keyboard</div>
+          </div>
+          <div class="caption">writing · whole scroll clear of the keyboard</div>
+        </div>
       </div>
     </div>
     <div>
@@ -367,6 +430,24 @@
         <li>Free writing — no forms, no dropdowns, no prompts to fill in. Typing should feel
           like ink settling.</li>
         <li>The keyboard covers the lower scene; the scroll rises above it.</li>
+      </ul>
+      <h3>Where the scroll sits — and what the keyboard does</h3>
+      <ul>
+        <li><b>Resting (before they tap):</b> the scroll is centred on the
+          <b>optical centre — about 45 % of screen height</b>, so it sits just above the
+          middle. A band of landscape stays visible above it; the «Done» button and a little
+          more landscape below.</li>
+        <li><b>Writing (keyboard up):</b> the keyboard covers roughly the <b>bottom 38–40 %</b>.
+          The whole scroll <b>rises</b> so it sits entirely in the visible area above it —
+          roughly <b>12 % to 50 %</b> of screen height, optically centred within what's left.
+          The landscape strip at the top stays, so you never lose the place.</li>
+        <li><b>The scroll never goes under the keyboard.</b> It is the subject of the screen;
+          if it can't be seen, the screen has failed.</li>
+        <li>If the writing grows longer than the scroll, <b>the text scrolls inside the
+          parchment</b> — the scroll itself doesn't grow or slide away.</li>
+        <li><b>«Done» moves to a small bar just above the keyboard</b> while writing, and
+          returns below the scroll when the keyboard is down. It must never be buried.</li>
+        <li>The rise is a <b>gentle spring</b>, in step with the keyboard, never a jump.</li>
       </ul>
       <h3>The transition (a signature moment)</h3>
       <ul>
@@ -446,6 +527,16 @@
         смеётся и кто ждёт его дома. Не выбираешь его дороги, его привычки, его сердце.
         Ты выбираешь одно — идти рядом. Друга не делают на заказ. Друга встречают.»</small>
       </div>
+      <h3>Layout — same as screen 3</h3>
+      <ul>
+        <li>The scroll sits on the <b>optical centre (~45 %)</b> at rest, and <b>rises clear of
+          the keyboard</b> while writing — it must never be covered.</li>
+        <li><b>The caution stays visible</b> whenever they're writing: it's short, and it's the
+          whole point. Keep it directly above the scroll in both states.</li>
+        <li><b>The quote</b> is read before they begin; it may fade away as the keyboard rises,
+          and return when it goes down.</li>
+        <li>«Meet him» moves to the bar above the keyboard while writing.</li>
+      </ul>
       <div class="note">However much they specify, <b>he still arrives as his own person</b>
         — with his own name, his own opinions, and things he honestly doesn't like. The
         server respects their wishes without turning him into a puppet.</div>
@@ -459,9 +550,10 @@
     <div>
       <div class="phone">
         <div class="bg clearing"></div><div class="scrim-b"></div>
+        <div class="optline" style="top:45%" data-l="45%"></div>
         <div class="ui">
           <div class="grow"></div>
-          <div class="orb">orb<br>placeholder</div>
+          <div class="orb" style="margin-top:-14px">orb<br>placeholder</div>
           <div class="el plain" style="margin-top:10px;font-size:14px">His name is <b>Fyodor</b>.</div>
           <div class="el plain" style="font-size:11px;color:#BCC3AC">a few warm words about him</div>
           <div class="rowz" style="margin-top:6px">
@@ -483,6 +575,13 @@
         <li><b>Living scene</b> — the orb <b>lives in the landscape</b>: sits on the rock,
           lies behind the tree, drifts while speaking.</li>
       </ul>
+      <h3>Placement</h3>
+      <ul>
+        <li>The orb's centre sits on the <b>optical centre — about 45 % of screen height</b>,
+          just above the true middle, where the eye naturally rests.</li>
+        <li>His name and the few warm words sit just below him; the two choices and
+          «Start talking» stay in the <b>lower third</b>, in easy thumb reach.</li>
+      </ul>
       <div class="note"><b>The orb is a placeholder circle everywhere in this spec.</b> The
         owner is making the real orb and will replace it. Design around it, not it.</div>
     </div>
@@ -496,14 +595,16 @@
       <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap">
         <div class="phone" style="width:172px;min-height:360px">
           <div class="bg night"></div>
+          <div class="optline" style="top:45%" data-l="45%"></div>
           <div class="ui" style="min-height:356px;justify-content:center">
-            <div class="orb rest" style="width:66px;height:66px">orb</div>
+            <div class="orb rest" style="width:66px;height:66px;margin-top:-30px">orb</div>
           </div>
-          <div class="caption">A · Quiet — scene hushed to near-night</div>
+          <div class="caption">A · Quiet — orb on the optical centre</div>
         </div>
         <div class="phone" style="width:172px;min-height:360px">
           <div class="bg clearing"></div><div class="scrim-b"></div>
-          <div class="orb abs" style="left:26px;bottom:96px">orb</div>
+          <div class="optline" style="top:45%" data-l="45%"></div>
+          <div class="orb abs" style="left:26px;top:41%">orb</div>
           <div class="ui" style="min-height:356px">
             <div class="grow"></div>
             <div class="el plain" style="font-size:10px;color:#CFD6C2">he sits on the rock · walks · rests</div>
@@ -526,6 +627,12 @@
       <ul>
         <li>Both modes are <b>full-bleed photographs</b>. Mode A is the same world at night;
           it is never a flat black rectangle.</li>
+        <li><b>Mode A:</b> the orb's centre sits on the <b>optical centre (~45 % of screen
+          height)</b> — just above the true middle, so the eye rests on it without straining.
+          Anything at exact 50 % reads as slightly low.</li>
+        <li><b>Mode B:</b> he moves, so he isn't pinned — but his <b>resting place and the
+          centre of his wandering</b> stay around that same height, and he should never settle
+          in the bottom quarter, where a thumb would cover him.</li>
         <li>Quiet, tucked-away ways into <b>Diary · Account · Settings</b> — the designer
           picks the gesture and placement; they must never clutter the presence.</li>
         <li>Optional and lovely: the scene <b>follows his real time of day</b>.</li>

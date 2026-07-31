@@ -58,6 +58,17 @@ waveforms, no mic icons, no robot glow, no "generating…" — ever.
   (`rgba(10,14,10,.82)` → transparent by ~70% height).
 - Motion described, not animated: scrolls roll up and drift out of frame, pages turn,
   the orb wanders and settles. Gentle, spring-based. Respect Reduce Motion.
+- **Vertical placement: look high, tap low.** What the eye rests on — the **orb** (screens
+  5–6) and the **scroll** (screens 3–4) — is centred on the **optical centre, ≈45–46 % of
+  screen height**, not 50 %: the optical centre of a rectangle sits slightly above the true
+  middle, so anything at exact centre reads as slightly low. What the thumb presses —
+  buttons, plan cards, sign-in — lives in the **bottom third**, where reach and tap accuracy
+  are best. Never put a primary control in the top third.
+- **The keyboard must never cover the scroll** on screens 3 and 4. At rest the scroll sits on
+  the optical centre; when the keyboard rises (≈38–40 % of the screen) the whole scroll rises
+  with it, sitting roughly between 12 % and 50 % of screen height, with a strip of landscape
+  still visible above. Long text scrolls *inside* the parchment; the confirm button moves to a
+  small bar just above the keyboard. Show me both states.
 - **Softness is a rule, not a mood.** Nothing in this app has hard, square edges —
   generously rounded corners (≈18–22 pt) on every panel, card, and group, translucent
   surfaces rather than opaque ones, inset faint dividers rather than full-width lines.
