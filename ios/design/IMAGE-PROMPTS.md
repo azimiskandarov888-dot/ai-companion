@@ -75,58 +75,67 @@ patch looks subtly plastic even when everything else is right.
 
 ---
 
-### The prompt — POV, seated, fancy scroll, soft light
+### The prompt — add to the photo, never re-frame it
 
-Your photo has soft overcast light, so this version has **no hard shadows** in it. If you
-later use a sunny photo, swap the light paragraph for the sunny one further below.
+**The key idea:** we do **not** ask it to change the camera. The camera stays exactly
+where it is. The "I'm sitting here writing" feeling comes entirely from **how close and how
+large the rock and scroll are** in the foreground — a big rock right under the lens, cut
+off by the bottom edge, with the scroll on it in strong perspective. Your eye reads that as
+*"I am sitting at this."*
+
+Asking it to "change the point of view" makes it re-render the whole frame — which wrecks
+the background *and* is half of why the quality collapsed.
+
+Your photo has soft overcast light, so this version has **no hard shadows**. If you later
+use a sunny photo, swap the light paragraph for the sunny one below.
 
 ```
-Edit this photograph into a first-person point of view: I am sitting on the ground in this
-field, using a flat rock in front of me as a writing desk, looking down at an open scroll
-on it.
+Keep this photograph exactly as it is. Do NOT change the camera position, the framing, the
+crop, the zoom, the perspective, or the horizon. Do not re-shoot, re-compose, re-render, or
+straighten anything. The field, the tree, the hills and the sky must stay pixel-for-pixel as
+they are. You are only ADDING objects into the existing foreground.
 
-THE VIEW: the camera is at the eye level of a person sitting on the ground — low, close to
-the rock, tilted slightly downward toward the scroll, but the field, the hills and the sky
-are still clearly visible in the upper part of the frame, exactly as they are now. It must
-feel like my own eyes, not like a photograph of a scene. Absolutely NO person, NO hands, NO
-arms, NO body, NO feet anywhere in the image.
+WHAT TO ADD, AND WHERE: place a large flat rock in the immediate foreground, very close to
+the camera — large in the frame, filling the lower part of the picture and running off the
+bottom edge, closer to the lens than anything else in the photo. Its broad flat top must lie
+along the same ground plane and follow the same perspective as the grass already in the
+photograph, so it looks like it has always been there, just in front of the viewer. Because
+it is so close and so low, the viewer should feel they are sitting right at it — that effect
+must come only from how near and how large the rock is, never from moving the camera.
 
-THE ROCK: directly in front of me, close to the camera, filling the lower part of the frame
-and running off the bottom edge. One low granite boulder with a broad, roughly flat top
-being used as a desk. Grey-brown stone, worn rounded edges, patches of lichen, a few natural
-cracks, dry dust in the hollows. It sits heavily in the ground — the grass around its base
-is pressed down and darker, and blades of grass overlap its bottom edge.
+THE ROCK: one low granite boulder with a broad, roughly flat top being used as a writing
+desk. Grey-brown stone, worn rounded edges, patches of lichen, a few natural cracks, dry
+dust in the hollows. It sits heavily in the ground — the grass around its base is pressed
+down and darker, and blades of the existing grass overlap its bottom edge.
 
-THE SCROLL: lying open across the rock, seen in perspective from where I sit — the near
-edge wider and lower, the far edge narrower, foreshortened naturally. It is a fine scroll
-wound on two turned wooden rollers, one at each end, so the open sheet is held between
-them; the rods are dark polished wood with small aged brass end-caps, and the far rod
-still has a little of the scroll wound around it. A thin leather cord lies loose beside it.
-The parchment between the rods is soft grey-cream, thick, with fine fibres, faint age
-spots and a gentle curl — elegant and well kept, not burnt, not torn, not crumpled.
-Absolutely nothing written, drawn, or printed on it — the surface is completely blank.
+THE SCROLL: lying open across the rock's flat top, close to the camera and strongly
+foreshortened — the near edge wide and low in the frame, the far edge noticeably narrower.
+It is a fine scroll wound on two turned wooden rollers, one at each end, so the open sheet
+is held between them; the rods are dark polished wood with small aged brass end-caps, and
+the far rod still has a little of the scroll wound around it. A thin leather cord lies loose
+beside it. The parchment between the rods is soft grey-cream, thick, with fine fibres, faint
+age spots and a gentle curl — elegant and well kept, not burnt, not torn, not crumpled.
+Absolutely nothing written, drawn or printed on it — the surface is completely blank.
 
-ALSO ON THE ROCK: a white goose feather quill with a slim dark metal nib resting across
-the stone beside the scroll, and a small heavy glass ink bottle with dark ink and a worn
-cork, small enough to fit in a palm. Each object casts a small soft dark contact shadow
-where it touches the stone, so everything clearly has weight and truly rests on it.
+ALSO ON THE ROCK: a white goose feather quill with a slim dark metal nib resting across the
+stone beside the scroll, and a small heavy glass ink bottle with dark ink and a worn cork,
+small enough to fit in a palm. Each object casts a small soft dark contact shadow where it
+touches the stone, so everything clearly has weight and truly rests on it.
+
+NO PEOPLE: absolutely no person, no hands, no arms, no body, no feet anywhere in the image.
 
 MATCH THE PHOTOGRAPH EXACTLY: the light is soft, diffuse, overcast midday light with no
-direct sun — there are NO hard cast shadows anywhere in this image and there must be none
-on the new objects either. Light everything evenly and softly from above, with only gentle
+direct sun — there are NO hard cast shadows anywhere in this image and there must be none on
+the new objects either. Light everything evenly and softly from above, with only gentle
 ambient shading and soft contact shadows underneath. No long shadows, no sunlit edges, no
 bright specular highlights. Match the existing cool, muted, low-contrast colour, the slight
 atmospheric haze, the film grain and the lens softness. The parchment must sit at the same
-muted exposure as the rest of the photo — never bright white. Keep the scroll and rock
-sharp, and let the far landscape stay exactly as soft as it already is.
+muted exposure as the rest of the photo — never bright white. Objects this close to the
+camera should be sharp, exactly as the near grass in the photo already is.
 
-DO NOT change anything else: keep the existing grass, trees, hills, sky, horizon, colours,
-brightness and grain exactly as they are. Do not re-render, re-light, or sharpen the rest
-of the image.
-
-Photorealistic, ordinary, understated — as if I simply sat down here and took this with my
-own eyes. No glow, no rim light, no added highlights, no HDR, no extra sharpening, no text,
-no watermark; nothing polished, sculpted, or symmetrical.
+Photorealistic, ordinary, understated — as if these things were simply lying there when the
+photo was taken. No glow, no rim light, no added highlights, no HDR, no extra sharpening, no
+text, no watermark; nothing polished, sculpted, or symmetrical.
 
 Output at maximum resolution, 4K.
 ```
@@ -134,14 +143,12 @@ Output at maximum resolution, 4K.
 **Short version** (for Photoshop's Generative Fill box, after masking the lower foreground):
 
 ```
-first person seated view of a flat granite rock used as a desk, an open scroll on it wound
-on two turned wooden rollers with brass end-caps, seen in perspective, blank parchment, a
-white feather quill and small glass ink bottle beside it, soft contact shadows, grass
-overlapping the rock base, soft overcast light, no hard shadows, matching the photo's grain
-and focus, photorealistic, no hands, nothing written
+large flat granite rock in the close foreground used as a desk, matching the existing ground
+perspective, an open scroll on it wound on two turned wooden rollers with brass end-caps,
+strongly foreshortened, blank parchment, a white feather quill and small glass ink bottle
+beside it, soft contact shadows, grass overlapping the rock base, soft overcast light, no
+hard shadows, matching the photo grain and focus, photorealistic, no hands, nothing written
 ```
-
----
 
 ### If you use a sunny photo instead
 
@@ -160,18 +167,19 @@ exposure, contrast, film grain, noise and lens softness.
 
 Make **4 versions**, then judge them on this, in order:
 
-1. **Is it really POV?** The scroll should feel like it's an arm's length in front of *you*
-   — near edge close and wide, far edge smaller, horizon still visible above. If it looks
-   like a photo of a rock taken from a few steps back, say so and regenerate:
-   *"Closer. Sit lower. The scroll should fill the bottom half of the frame in perspective."*
-2. **No hands, no people.** If any appear, regenerate — never try to fix hands.
-3. **Contact shadows.** Dark line where the rock meets the ground; small soft shadows under
+1. **Did the background survive?** Compare against your original: the tree, the hills, the
+   sky, the far grass must be *identical*. If anything moved, re-rendered, or went soft,
+   reject it — that's the tool re-shooting your photo instead of adding to it.
+2. **Is the rock close enough?** It should feel an arm's length away — big, low, cut off by
+   the bottom edge, with the scroll foreshortened on it. If it looks like a rock a few steps
+   away, that's the fix below.
+3. **No hands, no people.** If any appear, regenerate — never try to fix hands.
+4. **Contact shadows.** A dark line where the rock meets the ground; small soft shadows under
    the scroll, rods, quill and bottle. Without those, everything floats.
-4. **Grass over the base.** A few blades crossing in front of the stone, or it reads as a sticker.
-5. **The parchment isn't glowing white.** In a muted photo, a bright scroll is the single
-   biggest tell.
-6. **Nothing written on it.** These models love to invent letters. Zoom in and check.
-7. **Sharpness and grain match** the real parts of the photo at that distance.
+5. **Grass over the base.** A few blades crossing in front of the stone, or it reads as a sticker.
+6. **The parchment isn't glowing white.** In a muted photo, a bright scroll is the biggest tell.
+7. **Nothing written on it.** These models love to invent letters. Zoom in and check.
+8. **Sharpness and grain match** the real parts of the photo at that distance.
 
 ### Fixing without starting over
 
@@ -180,6 +188,12 @@ If it's 90 % right, don't re-roll — run a small second pass:
 > Keep everything exactly as it is. Only [make the parchment darker and softer / replace
 > the quill with a clean white goose feather with a slim dark nib / remove the writing from
 > the parchment so it is completely blank], same position, same shadow, same light.
+
+**If the rock feels too far away**, don't mention the camera — ask for the *objects* to move:
+
+> Keep the photograph and the camera exactly as they are. Only make the rock and the scroll
+> larger and closer to the lens, filling more of the bottom of the frame and running further
+> off the bottom edge, with the scroll more strongly foreshortened.
 
 ---
 
@@ -214,11 +228,12 @@ uncluttered. Vertical, --ar 9:19.5
 
 # 4 · The second scene
 
-Same first-person view, clearly a **different place** — cooler, quieter, shadier.
+Same close-foreground framing, clearly a **different place** — cooler, quieter, shadier.
 
 Start from a real photo of the **edge of a birch wood or a shady clearing**
 (`birch forest floor`, `woodland clearing light`, `mossy forest ground`), and use the
-**same POV prompt as scene 3**, with the rock paragraph swapped for this:
+**same prompt as scene 3** — camera untouched, rock added close to the lens — with the rock
+paragraph swapped for this:
 
 ```
 THE ROCK: directly in front of me, close to the camera, filling the lower part of the frame
