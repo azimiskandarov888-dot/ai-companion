@@ -1,113 +1,119 @@
-# Prompt for Claude design — the app's screens (v4)
+# Prompt for Claude design — v5
 
-Copy everything below the line into Claude design and attach **three things**:
-`product-spec.html` (structure and content of every screen), `palette.html` (the finished
-color system), and **your six landscape photographs**. Choose the photos first (see
-`PHOTOS.md`) — the designs are laid directly on them. The orb is NOT part of this job — leave it as a plain placeholder circle.
+**Attach four things**, then paste everything below the line:
+
+1. `product-spec.html` — what goes on each screen, plus type, spacing, motion, states
+2. `palette.html` — the finished colour system
+3. Your **six landscape photographs** (see `PHOTOS.md` — choose and grade them first)
+4. *(optional)* any screen you already love the feel of, as a reference
 
 ---
 
-You are designing the screens of a **voice-friend app for everyone** — you talk out
-loud, and a warm, real-feeling friend answers. I've attached **`product-spec.html`** (the
-source of truth for **what goes on each screen and where**), **`palette.html`** (the
-**finished color system — use it exactly, don't invent new colors**), and **my six
-photographs**. Your job is to make those screens **beautiful and cohesive** — layout,
-type, spacing, components, states. Don't change the feature list or the philosophy;
-they're set.
+I'm building **a voice friend** — you talk out loud, and a warm, real-feeling friend answers.
+He remembers you, and he keeps a diary about you. It's for everyone, any age.
 
-**THE MOST IMPORTANT RULE: every screen is a full-screen photograph.** My photos fill the
-entire display — edge to edge, top to bottom, behind the status bar and under the home
-indicator — and **all text, buttons, and panels sit ON the photo**. There is no screen
-with a flat background. A photo in a box at the top with content below it on a dark panel
-is exactly what I do not want, on any screen, including Settings and the Diary. Where a
-screen needs a lot of legible content (Settings, Account), keep the photo and lay a
-**blurred + darkened pass** over it — the place still shows through. Make text readable
-with **scrims, never by cutting the photo off**.
+I've attached the spec, the colour system, and my six photographs. **Design the nine screens.**
+The spec is the source of truth for *what goes where*; your job is to make it **beautiful,
+coherent, and buildable**.
 
-**The one law: it must never feel like AI.** It must feel like a real, natural human
-being — and the whole app must feel **natural, with life in it**. No chat bubbles, no
-waveforms, no mic icons, no robot glow, no "generating…" — ever.
+## The one law
 
-**The world it's built from (from the spec — honor it):**
-- **My photographs are the canvas** on every screen — **real landscape photos, nothing
-  generated or AI-edited**, all graded to look like one place on one day. Use the actual
-  images I attached: crop and position them, decide where the quiet areas are, and build
-  each screen's layout around what's really in the frame. Tell me if a photo doesn't work
-  for its screen.
-- **Everything else is drawn by you, over the photo.** The photos contain only landscape —
-  no props. So the **scroll** (screens 3 and 4) and the **diary book** (screen 7) are
-  components you design: they must look like real parchment and real binding, resting
-  convincingly in the scene with soft shadow beneath them, while holding live text.
-- **The scroll**, specifically: a parchment panel with **turned wooden rollers at the left
-  and right** and small aged brass end-caps, lying flat and **square to the viewer** like a
-  sheet of paper set down in front of them. Soft cream, fine fibres, faint age, a gentle
-  curl at the edges. It covers roughly **half the screen**, its near edge running off the
-  bottom. It is the writing surface, so design it to hold real text, resize for the
-  keyboard, and **roll up and drift out of frame** when finished.
-- **Parchment, quill & ink** for everything written by the user; an **ancient handmade
-  handwritten book** for the friend's diary. Never a plain floating form.
-- **Colors — "sunlight through leaves"** (full system in `palette.html`, follow it):
-  green is the world, gold is the light on it. Two surfaces decide every text color —
-  **night** (`#0E1210` bg, panels `#1B211A`; text linen `#EFE9D8`, sage `#BCC3AC`,
-  lichen `#8A9280`, accent sun `#E3B75A`) and **parchment** (`#F2E8D0`; text ink
-  `#2E2718`, soft ink `#574C36`, deep gold `#7E5A14`). Greens: `#4A5C36` `#5E7442`
-  `#7B9455` `#9DB477`. Destructive: clay `#D2735A` (dark) / `#A4402A` (paper).
-  **Never** pure white text, pure black backgrounds, blue/purple/gray-blue, iOS system
-  colors, gradient buttons, glassmorphism, or neon glow. Gold accents **one** action
-  per screen. **Text over a landscape always needs a bottom-up scrim**
-  (`rgba(10,14,10,.82)` → transparent by ~70% height).
-- Motion described, not animated: scrolls roll up and drift out of frame, pages turn,
-  the orb wanders and settles. Gentle, spring-based. Respect Reduce Motion.
-- **Vertical placement: look high, tap low.** What the eye rests on — the **orb** (screens
-  5–6) and the **scroll** (screens 3–4) — is centred on the **optical centre, ≈45–46 % of
-  screen height**, not 50 %: the optical centre of a rectangle sits slightly above the true
-  middle, so anything at exact centre reads as slightly low. What the thumb presses —
-  buttons, plan cards, sign-in — lives in the **bottom third**, where reach and tap accuracy
-  are best. Never put a primary control in the top third.
-- **The keyboard must never cover the scroll** on screens 3 and 4. At rest the scroll sits on
-  the optical centre; when the keyboard rises (≈38–40 % of the screen) the whole scroll rises
-  with it, sitting roughly between 12 % and 50 % of screen height, with a strip of landscape
-  still visible above. Long text scrolls *inside* the parchment; the confirm button moves to a
-  small bar just above the keyboard. Show me both states.
-- **Softness is a rule, not a mood.** Nothing in this app has hard, square edges —
-  generously rounded corners (≈18–22 pt) on every panel, card, and group, translucent
-  surfaces rather than opaque ones, inset faint dividers rather than full-width lines.
-  **This includes Settings**, which must feel as soft as the rest, not like a stock form.
-- **Do NOT design the orb.** Wherever the spec shows it, use a plain placeholder
-  circle — the owner paints the real orb separately.
-- Built in **SwiftUI, iOS 18+** — keep it buildable (full-bleed photos with subtle
-  parallax, native components and material blurs over them).
+**It must never feel like AI.** It has to feel like a real, natural human being — a person you
+met, not a product you use. No chat bubbles, no waveforms, no mic icons, no robot glow, no
+"generating…", no percentage bars. Every decision gets checked against this.
 
-**Screens to design (all nine, from the spec — every one full-bleed):**
-1. Sign in (landscape photo) · 2. Looking after him (the subscription, framed as caring
-for him — never "buy a friend") · 3. Your story — «Tell your story» (the drawn scroll over
-a landscape photo) · 4. Who you'd like to meet (second scroll, second photo; free writing,
-with a prominent caution above it and the quote below) ·
-5. Meet him & choose your world (Regular orb vs Living scene) · 6. Companion (both
-modes, states: resting/listening/thinking/speaking) · 7. The Companion's Diary (the
-handmade book) · 8. Account / Profile (landscape photo) · 9. Settings (an ordinary
-list — but still over the photo, blurred and darkened, and soft-cornered like everything else).
+## The one rule that governs every layout
 
-**How to work — two directions first:**
-1. **Propose TWO distinct visual directions** for the whole world. Show each applied to
-   **the Companion screen (6, both modes)** *and* **the Your-story scroll scene (3)** —
-   those two screens carry the soul. Make the directions genuinely different (e.g. one
-   warmer and more cinematic, one cooler and more minimal), and say in a line what each
-   is going for.
-2. **I'll pick one.** Then design **all nine screens** in that direction as one
-   cohesive set sharing a single visual language (type scale, color, spacing,
-   components, iconography).
+**Every screen is a full-screen photograph.** My photos fill the entire display — edge to edge,
+behind the status bar, under the home indicator — and **all text, buttons and panels sit ON the
+photo.** There is no screen with a flat background, including Settings and the Diary; those get
+a **blurred, darkened pass** of the same photo instead. Make text readable with **scrims, never
+by cutting the photo off.**
 
-**For the final set, include:**
-- Every screen shown **full-bleed**, with the status bar and home indicator over the photo.
-- The Companion screen in its four states, in both modes (placeholder circle only).
-- For the **Living scene** mode, note which parts of the photo I should cut into
-  **separate layers** (sky · far hills · tree · foreground) so the orb can settle on the
-  ground, pass behind the tree, and the scene can drift with gentle parallax.
-- The scroll-to-scroll **transition moment** between screens 3 → 4 (a key frame or two).
-- The Diary as an open book spread with handwritten-feeling text.
-- A short build note per screen: type sizes, colors, key components.
+A photo in a box at the top with content below it on a dark panel is exactly what I don't want.
 
-**Priorities:** the Companion screen is the hero; the scroll scenes are the signature
-onboarding; the Diary is the treasure. Every screen should feel like one natural,
-living world — warm, premium, and human.
+## Work with my actual photographs
+
+Use the images I attached — crop and position them, find the quiet areas, and build each
+layout around what's really in each frame. **Tell me if a photo doesn't work for its screen**
+and say what would.
+
+The photos contain **only landscape, no props.** So the two things that carry the app's soul
+are components *you* design, laid over the photo:
+
+- **The scroll** (screens 3 and 4) — a parchment panel with turned wooden rollers at the left
+  and right and small aged brass end-caps, lying flat and **square to the viewer**, like a
+  sheet of paper set down in front of them. Soft cream, fine fibres, faint age, a gentle curl,
+  a soft shadow so it rests on the world rather than floating. It's the **writing surface**:
+  it holds live text, grows with Dynamic Type, scrolls internally, and **rolls up and drifts
+  out of frame** when finished.
+- **The diary book** (screen 7) — an old hand-bound book, rough parchment pages, visible
+  stitching, worn boards. Nothing modern, no skeuomorphic gloss.
+
+## Non-negotiables from the spec
+
+- **Colour:** use `palette.html` exactly — don't invent colours. Green is the world, gold is
+  the light on it. Text is linen/sage/lichen over photos, ink/soft-ink on parchment. **Never**
+  pure white text, pure black panels, blue/purple/grey-blue, iOS system colours, gradient
+  buttons, glassmorphism, or neon glow. Gold accents **one** action per screen.
+- **Vertical rhythm — look high, tap low.** What the eye rests on (the **orb**, the **scroll**)
+  sits on the **optical centre, ≈45–46 % of screen height**, not 50 % — the optical centre of a
+  rectangle is slightly above the true middle, so exact centre reads as *low*. What the thumb
+  presses (buttons, plan cards, sign-in) sits in the **bottom third**. Never a primary control
+  in the top third.
+- **The keyboard must never cover the scroll** (screens 3–4). At rest it's on the optical
+  centre; when the keyboard rises (~38–40 % of the screen) the whole scroll rises with it,
+  sitting roughly between 12 % and 50 % of screen height, landscape still visible above, the
+  confirm button moving to a bar just above the keyboard. **Show me both states.**
+- **Softness is a rule, not a mood.** Nothing has hard square edges: 20 pt on cards and groups,
+  26 pt on buttons, translucent surfaces, faint inset dividers. **Settings included** — it must
+  feel as soft as everything else, not like a stock form.
+- **Two typefaces, two jobs:** sans (SF Pro) for what the *app* says; a warm serif (New York)
+  for everything **a person wrote** — the scroll, the diary, the quote. That distinction
+  carries most of the app's soul.
+- **Do NOT design the orb.** Use a plain placeholder circle everywhere — I'm making the real
+  one myself.
+- **SwiftUI, iOS 18+.** Keep everything buildable with native components and material blurs.
+- **Russian ships first**, and runs 15–20 % longer than English. Leave room in every button.
+
+## The nine screens
+
+1. **Sign in** — a meadow at first light, one warm line, sign-in buttons low
+2. **Take care of him** — the subscription, framed as *keeping him here*, never "buy a friend"
+3. **Tell your story** — the drawn scroll over a landscape; free writing
+4. **Who you'd like to meet** — second scroll, second place; free writing, with a **prominent
+   caution above it** ("The more you decide about him now, the less of him is left to meet")
+   and the friendship quote below
+5. **Meet him** — his name is revealed; choose *Quiet* or *Living scene*
+6. **Companion** — the hero. Both modes, four states (resting / listening / thinking / speaking)
+7. **His Diary** — the open book, plus its empty first-page state
+8. **Account** — blurred pass of a photo; profile, "My story", subscription
+9. **Settings** — deliberately ordinary, still over the photo, still soft
+
+## How I'd like you to work
+
+**First, two directions.** Propose **two genuinely different visual directions** for the whole
+world — not the same design twice. Show each applied to **the Companion screen (6, both modes)**
+*and* **the Your-story scroll scene (3)**, since those two carry the soul. One line each on what
+the direction is going for.
+
+**Then I'll pick one**, and you design all nine as one cohesive set — one type scale, one set of
+components, one grade across the photos.
+
+## In the final set, include
+
+- Every screen **full-bleed**, with the status bar and home indicator over the photo
+- The **Companion screen in all four states**, in both modes (placeholder circle only)
+- **Both keyboard states** for screen 3
+- The **scroll-to-scroll transition** between 3 → 4 — a key frame or two of it winding onto its
+  roller and drifting out of frame
+- The **Diary** as an open spread, and its empty first page
+- For the **Living scene**, which parts of my photo to cut into layers (sky · far hills · tree ·
+  foreground) so the orb can settle on the ground and pass behind the tree
+- A short **build note per screen**: type sizes, colours, key components, spacing
+
+## What I care about most
+
+The Companion screen is the hero. The scroll scenes are the signature. The Diary is the
+treasure. And all of it should feel like **one natural, living world** — warm, premium, and
+unmistakably human.
