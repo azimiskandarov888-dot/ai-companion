@@ -86,7 +86,7 @@
       <li>It is an AI app that must <b>never feel like AI</b>. It must feel like a
         <b>real, natural human being</b> — a person you met, not a product you use.</li>
       <li>The whole app must feel <b>natural — something with life in it</b>: nature,
-        landscape paintings, parchment and ink, stone and old paper. Never techy,
+        landscape photographs, parchment and ink, stone and old paper. Never techy,
         never clinical, never "assistant app."</li>
     </ul>
   </div>
@@ -97,9 +97,9 @@
       <li><b>Human, not AI.</b> No chat bubbles, no waveforms, no mic icons, no robot
         glow, no "generating…" spinners. When he thinks, he simply <i>thinks</i> —
         like a person does.</li>
-      <li><b>Nature everywhere.</b> Landscape paintings are the app's canvas
+      <li><b>Nature everywhere.</b> Landscape photographs are the app's canvas
         (sign-in, profile, the writing scenes, and optionally the companion's home).
-        All painted in <b>one artist's hand</b> so the app is one world.</li>
+        All graded to <b>one look</b> — one place, one camera, one day — so the app is one world.</li>
       <li><b>Writing is sacred.</b> Whenever something is written — by the user or by
         the friend — it happens on <b>parchment, with quill and ink</b>, or in an
         <b>old handmade book</b>. Never a plain form, never a text field floating in space.</li>
@@ -138,49 +138,63 @@
     </ul>
     <ul>
       <li>Landscapes may be dawn, day, or dusk — <b>natural light</b>, warm and alive; the
-        UI chrome around them stays deep and quiet so the paintings breathe.</li>
-      <li><b>Text over a painting always gets a scrim</b> — bottom-up
+        UI chrome around them stays deep and quiet so the landscapes breathe.</li>
+      <li><b>Text over a landscape always gets a scrim</b> — bottom-up
         <code>rgba(10,14,10,.82)</code> → transparent by ~70% height — then linen/sage on top.</li>
       <li>Gold is the accent for <b>one</b> action per screen. If everything glows, nothing does.</li>
     </ul>
   </div>
 
   <div class="card">
-    <h3>The paintings — real paintings, not AI slop</h3>
-    <p style="margin:0 0 8px">The landscapes are the soul of this app, so they are
-    <b>hand-painted artwork by a real painter</b> — <b>not AI-generated</b>, and
-    <b>never photorealistic</b>. If they look generated, the whole "a real human, not an
-    AI" promise dies on the first screen. (AI images may be used <b>only</b> as
-    throwaway placeholders while the app is being built, never shipped.)</p>
-    <h3>What "a real painting" means here</h3>
+    <h3>The imagery — photographic, real-looking, and never AI slop</h3>
+    <p style="margin:0 0 8px">The landscapes are <b>photographic and photorealistic</b>.
+    Real photographs wherever possible; <b>AI is allowed</b> — for building the scenes
+    photos can't provide (the scroll on the rock), for extending frames, and for cutting
+    the living scene into layers. The bar isn't "was a machine involved," it's
+    <b>"does any part of it look generated."</b> Nothing that looks generated ships.</p>
+    <h3>Method — in this order (each step is safer than the next)</h3>
     <ul>
-      <li><b>Visible hand.</b> Brush strokes you can see; edges that are painted, not
-        traced. Some areas loose and suggested, some sharp — a painter decides where to
-        spend attention.</li>
-      <li><b>Honest imperfection.</b> Slightly uneven skies, an asymmetric composition,
-        a horizon that isn't dead level. Perfect is the tell.</li>
-      <li><b>Few colors, mixed.</b> Our palette (leaf greens, sun golds, warm shadow) —
-        colors that look mixed on a palette, not sampled from a slider.</li>
-      <li><b>One light source</b>, honestly followed — real sun, real shadow direction.</li>
-      <li><b>Air and emptiness.</b> Room to breathe; the scroll and the words need space.</li>
-      <li>Think <b>19th-century landscape painting</b> (Levitan, Shishkin, Kuindzhi,
-        the Hudson River School) — quiet, warm, unhurried.</li>
+      <li><b>1 · A real photograph as the base.</b> Licensed stock of a real place — that
+        alone removes most slop risk.</li>
+      <li><b>2 · AI composited onto the photo</b> (generative fill / inpainting) to add the
+        scroll, quill, and ink on the rock, or to extend the frame. Editing a real photo
+        beats generating from nothing, every time.</li>
+      <li><b>3 · Full AI generation</b> only when 1 and 2 can't get there — and then
+        prompted like a photographer (lens, hour, light direction, depth of field, film
+        stock), never like a wallpaper.</li>
+      <li><b>4 · One grade over everything.</b> Photos and AI frames are graded together
+        into our palette — deep green shade, warm gold light. This is what makes a mixed
+        set feel like one world instead of a mood board.</li>
     </ul>
-    <h3>Never</h3>
+    <h3>The slop tells — reject the image if you see any of these</h3>
     <ul>
-      <li>Photorealism, HDR, lens flare, bokeh, "cinematic" glow, plastic light.</li>
-      <li>Hyper-detail everywhere at once (the AI-slop signature), symmetrical framing,
-        smeared or nonsensical detail in the small stuff.</li>
-      <li>Fantasy kitsch — glowing mushrooms, impossible moons, magic particles.</li>
-      <li>Any painting whose style doesn't match the others: <b>one artist's hand for the
-        whole set</b>, or the world falls apart.</li>
+      <li><b>Light that isn't real:</b> shadows pointing different ways, everything lit
+        with no true dark, HDR flatness, a haze/bloom glow over the whole frame.</li>
+      <li><b>Detail everywhere at once</b> with no focal point, and sharpness that never
+        falls off with distance — no real lens does that.</li>
+      <li><b>Melted small things:</b> quill barbs, the rim of the ink jar, rock edges,
+        distant branches, any invented text or lettering.</li>
+      <li><b>Tiled or repeating</b> grass, leaves, clouds, stone texture.</li>
+      <li><b>Plastic/waxy surfaces</b>, wet-looking sheen, unnaturally clean everything.</li>
+      <li><b>Wallpaper composition:</b> dead-centered, symmetrical, subject floating in
+        the middle, horizon perfectly level and perfectly halfway.</li>
+      <li><b>Wrong scale</b> — the scroll bigger than the rock, a quill the size of an arm.</li>
+      <li><b>Fantasy leakage:</b> magic particles, glowing dust, impossible moons.</li>
     </ul>
-    <h3>What has to be painted (≈5 pieces + 1 layered scene)</h3>
+    <h3>What a good one has instead</h3>
+    <ul>
+      <li>One sun, one shadow direction, and <b>real darkness</b> somewhere in the frame.</li>
+      <li>A <b>focal point</b>, with the rest falling away — depth of field a real lens would give.</li>
+      <li><b>Imperfection:</b> dust, wear, a chipped rock, dry grass, an off-centre horizon.</li>
+      <li><b>Air:</b> quiet, empty space where the scroll and the words will sit.</li>
+      <li><b>Restraint:</b> a plain place at a good hour beats an epic place at every hour.</li>
+    </ul>
+    <h3>What's needed (≈5 images + 1 layered scene)</h3>
     <ul>
       <li><b>Sign-in hero</b> — full-bleed portrait, the app's first breath.</li>
       <li><b>Payment backdrop</b> — quieter; may be a crop/variant of the hero.</li>
-      <li><b>Story scene</b> (screen 3) — with a <b>flat rock like a table</b>, composed
-        with an empty area where the scroll sits.</li>
+      <li><b>Story scene</b> (screen 3) — a <b>flat rock like a table</b> with the scroll,
+        quill, and ink on it, and empty space around them.</li>
       <li><b>Second scene</b> (screen 4) — a clearly <b>different</b> place, same rock-table idea.</li>
       <li><b>Profile landscape</b> (screen 8) — a calm band across the top.</li>
       <li><b>The living scene</b> (screen 6) — <b>delivered in separate layers</b>
@@ -189,8 +203,10 @@
         drift with gentle parallax. A flat image cannot do this.</li>
     </ul>
     <div class="note">Deliver at <b>1290×2796 minimum</b> (iPhone Pro Max @3x), sRGB, PNG;
-      layers as separate transparent PNGs on the same canvas. Optional and lovely later:
-      morning / day / dusk / night versions of the living scene, following his real time of day.</div>
+      layers as separate transparent PNGs on the same canvas. Full method, prompt recipes,
+      the 100%-zoom check, and licensing are in <code>IMAGERY-BRIEF.md</code>. Optional and
+      lovely later: morning / day / dusk / night versions of the living scene, following
+      his real time of day.</div>
   </div>
 
   <div class="card">
@@ -209,11 +225,11 @@
 
   <!-- ============ 1. SIGN IN ============ -->
   <h2>1 · Sign in</h2>
-  <p class="sub">The first breath of the app — a landscape painting, not a tech login.</p>
+  <p class="sub">The first breath of the app — a landscape photograph, not a tech login.</p>
   <div class="grid">
     <div>
       <div class="phone">
-        <div class="paint wf big" style="border:none">full-screen landscape painting<br>(painted, warm, alive)</div>
+        <div class="paint wf big" style="border:none">full-screen landscape photo<br>(warm, natural, alive)</div>
         <div class="wf" style="text-align:center;border:none">app name + one warm line<br><i>"Somewhere out there is a friend you haven't met yet."</i></div>
         <div class="wf solid" style="text-align:center">Continue with Apple</div>
         <div class="wf solid" style="text-align:center">Continue with Google</div>
@@ -225,12 +241,12 @@
       <p>Welcome + sign in / log in. Sets the tone for the entire app in one glance.</p>
       <h3>On screen</h3>
       <ul>
-        <li>A <b>full-screen landscape painting</b> — nature, light, air. This painting is
+        <li>A <b>full-screen landscape photograph</b> — nature, light, air. This image is
           the beautiful touch of nature the whole app opens with.</li>
         <li>The app's name and <b>one warm line</b> (copy is draft — keep the feeling).</li>
         <li>Sign-in choices (Apple / Google / email). Nothing else.</li>
       </ul>
-      <div class="note">No feature lists, no carousel of benefits, no screenshots. A painting,
+      <div class="note">No feature lists, no carousel of benefits, no screenshots. A landscape,
         a sentence, a door in.</div>
     </div>
   </div>
@@ -269,7 +285,7 @@
   <div class="grid">
     <div>
       <div class="phone">
-        <div class="paint wf" style="height:120px;border:none">landscape painting №1<br>(scene lives inside it)</div>
+        <div class="paint wf" style="height:120px;border:none">landscape №1<br>(scene lives inside it)</div>
         <div class="scroll" style="flex:1;display:flex;flex-direction:column">
           <div class="head">Tell us about you and your likings</div>
           <div style="flex:1;opacity:.75">…the user writes freely about themselves, in ink…</div>
@@ -286,7 +302,7 @@
       <b>probably like — or even love</b>.</p>
       <h3>The scene</h3>
       <ul>
-        <li>A <b>beautiful landscape painting</b>; in it, a <b>rock like a table</b>, and on the
+        <li>A <b>beautiful landscape photograph</b>; in it, a <b>rock like a table</b>, and on the
           rock an <b>unrolled parchment scroll</b> with a <b>quill pen and ink</b> beside it.</li>
         <li>The heading on the scroll: <b>«Tell us about you and your likings»</b>.</li>
         <li>They write on the scroll itself — free writing, no forms, no dropdowns. Typing
@@ -306,7 +322,7 @@
   <div class="grid">
     <div>
       <div class="phone">
-        <div class="paint mist wf" style="height:110px;border:none">landscape painting №2<br>(a different one)</div>
+        <div class="paint mist wf" style="height:110px;border:none">landscape №2<br>(a different one)</div>
         <div class="scroll">
           <div class="head">Who would you be with?</div>
           Age · Gender · Where he's from <i>(optional)</i><br>
@@ -463,11 +479,11 @@
 
   <!-- ============ 8. ACCOUNT / PROFILE ============ -->
   <h2>8 · Account / Profile</h2>
-  <p class="sub">The user's own things — under its own landscape painting.</p>
+  <p class="sub">The user's own things — under its own landscape.</p>
   <div class="grid">
     <div>
       <div class="phone">
-        <div class="paint dusk wf" style="height:96px;border:none">landscape painting<br>(profile's own scene)</div>
+        <div class="paint dusk wf" style="height:96px;border:none">landscape<br>(profile's own scene)</div>
         <div class="wf-row"><div class="wf" style="flex:0 0 54px;height:54px;border-radius:50%;text-align:center">photo</div>
           <div class="wf">name · signed-in account</div></div>
         <div class="wf">My story — reread / add to my scroll</div>
@@ -481,7 +497,7 @@
       kept gentle and simple.</p>
       <h3>On screen</h3>
       <ul>
-        <li>A <b>landscape painting</b> crowns this screen too (explicitly wanted here).</li>
+        <li>A <b>landscape photograph</b> crowns this screen too (explicitly wanted here).</li>
         <li>Basics: name, photo, account.</li>
         <li><b>My story</b> — reread the scroll they wrote; they may add to it over time
           (it quietly deepens the friendship).</li>
@@ -531,7 +547,7 @@
         signature onboarding; the Diary (7) is the treasure people will screenshot.</li>
       <li>The <b>orb stays a placeholder circle</b> everywhere — the owner paints the real
         one separately and swaps it in.</li>
-      <li>Target: <b>SwiftUI, iOS 18+</b>, buildable — paintings as layered images (subtle
+      <li>Target: <b>SwiftUI, iOS 18+</b>, buildable — landscapes as layered images (subtle
         parallax welcome), native components underneath.</li>
       <li>Copy in this spec is draft English; the app will be localized (Russian first).
         Keep the exact heading «Tell us about you and your likings» in meaning wherever
