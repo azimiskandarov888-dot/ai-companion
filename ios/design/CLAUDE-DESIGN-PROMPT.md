@@ -1,4 +1,4 @@
-# Prompt for Claude design — the app's screens (v3)
+# Prompt for Claude design — the app's screens (v4)
 
 Copy everything below the line into Claude design and attach **three things**:
 `product-spec.html` (structure and content of every screen), `palette.html` (the finished
@@ -29,15 +29,21 @@ being — and the whole app must feel **natural, with life in it**. No chat bubb
 waveforms, no mic icons, no robot glow, no "generating…" — ever.
 
 **The world it's built from (from the spec — honor it):**
-- **My photographs are the canvas** on every screen — real, photorealistic, all graded
-  to look like one place on one day. Use the actual images I attached: crop and position
-  them, decide where the quiet areas are, and build each screen's layout around what's
-  really in the frame. Tell me if a photo doesn't work for its screen.
-- **The scroll scenes (3 and 4)** are photographs of a parchment scroll, a feather quill,
-  and an ink bottle resting on a flat rock, shot from a low seated angle with the
-  landscape open behind. The app's live writing surface is laid over the scroll in the
-  photo — **matched to its perspective, light, and shadow**, so it reads as the same
-  piece of parchment, not a white box pasted on top.
+- **My photographs are the canvas** on every screen — **real landscape photos, nothing
+  generated or AI-edited**, all graded to look like one place on one day. Use the actual
+  images I attached: crop and position them, decide where the quiet areas are, and build
+  each screen's layout around what's really in the frame. Tell me if a photo doesn't work
+  for its screen.
+- **Everything else is drawn by you, over the photo.** The photos contain only landscape —
+  no props. So the **scroll** (screens 3 and 4) and the **diary book** (screen 7) are
+  components you design: they must look like real parchment and real binding, resting
+  convincingly in the scene with soft shadow beneath them, while holding live text.
+- **The scroll**, specifically: a parchment panel with **turned wooden rollers at the left
+  and right** and small aged brass end-caps, lying flat and **square to the viewer** like a
+  sheet of paper set down in front of them. Soft cream, fine fibres, faint age, a gentle
+  curl at the edges. It covers roughly **half the screen**, its near edge running off the
+  bottom. It is the writing surface, so design it to hold real text, resize for the
+  keyboard, and **roll up and drift out of frame** when finished.
 - **Parchment, quill & ink** for everything written by the user; an **ancient handmade
   handwritten book** for the friend's diary. Never a plain floating form.
 - **Colors — "sunlight through leaves"** (full system in `palette.html`, follow it):
