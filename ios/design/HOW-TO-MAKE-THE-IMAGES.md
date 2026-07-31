@@ -48,34 +48,36 @@ Go to **unsplash.com** or **pexels.com** and download big versions of:
 |-----|--------------|
 | Sign-in | `green hillside morning`, `meadow golden hour` |
 | Payment | `valley dusk`, `hills sunset calm` |
-| Story scene | `meadow low angle`, `grass field close up horizon` — **no rock needed, we add it** |
-| Second scene | `birch forest floor`, `woodland clearing light` — **no rock needed** |
+| Story scene | *(generated — see step 2; no stock photo)* |
+| Second scene | *(generated — see step 2; no stock photo)* |
 | Profile | `treeline field`, `open meadow sky` |
 | Living scene | `clearing tree rock`, `lone tree meadow` |
 
 Pick calm, plain, real places. Not dramatic mountains. Make sure there is **empty
 space** where text will go.
 
-### 2. Build the rock scene — one prompt, everything at once
+### 2. Build the two writing scenes — GENERATE these, don't edit
 
-**You won't find a photo of a table-like rock. Don't look for one — add it with AI.** Keep
-the landscape real (grass and trees are the hard part to fake); the rock is the easy part,
-because no shape is "wrong."
+The writing scenes (3 and 4) are the exception: **they must be generated whole.**
 
-Ask for the **rock, scroll, quill, and ink together in one prompt**, so the AI knows the
-rock's job is to be a table. The full prompt is in **`IMAGE-PROMPTS.md`** — before pasting
-it, look at your photo and fill in **which side the sun comes from**.
+A real landscape photo is taken standing up, looking far away. The writing scene needs the
+scroll **half a metre from the lens, filling half the frame**. That's a different camera —
+so editing a landscape photo can never produce it. The model has to rebuild the whole
+picture, and that's why it kept "regenerating the scenery."
 
-Make 4 versions and judge them in this order:
-1. **Shadow direction** — do the new shadows fall the same way as the real ones?
-2. **Contact shadows** — a dark line where the rock meets the ground, small shadows under
-   the scroll and bottle.
-3. **Grass over the base** — a few blades crossing in front, or it looks like a sticker.
-4. **Sharpness** — the new things must be exactly as sharp as real things that far away.
+So: **attach your landscape photo as a colour and light reference**, and generate a new
+frame from the prompt in **`IMAGE-PROMPTS.md`**. Ask for 4K.
 
-If one object comes out bad, don't start over — run a small second edit on just that spot.
+Judge them in this order:
+1. **Scroll square to you** — rollers left and right, page facing you like paper on a desk.
+   Turned or angled = it looks like someone photographed it. Reject.
+2. **Fills about half the frame**, near edge cut off by the bottom of the picture.
+3. **No hands, no people.**
+4. **Nothing written on the parchment.**
+5. **Contact shadows** under the scroll, quill and bottle.
 
-Do the same for the second scene photo.
+If one thing is wrong, don't start over — re-run with a single "keep everything, only
+change X" instruction.
 
 ### 3. Only if you can't find a good photo — make the whole thing
 
@@ -106,8 +108,8 @@ too clean. (Full list in `IMAGERY-BRIEF.md`.)
 
 ## What to do first
 
-1. Collect the 6 real photos (step 1) — free, today.
-2. Add the scroll, quill, and ink to the two rock photos (step 2).
+1. Collect the 4 real photos (step 1) — free, today.
+2. Generate the two writing scenes (step 2), using one of those photos as the look reference.
 3. Grade all six the same (step 4) and check them (step 5).
 4. **Then** send Claude design: the prompt, `product-spec.html`, `palette.html`, **and
    your six pictures**. It will design the screens on top of the real images.

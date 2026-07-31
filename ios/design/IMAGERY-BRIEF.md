@@ -43,6 +43,13 @@ shadow agrees with the rest of the frame. Then hand-fix the seam.
 Prompt like a photographer, never like a wallpaper: name the **lens, hour, light
 direction, depth of field, and film stock**. Recipes below.
 
+*The two writing scenes are the standing exception and must be generated whole.* A
+landscape photo is shot standing, focused far away; the writing scene needs the scroll half
+a metre from the lens filling half the frame. That is a different camera, so no amount of
+inpainting gets there — the model can only rebuild the frame. Generate those two with the
+landscape photo attached as a **colour and light reference**, so they still belong to the
+same world.
+
 **4 · One grade over everything.**
 Photos and AI frames get graded together into our palette — deep green shade, warm gold
 light, matched contrast, matched grain. **This step is what makes a mixed set feel like

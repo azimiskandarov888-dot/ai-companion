@@ -27,224 +27,172 @@ cartoon, 3d render, cgi, illustration, people, hands
 
 # ⭐ 3 · The story scene — the important one
 
-**A first-person view: you are sitting on the ground, using a flat rock as your desk, and
-the open scroll is right there in front of you — with the landscape beyond it.** Not a
-photo of a scroll standing somewhere. *Your* view, as if you look down and start writing.
-
-### Which AI to use for this
-
-| | Tool | Why |
-|---|------|-----|
-| **1st choice** | **Google Gemini image editing** — the model nicknamed **"Nano Banana"**. In the Gemini app, upload the photo and paste the prompt; pick the **newest / Pro image model** offered. | Best at "change only this, keep everything else." No masking, no skills needed. Free to try. |
-| **2nd choice** | **Photoshop → Generative Fill** (Adobe Firefly) | Replaces only the area you select, leaving the rest of your file untouched at full resolution. Safest licence for a paid app. Keep the prompt short — its box is small. |
-| **Avoid here** | ChatGPT image generation | It tends to redraw the *whole* picture, so your real photo stops being a real photo. |
-
-*Tools move fast — check current pricing and that your plan allows commercial use.*
+**You are sitting on the ground, writing on an open scroll that lies on a flat rock right
+in front of you.** The scroll fills about **half the frame**. The landscape is just
+background — what matters is that you can clearly see the page you are writing on. No
+hands, no person in shot.
 
 ---
 
-### 🚨 First: why it came back low quality (and how to stop it)
+### 🚫 Why editing a real photo CANNOT work for this one
 
-**This is the tool, not you.** These editors don't hand your photo back — they *re-render
-the whole frame* at their own output size, usually around 1024 px. So a gorgeous 4000 px
-photo returns as a small, soft, mushy one. No prompt fixes that.
+This isn't a prompt problem — it's geometry, and no wording gets around it.
 
-Three fixes, best first:
+Your meadow photo was taken **standing up, with a long lens, focused hundreds of metres
+away**. What we need is an object **half a metre from the lens, filling half the frame**.
+Those are two completely different cameras.
 
-**1 · Ask for the biggest output the tool offers.**
-Nano Banana **Pro** can output at **2K and 4K** — pick the highest resolution setting
-available, or add to the end of your prompt: *"Output at maximum resolution, 4K."* The
-plain/fast model can't, so make sure you're on the Pro image model.
+To put a near object into a far frame, the model has to rebuild the perspective, the
+scale, and the depth of field of the entire picture — which is exactly what it did when it
+"regenerated the scenery." It wasn't disobeying you. You asked it for something that can
+only exist in a different photograph.
 
-**2 · Edit a CROP, then paste it back.** ⭐ *This is the real answer.*
-- Open your original photo at full size and **crop out just the area** where the rock and
-  scroll will go (roughly the lower half). Save that crop at its **full original pixels**.
-- Run the prompt on **only that crop**.
-- Open the original again in Photoshop — or **photopea.com**, which is free in the browser
-  — paste the returned crop on top, scale it to line up exactly, and soften its edges.
-- Your sky, hills, tree and far grass stay **100 % untouched original quality**. Only the
-  small area you actually changed is AI.
+**So: generate this one from scratch.** You were right.
 
-**3 · Or use Photoshop Generative Fill**, which only ever replaces the selection. Keep the
-selection modest — the bigger the area, the more the generated pixels get stretched and
-softened.
-
-**One extra touch:** the returned patch is usually *too clean* compared to the real photo.
-Add a little noise/grain to it so it matches the original's texture. Without this, the
-patch looks subtly plastic even when everything else is right.
+**Keep your meadow photo** — it's beautiful and it works perfectly as the **Sign-in** image
+or the **Living scene**, where nothing has to sit close to the camera.
 
 ---
 
-### The prompt — add to the photo, never re-frame it
+### The method: generate a new frame, using your photo as the look
 
-**The key idea:** we do **not** ask it to change the camera. The camera stays exactly
-where it is. The "I'm sitting here writing" feeling comes entirely from **how close and how
-large the rock and scroll are** in the foreground — a big rock right under the lens, cut
-off by the bottom edge, with the scroll on it in strong perspective. Your eye reads that as
-*"I am sitting at this."*
+Don't just generate blind — **attach your meadow photo as a colour/light reference** so the
+new scene belongs to the same world as the rest of the set.
 
-Asking it to "change the point of view" makes it re-render the whole frame — which wrecks
-the background *and* is half of why the quality collapsed.
-
-Your photo has soft overcast light, so this version has **no hard shadows**. If you later
-use a sunny photo, swap the light paragraph for the sunny one below.
-
-```
-Keep this photograph exactly as it is. Do NOT change the camera position, the framing, the
-crop, the zoom, the perspective, or the horizon. Do not re-shoot, re-compose, re-render, or
-straighten anything. The field, the tree, the hills and the sky must stay pixel-for-pixel as
-they are. You are only ADDING objects into the existing foreground.
-
-WHAT TO ADD, AND WHERE: place a large flat rock in the immediate foreground, very close to
-the camera — large in the frame, filling the lower part of the picture and running off the
-bottom edge, closer to the lens than anything else in the photo. Its broad flat top must lie
-along the same ground plane and follow the same perspective as the grass already in the
-photograph, so it looks like it has always been there, just in front of the viewer. Because
-it is so close and so low, the viewer should feel they are sitting right at it — that effect
-must come only from how near and how large the rock is, never from moving the camera.
-
-THE ROCK: one low granite boulder with a broad, roughly flat top being used as a writing
-desk. Grey-brown stone, worn rounded edges, patches of lichen, a few natural cracks, dry
-dust in the hollows. It sits heavily in the ground — the grass around its base is pressed
-down and darker, and blades of the existing grass overlap its bottom edge.
-
-THE SCROLL: lying open across the rock's flat top, close to the camera and strongly
-foreshortened — the near edge wide and low in the frame, the far edge noticeably narrower.
-It is a fine scroll wound on two turned wooden rollers, one at each end, so the open sheet
-is held between them; the rods are dark polished wood with small aged brass end-caps, and
-the far rod still has a little of the scroll wound around it. A thin leather cord lies loose
-beside it. The parchment between the rods is soft grey-cream, thick, with fine fibres, faint
-age spots and a gentle curl — elegant and well kept, not burnt, not torn, not crumpled.
-Absolutely nothing written, drawn or printed on it — the surface is completely blank.
-
-ALSO ON THE ROCK: a white goose feather quill with a slim dark metal nib resting across the
-stone beside the scroll, and a small heavy glass ink bottle with dark ink and a worn cork,
-small enough to fit in a palm. Each object casts a small soft dark contact shadow where it
-touches the stone, so everything clearly has weight and truly rests on it.
-
-NO PEOPLE: absolutely no person, no hands, no arms, no body, no feet anywhere in the image.
-
-MATCH THE PHOTOGRAPH EXACTLY: the light is soft, diffuse, overcast midday light with no
-direct sun — there are NO hard cast shadows anywhere in this image and there must be none on
-the new objects either. Light everything evenly and softly from above, with only gentle
-ambient shading and soft contact shadows underneath. No long shadows, no sunlit edges, no
-bright specular highlights. Match the existing cool, muted, low-contrast colour, the slight
-atmospheric haze, the film grain and the lens softness. The parchment must sit at the same
-muted exposure as the rest of the photo — never bright white. Objects this close to the
-camera should be sharp, exactly as the near grass in the photo already is.
-
-Photorealistic, ordinary, understated — as if these things were simply lying there when the
-photo was taken. No glow, no rim light, no added highlights, no HDR, no extra sharpening, no
-text, no watermark; nothing polished, sculpted, or symmetrical.
-
-Output at maximum resolution, 4K.
-```
-
-**Short version** (for Photoshop's Generative Fill box, after masking the lower foreground):
-
-```
-large flat granite rock in the close foreground used as a desk, matching the existing ground
-perspective, an open scroll on it wound on two turned wooden rollers with brass end-caps,
-strongly foreshortened, blank parchment, a white feather quill and small glass ink bottle
-beside it, soft contact shadows, grass overlapping the rock base, soft overcast light, no
-hard shadows, matching the photo grain and focus, photorealistic, no hands, nothing written
-```
-
-### If you use a sunny photo instead
-
-Replace the light paragraph with:
-
-```
-MATCH THE PHOTOGRAPH EXACTLY: the sunlight comes from [THE LEFT / THE RIGHT / BEHIND THE
-CAMERA] — every new shadow must fall the same way, with the same length and the same
-softness as the shadows already in the picture. Match the existing colour temperature,
-exposure, contrast, film grain, noise and lens softness.
-```
+- **Google Gemini (Nano Banana Pro):** attach your photo, then paste the prompt below, and
+  add at the end: *"Match the colour, light, mood and grain of the attached photograph."*
+- **Midjourney:** paste your photo's URL at the start of the prompt as an image prompt (or
+  use `--sref <url>`), then the text, then the parameters.
+- Whichever you use: ask for the **highest resolution available** (4K).
 
 ---
 
-### After it generates — the things that give it away
+### The prompt (precise — every number matters)
 
-Make **4 versions**, then judge them on this, in order:
+```
+A photograph taken from the point of view of a person sitting on the ground and writing.
 
-1. **Did the background survive?** Compare against your original: the tree, the hills, the
-   sky, the far grass must be *identical*. If anything moved, re-rendered, or went soft,
-   reject it — that's the tool re-shooting your photo instead of adding to it.
-2. **Is the rock close enough?** It should feel an arm's length away — big, low, cut off by
-   the bottom edge, with the scroll foreshortened on it. If it looks like a rock a few steps
-   away, that's the fix below.
-3. **No hands, no people.** If any appear, regenerate — never try to fix hands.
-4. **Contact shadows.** A dark line where the rock meets the ground; small soft shadows under
-   the scroll, rods, quill and bottle. Without those, everything floats.
-5. **Grass over the base.** A few blades crossing in front of the stone, or it reads as a sticker.
-6. **The parchment isn't glowing white.** In a muted photo, a bright scroll is the biggest tell.
-7. **Nothing written on it.** These models love to invent letters. Zoom in and check.
-8. **Sharpness and grain match** the real parts of the photo at that distance.
+CAMERA: full-frame camera held at seated eye level, about 100 cm above the ground, tilted
+downward roughly 40 degrees toward a flat rock directly in front of the viewer. 24 mm wide
+lens, f/5.6, focused on the centre of the scroll, which is about 50 cm from the lens.
+Vertical portrait frame.
+
+FRAMING, EXACTLY: the rock and the open scroll fill the LOWER HALF of the picture — about
+55 % of the frame height. The scroll is so close that its near edge is cut off by the
+bottom edge of the frame, and it extends past both the left and right edges. Above the
+rock: a band of green grass, then low green hills, then a narrow strip of sky in the top
+tenth. The horizon sits about four fifths of the way up the frame. The scroll is the
+subject; the landscape is only background.
+
+THE SCROLL, ORIENTATION: it lies open and FLAT on the rock, SQUARE to the viewer — its
+long axis runs horizontally, parallel to the bottom edge of the frame, with one wooden
+roller at the left and one at the right. It is NOT turned sideways, NOT rotated, NOT
+diagonal, NOT seen from its end. It faces the viewer exactly as a sheet of paper faces
+someone about to write on it. Because the camera looks down at it from close range, it is
+strongly foreshortened: the near edge is wide and low in the frame, the far edge clearly
+narrower.
+
+THE SCROLL, DETAIL: a fine scroll wound on two turned wooden rollers, one at each end, the
+open sheet held flat between them; the rods are dark polished wood with small aged brass
+end-caps, and the far roller still has a little of the scroll wound around it. A thin
+leather cord lies loose beside it. The parchment is soft grey-cream, thick, with visible
+fibres, faint age spots and a gentle curl at the edges — elegant and well kept, not burnt,
+not torn, not crumpled. It is large and clearly visible, filling most of the lower half of
+the frame. ABSOLUTELY NOTHING is written, drawn, printed or marked on it — the surface is
+completely blank.
+
+THE ROCK: one low granite boulder with a broad, roughly flat top being used as a desk.
+Grey-brown stone, worn rounded edges, patches of lichen, a few natural cracks, dry dust in
+the hollows. Its surface is visible around the scroll, and it sits heavily in the ground
+with grass pressed down and darker where it meets the stone.
+
+ALSO ON THE ROCK: a white goose feather quill with a slim dark metal nib lying to the
+RIGHT of the scroll, angled naturally as if just set down, and a small heavy glass ink
+bottle with dark ink and a worn cork standing on the stone beside it, small enough to fit
+in a palm. Each object casts a small soft dark contact shadow where it touches the stone.
+
+NO PEOPLE: absolutely no person, no hands, no arms, no fingers, no body, no legs, no feet
+anywhere in the image. The viewer's hands are out of frame.
+
+DEPTH OF FIELD: the scroll and the rock are sharp and clearly detailed. The grass just
+beyond falls gently out of focus, and the hills and sky are soft — as a 24 mm lens at f/5.6
+focused at half a metre really renders them.
+
+LIGHT: soft, diffuse, overcast midday light with no direct sun — no hard cast shadows
+anywhere, only gentle ambient shading and soft contact shadows underneath each object. No
+sunlit edges, no bright specular highlights. Cool, muted, low-contrast colour with a slight
+atmospheric haze. The parchment is a soft grey-cream at the same muted exposure as the rest
+of the frame, never bright white.
+
+Shot on 35 mm film, natural colour, fine grain. Quiet, ordinary, understated — an
+unremarkable real photograph, not a product shot.
+```
+
+**Midjourney parameters** to add on the end:
+
+```
+--ar 9:19 --style raw --no HDR, oversaturated, glowing, bloom, haze, lens flare, god rays,
+symmetrical, plastic, waxy, glossy, hyperdetailed, fantasy, magical, glowing particles,
+text, letters, writing, watermark, logo, heavy vignette, tilt-shift, oversharpened,
+cartoon, 3d render, cgi, illustration, people, hands, fingers
+```
+
+*(`9:19` is the closest ratio Midjourney accepts to a phone screen; crop to 1290 × 2796 after.)*
+
+---
+
+### Judging the results
+
+Make **4**, then check in this order:
+
+1. **Is the scroll square to you?** Rollers left and right, long axis flat across the
+   frame, page facing you like paper on a desk. If it's turned, angled, or seen end-on —
+   that's the "someone photographed it" look. Reject.
+2. **Does it fill about half the frame,** with its near edge cut off at the bottom? If it's
+   small or sitting in the middle distance, reject.
+3. **Can you see the parchment clearly** — texture, fibres, enough room that you could
+   write a paragraph on it? That's the whole point of the screen.
+4. **No hands, no people.** Regenerate if any appear; never try to fix hands.
+5. **Nothing written on it.** These models love inventing letters. Zoom in.
+6. **Contact shadows** under the scroll, rollers, quill and bottle — or everything floats.
+7. **Is the parchment glowing white?** In a muted frame that's the biggest tell.
 
 ### Fixing without starting over
 
-If it's 90 % right, don't re-roll — run a small second pass:
+Re-run with the same seed / "keep this image but…" and one instruction:
 
-> Keep everything exactly as it is. Only [make the parchment darker and softer / replace
-> the quill with a clean white goose feather with a slim dark nib / remove the writing from
-> the parchment so it is completely blank], same position, same shadow, same light.
+> Keep everything exactly as it is. Only turn the scroll so it lies square to the viewer,
+> its long axis horizontal, one roller at the left and one at the right, facing me like a
+> sheet of paper I am about to write on.
 
-**If the rock feels too far away**, don't mention the camera — ask for the *objects* to move:
+> Keep everything exactly as it is. Only move the rock and scroll closer to the camera and
+> make them larger, so the scroll fills the lower half of the frame and its near edge runs
+> off the bottom edge.
 
-> Keep the photograph and the camera exactly as they are. Only make the rock and the scroll
-> larger and closer to the lens, filling more of the bottom of the frame and running further
-> off the bottom edge, with the scroll more strongly foreshortened.
-
----
-
-#### If you'd still rather find a real rock
-
-These search words work better than "flat rock" (which mostly returns big round
-boulders): `stone slab`, `rock ledge`, `flat rocks river`, `slate shore`, `stepping
-stone`, `granite outcrop`, `dolmen` (a natural stone table), `stone bench garden`. Photos
-of people sitting on flat rocks work too — crop the people out.
-
-But don't spend hours on it. Adding the rock gives you exactly the shape and angle you
-want.
+> Keep everything exactly as it is. Only remove all writing from the parchment so it is
+> completely blank.
 
 ---
-
-### Fallback — generate the whole scene
-
-```
-First-person point of view of someone sitting on the ground in an open green meadow, using
-a large flat weathered rock in front of them as a writing desk. The camera is at seated eye
-level, low and close, tilted slightly down toward the rock, with the field, soft hills and
-sky still visible in the upper part of the frame. No person, no hands, no body visible.
-On the rock lies an open scroll wound on two turned dark wooden rollers with small aged
-brass end-caps, seen in perspective — near edge wider, far edge narrower. The parchment is
-soft grey-cream, thick, gently curled, completely blank with nothing written on it. A white
-goose feather quill with a slim dark metal nib rests beside it, and a small heavy glass ink
-bottle with a worn cork. Soft diffuse overcast light, no hard shadows, only gentle contact
-shadows under each object. Shot on 35 mm film, 28 mm lens, f/5.6, scroll sharp and the
-landscape softening behind, cool muted low-contrast colour, fine grain. Quiet and
-uncluttered. Vertical, --ar 9:19.5
-```
 
 # 4 · The second scene
 
-Same close-foreground framing, clearly a **different place** — cooler, quieter, shadier.
+The **same seated writing view**, in a clearly different place — cooler, shadier, quieter.
+Also generated, not edited, for the same reason.
 
-Start from a real photo of the **edge of a birch wood or a shady clearing**
-(`birch forest floor`, `woodland clearing light`, `mossy forest ground`), and use the
-**same prompt as scene 3** — camera untouched, rock added close to the lens — with the rock
-paragraph swapped for this:
+Use the **whole prompt from scene 3**, with two paragraphs swapped:
 
 ```
-THE ROCK: directly in front of me, close to the camera, filling the lower part of the frame
-and running off the bottom edge. One low flat mossy stone with a broad flat top being used
-as a desk. Damp grey stone with green moss creeping over its edges, worn and old. It sits
-heavily in the undergrowth, with leaves and moss pressed against its base and a soft dark
-contact shadow beneath it.
+THE ROCK: one low flat mossy stone with a broad flat top being used as a desk. Damp grey
+stone with green moss creeping over its edges, worn and old. It sits heavily in the
+undergrowth, with leaves and moss pressed against its base.
 ```
 
-Keep everything else the same. The forest light is already soft, so the overcast light
-paragraph fits as written.
+```
+FRAMING, EXACTLY: … Above the rock: a band of forest floor and low undergrowth, then the
+pale trunks of birch trees, then soft grey-green light between them. No open sky.
+```
+
+Keep the light paragraph as written — forest light is already soft and shadowless.
 
 # 1 · Sign in
 
