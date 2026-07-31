@@ -20,6 +20,13 @@ waveforms, no mic icons, no robot glow, no "generating…" — ever.
 **The world it's built from (from the spec — honor it):**
 - **Landscape paintings** as the canvas (sign-in, profile, the writing scenes, the
   living companion scene) — all clearly painted by **one artist's hand**.
+  **Important:** the final paintings will be **real hand-painted artwork by a painter —
+  not AI-generated and never photorealistic** (quiet 19th-century landscape painting:
+  Levitan, Shishkin, Kuindzhi, the Hudson River School). In your designs, treat every
+  painting as a **placeholder composition**: show where it sits, how it's cropped, how
+  the scrim and text lie over it, and note what the real painting must contain (e.g.
+  "flat rock like a table, empty area for the scroll, warm dusk light"). Don't try to
+  produce final art, and don't render anything glossy, photographic, or "cinematic".
 - **Parchment, quill & ink** for everything written by the user; an **ancient handmade
   handwritten book** for the friend's diary. Never a plain floating form.
 - **Colors — "sunlight through leaves"** (full system in `palette.html`, follow it):
@@ -60,6 +67,9 @@ ordinary).
 
 **For the final set, include:**
 - The Companion screen in its four states, in both modes (placeholder circle only).
+- For the **Living scene** mode, note which parts of the painting must be **separate
+  layers** (sky · far hills · tree · rock · foreground) so the orb can sit on the rock,
+  pass behind the tree, and the scene can drift with gentle parallax.
 - The scroll-to-scroll **transition moment** between screens 3 → 4 (a key frame or two).
 - The Diary as an open book spread with handwritten-feeling text.
 - A short build note per screen: type sizes, colors, key components.
