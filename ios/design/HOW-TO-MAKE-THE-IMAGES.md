@@ -20,14 +20,15 @@ dark background below — the photo is the screen, and the text sits on top of i
 
 ## Which image AI to use
 
-**For adding things onto a real photo** (this is the main job — putting the scroll,
-quill, and ink onto a rock):
+**For adding things onto a real photo** (this is the main job — putting the rock, scroll,
+quill, and ink into a meadow photo):
 
-- **Best: Photoshop + Generative Fill.** It is made exactly for this. You open a real
-  photo, brush over an area, type what to add. Adobe lets you use the result
-  commercially. About $10–25 a month.
-- **Cheaper / no Photoshop: Google Gemini image editing.** Upload the photo, type what
-  to add. Very good now, and there's a free tier to try.
+- **Best: Google Gemini image editing.** Upload the photo, paste the prompt. It's the best
+  at "change only this, keep everything else," needs no skills, and is free to try.
+- **Also good: Photoshop + Generative Fill.** You brush exactly where the rock goes and can
+  fix the seam by hand. Safest licence for a paid app. About $10–25 a month.
+- **Avoid for this: ChatGPT image generation** — it tends to redraw the whole picture, so
+  your real photo stops being a real photo.
 
 **For making a whole scene from nothing** (only if you can't find a real photo):
 
@@ -55,22 +56,24 @@ Go to **unsplash.com** or **pexels.com** and download big versions of:
 Pick calm, plain, real places. Not dramatic mountains. Make sure there is **empty
 space** where text will go.
 
-### 2. Build the rock scene — two edits, not one
+### 2. Build the rock scene — one prompt, everything at once
 
-**You won't find a photo of a table-like rock. Don't look for one — add the rock with
-AI.** Keep the landscape real (grass and trees are the hard part to fake); a rock is the
-easy part, because no shape is "wrong."
+**You won't find a photo of a table-like rock. Don't look for one — add it with AI.** Keep
+the landscape real (grass and trees are the hard part to fake); the rock is the easy part,
+because no shape is "wrong."
 
-**First** select the lower part of the photo, near the camera, and add the rock. Let it
-run off the bottom edge — that makes it feel close and real.
-**Then**, separately, select the flat top of your new rock and add the scroll, quill, and
-ink. Doing both in one go makes a mess.
+Ask for the **rock, scroll, quill, and ink together in one prompt**, so the AI knows the
+rock's job is to be a table. The full prompt is in **`IMAGE-PROMPTS.md`** — before pasting
+it, look at your photo and fill in **which side the sun comes from**.
 
-Both prompts are in **`IMAGE-PROMPTS.md`**.
+Make 4 versions and judge them in this order:
+1. **Shadow direction** — do the new shadows fall the same way as the real ones?
+2. **Contact shadows** — a dark line where the rock meets the ground, small shadows under
+   the scroll and bottle.
+3. **Grass over the base** — a few blades crossing in front, or it looks like a sticker.
+4. **Sharpness** — the new things must be exactly as sharp as real things that far away.
 
-Each time: make 4 versions, keep the one where **the shadows go the same way as the other
-shadows**. Check the rock has a dark shadow where it touches the grass, and that the grass
-overlaps its base — otherwise it looks like a sticker.
+If one object comes out bad, don't start over — run a small second edit on just that spot.
 
 Do the same for the second scene photo.
 

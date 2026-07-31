@@ -31,67 +31,102 @@ This is the scene from your reference, corrected: **on a rock, not a wooden tabl
 **seen from a low angle so the landscape is visible**, with **a better scroll, a better
 quill, and a better ink bottle**.
 
-### Best way — build it in two steps on a real landscape photo (recommended)
+### Which AI to use for this
 
-**You will almost never find a photo of a table-like rock. Don't hunt for one — add the
-rock yourself.** Keep the *landscape* real (grass, trees, depth and light are the hardest
-things to fake) and let AI make only the rock and the objects. A rock is the safest thing
-to generate: it has no "correct" shape, so nobody can say it's wrong.
+| | Tool | Why |
+|---|------|-----|
+| **1st choice** | **Google Gemini image editing** (Gemini app — upload the photo, paste the prompt) | Best at "change only this, keep everything else." No masking, no skills needed. Free to try. |
+| **2nd choice** | **Photoshop → Generative Fill** (Adobe Firefly) | You paint exactly where the rock goes and can hand-fix the seam afterwards. Safest licence for a paid app. Keep the prompt short — its box is small. |
+| **Avoid here** | ChatGPT image generation | It tends to redraw the *whole* picture, so your real photo stops being a real photo. |
 
-**Do it as two separate edits, not one.** Asking for rock + scroll + quill + ink in a
-single prompt produces mush. Add the rock, check it, *then* add the objects.
-
----
-
-#### Step A — add the rock
-
-1. Download a real photo: an **open meadow or field shot from a low angle**, with grass in
-   the foreground and trees/hills/sky behind. (unsplash / pexels: `meadow low angle`,
-   `grass field close up horizon`, `wild grass hillside`)
-2. Select an area in the **lower part of the frame**, close to the camera. Let it run off
-   the **bottom edge** — a rock cropped by the frame reads as near and real, and there's
-   less of it to get wrong.
-3. Paste this:
-
-```
-Add a large flat weathered rock here in the foreground, close to the camera, its broad
-flat top facing up like a low natural table. Rough grey-brown granite with lichen
-patches, worn rounded edges, a few natural cracks and dry dust. It sits solidly and
-heavily in the grass, with the grass pressed down and darker where it meets the stone.
-Match the photograph exactly: same sun direction, same shadow length and softness, same
-grain, same focus. Photorealistic, plain and unremarkable — not sculpted, not polished,
-not symmetrical, not a monument.
-```
-
-4. **Check the rock before going on:** does its shadow point the same way as the other
-   shadows? Is there a dark contact shadow where it meets the grass? Does grass overlap
-   its base, rather than the rock sitting on top like a sticker? Is it a bit rough and
-   dirty (good) rather than smooth and clean (bad)?
-
-*If the AI struggles, try again on a simpler photo — plain grass with a soft background is
-much easier for it than a busy scene.*
+*Tools move fast — check current pricing and that your plan allows commercial use.*
 
 ---
 
-#### Step B — add the scroll, quill, and ink
+### The one-shot prompt (rock + scroll + quill + ink together)
 
-Now select the **flat top of your new rock** and paste this:
+Doing it in one go is the right instinct: the AI must know the rock's **job** — a table
+for the scroll — or it gives you a nice domed boulder you can't put anything on.
+
+**Start from:** a real photo of an **open meadow or field shot from a low angle**, with
+grass in the foreground and trees/hills/sky behind. (unsplash / pexels: `meadow low
+angle`, `grass field close up horizon`, `wild grass hillside`)
+
+**Before you paste — look at your photo and fill in one thing:** which side the sunlight
+comes from. Everything below depends on it.
 
 ```
-Add an old parchment scroll lying unrolled flat on the top of this rock, its far end
-still loosely rolled. Beside it, a fine white goose feather quill with a slim polished
-metal nib resting across the stone, and a small heavy glass ink bottle with dark ink and
-a worn cork. The parchment is soft cream, thick and slightly translucent at the edges,
-with gentle natural curl, fine fibres, faint age spots and a few soft creases — clean
-and elegant, not burnt, not torn, not crumpled. Nothing is written on it. Everything sits
-flat and stable on the stone with real weight and contact shadows. Match the photograph
-exactly: same sun direction, same shadow length and softness, same grain, same focus
-falloff. Photorealistic, natural, slightly dusty, understated.
+In this photograph, add a large flat weathered rock in the foreground, close to the
+camera, being used as a natural table — with an old parchment scroll unrolled across its
+flat top.
+
+THE ROCK: one low granite boulder with a broad, roughly flat top, tilted very slightly
+toward the camera so the top surface is clearly visible and usable as a table. Grey-brown
+stone, worn rounded edges, patches of lichen, a few natural cracks, dry dust in the
+hollows. About knee height. It sits heavily in the ground — the grass around its base is
+pressed down and darker, and blades of grass overlap the bottom edge of the stone. Let
+the rock run off the bottom edge of the frame.
+
+ON THE ROCK: an old parchment scroll lying unrolled flat across the stone, about the size
+of a sheet of paper, its far end still loosely rolled. Soft cream parchment, thick, with
+fine fibres, faint age spots, and a gentle natural curl at the corners — elegant and
+clean, not burnt, not torn, not crumpled. Absolutely nothing written or drawn on it.
+Beside it, a white goose feather quill with a slim dark metal nib lying across the stone,
+and a small heavy glass ink bottle with dark ink and a worn cork, small enough to fit in
+a palm. Each object casts a small, soft, dark contact shadow where it touches the stone,
+so they clearly have weight and are truly resting on it.
+
+MATCH THE PHOTOGRAPH EXACTLY: the sunlight comes from [THE LEFT / THE RIGHT / BEHIND THE
+CAMERA] — every new shadow must fall the same way, with the same length and the same
+softness as the shadows already in the picture. Match the existing colour temperature,
+exposure, contrast, film grain, noise, and lens softness. The new objects must carry the
+same amount of focus or blur as anything else at their distance in the original photo.
+
+DO NOT change anything else: keep the existing grass, trees, sky, horizon, colours,
+brightness, and grain exactly as they are. Do not re-render, re-light, or sharpen the
+rest of the image.
+
+Photorealistic, ordinary, understated — as if these objects were simply there when the
+photo was taken. No glow, no rim light, no added highlights, no HDR, no extra sharpening,
+no text, no watermark; nothing polished, sculpted, or symmetrical.
 ```
 
-Generate 4 versions. **Keep the one whose shadows fall the same way as the rock's own
-shadow.** Then zoom to 100 % and check the feather barbs, the nib, and the rim of the
-ink bottle are not melted.
+**Short version** (for Photoshop's Generative Fill box, after masking the lower foreground):
+
+```
+large flat weathered granite rock used as a table, an unrolled parchment scroll lying on
+its flat top, a white feather quill and a small glass ink bottle beside it, soft contact
+shadows, grass overlapping its base, matching the photo's light direction, grain and
+focus, photorealistic, nothing written
+```
+
+---
+
+### After it generates — the 4 things that give it away
+
+Make **4 versions**, then judge them on this, in order:
+
+1. **Shadow direction.** Does the rock's shadow fall the same way as the shadows already
+   in the photo? Wrong direction = delete, no matter how pretty it is.
+2. **Contact shadow.** Is there a dark line where the rock meets the ground, and small
+   soft shadows under the scroll, quill, and bottle? Without those, everything floats.
+3. **Grass over the base.** Do a few blades cross in front of the stone? If the rock's
+   outline is clean all the way round, it reads as a sticker.
+4. **Sharpness.** Are the new objects exactly as sharp — or as soft — as the real things
+   at that distance? AI likes to make its additions too crisp.
+
+Then zoom to **100 %** and check the feather barbs, the nib, and the rim of the ink
+bottle are not melted.
+
+### If it comes out messy
+
+- **The whole photo changed** (colours shifted, grass re-drawn) → wrong tool. Use Gemini
+  or Photoshop, not a whole-image generator.
+- **90 % right, one bad object** → don't start over. Run a second small edit on just that
+  spot: *"Keep everything exactly as it is. Only replace the quill with a clean white
+  goose feather with a slim dark metal nib, same position, same shadow."*
+- **Still mush after several tries** → then split it: add the rock first (saying "broad
+  flat top like a table"), check it, and add the objects in a second pass.
 
 ---
 
@@ -102,8 +137,10 @@ boulders): `stone slab`, `rock ledge`, `flat rocks river`, `slate shore`, `stepp
 stone`, `granite outcrop`, `dolmen` (a natural stone table), `stone bench garden`. Photos
 of people sitting on flat rocks work too — crop the people out.
 
-But don't spend hours on it. Adding the rock takes ten minutes and gives you exactly the
-shape and angle you want.
+But don't spend hours on it. Adding the rock gives you exactly the shape and angle you
+want.
+
+---
 
 ### Fallback — generate the whole scene
 
@@ -131,30 +168,20 @@ like you are sitting there — not looking down at a desk.
 
 Same idea, clearly a **different place** — cooler, quieter, later.
 
-Same two steps. Start from a real photo of the **edge of a birch wood or a shady
-clearing** (`birch forest floor`, `woodland clearing light`, `mossy forest ground`), then
-add the rock with this variation:
+Start from a real photo of the **edge of a birch wood or a shady clearing**
+(`birch forest floor`, `woodland clearing light`, `mossy forest ground`), and use the
+**same one-shot prompt as scene 3**, with the rock paragraph swapped for this:
 
 ```
-Add a low flat mossy stone here in the foreground, close to the camera, its broad flat
-top facing up like a low natural table. Damp grey stone with green moss creeping over its
-edges, worn and old. It sits heavily in the undergrowth, with leaves and moss pressed
-against its base and a soft dark contact shadow. Match the photograph exactly: same light
-direction, same soft shadows, same grain, same focus. Photorealistic, plain, unremarkable.
+THE ROCK: one low flat mossy stone with a broad flat top, usable as a low natural table.
+Damp grey stone with green moss creeping over its edges, worn and old. It sits heavily in
+the undergrowth, with leaves and moss pressed against its base and a soft dark contact
+shadow. Let it run off the bottom edge of the frame.
 ```
 
-Then add the scroll, quill, and ink with the **same prompt as step B above**.
-
-Fallback:
-
-```
-Photograph from a low seated angle at a flat mossy stone at the edge of a birch wood,
-camera near stone level so the trees and soft grey-green light open up behind. On the
-stone lies an unrolled parchment scroll with a fine white feather quill and a small glass
-ink bottle beside it. Soft overcast light, gentle shadows, damp green moss, cool and
-quiet. Shot on 35 mm film, 35 mm lens, f/5.6, natural colour, fine grain. Nothing written
-on the parchment. Empty space above. Vertical, --ar 9:19.5
-```
+Keep everything else in the prompt the same — and change the light line to match the
+softer, shadowless forest light of your photo (say *"soft overcast light from above, very
+soft shadows"*).
 
 ---
 
