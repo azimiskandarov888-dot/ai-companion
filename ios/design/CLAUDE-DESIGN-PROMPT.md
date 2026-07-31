@@ -75,7 +75,7 @@ with a prominent caution above it and the quote below) ·
 5. Meet him & choose your world (Regular orb vs Living scene) · 6. Companion (both
 modes, states: resting/listening/thinking/speaking) · 7. The Companion's Diary (the
 handmade book) · 8. Account / Profile (landscape photo) · 9. Settings (an ordinary
-list — but still over the photo, blurred and darkened).
+list — but still over the photo, blurred and darkened, and soft-cornered like everything else).
 
 **How to work — two directions first:**
 1. **Propose TWO distinct visual directions** for the whole world. Show each applied to
