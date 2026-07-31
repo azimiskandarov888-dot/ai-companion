@@ -9,11 +9,15 @@ Talking loop (with memory + persona):
           → (in the background) learn new memories
 
 Endpoints:
-    GET  /            → browser mic test page (a developer tool — he never sees a screen)
+    GET  /            → browser mic test page (a developer tool)
     GET  /api/health  → which services are configured + memory counts
     POST /api/talk    → audio in  → {transcript, reply, audio}   (the real loop)
     POST /api/say     → text in   → {reply, audio}   (dev only: test brain+memory)
-    GET  /api/memory  → what it currently remembers (for you to inspect)
+    POST /api/companion/create → the user's story + age/gender/origin → the friend
+                        walks in (his name is chosen here, never by the user)
+    GET  /api/diary   → the companion's handwritten diary about his friend —
+                        the ONLY memory users ever see
+    GET  /api/memory  → raw distilled memory (internal/dev only — never in the app)
 """
 
 from __future__ import annotations
@@ -26,7 +30,20 @@ from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, UploadF
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 
-from . import brain, companion, config, db, learn, memory, occasions, persona, stt, tts
+from . import (
+    brain,
+    companion,
+    config,
+    db,
+    diary,
+    learn,
+    matchmaker,
+    memory,
+    occasions,
+    persona,
+    stt,
+    tts,
+)
 
 
 @asynccontextmanager
@@ -166,9 +183,52 @@ async def say(req: SayRequest, background_tasks: BackgroundTasks) -> JSONRespons
     return JSONResponse({"transcript": text, **result})
 
 
+class CreateCompanionRequest(BaseModel):
+    about: str  # «Tell us about you and your likings» — the user's free writing
+    age: str = ""  # who they'd be WITH: age…
+    gender: str = ""  # …gender…
+    origin: str = ""  # …and maybe where he's from. Never a name.
+
+
+@app.post("/api/companion/create")
+async def companion_create(req: CreateCompanionRequest) -> JSONResponse:
+    """From the user's story + their few choices, the friend walks in.
+
+    His name, character, likes, and people are his own — created to share
+    common ground with the user, never designed or named by them.
+    """
+    if not req.about.strip():
+        raise HTTPException(
+            status_code=400, detail="Расскажите о себе — хоть немного."
+        )
+    try:
+        p = await matchmaker.create_companion(
+            req.about,
+            age=req.age.strip(),
+            gender=req.gender.strip(),
+            origin=req.origin.strip(),
+        )
+    except RuntimeError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    return JSONResponse({"name": p.get("name"), "persona": p})
+
+
+@app.get("/api/diary")
+async def companion_diary() -> JSONResponse:
+    """His diary — the beautifully written book about his friend.
+
+    This is the ONLY memory view users ever see; the raw distilled memory
+    below stays internal.
+    """
+    try:
+        return JSONResponse(await diary.get_diary())
+    except RuntimeError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+
+
 @app.get("/api/memory")
 async def memory_dump() -> JSONResponse:
-    """A window into what the companion currently remembers (for inspection)."""
+    """Raw distilled memory — internal/dev inspection only, never shown in the app."""
     with db.connect() as conn:
         rows = conn.execute(
             "SELECT owner, kind, title, content, status, recall_count, created_ts "

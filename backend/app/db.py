@@ -1,12 +1,16 @@
 """SQLite storage for the companion's memory.
 
-Two tables:
+Tables:
   - turns:    the raw conversation log (nothing is ever lost).
   - memories: what the companion has *learned* — facts, stories, health notes,
               mood, and caring follow-ups — with an optional embedding for
               semantic recall. The `owner` column separates memory about the
               elder ('elder') from Bob's own life-details ('bob'), so Bob stays
               consistent about himself without polluting the elder's memory.
+              This distilled memory is INTERNAL — users never see it.
+  - diary:    the single living book the user *does* see — the companion's
+              beautifully written diary about his friend, composed from the
+              memories above (see diary.py) and cached here.
 
 SQLite keeps this zero-setup (no database to install) and is more than enough
 for one person. It is wrapped behind this module + memory.py so a later phase
@@ -44,6 +48,13 @@ CREATE TABLE IF NOT EXISTS memories (
     created_ts        REAL NOT NULL,
     last_recalled_ts  REAL,
     recall_count      INTEGER DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS diary (
+    id          INTEGER PRIMARY KEY CHECK (id = 1),  -- one living book
+    content     TEXT NOT NULL,
+    fingerprint TEXT NOT NULL,                       -- of the memory it was written from
+    updated_ts  REAL NOT NULL
 );
 """
 

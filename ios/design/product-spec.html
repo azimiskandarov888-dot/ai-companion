@@ -3,271 +3,490 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Bob — Product &amp; Screen Spec (for the designer)</title>
+<title>A Living Friend — Product &amp; Screen Spec (v2)</title>
 <style>
   :root{
-    --bg:#0d0f0e; --panel:#151a17; --line:#26302a; --ink:#eef2ee; --dim:#9fb0a5;
-    --green:#7fae5e; --green-deep:#3f5e3a; --amber:#e0b15a; --accent:#8fca6a;
+    --bg:#0b0d0a; --panel:#141712; --line:#242a1f; --ink-on-dark:#ece8da; --dim:#9aa392;
+    --olive:#5b6242; --moss:#31371f; --amber:#caa65e; --accent:#a3ad83;
+    --parchment:#e9dfc7; --parch-edge:#cdbb92; --ink:#3a2f22; --stone:#7d8073;
     --radius:14px;
   }
   *{box-sizing:border-box}
-  body{margin:0;background:var(--bg);color:var(--ink);
+  body{margin:0;background:var(--bg);color:var(--ink-on-dark);
     font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;}
   .wrap{max-width:1040px;margin:0 auto;padding:32px 20px 80px}
   h1{font-size:30px;margin:0 0 6px}
-  h2{font-size:22px;margin:40px 0 4px;color:var(--accent)}
-  h3{font-size:15px;letter-spacing:.04em;text-transform:uppercase;color:var(--dim);margin:18px 0 6px}
+  h2{font-size:22px;margin:44px 0 4px;color:var(--accent)}
+  h3{font-size:14px;letter-spacing:.05em;text-transform:uppercase;color:var(--dim);margin:18px 0 6px}
   .sub{color:var(--dim);margin:0 0 8px}
-  a{color:var(--accent)}
   .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
     padding:18px 20px;margin:14px 0}
-  .grid{display:grid;grid-template-columns:1.1fr 1fr;gap:22px;align-items:start}
+  .grid{display:grid;grid-template-columns:1.05fr 1fr;gap:22px;align-items:start}
   @media(max-width:760px){.grid{grid-template-columns:1fr}}
-  ul{margin:6px 0 6px 0;padding-left:20px}
+  ul{margin:6px 0;padding-left:20px}
   li{margin:3px 0}
-  .tag{display:inline-block;font-size:12px;padding:2px 10px;border-radius:999px;
-    border:1px solid var(--line);color:var(--dim);margin-right:6px}
-  .tag.elder{color:#0e130f;background:var(--green);border-color:var(--green)}
-  .tag.family{color:var(--amber);border-color:#5a4a24;background:#241d10}
+  b{color:#fff}
   .swatches{display:flex;gap:10px;flex-wrap:wrap;margin:8px 0}
-  .swatch{width:64px;height:44px;border-radius:10px;border:1px solid var(--line);
-    display:flex;align-items:flex-end;justify-content:center;font-size:10px;color:#0d0f0e;padding:3px}
+  .swatch{width:74px;height:46px;border-radius:10px;border:1px solid var(--line);
+    display:flex;align-items:flex-end;justify-content:center;font-size:10px;color:#10130c;padding:3px;text-align:center}
+  .note{font-size:13px;color:var(--dim);border-left:3px solid var(--moss);padding:4px 0 4px 12px;margin:10px 0}
+  .flow{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:13.5px}
+  .flow .step{background:#1a2016;border:1px solid var(--line);border-radius:999px;padding:5px 13px}
+  .flow .arr{color:var(--dim)}
+  code{background:#10130c;border:1px solid var(--line);border-radius:6px;padding:1px 6px;font-size:13px}
+  .quote{font-style:italic;color:#d9d2bd;border-left:3px solid var(--amber);
+    padding:6px 0 6px 14px;margin:10px 0;font-size:15.5px;line-height:1.65}
+  .quote small{display:block;font-style:normal;color:var(--dim);margin-top:6px}
+
   /* --- lightweight wireframe "phone" --- */
-  .phone{width:230px;margin:0 auto;border:2px solid var(--line);border-radius:26px;
-    background:#0a0c0b;padding:12px 12px 16px;min-height:430px;display:flex;flex-direction:column;gap:8px}
-  .wf{border:1px dashed #35433b;border-radius:10px;padding:8px 10px;color:var(--dim);font-size:12.5px;background:#0f1310}
+  .phone{width:232px;margin:0 auto;border:2px solid var(--line);border-radius:26px;
+    background:#0a0c09;padding:12px 12px 16px;min-height:430px;display:flex;flex-direction:column;gap:8px}
+  .wf{border:1px dashed #39432f;border-radius:10px;padding:8px 10px;color:var(--dim);font-size:12.5px;background:#0e120c}
   .wf.solid{border-style:solid}
-  .wf.big{flex:1;display:flex;align-items:center;justify-content:center;text-align:center}
-  .orb{width:120px;height:120px;border-radius:50%;
-    background:radial-gradient(circle at 40% 35%,var(--green),var(--green-deep) 70%,#0f1310);
-    box-shadow:0 0 40px rgba(127,174,94,.35);display:flex;align-items:center;justify-content:center;
-    color:#0e130f;font-size:11px;text-align:center}
+  .wf.big{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:8px}
   .wf-row{display:flex;gap:8px}.wf-row>*{flex:1}
-  .note{font-size:13px;color:var(--dim);border-left:3px solid var(--green-deep);padding:4px 0 4px 12px;margin:8px 0}
-  code{background:#0f1310;border:1px solid var(--line);border-radius:6px;padding:1px 6px;font-size:13px}
+  .paint{border-radius:10px;color:#e9e4cf;font-size:11.5px;display:flex;align-items:flex-end;justify-content:center;
+    padding:6px;text-align:center;text-shadow:0 1px 2px #0009;
+    background:linear-gradient(168deg,#2a3a2c 0%,#4c5a33 42%,#8a7c4e 72%,#c9a45c 100%)}
+  .paint.dusk{background:linear-gradient(168deg,#1d2620 0%,#33402a 45%,#6b5d3c 78%,#a5793f 100%)}
+  .paint.mist{background:linear-gradient(168deg,#232d26 0%,#3b4a35 50%,#71765a 80%,#b0a578 100%)}
+  .scroll{background:var(--parchment);color:var(--ink);border:1px solid var(--parch-edge);
+    border-radius:8px;padding:9px 10px;font-size:12px;box-shadow:0 2px 8px #0006}
+  .scroll .head{font-weight:700;margin-bottom:4px}
+  .rock{background:linear-gradient(180deg,#6d7168,#4a4d45);color:#d8d8cf;border-radius:12px 14px 6px 6px;
+    font-size:10.5px;text-align:center;padding:3px}
+  .orb{width:104px;height:104px;border-radius:50%;
+    background:radial-gradient(circle at 40% 35%,var(--olive),var(--moss) 70%,#0b0d0a);
+    box-shadow:0 0 44px rgba(120,132,86,.4);display:flex;align-items:center;justify-content:center;
+    color:#e6e2cf;font-size:10.5px;text-align:center}
+  .orb.small{width:56px;height:56px;position:absolute}
+  .book{display:flex;gap:4px;flex:1}
+  .page{flex:1;background:var(--parchment);color:var(--ink);border:1px solid var(--parch-edge);
+    border-radius:4px 10px 10px 4px;padding:8px;font-size:10.5px;font-family:Georgia,'Times New Roman',serif;font-style:italic}
+  .page:first-child{border-radius:10px 4px 4px 10px}
 </style>
 </head>
 <body>
 <div class="wrap">
 
-  <h1>Bob — Product &amp; Screen Spec</h1>
-  <p class="sub">A structural spec of every core screen, for the designer to make beautiful.
-  <b>This is the "what &amp; where," not the final look.</b> The central living orb is designed
-  separately — wherever you see <span class="orb" style="width:auto;height:auto;padding:4px 8px;border-radius:8px;box-shadow:none">ORB</span>,
-  leave a simple placeholder circle.</p>
+  <h1>A Living Friend — Product &amp; Screen Spec</h1>
+  <p class="sub">v2 · A structural spec of every core screen, for the designer to make beautiful.
+  <b>This is the "what &amp; where," not the final look.</b> Working codename: <i>Bob</i> —
+  but each user's friend gets <b>his own name</b> (more below), so the friend is never
+  literally called Bob.</p>
 
   <div class="card">
-    <h3>What Bob is</h3>
-    <p>A warm <b>voice companion</b> for an <b>87-year-old Russian great-grandad</b> who is lonely.
-    He talks to it out loud; it answers in a warm voice. There are <b>two very different users</b>:</p>
+    <h3>What this app is</h3>
+    <p>A <b>voice friend for everyone</b> — all different kinds of people, any age.
+    (It began as a companion for one grandfather; that story shaped its warmth, but this
+    product is <b>for everyone — there is no "elder screen," no elder mode, no caretaker
+    area</b>. One beautiful app, one kind of user: a person who wants a friend.)</p>
     <ul>
-      <li><span class="tag elder">ELDER</span> He <b>only ever sees the Companion screen.</b> Voice-only —
-        he does not read, type, or tap. Everything must be calm, huge, and effortless.</li>
-      <li><span class="tag family">FAMILY / CARETAKER</span> Sets Bob up and checks on him. Uses all the
-        <i>other</i> screens, reached by a <b>hidden gesture</b> from the Companion screen (long-press →
-        PIN), so the elder never wanders into settings.</li>
+      <li>You talk out loud; he answers in a warm, natural voice. He remembers you.</li>
+      <li>It is an AI app that must <b>never feel like AI</b>. It must feel like a
+        <b>real, natural human being</b> — a person you met, not a product you use.</li>
+      <li>The whole app must feel <b>natural — something with life in it</b>: nature,
+        landscape paintings, parchment and ink, stone and old paper. Never techy,
+        never clinical, never "assistant app."</li>
     </ul>
   </div>
 
   <div class="card">
-    <h3>Visual direction (decided with the family)</h3>
+    <h3>The soul — rules that shape every screen</h3>
+    <ul>
+      <li><b>Human, not AI.</b> No chat bubbles, no waveforms, no mic icons, no robot
+        glow, no "generating…" spinners. When he thinks, he simply <i>thinks</i> —
+        like a person does.</li>
+      <li><b>Nature everywhere.</b> Landscape paintings are the app's canvas
+        (sign-in, profile, the writing scenes, and optionally the companion's home).
+        All painted in <b>one artist's hand</b> so the app is one world.</li>
+      <li><b>Writing is sacred.</b> Whenever something is written — by the user or by
+        the friend — it happens on <b>parchment, with quill and ink</b>, or in an
+        <b>old handmade book</b>. Never a plain form, never a text field floating in space.</li>
+      <li><b>You don't design a friend — you meet one.</b> No screen lets the user
+        edit who their friend is (see screen 4 for the philosophy and the quote).</li>
+      <li><b>Motion is natural.</b> Scrolls roll up and drift away; pages turn; the orb
+        wanders, settles, rests. Gentle, spring-based, unhurried. Respect Reduce Motion.</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h3>Colors of nature</h3>
     <div class="swatches">
-      <div class="swatch" style="background:#0d0f0e;color:#889">#0d0f0e bg</div>
-      <div class="swatch" style="background:#7fae5e">olive green</div>
-      <div class="swatch" style="background:#3f5e3a;color:#dfe">deep green</div>
-      <div class="swatch" style="background:#e0b15a">warm amber</div>
-      <div class="swatch" style="background:#151a17;color:#9fb0a5">panel</div>
+      <div class="swatch" style="background:#0b0d0a;color:#889">#0b0d0a night forest</div>
+      <div class="swatch" style="background:#5b6242;color:#e9e4cf">#5b6242 dark olive</div>
+      <div class="swatch" style="background:#31371f;color:#cfd6b8">#31371f deep moss</div>
+      <div class="swatch" style="background:#7d8073">#7d8073 stone</div>
+      <div class="swatch" style="background:#e9dfc7">#e9dfc7 parchment</div>
+      <div class="swatch" style="background:#cdbb92">#cdbb92 aged edge</div>
+      <div class="swatch" style="background:#3a2f22;color:#d9c9a3">#3a2f22 ink</div>
+      <div class="swatch" style="background:#caa65e">#caa65e warm amber</div>
     </div>
     <ul>
-      <li><b>Warm &amp; alive</b>, dark <b>near-black</b> background so things glow. Cozy, premium, never clinical.</li>
-      <li><b>Olive / nature green</b> with <b>warm amber</b> accents (green = life).</li>
-      <li><b>Elder-facing (Companion):</b> almost no text, giant, ultra-calm.
-        <b>Family-facing screens:</b> clean, modern, large-and-legible, simple.</li>
-      <li>Motion: natural, gentle, spring-based — nothing jerky or flashy. Respect Reduce Motion.</li>
-      <li>Elder-facing copy is <b>Russian</b>. Family screens can be Russian or English (say which you used).</li>
-      <li>Built in <b>SwiftUI, iOS 18+</b> — keep it buildable.</li>
+      <li>Deep, refined, <b>luxury-car olive</b> — dark and understated, never bright or grassy.</li>
+      <li>Landscapes may be dawn, day, or dusk — <b>natural light</b>, warm and alive; the
+        UI chrome around them stays deep and quiet so the paintings breathe.</li>
+      <li>Parchment + ink carry all reading &amp; writing; amber is the touch of warmth (sun, candle, brass).</li>
     </ul>
   </div>
 
-  <!-- ============ 1. COMPANION ============ -->
-  <h2>1 · Companion <span class="tag elder">ELDER</span></h2>
-  <p class="sub">The ambient home screen — the only thing the elder ever sees. He just talks; it answers.</p>
+  <div class="card">
+    <h3>The journey</h3>
+    <div class="flow">
+      <span class="step">1 · Sign in</span><span class="arr">→</span>
+      <span class="step">2 · Payment</span><span class="arr">→</span>
+      <span class="step">3 · Your story (scroll)</span><span class="arr">→</span>
+      <span class="step">4 · Who you'd be with (scroll)</span><span class="arr">→</span>
+      <span class="step">5 · Meet him &amp; choose your world</span><span class="arr">→</span>
+      <span class="step">6 · Companion</span>
+    </div>
+    <p class="sub" style="margin-top:8px">Reachable anytime after that:
+      <b>7 · His Diary</b> · <b>8 · Account / Profile</b> · <b>9 · Settings</b></p>
+  </div>
+
+  <!-- ============ 1. SIGN IN ============ -->
+  <h2>1 · Sign in</h2>
+  <p class="sub">The first breath of the app — a landscape painting, not a tech login.</p>
   <div class="grid">
     <div>
       <div class="phone">
-        <div class="wf big"><div class="orb">the living orb<br>(designed separately)</div></div>
-        <div class="wf" style="text-align:center">tiny soft status word (optional): «слушаю»</div>
+        <div class="paint wf big" style="border:none">full-screen landscape painting<br>(painted, warm, alive)</div>
+        <div class="wf" style="text-align:center;border:none">app name + one warm line<br><i>"Somewhere out there is a friend you haven't met yet."</i></div>
+        <div class="wf solid" style="text-align:center">Continue with Apple</div>
+        <div class="wf solid" style="text-align:center">Continue with Google</div>
+        <div class="wf" style="text-align:center">or use email · tiny legal line</div>
       </div>
     </div>
     <div>
       <h3>Purpose</h3>
-      <p>A calm living presence to rest his eyes on and talk to. No controls, no reading.</p>
+      <p>Welcome + sign in / log in. Sets the tone for the entire app in one glance.</p>
       <h3>On screen</h3>
       <ul>
-        <li><b>The orb</b>, centered, filling the screen (placeholder here).</li>
-        <li>Optional <b>tiny status word</b>, soft/low-contrast: resting / «слушаю» / «думаю» / «говорю».</li>
-        <li>Nothing else. No buttons, no menus, no text to read.</li>
+        <li>A <b>full-screen landscape painting</b> — nature, light, air. This painting is
+          the beautiful touch of nature the whole app opens with.</li>
+        <li>The app's name and <b>one warm line</b> (copy is draft — keep the feeling).</li>
+        <li>Sign-in choices (Apple / Google / email). Nothing else.</li>
       </ul>
-      <h3>States (orb changes color/glow/motion — no words)</h3>
-      <ul><li>Resting · Listening (he speaks) · Thinking · Speaking (Bob's voice).</li></ul>
-      <h3>Interactions</h3>
-      <ul>
-        <li>He speaks → it responds. Fully hands-free.</li>
-        <li><b>Hidden:</b> long-press ~2s → PIN → the Family area (screens 2–6). The elder can't reach it by accident.</li>
-      </ul>
-      <div class="note">Docked in a stand, plugged in, always on. Design for a phone that stays on this screen all day/night.</div>
+      <div class="note">No feature lists, no carousel of benefits, no screenshots. A painting,
+        a sentence, a door in.</div>
     </div>
   </div>
 
-  <!-- ============ 2. ONBOARDING ============ -->
-  <h2>2 · Onboarding / Setup <span class="tag family">FAMILY · first run</span></h2>
-  <p class="sub">A gentle step-by-step to get Bob running. One thing per step, big and friendly.</p>
+  <!-- ============ 2. PAYMENT ============ -->
+  <h2>2 · Payment</h2>
+  <p class="sub">Comes right after sign-in. Honest and warm — a promise, not a paywall shove.</p>
   <div class="grid">
     <div>
       <div class="phone">
-        <div class="wf">Step 3 of 6</div>
-        <div class="wf big">Big friendly title<br>+ one illustration</div>
-        <div class="wf">one input / one choice</div>
-        <div class="wf-row"><div class="wf solid">Back</div><div class="wf solid" style="background:#243a20;color:#cfe">Next →</div></div>
+        <div class="paint dusk wf" style="height:84px;border:none">soft landscape backdrop</div>
+        <div class="wf" style="text-align:center">one warm sentence about what this friendship is</div>
+        <div class="wf solid">Plan · Monthly — placeholder price</div>
+        <div class="wf solid" style="border-color:#caa65e;color:#e6cf9a">Plan · Yearly — placeholder price · gentle "best value"</div>
+        <div class="wf solid" style="background:#243a20;color:#dbe8c8;text-align:center">Begin</div>
+        <div class="wf" style="text-align:center;border:none">restore purchase · cancel anytime</div>
       </div>
     </div>
     <div>
       <h3>Purpose</h3>
-      <p>Take the family from install → a working, docked Bob.</p>
-      <h3>Steps</h3>
+      <p>Subscription before entering. Keep the nature language — never corporate.</p>
+      <h3>On screen</h3>
       <ul>
-        <li><b>Welcome</b> — what Bob is, in one warm sentence.</li>
-        <li><b>Connect</b> — the server address (Bob's brain runs on a server; keys live there, not on the phone). Show a connection check ✓.</li>
-        <li><b>Voice</b> — pick Bob's voice &amp; a <b>“play sample”</b> button to hear it.</li>
-        <li><b>His profile</b> — the elder's name, how to address him (ты/вы), optional photo, close family, key dates.</li>
-        <li><b>Bob's character</b> — use the ready-made default, or customize (links to screen 4).</li>
-        <li><b>Dock it</b> — a tip to put the phone in a stand, plug it in, and lock it to this one app.</li>
+        <li>A soft landscape backdrop (quieter than screen 1 — this page is about trust).</li>
+        <li><b>Two plan cards</b> (monthly / yearly). Prices are placeholders — business decides later.</li>
+        <li>One warm sentence, a clear <b>Begin</b>, and honest fine print (cancel anytime, restore).</li>
       </ul>
-      <div class="note">Progress indicator at top. Everything skippable/returnable. Never overwhelming.</div>
+      <div class="note">No countdown timers, no fake discounts, no aggressive badges — that would
+        kill the "real human" feeling before it starts.</div>
     </div>
   </div>
 
-  <!-- ============ 3. ACCOUNT / PROFILE ============ -->
-  <h2>3 · Account / Profile <span class="tag family">FAMILY</span></h2>
-  <p class="sub">Who Bob is talking to, and who looks after him.</p>
+  <!-- ============ 3. YOUR STORY ============ -->
+  <h2>3 · Your story — «Tell us about you and your likings»</h2>
+  <p class="sub">The signature scene: a scroll, a rock, a quill, and ink — inside a beautiful landscape.</p>
   <div class="grid">
     <div>
       <div class="phone">
-        <div class="wf-row"><div class="wf" style="flex:0 0 60px;height:60px;border-radius:50%;text-align:center">photo</div>
-          <div class="wf">Имя · «дедушка Иван»<br>обращение: ты / вы</div></div>
-        <div class="wf">Важные даты · дни рождения</div>
-        <div class="wf">Семья (список): внучка Аня…</div>
-        <div class="wf">Врач / экстренный контакт</div>
-        <div class="wf">Кто ухаживает (аккаунты семьи)</div>
+        <div class="paint wf" style="height:120px;border:none">landscape painting №1<br>(scene lives inside it)</div>
+        <div class="scroll" style="flex:1;display:flex;flex-direction:column">
+          <div class="head">Tell us about you and your likings</div>
+          <div style="flex:1;opacity:.75">…the user writes freely about themselves, in ink…</div>
+        </div>
+        <div class="rock">the rock — a table under the scroll · quill &amp; ink beside</div>
+        <div class="wf solid" style="text-align:center">Done → (the scroll rolls up and floats away)</div>
       </div>
     </div>
     <div>
       <h3>Purpose</h3>
-      <p>The elder's real-world profile (feeds Bob's memory) + the caretaker account(s).</p>
-      <h3>Elements</h3>
+      <p>The user writes <b>everything about themselves</b> — who they are, what they love:
+      sport, video games, movies, TV shows, architecture, medicine… anything. From this we
+      learn <b>what kind of people they'd like</b>, so we can bring them the friend they'd
+      <b>probably like — or even love</b>.</p>
+      <h3>The scene</h3>
       <ul>
-        <li><b>The elder:</b> name, how he likes to be addressed (ты/вы), optional photo, birthday.</li>
-        <li><b>Family &amp; close people:</b> a list — name, relation, birthday (Bob can remember/mention these).</li>
-        <li><b>Doctor / emergency contact</b> (Bob points here; he never gives medical advice).</li>
-        <li><b>Caretakers:</b> the family account(s) who manage Bob; add another caretaker.</li>
+        <li>A <b>beautiful landscape painting</b>; in it, a <b>rock like a table</b>, and on the
+          rock an <b>unrolled parchment scroll</b> with a <b>quill pen and ink</b> beside it.</li>
+        <li>The heading on the scroll: <b>«Tell us about you and your likings»</b>.</li>
+        <li>They write on the scroll itself — free writing, no forms, no dropdowns. Typing
+          should feel like ink settling on parchment.</li>
       </ul>
-      <div class="note">Each field editable. This is care data — calm, private, trustworthy tone.</div>
+      <h3>The transition (a signature moment — design it with care)</h3>
+      <ul>
+        <li>When they finish, <b>the scroll rolls itself up and moves out of the frame</b> —
+          and a <b>new scroll arrives</b> for the next page (screen 4).</li>
+      </ul>
     </div>
   </div>
 
-  <!-- ============ 4. BOB'S CHARACTER ============ -->
-  <h2>4 · Bob's Character <span class="tag family">FAMILY</span></h2>
-  <p class="sub">Shape who Bob <i>is</i> — his own story, changeable anytime (no coding).</p>
+  <!-- ============ 4. WHO YOU'D BE WITH ============ -->
+  <h2>4 · Who you'd be with</h2>
+  <p class="sub">Replaces any "edit your companion's character" screen — that idea is gone, on purpose.</p>
   <div class="grid">
     <div>
       <div class="phone">
-        <div class="wf">Имя · Боб &nbsp; | &nbsp; возраст · 87</div>
-        <div class="wf">Где живёт · родом откуда</div>
-        <div class="wf big">История / характер<br>(несколько строк)</div>
-        <div class="wf">Любит / не любит</div>
-        <div class="wf">Люди в его жизни (друзья, кот…)</div>
-        <div class="wf solid" style="background:#243a20;color:#cfe;text-align:center">Использовать по умолчанию</div>
+        <div class="paint mist wf" style="height:110px;border:none">landscape painting №2<br>(a different one)</div>
+        <div class="scroll">
+          <div class="head">Who would you be with?</div>
+          Age · Gender · Where he's from <i>(optional)</i><br>
+          <span style="opacity:.7">— and that's all. No name field.</span>
+        </div>
+        <div class="rock">same rock-table, quill &amp; ink</div>
+        <div class="wf" style="font-style:italic;text-align:center;border:none">the quote, small and beautiful,<br>right below the scroll</div>
+        <div class="wf solid" style="background:#243a20;color:#dbe8c8;text-align:center">Meet him →</div>
+      </div>
+    </div>
+    <div>
+      <h3>The philosophy (this is why the screen exists)</h3>
+      <p>You can't tell a friend what he must love or who he must be. A friend is
+      <b>accepted as he is</b> — even if he doesn't like something you like, even if he
+      lives in a very different country. You don't choose what he likes or hates, or who
+      he has in his life — people, pets, any of it. <b>You only choose who you would be
+      with — not who they would be.</b></p>
+      <h3>So the user chooses only</h3>
+      <ul>
+        <li><b>Age</b> · <b>Gender</b> · maybe <b>where he's from</b>. Nothing more.</li>
+        <li><b>Never the name.</b> People don't name their friends — that would be
+          unnatural. The app gives the friend his own name.</li>
+        <li>Common ground — same sport, same video game, same likings (movies, TV shows,
+          architecture, medicine…) — comes automatically <b>from their story on screen 3</b>.
+          That's why a "companion character" editing screen is <b>not necessary</b>: the bio
+          already tells us who they'd love.</li>
+      </ul>
+      <h3>The quote (set it beautifully under the scroll)</h3>
+      <div class="quote">
+        You don't choose what your friend will love or hate, what he'll laugh at, or who
+        waits for him at home. You don't choose his roads, his habits, his heart. You choose
+        only one thing — to walk beside him. A friend isn't made to order. A friend is met.
+        <small>Russian: «Ты не выбираешь, что друг полюбит и чего не примет, над чем он
+        смеётся и кто ждёт его дома. Не выбираешь его дороги, его привычки, его сердце.
+        Ты выбираешь одно — идти рядом. Друга не делают на заказ. Друга встречают.»</small>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 5. MEET HIM ============ -->
+  <h2>5 · Meet him &amp; choose your world</h2>
+  <p class="sub">The friend arrives — then the user shapes how the companion screen will look.</p>
+  <div class="grid">
+    <div>
+      <div class="phone">
+        <div class="wf big" style="border:none">
+          <div class="orb">placeholder<br>orb</div>
+          <div>“His name is <b>Fyodor</b>.”<br><span style="font-size:11px;opacity:.7">a few warm words about him</span></div>
+        </div>
+        <div class="wf-row">
+          <div class="wf solid" style="text-align:center">Regular<br><span style="font-size:10.5px">orb on a quiet screen</span></div>
+          <div class="wf solid" style="text-align:center">Living scene<br><span style="font-size:10.5px">orb in a landscape</span></div>
+        </div>
+        <div class="wf solid" style="background:#243a20;color:#dbe8c8;text-align:center">Start talking</div>
       </div>
     </div>
     <div>
       <h3>Purpose</h3>
-      <p>Bob has his <b>own</b> warm personality and life (not a copy of the elder). This screen edits it.</p>
-      <h3>Fields</h3>
+      <p>The app <b>introduces the friend it found</b> — created from their story + their
+      few choices. His name (chosen by the app, never by the user) is revealed here, with a
+      few warm words about him. From now on, this friend is theirs.</p>
+      <h3>Choose how the companion screen looks — two types</h3>
       <ul>
-        <li>Name, age, one-line character.</li>
-        <li>Home &amp; roots; backstory; personality; values.</li>
-        <li>Likes / dislikes; opinions; habits.</li>
-        <li><b>People in Bob's life</b> (a friend, a cat…) — name + who they are.</li>
-        <li>“What's going on in Bob's life right now” (free text).</li>
-        <li><b>“Use the ready-made default”</b> button, for families who don't want to write it.</li>
+        <li><b>Regular</b> — the orb simply on the screen: quiet, calm, nothing else.</li>
+        <li><b>Living scene</b> — the orb <b>lives inside a landscape</b>: he sits on the rock,
+          lies down behind the tree, walks around while speaking — everything that makes him
+          feel <b>natural and alive</b>.</li>
       </ul>
-      <div class="note">Friendly, story-like editing — like filling in a character, not a database form.</div>
+      <div class="note"><b>The orb itself is a placeholder circle everywhere in this spec.</b>
+        The owner is painting the real orb by hand and will replace it. Design the screens
+        around it — not the orb.</div>
     </div>
   </div>
 
-  <!-- ============ 5. MEMORY ============ -->
-  <h2>5 · Memory <span class="tag family">FAMILY</span></h2>
-  <p class="sub">Reassurance — what Bob remembers about him. Mostly read-only; correct/delete if needed.</p>
+  <!-- ============ 6. COMPANION ============ -->
+  <h2>6 · Companion — the main screen</h2>
+  <p class="sub">Where the friendship lives. Both looks, one screen.</p>
   <div class="grid">
     <div>
-      <div class="phone">
-        <div class="wf">Факты · семья, здоровье, распорядок, даты</div>
-        <div class="wf">Истории, что он рассказал</div>
-        <div class="wf">Что Боб хочет спросить потом (follow-ups)</div>
-        <div class="wf">Настроение со временем ▁▂▅▃▆</div>
+      <div style="display:flex;gap:14px;justify-content:center;flex-wrap:wrap">
+        <div class="phone" style="width:170px;min-height:330px">
+          <div class="wf big" style="border:none"><div class="orb">orb</div></div>
+          <div class="wf" style="text-align:center;border:none;font-size:11px">Mode A · Regular<br>quiet screen, orb only</div>
+        </div>
+        <div class="phone" style="width:170px;min-height:330px">
+          <div class="paint wf big" style="border:none;position:relative">
+            <div class="orb small" style="left:16px;bottom:52px">orb</div>
+            landscape scene<br>rock · tree · light
+          </div>
+          <div class="wf" style="text-align:center;border:none;font-size:11px">Mode B · Living scene<br>he wanders, sits, rests</div>
+        </div>
       </div>
     </div>
     <div>
       <h3>Purpose</h3>
-      <p>Let the family <b>see Bob is truly listening</b> and remembering — a window into his memory.</p>
-      <h3>Sections</h3>
+      <p>They just talk — hands-free, out loud — and he answers. This screen should be
+      calm enough to stay open all day.</p>
+      <h3>States (no words needed)</h3>
       <ul>
-        <li><b>Facts</b> — family, health notes, routine, likes, important dates.</li>
-        <li><b>Stories</b> — anecdotes he shared.</li>
-        <li><b>Follow-ups</b> — things Bob plans to gently check back on.</li>
-        <li><b>Mood over time</b> — a soft trend, never clinical.</li>
+        <li><b>Resting · Listening · Thinking · Speaking</b> — expressed by the orb's glow
+          and motion; in the Living scene, also by <b>behavior</b>: walking around while
+          speaking, settling on the rock, lying down behind the tree at rest.</li>
       </ul>
-      <div class="note">Each item can be corrected or deleted. Warm, gentle — this is a person's life, not a log file.</div>
+      <h3>On screen</h3>
+      <ul>
+        <li>Mode A: the orb, centered, on a quiet deep background. Almost nothing else.</li>
+        <li>Mode B: the landscape scene with the orb living in it.</li>
+        <li>Quiet, tucked-away entrances to <b>Diary · Account · Settings</b> (designer
+          decides the gesture/placement — they must never clutter the presence).</li>
+      </ul>
+      <div class="note">No chat log on screen, no transcription bubbles, no mic button —
+        he's a friend in the room, not an app mid-session.</div>
     </div>
   </div>
 
-  <!-- ============ 6. SETTINGS ============ -->
-  <h2>6 · Settings <span class="tag family">FAMILY</span></h2>
-  <p class="sub">Everything technical &amp; tunable, in plain language.</p>
+  <!-- ============ 7. DIARY ============ -->
+  <h2>7 · The Companion's Diary</h2>
+  <p class="sub">Not a "memory screen" — his personal diary, where he writes about his friend.</p>
   <div class="grid">
     <div>
       <div class="phone">
-        <div class="wf">Подключение · адрес сервера · ✓ на связи</div>
-        <div class="wf">Голос · Fish Audio · [прослушать]</div>
-        <div class="wf">Паузы в разговоре (2 ползунка)</div>
-        <div class="wf">Слово-обращение «Боб» (позже)</div>
-        <div class="wf" style="color:#e0857a">Очистить память…  ·  Сброс</div>
-        <div class="wf">О приложении · версия</div>
+        <div class="wf" style="text-align:center;border:none">an old handmade book — “Fyodor's diary”</div>
+        <div class="book">
+          <div class="page">…my friend told me today about the sea he grew up beside. I keep
+            thinking how his voice changes when he talks about it — younger, somehow…</div>
+          <div class="page">…he loves football and old films, and he argues about both, which
+            I secretly enjoy. On Tuesday his knee was hurting. I'll ask about it, gently…</div>
+        </div>
+        <div class="wf" style="text-align:center;border:none">page corner → turn · pages grow over time</div>
+      </div>
+    </div>
+    <div>
+      <h3>What it is</h3>
+      <ul>
+        <li>An <b>ancient, handmade, handwritten book</b> — think the feel of a Minecraft
+          book-and-quill, but <b>real</b>: hand-bound, rough parchment pages, ink script.
+          Nothing modern.</li>
+        <li>In it, the friend writes — <b>very beautifully</b> — the story of his friend:
+          a <b>biography of the user</b> through the eyes of someone who cares. Written just
+          for the user (and for himself).</li>
+        <li>The user <b>doesn't write here</b> — they open it and read. Pages accumulate as
+          the friendship grows.</li>
+      </ul>
+      <h3>Under the hood (already built — important for honesty of the design)</h3>
+      <ul>
+        <li>The friend's <b>real memory is a different thing</b>: distilled notes, as short as
+          possible, optimized to remember fast. <b>It is never shown to users.</b></li>
+        <li>The diary is <b>composed by AI from that hidden memory</b> on the server
+          (<code>GET /api/diary</code>) — beautifully written, and rewritten only when his
+          memory of you has grown.</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ============ 8. ACCOUNT / PROFILE ============ -->
+  <h2>8 · Account / Profile</h2>
+  <p class="sub">The user's own things — under its own landscape painting.</p>
+  <div class="grid">
+    <div>
+      <div class="phone">
+        <div class="paint dusk wf" style="height:96px;border:none">landscape painting<br>(profile's own scene)</div>
+        <div class="wf-row"><div class="wf" style="flex:0 0 54px;height:54px;border-radius:50%;text-align:center">photo</div>
+          <div class="wf">name · signed-in account</div></div>
+        <div class="wf">My story — reread / add to my scroll</div>
+        <div class="wf">Subscription · plan · manage</div>
+        <div class="wf">Sign out</div>
       </div>
     </div>
     <div>
       <h3>Purpose</h3>
-      <p>Connection, voice, and behaviour tuning — for the family only.</p>
+      <p>Profile, subscription, and the user's story — everything that is <i>theirs</i>,
+      kept gentle and simple.</p>
+      <h3>On screen</h3>
+      <ul>
+        <li>A <b>landscape painting</b> crowns this screen too (explicitly wanted here).</li>
+        <li>Basics: name, photo, account.</li>
+        <li><b>My story</b> — reread the scroll they wrote; they may add to it over time
+          (it quietly deepens the friendship).</li>
+        <li>Subscription status + manage; sign out.</li>
+      </ul>
+      <div class="note">Reading/adding to "My story" reuses the parchment language — never a plain settings form.</div>
+    </div>
+  </div>
+
+  <!-- ============ 9. SETTINGS ============ -->
+  <h2>9 · Settings</h2>
+  <p class="sub">Deliberately the one ordinary screen — just a regular, clean settings list.</p>
+  <div class="grid">
+    <div>
+      <div class="phone">
+        <div class="wf">Voice · his voice · [listen]</div>
+        <div class="wf">Conversation feel · pauses (2 sliders)</div>
+        <div class="wf">Notifications</div>
+        <div class="wf">Language</div>
+        <div class="wf">Privacy &amp; data · export / delete everything</div>
+        <div class="wf" style="color:#e0857a">Start over (leave this friend)…</div>
+        <div class="wf">About · version</div>
+      </div>
+    </div>
+    <div>
+      <h3>Purpose</h3>
+      <p>All the practical, tunable things — standard iOS grouped list, clean and legible.
+      No scene, no parchment: settings are allowed to be just settings.</p>
       <h3>Groups</h3>
       <ul>
-        <li><b>Connection</b> — server address + live status (✓ on / ✗ off).</li>
-        <li><b>Voice</b> — provider &amp; voice + a “listen” button.</li>
-        <li><b>Conversation feel</b> — the two pauses (long “wait for him,” short “reply quickly”).</li>
-        <li><b>Wake word “Боб”</b> — a placeholder for later.</li>
-        <li><b>Danger zone</b> — clear memory / reset (with a clear confirm).</li>
+        <li><b>Voice</b> — the friend's voice + a "listen" button.</li>
+        <li><b>Conversation feel</b> — the two pauses (how long he waits for you to start;
+          how quickly he replies when you stop).</li>
+        <li><b>Notifications · Language · Privacy &amp; data</b> (export / delete).</li>
+        <li><b>Start over</b> — parting with a friend is serious; confirm it like it matters.</li>
         <li><b>About</b> — version, credits.</li>
       </ul>
-      <div class="note">Standard iOS-style grouped list is fine here — clean, legible, unfussy.</div>
     </div>
   </div>
 
   <div class="card" style="margin-top:34px">
-    <h3>For the designer</h3>
+    <h3>For the designer — putting it together</h3>
     <ul>
-      <li>Design <b>all six screens</b> as one cohesive set sharing a single visual language.</li>
-      <li>Treat the <b>Companion (1)</b> as the hero — the rest are its calm, legible support system.</li>
-      <li>Leave the <b>orb as a placeholder circle</b> (the family designs it separately).</li>
-      <li>Optimize the elder-facing screen for very old eyes; optimize the family screens for clarity and trust.</li>
+      <li>Design <b>all nine screens as one world</b>: one artist's hand for every landscape,
+        one parchment/ink language for everything written, one quiet chrome around it all.</li>
+      <li><b>The Companion screen (6) is the hero.</b> The scroll scenes (3–4) are the
+        signature onboarding; the Diary (7) is the treasure people will screenshot.</li>
+      <li>The <b>orb stays a placeholder circle</b> everywhere — the owner paints the real
+        one separately and swaps it in.</li>
+      <li>Target: <b>SwiftUI, iOS 18+</b>, buildable — paintings as layered images (subtle
+        parallax welcome), native components underneath.</li>
+      <li>Copy in this spec is draft English; the app will be localized (Russian first).
+        Keep the exact heading «Tell us about you and your likings» in meaning wherever
+        the language lands.</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h3>Already real on the server (so the design is honest)</h3>
+    <ul>
+      <li><code>POST /api/companion/create</code> — takes the user's story + age/gender/origin,
+        and <b>the friend walks in</b>: his own name, character, likes, people. The user never
+        names or edits him.</li>
+      <li><code>GET /api/diary</code> — the friend's <b>beautifully written diary about the
+        user</b>, composed by AI from his hidden distilled memory; rewritten only as the
+        friendship grows.</li>
+      <li>The raw memory endpoint stays <b>internal/dev-only</b> — no screen shows it.</li>
+      <li>Not yet built server-side: accounts, billing (screens 1–2 are designed now, wired later).</li>
     </ul>
   </div>
 

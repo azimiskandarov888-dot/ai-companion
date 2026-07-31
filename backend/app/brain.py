@@ -69,3 +69,22 @@ async def generate_reply(
     if message is None:
         return ""
     return "".join(b.text for b in message.content if b.type == "text").strip()
+
+
+async def generate_text(
+    system_prompt: str, user_text: str, max_tokens: int = 1500
+) -> str:
+    """One-shot writing call (no tools, no history).
+
+    Used for composed writing rather than conversation: the companion's diary
+    about his friend, and creating the friend from the user's story.
+    """
+    client = _get_client()
+    async with client.messages.stream(
+        model=config.BRAIN_MODEL,
+        max_tokens=max_tokens,
+        system=system_prompt,
+        messages=[{"role": "user", "content": user_text}],
+    ) as stream:
+        message = await stream.get_final_message()
+    return "".join(b.text for b in message.content if b.type == "text").strip()

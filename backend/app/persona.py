@@ -73,10 +73,33 @@ def load_persona(path=None) -> dict:
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
             if isinstance(data, dict) and data.get("name"):
-                return {**DEFAULT_PERSONA, **data}
+                merged = {**DEFAULT_PERSONA, **data}
+                if "_note" not in data:  # a saved persona is no draft
+                    merged.pop("_note", None)
+                return merged
         except (json.JSONDecodeError, OSError):
             pass
     return DEFAULT_PERSONA
+
+
+def save_persona(data: dict, path=None) -> dict:
+    """Persist a persona to data/persona.json — it becomes who the companion is.
+
+    Missing fields fall back to the built-in default so a partially-specified
+    character still works. Used by matchmaker.py when the friend is created
+    from the user's story (and by any future editing tool).
+    """
+    path = path or config.PERSONA_PATH
+    merged = {
+        **DEFAULT_PERSONA,
+        **{k: v for k, v in data.items() if v not in (None, "")},
+    }
+    merged.pop("_note", None)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(merged, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+    return merged
 
 
 def persona_name(persona: dict | None = None) -> str:

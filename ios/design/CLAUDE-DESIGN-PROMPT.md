@@ -1,58 +1,61 @@
-# Prompt for Claude design — the app's screens
+# Prompt for Claude design — the app's screens (v2)
 
-Copy everything below the line into Claude design, and **attach `product-spec.html`**
-(it defines the structure and content of every screen). This prompt is about the
-**app's screens** — the orb is NOT your job here, leave it as a placeholder circle.
+Copy everything below the line into Claude design and **attach `product-spec.html`**
+(it defines the structure and content of every screen). The orb is NOT part of this
+job — leave it as a plain placeholder circle everywhere.
 
 ---
 
-You are designing the screens of **Bob**, a warm voice companion iPhone app for a
-lonely **87-year-old Russian great-grandad**. He talks to it out loud; it answers in
-a warm voice. I've attached **`product-spec.html`** — it is the source of truth for
-**what goes on each screen and where**. Your job is to make those screens **beautiful
-and cohesive**. Design the layout, type, color, spacing, components, and states — not
-the wording or the feature list (those are set in the spec).
+You are designing the screens of a **voice-friend app for everyone** — you talk out
+loud, and a warm, real-feeling friend answers. I've attached **`product-spec.html`**;
+it is the source of truth for **what goes on each screen and where**. Your job is to
+make those screens **beautiful and cohesive** — layout, type, color, spacing,
+components, states. Don't change the feature list or the philosophy; they're set.
 
-**Two very different users — design for both:**
-- **ELDER** — only ever sees screen **1 (Companion)**. Voice-only: he never reads,
-  types, or taps. That screen must be almost wordless, huge, ultra-calm.
-- **FAMILY / caretaker** — uses screens **2–6** (Onboarding, Account, Bob's Character,
-  Memory, Settings) to set Bob up and check on him. These should be clean, modern,
-  legible, and trustworthy.
+**The one law: it must never feel like AI.** It must feel like a real, natural human
+being — and the whole app must feel **natural, with life in it**. No chat bubbles, no
+waveforms, no mic icons, no robot glow, no "generating…" — ever.
 
-**Screens to design (all six, from the spec):**
-1. Companion (elder) · 2. Onboarding / Setup · 3. Account / Profile ·
-4. Bob's Character · 5. Memory · 6. Settings
+**The world it's built from (from the spec — honor it):**
+- **Landscape paintings** as the canvas (sign-in, profile, the writing scenes, the
+  living companion scene) — all clearly painted by **one artist's hand**.
+- **Parchment, quill & ink** for everything written by the user; an **ancient handmade
+  handwritten book** for the friend's diary. Never a plain floating form.
+- **Colors of nature**: deep near-black forest, dark refined olive (luxury-car olive —
+  never bright or grassy), moss, stone, parchment, ink, warm amber. Anchors in the
+  spec; refine as you see fit.
+- Motion described, not animated: scrolls roll up and drift out of frame, pages turn,
+  the orb wanders and settles. Gentle, spring-based. Respect Reduce Motion.
+- **Do NOT design the orb.** Wherever the spec shows it, use a plain placeholder
+  circle — the owner paints the real orb separately.
+- Built in **SwiftUI, iOS 18+** — keep it buildable (paintings as layered images,
+  native components underneath).
 
-**Visual direction (decided with the family — please honor it):**
-- **Warm and alive**, on a **dark near-black** background so things gently glow.
-  Cozy and premium — never clinical or "medical app."
-- **Olive / nature green** as the primary color (green = life), with **warm amber**
-  accents. Suggested anchors: bg `#0d0f0e`, green `#7fae5e`, deep green `#3f5e3a`,
-  amber `#e0b15a`, panel `#151a17` — refine as you see fit.
-- Motion (describe it, don't animate): natural, gentle, **spring-based** — nothing
-  jerky or flashy. Must respect Reduce Motion.
-- **Do NOT design the orb.** Wherever the spec shows the living orb, leave a **plain
-  placeholder circle** — the family designs the orb separately.
-- Built in **SwiftUI, iOS 18+** — keep everything buildable with native components
-  (no custom hardware, no web views).
+**Screens to design (all nine, from the spec):**
+1. Sign in (landscape painting) · 2. Payment · 3. Your story — «Tell us about you and
+your likings» (scroll + rock + quill + ink in a landscape) · 4. Who you'd be with
+(second scroll scene; age/gender/origin only — no name; the quote below the scroll) ·
+5. Meet him & choose your world (Regular orb vs Living scene) · 6. Companion (both
+modes, states: resting/listening/thinking/speaking) · 7. The Companion's Diary (the
+handmade book) · 8. Account / Profile (landscape painting) · 9. Settings (deliberately
+ordinary).
 
-**How I'd like you to work — give me two directions first:**
-1. **First, propose TWO distinct visual directions** for the whole set. Show each
-   direction applied to **the Companion screen (1)** *and* **one family screen (e.g.
-   Settings or Account)**, so I can feel both the elder side and the family side.
-   Make the two genuinely different (e.g. one softer/organic, one cleaner/structured)
-   — not the same design twice. Briefly note what each direction is going for.
-2. **I'll pick one.** Then design **all six screens** in that direction as one
+**How to work — two directions first:**
+1. **Propose TWO distinct visual directions** for the whole world. Show each applied to
+   **the Companion screen (6, both modes)** *and* **the Your-story scroll scene (3)** —
+   those two screens carry the soul. Make the directions genuinely different (e.g. one
+   more painterly/romantic, one more minimal/refined), and say in a line what each is
+   going for.
+2. **I'll pick one.** Then design **all nine screens** in that direction as one
    cohesive set sharing a single visual language (type scale, color, spacing,
    components, iconography).
 
-**For each final screen, include:**
-- The **elder-facing Companion** screen shown in its main states (resting, listening,
-  thinking, speaking) — conveyed by the placeholder circle's color/glow only, no words.
-- The **family screens** with their real sections filled in (use the spec's content).
-- A short note on **type sizes, colors, and key components** so it can be built.
+**For the final set, include:**
+- The Companion screen in its four states, in both modes (placeholder circle only).
+- The scroll-to-scroll **transition moment** between screens 3 → 4 (a key frame or two).
+- The Diary as an open book spread with handwritten-feeling text.
+- A short build note per screen: type sizes, colors, key components.
 
-**Priorities:** the **Companion screen is the hero** — everything else is its calm,
-legible support system. Optimize the elder screen for very old eyes (huge, high
-contrast, no clutter); optimize the family screens for clarity and trust.
+**Priorities:** the Companion screen is the hero; the scroll scenes are the signature
+onboarding; the Diary is the treasure. Every screen should feel like one natural,
+living, painted world — warm, premium, and human.
