@@ -95,16 +95,18 @@ SCREENS: list[dict] = [
     # Same photograph as 3, an hour later: lower crop, cooler, a touch dimmer.
     dict(out="4-meet",      photo="zak",
          exposure=-0.05, contrast=+0.01, sky_warm=-0.05, crop_bias=0.62, darken=0.08),
-    # He lives here. Darkened well toward night, but never a black rectangle.
+    # He lives here. yunustung is pure green with no warm tone, so darkening it
+    # hard just made it dead — now it's only gently dusked, and warm_darken puts
+    # gold back into the shade as it dims, so it stays alive and matches the set.
     dict(out="5-companion", photo="yunustung",
-         exposure=-0.04, contrast=-0.02, crop_bias=0.40, darken=0.46),
+         exposure=-0.01, contrast=-0.02, crop_bias=0.40, darken=0.18, warm_darken=0.7),
     dict(out="6-diary",     photo="samuel",
          exposure=-0.02, crop_bias=0.48, darken=0.12),
-    # Blurred and darkened in the app; these are the versions to design against.
+    # Blurred + darkened in the app; these are the versions to design against.
     dict(out="7-account",   photo="aleksio",
          exposure=-0.04, crop_bias=0.42, blur=34, darken=0.34),
     dict(out="8-settings",  photo="yunustung",
-         exposure=-0.06, crop_bias=0.40, blur=38, darken=0.52),
+         exposure=-0.02, crop_bias=0.40, blur=38, darken=0.30, warm_darken=0.7),
 ]
 
 
@@ -270,15 +272,28 @@ def crop_to_phone(img: Image.Image, bias: float = 0.44) -> Image.Image:
     return img.resize((tw, th), Image.LANCZOS)
 
 
-def blur_and_darken(img: Image.Image, blur: float, darken: float) -> Image.Image:
-    """Account and Settings sit on a blurred, darkened pass of the same place —
-    you can still tell you're outdoors, but every word stays legible."""
+def blur_and_darken(img: Image.Image, blur: float, darken: float,
+                    warm: float = 0.0) -> Image.Image:
+    """Dim a screen toward night while keeping it warm and alive.
+
+    Scaling straight toward black kills a photo that has no warm tone to begin
+    with — a pure-green field just goes dead. `warm` blends the darkening toward
+    a deep warm olive instead of black, and pushes a little gold back into what
+    light remains, so the dusk still glows. `blur` is for Account and Settings.
+    """
     if blur:
         img = img.filter(ImageFilter.GaussianBlur(radius=blur))
     if darken:
         a = np.asarray(img, np.float32) / 255.0
-        a *= (1.0 - darken)
-        a += np.array([0.008, 0.010, 0.006], np.float32) * darken   # keep it warm, not grey
+        # the colour the shadows fall toward: warm dark olive, not black
+        floor = np.array([0.050, 0.045, 0.028], np.float32) if warm else \
+                np.array([0.008, 0.010, 0.006], np.float32)
+        a = a * (1.0 - darken) + floor * darken
+        if warm:
+            # put gold back into whatever light is left, most in the midtones
+            l = luma(a)
+            lift = (np.clip(l * 2.2, 0, 1) * warm * darken)[..., None]
+            a = a + lift * np.array([0.045, 0.028, -0.020], np.float32)
         img = Image.fromarray((np.clip(a, 0, 1) * 255 + 0.5).astype(np.uint8), "RGB")
     return img
 
@@ -313,7 +328,8 @@ def grade_one(path: Path, screen: dict) -> tuple[Image.Image, dict, dict]:
 
     out = Image.fromarray((rgb * 255.0 + 0.5).astype(np.uint8), "RGB")
     out = crop_to_phone(out, screen.get("crop_bias", 0.44))
-    out = blur_and_darken(out, screen.get("blur", 0), screen.get("darken", 0.0))
+    out = blur_and_darken(out, screen.get("blur", 0), screen.get("darken", 0.0),
+                          screen.get("warm_darken", 0.0))
     after = measure(np.asarray(out, np.float32) / 255.0)
     return out, before, after
 

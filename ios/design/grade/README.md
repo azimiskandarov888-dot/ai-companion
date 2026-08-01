@@ -102,10 +102,10 @@ Five photos → eight screens. Some are used twice, cropped or dimmed differentl
 | `2-payment.jpg` | Take care of him | hilalbulbul, dusk-ward |
 | `3-story.jpg` | Tell your story | zak |
 | `4-meet.jpg` | Who you'd like to meet | zak again — lower crop, cooler, dimmer: the same place an hour later |
-| `5-companion.jpg` | Companion | yunustung, **darkened well toward night** |
+| `5-companion.jpg` | Companion | yunustung, gently dusked and warmed (kept alive, not blacked out) |
 | `6-diary.jpg` | His Diary | samuel |
 | `7-account.jpg` | Account | aleksio again, **blurred + darkened** |
-| `8-settings.jpg` | Settings | yunustung again, **blurred + darkest** |
+| `8-settings.jpg` | Settings | yunustung again, blurred + dusked, warmed |
 
 The blurring on 7 and 8 also happens live in the app; these files exist so the
 designer has the real thing to lay a layout on.
