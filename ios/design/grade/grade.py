@@ -359,15 +359,15 @@ def main() -> int:
     args = ap.parse_args()
 
     src, dst = Path(args.src), Path(args.dst)
-    if not src.exists():
-        print(f"Put the photos in {src}/ first — see README.md", file=sys.stderr)
-        return 1
+    src.mkdir(parents=True, exist_ok=True)   # make the folders on a fresh clone
     dst.mkdir(parents=True, exist_ok=True)
 
     files = [p for p in sorted(src.iterdir())
              if p.suffix.lower() in {".jpg", ".jpeg", ".png", ".webp"}]
     if not files:
-        print(f"No images found in {src}/. Drop your five photos in there.", file=sys.stderr)
+        print(f"No photos yet. Drop your five photos into:\n  {src}\n"
+              f"then run this again. (Tip: `open {src}` opens it in Finder.)",
+              file=sys.stderr)
         return 1
 
     b_rows, a_rows, missing = [], [], set()

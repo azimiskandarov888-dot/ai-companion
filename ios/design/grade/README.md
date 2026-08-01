@@ -37,10 +37,11 @@ If `pip3` isn't found, try `python3 -m pip install pillow numpy`.
 ## 4 · Put your five photos in the `in` folder
 
 ```bash
-open ios/design/grade/in
+mkdir -p ios/design/grade/in && open ios/design/grade/in
 ```
 
-A Finder window opens. **Drag your five photos into it.**
+A Finder window opens. **Drag your five photos into it.** (The `mkdir` part just
+makes the folder if it isn't there yet — harmless if it already is.)
 
 **You don't have to rename anything.** Each photo is recognised by the
 photographer's name in the filename — `pexels-aleksio-8123456.jpg` is enough.

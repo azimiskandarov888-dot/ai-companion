@@ -1,3 +1,6 @@
-# Your photographs — big binaries, and not ours to redistribute.
-in/
-out/
+# Your photographs are big and not ours to redistribute — but keep the
+# folders themselves, so the tool has somewhere to look after a fresh clone.
+in/*
+out/*
+!in/.gitkeep
+!out/.gitkeep
