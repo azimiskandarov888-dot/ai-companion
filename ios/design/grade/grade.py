@@ -318,11 +318,38 @@ def grade_one(path: Path, screen: dict) -> tuple[Image.Image, dict, dict]:
     return out, before, after
 
 
+# The five source photos, in the order the owner named them. Each has a few
+# aliases, because stock filenames split names with hyphens and use either the
+# first or the last name — `pexels-hilal-bulbul-123.jpg`, `yunus-tung-...`, etc.
+PHOTO_ORDER = ["aleksio", "hilalbulbul", "zak", "yunustung", "samuel"]
+PHOTO_ALIASES: dict[str, list[str]] = {
+    "aleksio":     ["aleksio", "aleksey", "aleksandr", "aleks"],
+    "hilalbulbul": ["hilalbulbul", "hilal", "bulbul"],
+    "zak":         ["zak", "zakaria", "zakariae", "zakariya"],
+    "yunustung":   ["yunustung", "yunus", "tung"],
+    "samuel":      ["samuel", "jackson"],
+}
+
+
+def _norm(s: str) -> str:
+    """Lowercase, letters and digits only — so `Hilal-Bulbul` == `hilalbulbul`."""
+    return "".join(c for c in s.lower() if c.isalnum())
+
+
 def find_source(files: list[Path], photo: str) -> Path | None:
-    """Match a photographer's name anywhere in the filename, so nothing has to
-    be renamed — `pexels-aleksio-12345.jpg` is recognised as `aleksio`."""
+    """Find the file for a photo, tolerant of how stock names really look.
+
+    Matches on any alias with hyphens/spaces ignored, so nothing has to be
+    renamed. Also honours a dead-simple fallback: a file named exactly
+    `1.jpg` … `5.jpg` is taken as the 1st … 5th photo in PHOTO_ORDER.
+    """
+    aliases = [_norm(a) for a in PHOTO_ALIASES.get(photo, [photo])]
+    number = str(PHOTO_ORDER.index(photo) + 1) if photo in PHOTO_ORDER else None
     for f in files:
-        if photo.lower() in f.name.lower():
+        if number is not None and f.stem.strip() == number:   # 1.jpg … 5.jpg
+            return f
+        stem = _norm(f.stem)
+        if any(a and a in stem for a in aliases):
             return f
     return None
 
@@ -400,9 +427,17 @@ def main() -> int:
             strip.save(dst / f"{screen['out']}--before-after.jpg", quality=88)
 
     if missing:
-        print("\n⚠  Couldn't find a photo for: " + ", ".join(sorted(missing)))
-        print("   The filename needs the photographer's name in it somewhere.")
-        print("   Found in " + str(src) + ": " + ", ".join(f.name for f in files))
+        want = [p for p in PHOTO_ORDER if p in missing]
+        print("\n⚠  Couldn't match a photo for: " + ", ".join(want))
+        print("\n   Files I can see in the in/ folder:")
+        for f in files:
+            print(f"     • {f.name}")
+        print("\n   Easiest fix — rename those files so the number is the WHOLE name")
+        print("   (in the order you gave me), then run again:")
+        for i, p in enumerate(PHOTO_ORDER, 1):
+            mark = "  ← missing, rename this one" if p in missing else ""
+            print(f"     {i}.jpg  =  {p}{mark}")
+        print("\n   (Keep the .jpg — or .png if that's what they are.)")
 
     if args.report and a_rows:
         _table("BEFORE — five different worlds", b_rows)

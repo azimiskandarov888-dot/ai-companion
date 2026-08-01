@@ -55,8 +55,20 @@ The names it looks for are:
 | `yunustung` | green field, lone tree |
 | `samuel` | alpine meadow, spruces, peak |
 
-*(If a file downloaded without the name in it, just rename it so the name is in
-there somewhere — `zak.jpg` works fine.)*
+**If any photo isn't recognised** (hyphens, odd names, or a random hash for a
+filename), there's a foolproof fallback: rename the five files to just numbers,
+in the order you gave me, and it always works:
+
+| Rename to | Photo |
+|---|---|
+| `1.jpg` | aleksio |
+| `2.jpg` | hilalbulbul |
+| `3.jpg` | zak |
+| `4.jpg` | yunustung |
+| `5.jpg` | samuel |
+
+The tool also tells you exactly which ones it couldn't match and prints this
+list, so you never have to guess.
 
 ## 5 · Run it
 
