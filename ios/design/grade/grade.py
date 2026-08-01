@@ -39,7 +39,7 @@ import sys
 from pathlib import Path
 
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageFilter
 
 HERE = Path(__file__).resolve().parent
 IN_DIR, OUT_DIR = HERE / "in", HERE / "out"
@@ -72,18 +72,40 @@ LOOK = dict(
     grain=0.009,
 )
 
-# Per-photo taste, on top of everything above. Small numbers only — the matching
-# has already done the heavy lifting. Keys are the filename stems.
-TASTE: dict[str, dict] = {
-    "1-signin":    dict(exposure=+0.02, contrast=+0.02),  # the hero, a touch brighter
-    "2-payment":   dict(exposure=-0.05, sky_sat=-0.06),   # dusk-ward, calmer sky
-    "3-scroll":    dict(exposure=+0.02, contrast=+0.03),  # writing needs clarity
-    "4-scroll2":   dict(exposure=-0.02),
-    "6-companion": dict(exposure=-0.03, contrast=-0.02),  # he lives here — softer
-    "7-diary":     dict(exposure=-0.02),
-    "8-account":   dict(exposure=-0.04),                  # gets blurred anyway
-    "9-settings":  dict(exposure=-0.08),                  # darkest of the set
-}
+# --------------------------------------------------------------------------- #
+# Which photo becomes which screen.
+#
+# You don't rename anything: drop the files in `in/` however they downloaded,
+# and each is recognised by the photographer's name somewhere in the filename.
+# Five photographs become eight screens — some are used twice, cropped or
+# blurred differently, because Account and Settings are blurred past
+# recognition anyway and screen 4 is meant to be the same place as screen 3.
+#
+#   crop_bias : 0 keeps the top of the frame, 1 keeps the bottom
+#   blur      : pixels of blur (Account and Settings only)
+#   darken    : 0–1, how far toward night
+# --------------------------------------------------------------------------- #
+SCREENS: list[dict] = [
+    dict(out="1-signin",    photo="aleksio",
+         exposure=+0.02, contrast=+0.02, crop_bias=0.42),
+    dict(out="2-payment",   photo="hilalbulbul",
+         exposure=-0.06, sky_sat=-0.06, crop_bias=0.46, darken=0.10),
+    dict(out="3-story",     photo="zak",
+         exposure=+0.02, contrast=+0.03, crop_bias=0.44),
+    # Same photograph as 3, an hour later: lower crop, cooler, a touch dimmer.
+    dict(out="4-meet",      photo="zak",
+         exposure=-0.05, contrast=+0.01, sky_warm=-0.05, crop_bias=0.62, darken=0.08),
+    # He lives here. Darkened well toward night, but never a black rectangle.
+    dict(out="5-companion", photo="yunustung",
+         exposure=-0.04, contrast=-0.02, crop_bias=0.40, darken=0.46),
+    dict(out="6-diary",     photo="samuel",
+         exposure=-0.02, crop_bias=0.48, darken=0.12),
+    # Blurred and darkened in the app; these are the versions to design against.
+    dict(out="7-account",   photo="aleksio",
+         exposure=-0.04, crop_bias=0.42, blur=34, darken=0.34),
+    dict(out="8-settings",  photo="yunustung",
+         exposure=-0.06, crop_bias=0.40, blur=38, darken=0.52),
+]
 
 
 # --------------------------------------------------------------------------- #
@@ -231,65 +253,101 @@ def add_grain(rgb, amount, seed=11):
     return rgb + n[..., None] * w
 
 
-def crop_to_phone(img: Image.Image) -> Image.Image:
-    """Centre-crop to the phone ratio, favouring the ground — the interface
-    lives on the lower half, and sky is the easiest thing to lose."""
+def crop_to_phone(img: Image.Image, bias: float = 0.44) -> Image.Image:
+    """Crop to the phone ratio. `bias` decides what survives: 0 keeps the top of
+    the frame, 1 keeps the bottom. Sky is usually the easiest thing to lose."""
     tw, th = TARGET_W, TARGET_H
     w, h = img.size
     target = tw / th
     if w / h > target:
         new_w = int(round(h * target))
-        img = img.crop(((w - new_w) // 2, 0, (w - new_w) // 2 + new_w, h))
+        left = int((w - new_w) * 0.5)
+        img = img.crop((left, 0, left + new_w, h))
     else:
         new_h = int(round(w / target))
-        top = int((h - new_h) * 0.42)
+        top = int((h - new_h) * bias)
         img = img.crop((0, top, w, top + new_h))
     return img.resize((tw, th), Image.LANCZOS)
 
 
+def blur_and_darken(img: Image.Image, blur: float, darken: float) -> Image.Image:
+    """Account and Settings sit on a blurred, darkened pass of the same place —
+    you can still tell you're outdoors, but every word stays legible."""
+    if blur:
+        img = img.filter(ImageFilter.GaussianBlur(radius=blur))
+    if darken:
+        a = np.asarray(img, np.float32) / 255.0
+        a *= (1.0 - darken)
+        a += np.array([0.008, 0.010, 0.006], np.float32) * darken   # keep it warm, not grey
+        img = Image.fromarray((np.clip(a, 0, 1) * 255 + 0.5).astype(np.uint8), "RGB")
+    return img
+
+
 # --------------------------------------------------------------------------- #
-def grade_one(path: Path, taste: dict) -> tuple[Image.Image, dict, dict]:
+def grade_one(path: Path, screen: dict) -> tuple[Image.Image, dict, dict]:
     img = Image.open(path).convert("RGB")
     if max(img.size) > 4200:
         img.thumbnail((4200, 4200), Image.LANCZOS)
     rgb = np.asarray(img, dtype=np.float32) / 255.0
     before = measure(rgb)
 
-    look = {**LOOK, **{k: LOOK.get(k, 0) + v for k, v in taste.items() if k in LOOK}}
-    exposure = taste.get("exposure", 0.0)
+    look = {**LOOK}
+    for k, v in screen.items():
+        if k in look:
+            look[k] = look[k] + v
 
-    # 1 · match
+    # 1 · match every photo to the same destination
     rgb = match_to_target(rgb)
     rgb = match_saturation(rgb)
     rgb = set_black_point(rgb)
-    rgb = np.clip(rgb * (2.0 ** exposure), 0.0, 1.0)
+    rgb = np.clip(rgb * (2.0 ** screen.get("exposure", 0.0)), 0.0, 1.0)
 
-    # 2 · look
+    # 2 · the house look
     rgb = s_curve(rgb, look["contrast"])
     rgb = shift_greens(rgb, look["green_hue"], look["green_sat"])
     rgb = calm_sky(rgb, look["sky_sat"], look["sky_warm"])
     rgb = split_tone(rgb, look["shadow_tint"], look["highlight_tint"])
     rgb = vibrance_saturation(rgb, look["vibrance"], look["saturation"])
     rgb = add_grain(rgb, look["grain"])
-
     rgb = np.clip(rgb, 0.0, 1.0)
-    after = measure(rgb)
+
     out = Image.fromarray((rgb * 255.0 + 0.5).astype(np.uint8), "RGB")
-    return crop_to_phone(out), before, after
+    out = crop_to_phone(out, screen.get("crop_bias", 0.44))
+    out = blur_and_darken(out, screen.get("blur", 0), screen.get("darken", 0.0))
+    after = measure(np.asarray(out, np.float32) / 255.0)
+    return out, before, after
 
 
-def _table(title, rows):
+def find_source(files: list[Path], photo: str) -> Path | None:
+    """Match a photographer's name anywhere in the filename, so nothing has to
+    be renamed — `pexels-aleksio-12345.jpg` is recognised as `aleksio`."""
+    for f in files:
+        if photo.lower() in f.name.lower():
+            return f
+    return None
+
+
+def _table(title, rows, note=""):
+    """rows: (name, measurements, is_natural). Spread is computed only over the
+    screens meant to look alike — the deliberately darkened and blurred ones
+    would otherwise make a working grade look broken."""
     print(f"\n{title}")
-    print(f"{'photo':<14}{'warmth':>9}{'sat':>8}{'contrast':>10}{'mean':>8}{'black':>8}")
-    for name, m in rows:
+    if note:
+        print(f"  {note}")
+    print(f"{'screen':<14}{'warmth':>9}{'sat':>8}{'contrast':>10}{'mean':>8}{'black':>8}   ")
+    for name, m, natural in rows:
+        mark = "" if natural else "  · darkened on purpose"
         print(f"{name:<14}{m['warmth']:>9.3f}{m['sat']:>8.3f}"
-              f"{m['contrast']:>10.3f}{m['mean']:>8.3f}{m['black']:>8.3f}")
-    if len(rows) > 1:
-        spread = {k: max(m[k] for _, m in rows) - min(m[k] for _, m in rows)
-                  for k in ("warmth", "sat", "contrast", "mean", "black")}
-        print("  spread      " + "".join(f"{spread[k]:>9.3f}" if k == "warmth"
-              else f"{spread[k]:>8.3f}" if k != "contrast" else f"{spread[k]:>10.3f}"
-              for k in ("warmth", "sat", "contrast", "mean", "black")))
+              f"{m['contrast']:>10.3f}{m['mean']:>8.3f}{m['black']:>8.3f}{mark}")
+    nat = [m for _, m, natural in rows if natural]
+    if len(nat) > 1:
+        keys = ("warmth", "sat", "contrast", "mean", "black")
+        spread = {k: max(m[k] for m in nat) - min(m[k] for m in nat) for k in keys}
+        print("  spread      " + "".join(
+            f"{spread[k]:>9.3f}" if k == "warmth"
+            else f"{spread[k]:>10.3f}" if k == "contrast"
+            else f"{spread[k]:>8.3f}" for k in keys)
+            + "   ← smaller = more one world")
 
 
 def main() -> int:
@@ -306,37 +364,55 @@ def main() -> int:
         return 1
     dst.mkdir(parents=True, exist_ok=True)
 
-    files = sorted(p for p in src.iterdir()
-                   if p.suffix.lower() in {".jpg", ".jpeg", ".png", ".webp"}
-                   and "before-after" not in p.name)
+    files = [p for p in sorted(src.iterdir())
+             if p.suffix.lower() in {".jpg", ".jpeg", ".png", ".webp"}]
     if not files:
-        print(f"No images found in {src}/.", file=sys.stderr)
+        print(f"No images found in {src}/. Drop your five photos in there.", file=sys.stderr)
         return 1
 
-    b_rows, a_rows = [], []
-    for path in files:
-        graded, before, after = grade_one(path, TASTE.get(path.stem.lower(), {}))
-        out_path = dst / f"{path.stem}.jpg"
+    b_rows, a_rows, missing = [], [], set()
+    for screen in SCREENS:
+        source = find_source(files, screen["photo"])
+        if source is None:
+            missing.add(screen["photo"])
+            continue
+        graded, before, after = grade_one(source, screen)
+        out_path = dst / f"{screen['out']}.jpg"
         graded.save(out_path, quality=93, subsampling=1, optimize=True)
-        b_rows.append((path.stem, before))
-        a_rows.append((path.stem, after))
-        print(f"✓ {path.name} → out/{out_path.name}  ({TARGET_W}×{TARGET_H})")
+        natural = not screen.get("blur") and screen.get("darken", 0) <= 0.2
+        b_rows.append((screen["out"], before, natural))
+        a_rows.append((screen["out"], after, natural))
+        extra = ""
+        if screen.get("blur"):
+            extra = "  (blurred + darkened)"
+        elif screen.get("darken", 0) > 0.3:
+            extra = "  (darkened toward night)"
+        print(f"✓ {source.name}  →  {out_path.name}{extra}")
 
         if args.preview:
-            orig = crop_to_phone(Image.open(path).convert("RGB"))
+            orig = crop_to_phone(Image.open(source).convert("RGB"),
+                                 screen.get("crop_bias", 0.44))
             strip = Image.new("RGB", (TARGET_W, TARGET_H))
             strip.paste(orig.crop((0, 0, TARGET_W // 2, TARGET_H)), (0, 0))
-            strip.paste(graded.crop((TARGET_W // 2, 0, TARGET_W, TARGET_H)), (TARGET_W // 2, 0))
+            strip.paste(graded.crop((TARGET_W // 2, 0, TARGET_W, TARGET_H)),
+                        (TARGET_W // 2, 0))
             strip.thumbnail((700, 1520), Image.LANCZOS)
-            strip.save(dst / f"{path.stem}--before-after.jpg", quality=88)
+            strip.save(dst / f"{screen['out']}--before-after.jpg", quality=88)
 
-    if args.report:
+    if missing:
+        print("\n⚠  Couldn't find a photo for: " + ", ".join(sorted(missing)))
+        print("   The filename needs the photographer's name in it somewhere.")
+        print("   Found in " + str(src) + ": " + ", ".join(f.name for f in files))
+
+    if args.report and a_rows:
         _table("BEFORE — five different worlds", b_rows)
-        _table("AFTER — one world", a_rows)
+        _table("AFTER — one world", a_rows,
+               note="Companion, Account and Settings are dimmed by design; "
+                    "they're excluded from the spread.")
 
-    print(f"\nDone. {len(files)} photo(s) in {dst}/. Open them side by side: they "
-          f"should look like one place on one day.")
-    return 0
+    print(f"\nDone. {len(a_rows)} screen(s) written to {dst}/.")
+    print("Open them all at once and look: they should read as one place on one day.")
+    return 0 if not missing else 1
 
 
 if __name__ == "__main__":

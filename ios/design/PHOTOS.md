@@ -27,34 +27,37 @@ free, commercial use allowed. Always download the **largest size offered**.
 
 ## Chosen — and which screen each one is for
 
-| Screen | Photo | File name for the grader |
+| Screen | Photo | Treatment |
 |---|---|---|
-| 1 · Sign in | **aleksio** — golden hills, ploughed field | `1-signin.jpg` |
-| 2 · Take care of him | **hilalbulbul** — alpine peaks, autumn trees | `2-payment.jpg` |
-| 3 · Tell your story | **zak** — moody meadow with pines | `3-scroll.jpg` |
-| 4 · Who you'd like to meet | **zak** again, different crop | *(same file)* |
-| 5 · Companion | **yunustung** — green field, lone tree | `6-companion.jpg` |
-| 6 · His Diary | **samuel** — alpine meadow, spruces, peak | `7-diary.jpg` |
-| 7 · Account | **aleksio** again, blurred | *(same file)* |
-| 8 · Settings | **yunustung** again, blurred and darker | *(same file)* |
+| 1 · Sign in | **aleksio** — golden hills, ploughed field | full brightness |
+| 2 · Take care of him | **hilalbulbul** — alpine peaks, autumn trees | dusk-ward |
+| 3 · Tell your story | **zak** — moody meadow with pines | — |
+| 4 · Who you'd like to meet | **zak** again | lower crop, cooler, dimmer — the same place an hour later |
+| 5 · Companion | **yunustung** — green field, lone tree | darkened well toward night |
+| 6 · His Diary | **samuel** — alpine meadow, spruces, peak | — |
+| 7 · Account | **aleksio** again | blurred + darkened |
+| 8 · Settings | **yunustung** again | blurred + darkest of all |
 
 Five photographs cover eight screens — 7 and 8 are blurred past recognition, so a
-sixth photo would add weight and change nothing you can see.
+sixth photo would add app weight and change nothing you can see.
 
 ## Grade them — `ios/design/grade/`
 
-Don't hand-grade these. Put them in `grade/in/` with the names above and run:
+Don't hand-grade these. Drop the five files into `grade/in/` — **no renaming
+needed**, each is recognised by the photographer's name in the filename — and run:
 
 ```bash
 cd ios/design/grade
 pip3 install pillow numpy
-python3 grade.py --preview --report
+python3 grade.py --report
 ```
 
-It measures each photo, pulls it toward one shared destination — same warmth,
-brightness, contrast, black point and colour intensity — then applies the same
-house look to all of them. Output lands in `grade/out/`, already cropped to
-1290 × 2796. Full explanation in `grade/README.md`.
+It measures each photo, pulls it toward one shared destination (same warmth,
+brightness, contrast, black point, colour intensity), applies the same house look
+to all of them, and writes **all eight screens** — including the blurred, darkened
+versions for Account and Settings — cropped to 1290 × 2796.
+
+Step-by-step instructions, and how to tune it, are in `grade/README.md`.
 
 **Watch the `spread` row in the report.** The smaller those numbers, the more the
 photos belong together.
