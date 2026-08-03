@@ -13,24 +13,24 @@ cd ~/ai-companion && git pull
 
 ## 2 · Put the eight photographs in
 
-The app looks for them by name in its asset catalog. Copy your graded exports
-straight across — the names already match:
+One command. It finds your graded exports, copies them into the app's asset
+catalog under the right names, and tells you if any are missing:
 
 ```bash
-cd ~/ai-companion/ios
-for n in 1-signin 2-payment 3-story 4-meet 5-companion 6-diary 7-account 8-settings; do
-  cp "design/grade/out/$n.jpg" "BobCompanion/Resources/Assets.xcassets/$n.imageset/$n.jpg"
-done
+~/ai-companion/ios/design/grade/install-photos.sh
 ```
 
-Check all eight landed:
+It looks in `design/grade/out/` first, and if they aren't there it searches your
+home folder for them. If you know where they are, say so:
 
 ```bash
-find BobCompanion/Resources/Assets.xcassets -name "*.jpg" | wc -l   # should print 8
+~/ai-companion/ios/design/grade/install-photos.sh ~/Desktop/out
 ```
 
-*(Without them the app still runs — every screen just falls back to deep forest
-night. Nothing crashes.)*
+It should finish with **"Copied 8 of 8 into the app."**
+
+*(Without the photographs the app still runs — every screen just falls back to
+deep forest night. Nothing crashes.)*
 
 ## 3 · Make the Xcode project
 
