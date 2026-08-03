@@ -9,9 +9,26 @@
 name: BobCompanion
 options:
   bundleIdPrefix: com.yourfamily
+  # 17.0, not 18 — nothing in the app needs 18, and this way every simulator
+  # and every iPhone from the last few years can run it.
   deploymentTarget:
-    iOS: "18.0"
+    iOS: "17.0"
   createIntermediateGroups: true
+
+# Without this, Xcode's destination menu can come up empty ("No selection").
+schemes:
+  BobCompanion:
+    build:
+      targets:
+        BobCompanion: all
+    run:
+      config: Debug
+    profile:
+      config: Release
+    analyze:
+      config: Debug
+    archive:
+      config: Release
 
 targets:
   BobCompanion:
