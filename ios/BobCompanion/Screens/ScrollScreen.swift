@@ -55,6 +55,14 @@ struct ScrollScreen: View {
             ZStack(alignment: .top) {
                 PhotoBackground(place: kind.place, treatment: .scrim)
 
+                // Tapping the world outside the paper puts the pen down. This
+                // has to sit BEHIND the scroll — as a modifier on the whole
+                // screen it swallowed the taps meant for the writing surface,
+                // and nothing could be typed at all.
+                Color.clear
+                    .contentShape(Rectangle())
+                    .onTapGesture { writing = false }
+
                 // ── screen 4's caution: the one thing that survives the keyboard
                 if kind == .meet {
                     caution(isWriting: isWriting)
@@ -117,7 +125,6 @@ struct ScrollScreen: View {
             .animation(.easeOut(duration: keyboard.duration), value: keyboard.height)
         }
         .ignoresSafeArea(.keyboard)      // we position against the keyboard ourselves
-        .onTapGesture { writing = false }
     }
 
     // MARK: - where the paper sits
@@ -144,15 +151,20 @@ struct ScrollScreen: View {
     private func scroll(width: CGFloat, height: CGFloat, isWriting: Bool) -> some View {
         ParchmentScroll(winding: winding) {
             VStack(alignment: .leading, spacing: 12) {
+                // Priority, so a short screen squeezes the writing area and
+                // never the words that say what to write.
                 Text(kind.heading)
                     .font(AppType.writtenHeading)
                     .foregroundStyle(Theme.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .layoutPriority(2)
 
                 if !isWriting, text.isEmpty, kind == .story {
                     Text(Strings.storyLine())
                         .appFont(AppType.caption)
                         .foregroundStyle(Theme.inkSoft.opacity(0.88))
                         .fixedSize(horizontal: false, vertical: true)
+                        .layoutPriority(2)
                 }
 
                 writingSurface
@@ -167,11 +179,17 @@ struct ScrollScreen: View {
                         SoftChip(title: Strings.chipOrigin()) { insert(Strings.chipOriginText()) }
                     }
                     .padding(.top, 2)
+                    .layoutPriority(2)
                 }
             }
         }
         .frame(width: min(Metrics.scrollWidth, width - Metrics.sideMargin * 2))
         .frame(maxHeight: maxPaperHeight(in: height, isWriting: isWriting))
+        // Touching the paper anywhere picks the pen up — the margins count too,
+        // not only the exact line you're writing on. Simultaneous, so the text
+        // view still places its own cursor where you tapped.
+        .contentShape(Rectangle())
+        .simultaneousGesture(TapGesture().onEnded { writing = true })
     }
 
     private var writingSurface: some View {
@@ -184,17 +202,20 @@ struct ScrollScreen: View {
                         .foregroundStyle(Theme.inkSoft.opacity(0.88))
                         .allowsHitTesting(false)
                         .padding(.top, 8)
+                        .padding(.leading, 5)    // sits on the text view's own inset
                 }
                 TextEditor(text: $text)
                     .font(AppType.writtenBody)
                     .lineSpacing(AppType.writtenLeading)
                     .foregroundStyle(Theme.ink)
+                    .tint(Theme.leaf500)                 // the caret, in ink's world
                     .scrollContentBackground(.hidden)
                     .background(.clear)
                     .frame(minHeight: 120)
                     .focused($writing)
             }
         }
+        .frame(minHeight: 96)        // always a real place to write, never a sliver
         .scrollBounceBehavior(.basedOnSize)
     }
 

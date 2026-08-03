@@ -54,6 +54,7 @@ struct TakeCareScreen: View {
                             .appFont(AppType.caption)
                             .foregroundStyle(Theme.sage)
                             .multilineTextAlignment(.center)
+                            .fixedSize(horizontal: false, vertical: true)
                             .padding(.top, 4)
 
                         AppButton(title: Strings.takeCareButton(), tone: .sun) {

@@ -36,13 +36,20 @@ struct AppButton: View {
                 Text(title)
                     .appFont(AppType.button)
                     .lineLimit(2)                  // Russian runs longer
-                    .minimumScaleFactor(0.85)
+                    .minimumScaleFactor(0.8)
                     .multilineTextAlignment(.center)
+                    // Without this a second line has nowhere to go and spills
+                    // out past the button's edge.
+                    .fixedSize(horizontal: false, vertical: true)
             }
             .foregroundStyle(foreground)
+            // Padding INSIDE the frame, and the height a floor rather than a
+            // cap — so the button grows to hold its words instead of the words
+            // growing out of the button.
+            .padding(.horizontal, 18)
+            .padding(.vertical, 12)
             .frame(maxWidth: .infinity)
             .frame(minHeight: Metrics.buttonHeight)
-            .padding(.horizontal, 18)
             .background(background)
             .clipShape(RoundedRectangle(cornerRadius: Metrics.buttonRadius, style: .continuous))
             .overlay(
@@ -106,6 +113,7 @@ struct PlanCard: View {
                     Text(title)
                         .appFont(AppType.body)
                         .foregroundStyle(Theme.linen)
+                        .fixedSize(horizontal: false, vertical: true)
                     Text(detail)
                         .appFont(AppType.caption)
                         .foregroundStyle(Theme.lichen)
@@ -115,6 +123,8 @@ struct PlanCard: View {
                 Text(price)
                     .appFont(AppType.body)
                     .foregroundStyle(isChosen ? Theme.sun300 : Theme.sage)
+                    .lineLimit(1)
+                    .fixedSize()          // the price is never the thing that wraps
                 Tick(isFilled: isChosen)
             }
             .padding(.horizontal, 18)
