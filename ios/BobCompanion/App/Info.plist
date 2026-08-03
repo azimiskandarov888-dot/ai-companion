@@ -2,13 +2,27 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <!-- Why we need the mic. Shown to the family once, in Russian. -->
+    <!-- The app's own name, shown under the icon. Renaming the app is this
+         line plus AppInfo.displayName in SettingsScreen.swift. -->
+    <key>CFBundleDisplayName</key>
+    <string>Боб</string>
+
+    <!-- Russian ships first. -->
+    <key>CFBundleDevelopmentRegion</key>
+    <string>ru</string>
+    <key>CFBundleLocalizations</key>
+    <array>
+        <string>ru</string>
+        <string>en</string>
+    </array>
+
+    <!-- Why we need the mic. He can't be a friend if he can't hear you. -->
     <key>NSMicrophoneUsageDescription</key>
-    <string>Боб слушает, только когда вы говорите с ним, чтобы отвечать вам вслух.</string>
+    <string>Он слушает, только когда вы говорите с ним, чтобы ответить вам вслух.</string>
 
     <!-- Needed to reach the backend running on your Mac over local Wi-Fi. -->
     <key>NSLocalNetworkUsageDescription</key>
-    <string>Приложение отправляет ваш голос на домашний сервер, чтобы Боб мог ответить.</string>
+    <string>Приложение отправляет ваш голос на ваш сервер, чтобы он мог ответить.</string>
 
     <!-- Keep audio alive. Foreground docked use needs this for reliable capture;
          it's also the foundation for the later background/floating-window layer. -->

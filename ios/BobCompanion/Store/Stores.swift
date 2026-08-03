@@ -1,0 +1,178 @@
+// The three things the app remembers about itself: who you are, whether he's
+// being looked after, and whether he has arrived yet.
+//
+// ▸ Accounts and billing are NOT built on the server yet, so both are stubbed
+//   here behind small protocols. Screens 1 and 2 are fully real — every pixel,
+//   every state, every animation — and only the last inch is a stand-in:
+//   signing in stores a local account, and paying just advances.
+//
+//   When the real ones land, swap the two `Stub…` types for `AppleSignIn…` and
+//   `StoreKit…`. No screen changes.
+
+import Foundation
+import SwiftUI
+
+// MARK: - Who you are
+
+struct Account: Codable, Equatable {
+    var name: String
+    /// "Apple", "Google", or "email" — shown on the Account screen.
+    var provider: String
+    var joined: Date
+
+    var initial: String { String(name.prefix(1)).uppercased() }
+}
+
+protocol AccountProviding {
+    func signIn(with provider: String) async throws -> Account
+}
+
+/// Stand-in: creates a local account with no network and no Apple Developer
+/// account required. Real Sign in with Apple replaces this file's body only.
+struct StubAccountProvider: AccountProviding {
+    func signIn(with provider: String) async throws -> Account {
+        try? await Task.sleep(nanoseconds: 450_000_000)   // a beat, so it feels real
+        return Account(name: Strings.language == .russian ? "Друг" : "Friend",
+                       provider: provider,
+                       joined: Date())
+    }
+}
+
+// MARK: - Whether he's being looked after
+
+enum Plan: String, Codable, CaseIterable {
+    case monthly, yearly
+
+    var title: String { self == .monthly ? Strings.planMonthly() : Strings.planYearly() }
+
+    /// ▸ PLACEHOLDER PRICES, straight from the design.
+    ///   At ship these come from StoreKit — a price is never hard-coded, because
+    ///   the App Store shows it in the buyer's own currency and store.
+    var price: String { self == .monthly ? "349 ₽" : "2 690 ₽" }
+
+    /// The small line inside the card.
+    var detail: String {
+        self == .monthly ? Strings.perMonth("349 ₽")()
+                         : Strings.perMonthPaidOnce("224 ₽")()
+    }
+
+    /// The honest line directly above the button — what will actually be
+    /// charged, and how often. Never buried in fine print.
+    var summary: String {
+        self == .monthly ? Strings.perMonthRenewing("349 ₽")()
+                         : Strings.perYearRenewing("2 690 ₽")()
+    }
+}
+
+protocol SubscriptionProviding {
+    func purchase(_ plan: Plan) async throws -> Bool
+}
+
+/// Stand-in: no StoreKit, no products, no receipts. The real one opens Apple's
+/// own payment sheet — which is why the button never opens a website.
+struct StubSubscriptionProvider: SubscriptionProviding {
+    func purchase(_ plan: Plan) async throws -> Bool {
+        try? await Task.sleep(nanoseconds: 700_000_000)
+        return true
+    }
+}
+
+// MARK: - The one place the app's own state lives
+
+@MainActor
+final class AppState: ObservableObject {
+
+    @Published private(set) var account: Account?
+    @Published private(set) var isSubscribed: Bool
+    /// What they wrote about themselves on screen 3. Kept so «My story» can
+    /// reopen it, and so he can be rebuilt if they ever start over.
+    @Published var story: String
+    /// What they asked for on screen 4. May be empty — that's a fine answer.
+    @Published var wishes: String
+    /// His name, once he has arrived. Empty until the server creates him.
+    @Published private(set) var companionName: String
+
+    private let accounts: AccountProviding
+    private let subscriptions: SubscriptionProviding
+    private let defaults = UserDefaults.standard
+
+    private enum Keys {
+        static let account = "account"
+        static let subscribed = "isSubscribed"
+        static let story = "story"
+        static let wishes = "wishes"
+        static let companionName = "companionName"
+    }
+
+    init(accounts: AccountProviding = StubAccountProvider(),
+         subscriptions: SubscriptionProviding = StubSubscriptionProvider()) {
+        self.accounts = accounts
+        self.subscriptions = subscriptions
+        self.isSubscribed   = defaults.bool(forKey: Keys.subscribed)
+        self.story          = defaults.string(forKey: Keys.story) ?? ""
+        self.wishes         = defaults.string(forKey: Keys.wishes) ?? ""
+        self.companionName  = defaults.string(forKey: Keys.companionName) ?? ""
+        if let data = defaults.data(forKey: Keys.account) {
+            self.account = try? JSONDecoder().decode(Account.self, from: data)
+        }
+    }
+
+    /// Where the app should open. After onboarding this is always `.companion` —
+    /// the app never shows sign-in again, and never introduces him.
+    var startingScreen: AppScreen {
+        if account == nil          { return .signIn }
+        if !isSubscribed           { return .takeCare }
+        if story.isEmpty           { return .story }
+        if companionName.isEmpty   { return .meet }
+        return .companion
+    }
+
+    // MARK: actions
+
+    func signIn(with provider: String) async throws {
+        let account = try await accounts.signIn(with: provider)
+        self.account = account
+        defaults.set(try? JSONEncoder().encode(account), forKey: Keys.account)
+    }
+
+    func purchase(_ plan: Plan) async throws {
+        guard try await subscriptions.purchase(plan) else { return }
+        isSubscribed = true
+        defaults.set(true, forKey: Keys.subscribed)
+    }
+
+    func saveStory(_ text: String) {
+        story = text
+        defaults.set(text, forKey: Keys.story)
+    }
+
+    func saveWishes(_ text: String) {
+        wishes = text
+        defaults.set(text, forKey: Keys.wishes)
+    }
+
+    func remember(companionName name: String) {
+        companionName = name
+        defaults.set(name, forKey: Keys.companionName)
+    }
+
+    func signOut() {
+        account = nil
+        defaults.removeObject(forKey: Keys.account)
+    }
+
+    /// Parting with a friend. Everything he knew goes with him.
+    func startOver() {
+        for key in [Keys.story, Keys.wishes, Keys.companionName] {
+            defaults.removeObject(forKey: key)
+        }
+        story = ""; wishes = ""; companionName = ""
+    }
+
+    /// A fallback so a screen never has to say "his name" out loud before he
+    /// has arrived.
+    var displayName: String {
+        companionName.isEmpty ? (Strings.language == .russian ? "Друг" : "Your friend")
+                              : companionName
+    }
+}

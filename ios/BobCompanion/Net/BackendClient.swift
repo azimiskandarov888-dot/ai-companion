@@ -34,6 +34,45 @@ enum BackendError: LocalizedError {
     }
 }
 
+/// POST /api/companion/create — the friend walks in.
+struct CreateCompanionResponse: Decodable {
+    let name: String
+}
+
+/// GET /api/diary — what he has written about his friend so far.
+struct DiaryResponse: Decodable {
+    let companion: String
+    let text: String
+
+    /// The diary arrives as flowing prose. The book needs leaves, so we break
+    /// it at paragraphs and pack them until a leaf is comfortably full — the
+    /// design asks for 38–46 characters a line, which lands around 420
+    /// characters a page at the diary's size.
+    func leaves(charactersPerLeaf: Int = 420) -> [String] {
+        let paragraphs = text
+            .components(separatedBy: "\n")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+        guard !paragraphs.isEmpty else { return [text] }
+
+        var leaves: [String] = []
+        var current = ""
+        for paragraph in paragraphs {
+            let candidate = current.isEmpty ? paragraph : current + "\n\n" + paragraph
+            if candidate.count > charactersPerLeaf, !current.isEmpty {
+                leaves.append(current)
+                current = paragraph
+            } else {
+                current = candidate
+            }
+        }
+        if !current.isEmpty { leaves.append(current) }
+        // A book always opens on a spread, so never leave a lone left-hand leaf.
+        if leaves.count % 2 == 1 { leaves.append("") }
+        return leaves
+    }
+}
+
 struct BackendClient {
     let baseURL: URL
 
@@ -67,6 +106,50 @@ struct BackendClient {
         }
 
         return try JSONDecoder().decode(TalkResponse.self, from: data)
+    }
+
+    /// Their story, plus whatever they asked for, and he walks in — with his
+    /// own name. Wishes may be empty; that's arguably the best case.
+    func createCompanion(story: String, wishes: String) async throws -> CreateCompanionResponse {
+        try await postJSON(
+            "api/companion/create",
+            body: ["about": story, "wishes": wishes],
+            timeout: 90                       // he is being written; give him time
+        )
+    }
+
+    /// His diary about his friend. Cheap and instant unless his memory has
+    /// grown since last time, in which case he rewrites it.
+    func diary() async throws -> DiaryResponse {
+        var request = URLRequest(url: baseURL.appendingPathComponent("api/diary"))
+        request.timeoutInterval = 60
+        let (data, response) = try await URLSession.shared.data(for: request)
+        try Self.check(response, data)
+        return try JSONDecoder().decode(DiaryResponse.self, from: data)
+    }
+
+    // MARK: - shared
+
+    private func postJSON<T: Decodable>(_ path: String,
+                                        body: [String: String],
+                                        timeout: TimeInterval) async throws -> T {
+        var request = URLRequest(url: baseURL.appendingPathComponent(path))
+        request.httpMethod = "POST"
+        request.timeoutInterval = timeout
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONEncoder().encode(body)
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        try Self.check(response, data)
+        return try JSONDecoder().decode(T.self, from: data)
+    }
+
+    private static func check(_ response: URLResponse, _ data: Data) throws {
+        guard let http = response as? HTTPURLResponse else { return }
+        guard (200...299).contains(http.statusCode) else {
+            throw BackendError.badStatus(http.statusCode,
+                                         String(data: data, encoding: .utf8) ?? "")
+        }
     }
 }
 

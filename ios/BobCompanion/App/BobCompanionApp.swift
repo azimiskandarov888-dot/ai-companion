@@ -1,34 +1,33 @@
 // The app entry point.
 //
-// Bob is voice-only. He never speaks first — the conversation starts when the
-// elder speaks. This app runs "docked": a phone in a stand by his chair, plugged
-// in, this one screen always open (mode A in docs/BUILD-PLAN.md). It listens,
-// sends his voice to our backend, and plays Bob's warm reply back.
+// A voice friend. He never speaks first — the conversation starts when you do.
+// The backend holds every API key and does the thinking; this app is ears, a
+// mouth, and a place to stand.
 //
-// The backend holds all the API keys and does the thinking. This app is just
-// ears + mouth + a gentle face.
+// After the first run the app opens on the companion screen forever, so the
+// thing you see when you pick up the phone is him, not a menu.
 
 import SwiftUI
 
 @main
 struct BobCompanionApp: App {
+    @StateObject private var app = AppState()
     @StateObject private var conversation = ConversationController()
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {
         WindowGroup {
-            CompanionView(conversation: conversation)
+            AppFlow(conversation: conversation)
+                .environmentObject(app)
+                .preferredColorScheme(.dark)      // the world is always in shade
+                .tint(Theme.sun400)
                 .onChange(of: scenePhase) { _, phase in
-                    // Keep the loop alive only while the app is on screen. iOS
-                    // suspends a normal app's microphone when it's backgrounded;
-                    // the docked design keeps this screen foregrounded all day
-                    // (Guided Access). Background listening / floating window is a
-                    // later layer — see docs/BUILD-PLAN.md §6 and ALWAYS-ON.md.
-                    switch phase {
-                    case .active:   conversation.start()
-                    case .inactive, .background: conversation.stop()
-                    @unknown default: break
-                    }
+                    // iOS suspends a normal app's microphone when it's
+                    // backgrounded, so the loop lives only while we're on
+                    // screen. The docked design keeps this screen foregrounded
+                    // all day (Guided Access). Background listening is a later
+                    // layer — see docs/ALWAYS-ON.md.
+                    if phase != .active { conversation.stop() }
                 }
         }
     }
