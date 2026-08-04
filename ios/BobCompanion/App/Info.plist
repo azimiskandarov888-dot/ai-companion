@@ -2,6 +2,28 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+    <!-- The seven keys every app bundle must have. Xcode used to inject these
+         invisibly when XcodeGen generated this file for us — which was also
+         what let it silently overwrite everything below on every run. Now that
+         this file is used as-is, they have to actually be here, or the
+         simulator refuses to install it ("Missing bundle ID"). The $(...)
+         forms are filled in by Xcode from the target's build settings at
+         build time, same as Apple's own template. -->
+    <key>CFBundleExecutable</key>
+    <string>$(EXECUTABLE_NAME)</string>
+    <key>CFBundleIdentifier</key>
+    <string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+    <key>CFBundleName</key>
+    <string>$(PRODUCT_NAME)</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleShortVersionString</key>
+    <string>$(MARKETING_VERSION)</string>
+    <key>CFBundleVersion</key>
+    <string>$(CURRENT_PROJECT_VERSION)</string>
+
     <!-- The app's own name, shown under the icon. Renaming the app is this
          line plus AppInfo.displayName in SettingsScreen.swift. -->
     <key>CFBundleDisplayName</key>
