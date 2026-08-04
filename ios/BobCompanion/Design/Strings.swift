@@ -118,9 +118,12 @@ enum Strings {
     static let chipOriginText = Phrase(ru: "Откуда-нибудь издалека. ",     en: "From somewhere far away. ")
     static let meetHim = Phrase(ru: "Познакомиться", en: "Meet him")
 
+    /// Cut to its last two lines. The three sentences before them were building
+    /// to this, and on a screen that also carries a caution, a scroll and a
+    /// keyboard, the build was the part that could go.
     static let friendshipQuote = Phrase(
-        ru: "Ты не выбираешь, что друг полюбит и чего не примет, над чем он смеётся и кто ждёт его дома. Не выбираешь его дороги, его привычки, его сердце. Ты выбираешь одно — идти рядом. Друга не делают на заказ. Друга встречают.",
-        en: "You don't choose what your friend will love or hate, what he'll laugh at, or who waits for him at home. You don't choose his roads, his habits, his heart. You choose only one thing — to walk beside him. A friend isn't made to order. A friend is met.")
+        ru: "Друга не делают на заказ. Друга встречают.",
+        en: "A friend isn't made to order. A friend is met.")
 
     // MARK: - 5 · Companion
 

@@ -103,6 +103,24 @@ enum Theme {
         )
     }
 
+    /// Top-down scrim, for the screens whose words sit high in the frame.
+    ///
+    /// Sky is the brightest thing in every one of these photographs, and warm
+    /// cream type on a bright sky has almost no contrast at all — which is what
+    /// «matching the background» meant on the payment screen. This darkens the
+    /// top of the frame just enough for words to sit there, and reaches zero
+    /// well before the middle so the photograph is never dimmed as a whole.
+    static var topScrim: LinearGradient {
+        LinearGradient(
+            stops: [
+                .init(color: Color(hex: 0x0A0E0A, alpha: 0.62), location: 0.00),
+                .init(color: Color(hex: 0x0A0E0A, alpha: 0.30), location: 0.26),
+                .init(color: Color(hex: 0x0A0E0A, alpha: 0.00), location: 0.52),
+            ],
+            startPoint: .top, endPoint: .bottom
+        )
+    }
+
     /// A soft radial plate behind a hero line, so it carries contrast without
     /// darkening the whole frame.
     static var heroPlate: RadialGradient {

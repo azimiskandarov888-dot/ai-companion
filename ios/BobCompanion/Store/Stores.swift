@@ -175,12 +175,14 @@ final class AppState: ObservableObject {
         defaults.removeObject(forKey: Keys.account)
     }
 
-    /// Parting with a friend. Everything he knew goes with him.
+    /// Parting with a friend. Everything HE knew goes with him — but your own
+    /// story stays yours, so starting over means choosing who to meet next
+    /// rather than retelling your whole life to a stranger.
     func startOver() {
-        for key in [Keys.story, Keys.wishes, Keys.companionName, Keys.hasArrived] {
+        for key in [Keys.wishes, Keys.companionName, Keys.hasArrived] {
             defaults.removeObject(forKey: key)
         }
-        story = ""; wishes = ""; companionName = ""; hasArrived = false
+        wishes = ""; companionName = ""; hasArrived = false
     }
 
     /// A fallback so a screen never has to say "his name" out loud before he

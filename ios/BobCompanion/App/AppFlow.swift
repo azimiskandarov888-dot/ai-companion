@@ -43,11 +43,11 @@ struct AppFlow: View {
             switch screen {
             case .signIn:
                 SignInScreen { go(.takeCare) }
-                    .transition(.opacity)
+                    .transition(.screenChange)
 
             case .takeCare:
                 TakeCareScreen { go(.story) }
-                    .transition(.opacity)
+                    .transition(.screenChange)
 
             // 3 and 4 are ONE place. The photograph is drawn here, once, and
             // only the sheet changes — the first rolls away, the next unrolls in
@@ -61,13 +61,13 @@ struct AppFlow: View {
                             app.saveStory(story)
                             go(.meet)
                         }
-                        .transition(.opacity)
+                        .transition(.screenChange)
                     } else {
                         ScrollScreen(kind: .meet, text: $wishes, drawsBackground: false) {
                             app.saveWishes(wishes)
                             go(.arriving)
                         }
-                        .transition(.opacity)
+                        .transition(.screenChange)
                     }
                 }
                 .transition(.identity)      // the land itself never transitions
@@ -78,7 +78,7 @@ struct AppFlow: View {
                     app.markArrived()
                     go(.companion)
                 }
-                .transition(.opacity)
+                .transition(.screenChange)
 
             case .companion:
                 CompanionScreen(
@@ -87,10 +87,10 @@ struct AppFlow: View {
                     onAccount:  { overlay = .account },
                     onSettings: { overlay = .settings }
                 )
-                .transition(.opacity)
+                .transition(.screenChange)
             }
         }
-        .animation(.easeInOut(duration: 0.35), value: screen)
+        .animation(.easeInOut(duration: 0.55), value: screen)
         .onAppear {
             screen = app.startingScreen
             story = app.story
@@ -112,6 +112,14 @@ struct AppFlow: View {
         .onChange(of: screen) { _, now in
             now == .companion ? conversation.start() : conversation.stop()
         }
+        // «Start over» keeps their story and clears only the friend, so the
+        // app returns to screen 4 — choosing who to meet next — rather than
+        // making them retell their whole life.
+        .onChange(of: app.hasArrived) { _, arrived in
+            guard !arrived, screen == .companion else { return }
+            overlay = nil
+            withAnimation(.easeInOut(duration: 0.55)) { screen = .meet }
+        }
         .onChange(of: overlay) { _, now in
             guard screen == .companion else { return }
             now == nil ? conversation.start() : conversation.stop()
@@ -119,7 +127,7 @@ struct AppFlow: View {
     }
 
     private func go(_ next: AppScreen) {
-        withAnimation(.easeInOut(duration: 0.35)) { screen = next }
+        withAnimation(.easeInOut(duration: 0.55)) { screen = next }
     }
 }
 

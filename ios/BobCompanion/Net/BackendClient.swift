@@ -81,7 +81,7 @@ struct BackendClient {
         let endpoint = baseURL.appendingPathComponent("api/talk")
         var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"
-        request.timeoutInterval = 60
+        request.timeoutInterval = 15   // he says he can't hear you FAST, not after a minute
 
         let boundary = "Boundary-\(UUID().uuidString)"
         request.setValue("multipart/form-data; boundary=\(boundary)",
@@ -114,7 +114,7 @@ struct BackendClient {
         try await postJSON(
             "api/companion/create",
             body: ["about": story, "wishes": wishes],
-            timeout: 90                       // he is being written; give him time
+            timeout: 40                       // he is being written; give him time
         )
     }
 
@@ -122,7 +122,7 @@ struct BackendClient {
     /// grown since last time, in which case he rewrites it.
     func diary() async throws -> DiaryResponse {
         var request = URLRequest(url: baseURL.appendingPathComponent("api/diary"))
-        request.timeoutInterval = 60
+        request.timeoutInterval = 15   // he says he can't hear you FAST, not after a minute
         let (data, response) = try await URLSession.shared.data(for: request)
         try Self.check(response, data)
         return try JSONDecoder().decode(DiaryResponse.self, from: data)

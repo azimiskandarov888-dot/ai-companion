@@ -15,22 +15,27 @@ enum AppType {
 
     // MARK: - The voice — the few lines that carry the app's feeling
     //
-    // These are serif, not sans. They are the only sentences in the app that
-    // are trying to make you feel something, and a system sans says them like
-    // a settings label — correct, and completely flat. New York gives them an
-    // edge and a warmth that the photographs deserve, and separates the app
-    // SPEAKING from the app LABELLING.
+    // These are the only sentences in the app trying to make you feel
+    // something, and a system sans says them like a settings label — correct,
+    // and completely flat. They get their own face.
 
-    /// 32 / 1.22 serif, Light. Sign-in's warm line, "Take care of him".
+    /// 32 / 1.22 ROUNDED, Light. Sign-in's warm line, "Take care of him".
     ///
-    /// Light, not regular. At 32 pt a regular-weight serif has thick stems and
-    /// hard, high-contrast serifs — it reads as cut rather than spoken. The
-    /// lighter weight thins the strokes and lets the line breathe.
-    static let hero = Font.system(size: 32, weight: .light, design: .serif)
-    /// 27 / Regular serif. Screen titles.
-    static let title = Font.system(size: 27, design: .serif)
-    /// 19 / 1.5 serif, Light. The sentence under a hero line.
-    static let lede = Font.system(size: 19, weight: .light, design: .serif)
+    /// Rounded, not serif. A serif — even at Light — has pointed terminals and
+    /// sharp bracketed joints; every letter ends in a fine hard tip, and no
+    /// amount of softening the shadow behind it changes that. The letterforms
+    /// themselves were the sharpness. SF Rounded has no corners anywhere: every
+    /// stroke ends in a circle. It is the softest face on the system, and next
+    /// to a photograph of leaves and light it reads as warm rather than cut.
+    ///
+    /// Serif is still used, deliberately, for the things a PERSON wrote — the
+    /// scroll, the diary, the quote. Ink on paper should have a sharp edge.
+    /// That contrast is now doing real work instead of being decoration.
+    static let hero = Font.system(size: 32, weight: .light, design: .rounded)
+    /// 27 / Regular rounded. Screen titles.
+    static let title = Font.system(size: 27, weight: .regular, design: .rounded)
+    /// 19 / 1.5 rounded, Light. The sentence under a hero line.
+    static let lede = Font.system(size: 19, weight: .light, design: .rounded)
     /// 17 / Regular. Body, list labels.
     static let body = Font.system(size: 17)
     /// 17 / Semibold. Button labels.

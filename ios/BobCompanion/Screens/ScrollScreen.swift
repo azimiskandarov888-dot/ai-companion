@@ -93,12 +93,30 @@ struct ScrollScreen: View {
                     .onTapGesture { writing = false }
 
                 VStack(spacing: 0) {
-                    // ── screen 4's caution, above the paper and never on it
-                    if kind == .meet {
-                        caution(isWriting: isWriting)
-                            .opacity(winding > 0.1 ? 0 : 1)
-                            .arrive(.first)
-                        Spacer(minLength: 14)
+                    // ── screen 4's words, above the paper and never on it.
+                    // Both of these are things to read BEFORE writing, in the
+                    // order you'd read them, and both step out of the way the
+                    // moment the keyboard comes up — the paper needs that room,
+                    // and nobody re-reads a caution while they're typing.
+                    if kind == .meet, !isWriting {
+                        VStack(alignment: .leading, spacing: 12) {
+                            caution()
+                                .arrive(.first)
+
+                            Group {
+                                Text(Strings.friendshipQuote())
+                                    .font(AppType.quote)
+                                    .lineSpacing(AppType.quoteLeading)
+                                    .foregroundStyle(Theme.onLand)
+                                    .multilineTextAlignment(.leading)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .legible()
+                                    .arrive(.second)
+                            }
+                        }
+                        .opacity(winding > 0.1 ? 0 : 1)
+                        Spacer(minLength: 16)
                     }
 
                     // ── the scroll itself
@@ -111,20 +129,6 @@ struct ScrollScreen: View {
                         .arrive(.object, rise: 22, enabled: kind == .story)
 
                     Spacer(minLength: 12)
-
-                    // ── screen 4's quote: read before writing, steps back after
-                    if kind == .meet, !isWriting, winding < 0.1 {
-                        Text(Strings.friendshipQuote())
-                            .font(AppType.quote)
-                            .lineSpacing(AppType.quoteLeading)
-                            .foregroundStyle(Theme.onLand)
-                            .multilineTextAlignment(.leading)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .legible()
-                            .padding(.bottom, 18)
-                            .arrive(.second)
-                    }
 
                     confirmButton
                         .arrive(.footnote, enabled: kind == .story)
@@ -249,7 +253,7 @@ struct ScrollScreen: View {
 
     // MARK: - the caution (screen 4 only)
 
-    private func caution(isWriting: Bool) -> some View {
+    private func caution() -> some View {
         HStack(alignment: .top, spacing: 12) {
             Rectangle()
                 .fill(Theme.sun400)
@@ -259,8 +263,7 @@ struct ScrollScreen: View {
                 // restatement of itself, which was a third helping of the same
                 // thought on a screen that already carries the quote.
                 Text(Strings.caution())
-                    .font(.system(size: isWriting ? 14.5 : 18, weight: .regular))
-                    .lineSpacing(isWriting ? 4 : 5)
+                    .appFont(AppType.lede, leading: AppType.ledeLeading)
                     .foregroundStyle(Theme.sun300)
                     .fixedSize(horizontal: false, vertical: true)
                     .legible()

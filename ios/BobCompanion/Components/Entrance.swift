@@ -35,11 +35,11 @@ enum Beat {
     var delay: Double {
         switch self {
         case .world:    return 0.00
-        case .first:    return 0.75
-        case .second:   return 1.45
-        case .third:    return 2.00
-        case .object:   return 2.35
-        case .footnote: return 2.85
+        case .first:    return 0.45
+        case .second:   return 1.00
+        case .third:    return 1.40
+        case .object:   return 1.65
+        case .footnote: return 2.00
         }
     }
 }
@@ -84,6 +84,37 @@ extension View {
     ///     fade in again.
     func arrive(_ beat: Beat, rise: CGFloat = 12, enabled: Bool = true) -> some View {
         modifier(Arrive(beat: beat, rise: rise, enabled: enabled))
+    }
+}
+
+// MARK: - Leaving
+
+/// A screen on its way out: fading, softening and settling back a little, so it
+/// recedes rather than being switched off.
+private struct SoftLeave: ViewModifier {
+    let gone: Bool
+    func body(content: Content) -> some View {
+        content
+            .opacity(gone ? 0 : 1)
+            .blur(radius: gone ? 10 : 0)
+            .scaleEffect(gone ? 0.985 : 1)
+    }
+}
+
+extension AnyTransition {
+    /// How one screen becomes the next.
+    ///
+    /// The app had an arrival and no departure: screens faded up slowly and
+    /// then vanished in an instant, which is exactly what reads as lag — the
+    /// eye is still following something that is already gone. The two halves
+    /// are matched now, and the leaving is a touch quicker than the arriving so
+    /// they overlap in the middle instead of leaving a hole.
+    static var screenChange: AnyTransition {
+        .asymmetric(
+            insertion: .opacity,
+            removal: .modifier(active: SoftLeave(gone: true),
+                               identity: SoftLeave(gone: false))
+        )
     }
 }
 

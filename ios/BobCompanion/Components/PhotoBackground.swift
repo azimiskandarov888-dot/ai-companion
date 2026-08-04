@@ -71,6 +71,7 @@ struct PhotoBackground: View {
                                                 reduceTransparency: reduceTransparency))
 
                 if case .scrim = treatment {
+                    Theme.topScrim
                     Theme.bottomScrim
                 }
             }

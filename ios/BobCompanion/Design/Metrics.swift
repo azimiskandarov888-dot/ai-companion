@@ -60,9 +60,13 @@ enum Metrics {
     // MARK: - The scroll
 
     static let rollerWidth: CGFloat = 28
-    /// How far the paper is inset from the ends of its rollers, so the wood and
-    /// the brass caps stand proud at both sides.
-    static let paperInset: CGFloat = 13
+    /// How far the paper is inset from the ends of its rollers.
+    ///
+    /// Exactly the width of a brass cap, because the caps sit ON TOP of the
+    /// ends of the wood: the VISIBLE run of wood is the span between them, and
+    /// that is what the paper has to match. Inset by less and the paper runs on
+    /// underneath the caps and reads as oversized — which is what it did at 13.
+    static let paperInset: CGFloat = brassCapSize.height
     static let brassCapSize = CGSize(width: 36, height: 18)
     static let scrollWidth: CGFloat = 366        // of a 430 canvas
     static let ledgerRuleSpacing: CGFloat = 30

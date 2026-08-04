@@ -35,27 +35,14 @@ struct SettingsScreen: View {
                             .foregroundStyle(Theme.linen)
                             .padding(.top, geo.size.height * 0.045)
 
-                        // Him
+                        // Only what actually does something. His voice,
+                        // notifications and the data export were rows that
+                        // looked live and did nothing when tapped — which is
+                        // worse than not offering them. They come back when
+                        // they work.
                         ListGroup {
-                            ListRow(label: Strings.rowVoice(),
-                                    value: Strings.rowVoiceHint()) { }
-                            ListRow(label: Strings.rowHowHeTalks(),
-                                    value: Strings.rowPauses(),
-                                    showsDivider: false) { }
-                        }
-
-                        // The app
-                        ListGroup {
-                            ListRow(label: Strings.rowNotifications(), value: "›") { }
                             ListRow(label: Strings.rowLanguage(),
                                     value: language.displayName) { toggleLanguage() }
-                            ListRow(label: Strings.rowPrivacy(),
-                                    value: Strings.rowPrivacyHint(),
-                                    showsDivider: false) { }
-                        }
-
-                        // The one technical row, kept as plain as the rest.
-                        ListGroup {
                             ListRow(label: Strings.rowServer(),
                                     value: AppConfig.shared.backendURLString,
                                     showsDivider: false) { showServer = true }
@@ -68,7 +55,7 @@ struct SettingsScreen: View {
                                     tone: Theme.clay) { showStartOver = true }
                             ListRow(label: Strings.rowAbout(),
                                     value: AppInfo.version,
-                                    showsDivider: false) { }
+                                    showsDivider: false)
                         }
                     }
                     .padding(.horizontal, Metrics.sideMargin)

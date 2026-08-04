@@ -23,12 +23,10 @@ struct SignInScreen: View {
                 PhotoBackground(place: .signIn, treatment: .scrim)
 
                 VStack(spacing: 0) {
-                    Spacer()
-
-                    // The warm line sits above the controls, below the empty
-                    // sky. Left-set, not centred: it reads as something said
-                    // rather than a headline — and it is said in two breaths,
-                    // the second arriving after the first has landed.
+                    // The line sits HIGH — up in the open sky above the tree,
+                    // so the tree standing alone on the hill below reads as the
+                    // friend the sentence is talking about. It is said in two
+                    // breaths, the second arriving after the first has landed.
                     VStack(alignment: .leading, spacing: 2) {
                         Text(Strings.signInLineA())
                             .appFont(AppType.hero, leading: AppType.heroLeading)
@@ -45,7 +43,9 @@ struct SignInScreen: View {
                     }
                     .frame(maxWidth: 366, alignment: .leading)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.bottom, 40)
+                    .padding(.top, geo.size.height * 0.13)
+
+                    Spacer()
 
                     VStack(spacing: 12) {
                         AppButton(title: Strings.continueApple(),
