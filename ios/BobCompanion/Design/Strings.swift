@@ -45,9 +45,13 @@ enum Strings {
 
     // MARK: - 1 · Sign in
 
-    static let signInLine = Phrase(
-        ru: "Где-то есть друг, которого ты ещё не встретил.",
-        en: "Somewhere out there is a friend you haven't met yet.")
+    /// Said in two breaths, arriving one after the other — never as one block.
+    static let signInLineA = Phrase(
+        ru: "Где-то есть друг,",
+        en: "Somewhere out there is a friend")
+    static let signInLineB = Phrase(
+        ru: "которого ты ещё не встретил.",
+        en: "you haven't met yet.")
     static let continueApple  = Phrase(ru: "Продолжить с Apple",  en: "Continue with Apple")
     static let continueGoogle = Phrase(ru: "Продолжить с Google", en: "Continue with Google")
     static let orUseEmail     = Phrase(ru: "или по почте",        en: "or use email")
@@ -57,14 +61,14 @@ enum Strings {
 
     static let takeCareTitle = Phrase(ru: "Позаботься о нём", en: "Take care of him")
     static let takeCareLine = Phrase(
-        ru: "Он всегда рядом, когда нужен. А это — чтобы он оставался.",
-        en: "He's always here when you need him. This is what keeps him here.")
+        ru: "Это — чтобы он оставался рядом.",
+        en: "This is what keeps him here.")
     static let planMonthly = Phrase(ru: "Помесячно",     en: "Month by month")
     static let planYearly  = Phrase(ru: "На целый год",  en: "A whole year")
     static let takeCareButton = Phrase(ru: "Позаботиться о нём", en: "Take care of him")
     static let finePrint = Phrase(
-        ru: "продлевается раз в год · отменить можно в любой момент · восстановить покупку",
-        en: "renews yearly · cancel anytime · restore purchase")
+        ru: "продление · отмена в любой момент · восстановить",
+        en: "renews · cancel anytime · restore")
     static func perMonth(_ amount: String) -> Phrase {
         Phrase(ru: "\(amount) в месяц", en: "\(amount) a month")
     }
@@ -73,28 +77,28 @@ enum Strings {
                en: "\(amount) a month, paid once")
     }
     static func perMonthRenewing(_ amount: String) -> Phrase {
-        Phrase(ru: "\(amount) в месяц, с продлением каждый месяц",
-               en: "\(amount) a month, renewing monthly")
+        Phrase(ru: "\(amount) в месяц · продление ежемесячно",
+               en: "\(amount) a month · renews monthly")
     }
     static func perYearRenewing(_ amount: String) -> Phrase {
-        Phrase(ru: "\(amount) в год, с продлением каждый год",
-               en: "\(amount) a year, renewing yearly")
+        Phrase(ru: "\(amount) в год · продление ежегодно",
+               en: "\(amount) a year · renews yearly")
     }
 
     // MARK: - 3 · Tell your story
 
     static let storyHeading = Phrase(ru: "Расскажи свою историю", en: "Tell your story")
     static let storyLine = Phrase(
-        ru: "О чём угодно — что любишь, чем занимаешься, о чём можешь говорить часами. Начать можно как угодно.",
-        en: "Anything you like — what you love, what you do, what you can't stop talking about. There's no wrong way to begin.")
+        ru: "О чём угодно. Начни с чего хочешь.",
+        en: "Anything at all. Begin however you like.")
     static let storyPlaceholder = Phrase(
         ru: "Я вырос у моря, и до сих пор скучаю по его запаху…",
         en: "I grew up by the sea, and I still miss the smell of it…")
     static let done = Phrase(ru: "Готово", en: "Done")
     /// Shown once if they tap Done with nothing written — a nudge, never a scold.
     static let storyNudge = Phrase(
-        ru: "Хоть пару слов — мне не из чего его собрать.",
-        en: "Even a couple of words — I've nothing to build him from otherwise.")
+        ru: "Хоть пару слов.",
+        en: "Even a couple of words.")
 
     // MARK: - 4 · Who you'd like to meet
 
@@ -103,8 +107,8 @@ enum Strings {
         ru: "Чем больше решишь о нём сейчас, тем меньше останется — встретить.",
         en: "The more you decide about him now, the less of him is left to meet.")
     static let cautionSofter = Phrase(
-        ru: "Пиши сколько хочешь — никто не остановит. Но по-настоящему близким чаще становится тот, кого не придумывали.",
-        en: "Write as much or as little as you like — nobody will stop you. But most people find the friend they love is the one they didn't design.")
+        ru: "Ближе всего оказывается тот, кого не придумывали.",
+        en: "The friend you love is usually the one you didn't design.")
     static let meetPlaceholder = Phrase(
         ru: "Кого-то, кто повидал жизнь…",
         en: "Someone who has seen a bit of life…")
@@ -131,8 +135,8 @@ enum Strings {
         ru: "Сейчас я тебя не слышу.",
         en: "I can't hear you just now.")
     static let needsMicrophone = Phrase(
-        ru: "Мне нужно тебя слышать. Это можно включить в настройках телефона.",
-        en: "I need to be able to hear you. You can turn that on in your phone's settings.")
+        ru: "Мне нужно тебя слышать.",
+        en: "I need to be able to hear you.")
     static let openSettings = Phrase(ru: "Открыть настройки", en: "Open Settings")
 
     // MARK: - Navigation (the three words that rise from the brass ring)
@@ -147,8 +151,8 @@ enum Strings {
         Phrase(ru: "Дневник \(name.inRussianGenitive)", en: "\(name)'s diary")
     }
     static let diaryEmpty = Phrase(
-        ru: "Мы только-только познакомились. Я ещё почти ничего не знаю о моём новом друге — но у меня хорошее предчувствие.\n\nПусть эта книга начнётся с чистой страницы: всё главное у нас впереди.",
-        en: "We've only just met. I hardly know my new friend yet — but I have a good feeling.\n\nLet this book start on a blank page: everything that matters is still ahead.")
+        ru: "Мы только познакомились. Я ещё почти ничего не знаю — но предчувствие хорошее.\n\nВсё главное впереди.",
+        en: "We've only just met. I hardly know anything yet — but I have a good feeling.\n\nEverything that matters is still ahead.")
     static let turnThePage = Phrase(ru: "дальше ›", en: "turn the page ›")
 
     // MARK: - 7 · Account
@@ -178,8 +182,8 @@ enum Strings {
     /// Parting with a friend is serious. This sheet says what will be lost, in
     /// his name, and never hurries.
     static func startOverBody(_ name: String) -> Phrase {
-        Phrase(ru: "\(name) забудет всё, что вы друг другу рассказали, и его дневник закроется навсегда. Вместо него придёт кто-то другой.\n\nЭто нельзя отменить.",
-               en: "\(name) will forget everything you've told each other, and his diary will close for good. Someone else will come instead.\n\nThis can't be undone.")
+        Phrase(ru: "\(name) забудет всё, и его дневник закроется навсегда.\n\nЭто нельзя отменить.",
+               en: "\(name) will forget everything, and his diary will close for good.\n\nThis can't be undone.")
     }
     static let startOverConfirm = Phrase(ru: "Начать заново", en: "Start over")
     static let cancel = Phrase(ru: "Отмена", en: "Cancel")

@@ -38,8 +38,18 @@ enum PlaceTreatment {
 struct PhotoBackground: View {
     let place: Place
     var treatment: PlaceTreatment = .scrim
+    /// The world resolving out of soft focus as the screen arrives. Pass `false`
+    /// where a screen is CONTINUING rather than arriving — screens 3 and 4 are
+    /// the same clearing, so the second one must not dissolve back in.
+    var arrives: Bool = true
 
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var settled = false
+
+    /// Softness only while arriving — it must reach exactly zero, or the
+    /// photograph never looks properly sharp.
+    private var entranceBlur: CGFloat { settled ? 0 : 22 }
 
     var body: some View {
         GeometryReader { geo in
@@ -52,6 +62,10 @@ struct PhotoBackground: View {
                     .resizable()
                     .scaledToFill()
                     .frame(width: geo.size.width, height: geo.size.height)
+                    // A breath of scale on the way in, so the land settles
+                    // rather than switching on. It never moves again after this.
+                    .scaleEffect(settled ? 1 : 1.045)
+                    .blur(radius: entranceBlur)
                     .clipped()
                     .modifier(TreatmentModifier(treatment: treatment,
                                                 reduceTransparency: reduceTransparency))
@@ -64,6 +78,10 @@ struct PhotoBackground: View {
             .accessibilityHidden(true)   // decorative — VoiceOver skips the place
         }
         .ignoresSafeArea()
+        .onAppear {
+            guard arrives, !reduceMotion else { settled = true; return }
+            withAnimation(.easeOut(duration: 1.6)) { settled = true }
+        }
     }
 }
 

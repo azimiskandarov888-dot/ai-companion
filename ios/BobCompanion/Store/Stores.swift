@@ -91,6 +91,11 @@ final class AppState: ObservableObject {
     @Published var wishes: String
     /// His name, once he has arrived. Empty until the server creates him.
     @Published private(set) var companionName: String
+    /// Whether onboarding is FINISHED. Kept separately from his name on
+    /// purpose: if the backend was unreachable when he was created he arrives
+    /// without one, and keying off the name alone sent the app back to screen 4
+    /// on every launch. Onboarding is done when it's done.
+    @Published private(set) var hasArrived: Bool
 
     private let accounts: AccountProviding
     private let subscriptions: SubscriptionProviding
@@ -102,6 +107,7 @@ final class AppState: ObservableObject {
         static let story = "story"
         static let wishes = "wishes"
         static let companionName = "companionName"
+        static let hasArrived = "hasArrived"
     }
 
     init(accounts: AccountProviding = StubAccountProvider(),
@@ -112,6 +118,7 @@ final class AppState: ObservableObject {
         self.story          = defaults.string(forKey: Keys.story) ?? ""
         self.wishes         = defaults.string(forKey: Keys.wishes) ?? ""
         self.companionName  = defaults.string(forKey: Keys.companionName) ?? ""
+        self.hasArrived     = defaults.bool(forKey: Keys.hasArrived)
         if let data = defaults.data(forKey: Keys.account) {
             self.account = try? JSONDecoder().decode(Account.self, from: data)
         }
@@ -123,7 +130,7 @@ final class AppState: ObservableObject {
         if account == nil          { return .signIn }
         if !isSubscribed           { return .takeCare }
         if story.isEmpty           { return .story }
-        if companionName.isEmpty   { return .meet }
+        if !hasArrived             { return .meet }
         return .companion
     }
 
@@ -156,6 +163,13 @@ final class AppState: ObservableObject {
         defaults.set(name, forKey: Keys.companionName)
     }
 
+    /// He is here. From now on the app opens to him and nothing else — whether
+    /// or not the server managed to give him a name.
+    func markArrived() {
+        hasArrived = true
+        defaults.set(true, forKey: Keys.hasArrived)
+    }
+
     func signOut() {
         account = nil
         defaults.removeObject(forKey: Keys.account)
@@ -163,10 +177,10 @@ final class AppState: ObservableObject {
 
     /// Parting with a friend. Everything he knew goes with him.
     func startOver() {
-        for key in [Keys.story, Keys.wishes, Keys.companionName] {
+        for key in [Keys.story, Keys.wishes, Keys.companionName, Keys.hasArrived] {
             defaults.removeObject(forKey: key)
         }
-        story = ""; wishes = ""; companionName = ""
+        story = ""; wishes = ""; companionName = ""; hasArrived = false
     }
 
     /// A fallback so a screen never has to say "his name" out loud before he

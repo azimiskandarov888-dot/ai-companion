@@ -46,6 +46,10 @@ struct ScrollScreen: View {
 
     let kind: Kind
     @Binding var text: String
+    /// Screens 3 and 4 are the same clearing an hour apart, so the flow draws
+    /// ONE photograph behind both and passes `false` here. Nothing about the
+    /// land may change when the second scroll is brought out.
+    var drawsBackground: Bool = true
     var onConfirm: () -> Void
 
     @StateObject private var keyboard = KeyboardObserver()
@@ -53,8 +57,21 @@ struct ScrollScreen: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// 0 at rest → 1 when the sheet has wound onto the top roller and gone.
-    @State private var winding: CGFloat = 0
+    /// Screen 4 starts at 1 and unrolls, so it reads as a NEW SHEET being drawn
+    /// out in the same place — not as a new screen.
+    @State private var winding: CGFloat
     @State private var showNudge = false
+
+    init(kind: Kind,
+         text: Binding<String>,
+         drawsBackground: Bool = true,
+         onConfirm: @escaping () -> Void) {
+        self.kind = kind
+        self._text = text
+        self.drawsBackground = drawsBackground
+        self.onConfirm = onConfirm
+        self._winding = State(initialValue: kind == .meet ? 1 : 0)
+    }
 
     var body: some View {
         GeometryReader { geo in
@@ -63,7 +80,9 @@ struct ScrollScreen: View {
             let paper = paperHeight(in: h, isWriting: isWriting)
 
             ZStack {
-                PhotoBackground(place: kind.place, treatment: .scrim)
+                if drawsBackground {
+                    PhotoBackground(place: kind.place, treatment: .scrim)
+                }
 
                 // Tapping the world outside the paper puts the pen down. This
                 // has to sit BEHIND the scroll — as a modifier on the whole
@@ -78,6 +97,7 @@ struct ScrollScreen: View {
                     if kind == .meet {
                         caution(isWriting: isWriting)
                             .opacity(winding > 0.1 ? 0 : 1)
+                            .arrive(.first)
                         Spacer(minLength: 14)
                     }
 
@@ -86,6 +106,9 @@ struct ScrollScreen: View {
                         .frame(height: paper)
                         .offset(y: -winding * h * 0.28)
                         .opacity(1 - winding * 0.55)
+                        // Screen 3 sets the scroll down as the screen arrives.
+                        // Screen 4 unrolls instead, so it must not fade in.
+                        .arrive(.object, rise: 22, enabled: kind == .story)
 
                     Spacer(minLength: 12)
 
@@ -98,10 +121,13 @@ struct ScrollScreen: View {
                             .multilineTextAlignment(.leading)
                             .fixedSize(horizontal: false, vertical: true)
                             .frame(maxWidth: .infinity, alignment: .leading)
+                            .legible()
                             .padding(.bottom, 18)
+                            .arrive(.second)
                     }
 
                     confirmButton
+                        .arrive(.footnote, enabled: kind == .story)
                 }
                 .padding(.horizontal, Metrics.sideMargin)
                 .padding(.top, topInset(in: h, paper: paper, isWriting: isWriting))
@@ -112,6 +138,13 @@ struct ScrollScreen: View {
             .animation(.easeOut(duration: keyboard.duration), value: keyboard.height)
         }
         .ignoresSafeArea(.keyboard)      // we position against the keyboard ourselves
+        .onAppear {
+            guard kind == .meet else { return }
+            // The same hand, drawing out the next sheet.
+            withAnimation(.timingCurve(0.32, 0, 0.2, 1, duration: 0.85).delay(0.15)) {
+                winding = 0
+            }
+        }
     }
 
     // MARK: - where the paper sits, and how tall it is
@@ -227,11 +260,13 @@ struct ScrollScreen: View {
                     .lineSpacing(isWriting ? 4 : 5)
                     .foregroundStyle(Theme.sun300)
                     .fixedSize(horizontal: false, vertical: true)
+                    .legible()
                 if !isWriting {
                     Text(Strings.cautionSofter())
                         .appFont(AppType.caption)
                         .foregroundStyle(Theme.sage)
                         .fixedSize(horizontal: false, vertical: true)
+                        .legible()
                 }
             }
         }

@@ -25,17 +25,27 @@ struct SignInScreen: View {
                 VStack(spacing: 0) {
                     Spacer()
 
-                    // The warm line sits at y 398 of 932 — above the controls,
-                    // below the empty sky. Left-set, not centred: it reads as
-                    // something said rather than a headline.
-                    Text(Strings.signInLine())
-                        .appFont(AppType.hero, leading: AppType.heroLeading)
-                        .foregroundStyle(Theme.linen)
-                        .frame(maxWidth: 366, alignment: .leading)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .background(Theme.heroPlate.blur(radius: 24))
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.bottom, 40)
+                    // The warm line sits above the controls, below the empty
+                    // sky. Left-set, not centred: it reads as something said
+                    // rather than a headline — and it is said in two breaths,
+                    // the second arriving after the first has landed.
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(Strings.signInLineA())
+                            .appFont(AppType.hero, leading: AppType.heroLeading)
+                            .foregroundStyle(Theme.linen)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .legible()
+                            .arrive(.first)
+                        Text(Strings.signInLineB())
+                            .appFont(AppType.hero, leading: AppType.heroLeading)
+                            .foregroundStyle(Theme.linen)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .legible()
+                            .arrive(.second)
+                    }
+                    .frame(maxWidth: 366, alignment: .leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.bottom, 40)
 
                     VStack(spacing: 12) {
                         AppButton(title: Strings.continueApple(),
@@ -53,19 +63,23 @@ struct SignInScreen: View {
                             Text(Strings.orUseEmail())
                                 .appFont(AppType.secondary)
                                 .foregroundStyle(Theme.sage)
+                                .legible(0.7)
                                 .frame(minHeight: Metrics.minTouch)
                         }
                         .buttonStyle(SoftPress())
-
-                        Text(trouble ?? Strings.terms())
-                            .appFont(AppType.micro)
-                            .foregroundStyle(trouble == nil ? Theme.lichen : Theme.clay)
-                            .multilineTextAlignment(.center)
-                            .padding(.top, 2)
                     }
+                    .arrive(.object, rise: 18)
                     .disabled(isWorking)
                     .opacity(isWorking ? 0.6 : 1)
-                    .padding(.bottom, geo.safeAreaInsets.bottom > 0 ? 8 : 24)
+
+                    Text(trouble ?? Strings.terms())
+                        .appFont(AppType.micro)
+                        .foregroundStyle(trouble == nil ? Theme.lichen : Theme.clay)
+                        .multilineTextAlignment(.center)
+                        .legible(0.7)
+                        .padding(.top, 10)
+                        .arrive(.footnote)
+                        .padding(.bottom, geo.safeAreaInsets.bottom > 0 ? 8 : 24)
                 }
                 .padding(.horizontal, Metrics.sideMargin)
             }

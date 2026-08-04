@@ -55,6 +55,11 @@ struct ParchmentScroll<Content: View>: View {
                     .frame(height: 1)
                     .blendMode(.softLight)
             }
+            // The sheet is narrower than the rollers it hangs from, so the wood
+            // and its brass caps stand proud at both ends — which is the whole
+            // reason it reads as a scroll and not as a sheet of paper with two
+            // stripes across it.
+            .padding(.horizontal, Metrics.paperInset)
             // Rolls up into the top roller.
             .scaleEffect(y: max(0.02, 1 - winding), anchor: .top)
             .opacity(winding > 0.94 ? 0 : 1)

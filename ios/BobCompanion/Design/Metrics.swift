@@ -60,6 +60,9 @@ enum Metrics {
     // MARK: - The scroll
 
     static let rollerWidth: CGFloat = 28
+    /// How far the paper is inset from the ends of its rollers, so the wood and
+    /// the brass caps stand proud at both sides.
+    static let paperInset: CGFloat = 13
     static let brassCapSize = CGSize(width: 36, height: 18)
     static let scrollWidth: CGFloat = 366        // of a 430 canvas
     static let ledgerRuleSpacing: CGFloat = 30

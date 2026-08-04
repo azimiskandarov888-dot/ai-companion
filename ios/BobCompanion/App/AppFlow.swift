@@ -49,23 +49,33 @@ struct AppFlow: View {
                 TakeCareScreen { go(.story) }
                     .transition(.opacity)
 
-            case .story:
-                ScrollScreen(kind: .story, text: $story) {
-                    app.saveStory(story)
-                    go(.meet)
-                }
-                .transition(.opacity)
+            // 3 and 4 are ONE place. The photograph is drawn here, once, and
+            // only the sheet changes — the first rolls away, the next unrolls in
+            // the same spot. Nothing about the clearing moves.
+            case .story, .meet:
+                ZStack {
+                    PhotoBackground(place: .story, treatment: .scrim)
 
-            case .meet:
-                ScrollScreen(kind: .meet, text: $wishes) {
-                    app.saveWishes(wishes)
-                    go(.arriving)
+                    if screen == .story {
+                        ScrollScreen(kind: .story, text: $story, drawsBackground: false) {
+                            app.saveStory(story)
+                            go(.meet)
+                        }
+                        .transition(.opacity)
+                    } else {
+                        ScrollScreen(kind: .meet, text: $wishes, drawsBackground: false) {
+                            app.saveWishes(wishes)
+                            go(.arriving)
+                        }
+                        .transition(.opacity)
+                    }
                 }
-                .transition(.opacity)
+                .transition(.identity)      // the land itself never transitions
 
             case .arriving:
                 ArrivingScreen(story: app.story, wishes: app.wishes) { name in
                     if !name.isEmpty { app.remember(companionName: name) }
+                    app.markArrived()
                     go(.companion)
                 }
                 .transition(.opacity)

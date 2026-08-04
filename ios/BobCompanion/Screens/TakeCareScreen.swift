@@ -29,10 +29,15 @@ struct TakeCareScreen: View {
                         Text(Strings.takeCareTitle())
                             .appFont(AppType.hero, leading: AppType.heroLeading)
                             .foregroundStyle(Theme.linen)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .legible()
+                            .arrive(.first)
                         Text(Strings.takeCareLine())
-                            .appFont(AppType.body, leading: AppType.bodyLeading)
+                            .appFont(AppType.lede, leading: AppType.ledeLeading)
                             .foregroundStyle(Theme.sage)
                             .fixedSize(horizontal: false, vertical: true)
+                            .legible()
+                            .arrive(.second)
                     }
                     .padding(.top, geo.size.height * 0.13)
 
@@ -66,7 +71,9 @@ struct TakeCareScreen: View {
                             .foregroundStyle(trouble == nil ? Theme.lichen : Theme.clay)
                             .multilineTextAlignment(.center)
                             .fixedSize(horizontal: false, vertical: true)
+                            .legible(0.7)
                     }
+                    .arrive(.object, rise: 18)
                     .disabled(isWorking)
                     .opacity(isWorking ? 0.6 : 1)
                     .padding(.bottom, geo.safeAreaInsets.bottom > 0 ? 8 : 24)

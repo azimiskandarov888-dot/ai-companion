@@ -17,15 +17,22 @@ struct BrassRing: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var pull: CGFloat = 0
+    /// The three words show themselves ONCE, the first time he is ever on
+    /// screen, and then never again unasked. A handle nobody can find is not
+    /// minimalism, it's a missing feature — but it only has to be taught once.
+    @AppStorage("hasSeenNavHint") private var hasSeenHint = false
+    @State private var hinting = false
 
     private var springy: Animation {
         reduceMotion ? .easeInOut(duration: 0.35)
                      : .spring(response: 0.42, dampingFraction: 0.86)
     }
 
+    private var showingWords: Bool { isOpen || hinting }
+
     var body: some View {
         VStack(spacing: 18) {
-            if isOpen {
+            if showingWords {
                 HStack(spacing: 28) {
                     word(Strings.navDiary(),    action: onDiary)
                     word(Strings.navAccount(),  action: onAccount)
@@ -44,17 +51,31 @@ struct BrassRing: View {
         }
         .padding(.bottom, 6)
         .animation(springy, value: isOpen)
+        .animation(.easeInOut(duration: 0.9), value: hinting)
+        .onAppear(perform: hintOnce)
+    }
+
+    /// Shown once, well after the screen has settled, and gone again on its own.
+    private func hintOnce() {
+        guard !hasSeenHint else { return }
+        hasSeenHint = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3.4) {
+            hinting = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 4.2) { hinting = false }
+        }
     }
 
     private func word(_ title: String, action: @escaping () -> Void) -> some View {
         Button(action: {
             withAnimation(springy) { isOpen = false }
+            hinting = false
             action()
         }) {
             Text(title)
-                .appFont(AppType.caption)
+                .appFont(AppType.secondary)
                 .tracking(AppType.statusTracking)
-                .foregroundStyle(Theme.sage)
+                .foregroundStyle(Theme.linen)
+                .legible()
                 .padding(.horizontal, 10)
                 .frame(minHeight: Metrics.minTouch)
         }
@@ -63,14 +84,17 @@ struct BrassRing: View {
 
     private var ring: some View {
         Capsule()
-            .strokeBorder(
-                LinearGradient(colors: [Theme.brassLight.opacity(0.75),
-                                        Theme.brass.opacity(0.55),
-                                        Theme.brassDark.opacity(0.7)],
-                               startPoint: .leading, endPoint: .trailing),
-                lineWidth: 1.5
+            .fill(
+                LinearGradient(colors: [Theme.brassLight.opacity(0.95),
+                                        Theme.brass.opacity(0.85),
+                                        Theme.brassDark.opacity(0.9)],
+                               startPoint: .leading, endPoint: .trailing)
             )
-            .frame(width: 46, height: 5)
+            .frame(width: 64, height: 5)
+            // A little light pooling under it, so it is findable on a dark
+            // photograph without becoming a piece of furniture.
+            .shadow(color: Theme.brassLight.opacity(0.35), radius: 8)
+            .shadow(color: Color(hex: 0x0A0D08, alpha: 0.6), radius: 6, y: 2)
             .offset(y: -pull * 0.35)
             .frame(minWidth: Metrics.minTouch * 2, minHeight: Metrics.minTouch)
             .contentShape(Rectangle())

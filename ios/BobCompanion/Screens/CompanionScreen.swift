@@ -47,10 +47,12 @@ struct CompanionScreen: View {
                 // Him, on the optical centre. `.position` puts his CENTRE there,
                 // which is what 45.5 % means.
                 OrbView(state: orbState)
+                    .arrive(.first, rise: 0)
                     .position(x: geo.size.width / 2, y: h * Metrics.opticalCentre)
 
                 // The status word, below him at 56.9 %.
                 StatusWord(state: orbState)
+                    .arrive(.second)
                     .position(x: geo.size.width / 2, y: h * Metrics.statusWordY)
 
                 // When he can't hear you, he says so himself — on this screen,
@@ -72,6 +74,7 @@ struct CompanionScreen: View {
                               onAccount: onAccount,
                               onSettings: onSettings)
                 }
+                .arrive(.object)
             }
             .animation(.easeInOut(duration: 0.45), value: conversation.status)
         }

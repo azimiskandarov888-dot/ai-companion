@@ -13,12 +13,20 @@ import SwiftUI
 
 enum AppType {
 
-    // MARK: - Sans — what the app says
+    // MARK: - The voice — the few lines that carry the app's feeling
+    //
+    // These are serif, not sans. They are the only sentences in the app that
+    // are trying to make you feel something, and a system sans says them like
+    // a settings label — correct, and completely flat. New York gives them an
+    // edge and a warmth that the photographs deserve, and separates the app
+    // SPEAKING from the app LABELLING.
 
-    /// 30 / 1.26, Light. Sign-in's warm line, "Take care of him".
-    static let hero = Font.system(size: 30, weight: .light)
-    /// 24 / Semibold. Screen titles.
-    static let title = Font.system(size: 24, weight: .semibold)
+    /// 32 / 1.22 serif. Sign-in's warm line, "Take care of him".
+    static let hero = Font.system(size: 32, design: .serif)
+    /// 27 / Medium serif. Screen titles.
+    static let title = Font.system(size: 27, weight: .medium, design: .serif)
+    /// 19 / 1.5 serif. The sentence under a hero line.
+    static let lede = Font.system(size: 19, design: .serif)
     /// 17 / Regular. Body, list labels.
     static let body = Font.system(size: 17)
     /// 17 / Semibold. Button labels.
@@ -48,7 +56,8 @@ enum AppType {
     // SwiftUI's `lineSpacing` is the gap BETWEEN lines, not the line height, so
     // these are (lineHeight − fontSize) rather than the ratios themselves.
 
-    static let heroLeading: CGFloat      = 30 * 1.26 - 30   // ≈ 7.8
+    static let heroLeading: CGFloat      = 32 * 1.22 - 32   // ≈ 7.0
+    static let ledeLeading: CGFloat      = 19 * 1.50 - 19   // ≈ 9.5
     static let writtenLeading: CGFloat   = 18 * 1.66 - 18   // ≈ 11.9
     static let diaryLeading: CGFloat     = 15 * 1.72 - 15   // ≈ 10.8
     static let quoteLeading: CGFloat     = 14 * 1.60 - 14   // ≈ 8.4
