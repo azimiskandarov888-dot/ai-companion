@@ -40,62 +40,24 @@ struct AppFlow: View {
 
     var body: some View {
         ZStack {
-            switch screen {
-            case .signIn:
-                SignInScreen { go(.takeCare) }
-                    .transition(.screenChange)
-
-            case .takeCare:
-                TakeCareScreen { go(.story) }
-                    .transition(.screenChange)
-
-            // 3 and 4 are ONE place. The photograph is drawn here, once, and
-            // only the sheet changes — the first rolls away, the next unrolls in
-            // the same spot. Nothing about the clearing moves.
-            case .story, .meet:
-                ZStack {
-                    PhotoBackground(place: .story, treatment: .scrim)
-
-                    if screen == .story {
-                        ScrollScreen(kind: .story, text: $story, drawsBackground: false) {
-                            app.saveStory(story)
-                            go(.meet)
-                        }
-                        .transition(.screenChange)
-                    } else {
-                        ScrollScreen(kind: .meet, text: $wishes, drawsBackground: false) {
-                            app.saveWishes(wishes)
-                            go(.arriving)
-                        }
-                        .transition(.screenChange)
-                    }
-                }
-                // The land doesn't transition BETWEEN 3 and 4 — it's one view
-                // that simply stays put while the sheet inside it changes. But
-                // this pair still has to arrive and leave like any other screen,
-                // and .identity here silently killed the outro on the two
-                // screens you pass through most.
+            // WHY .id() IS HERE, AND WHY THE OUTRO DIDN'T WORK WITHOUT IT
+            //
+            // A `switch` inside a container builds a conditional view, and
+            // SwiftUI frequently treats a change of branch as an UPDATE of one
+            // slot rather than a remove-and-insert. When that happens the
+            // insertion transition still runs — the new screen fades up — but
+            // the removal transition is silently dropped, so the old screen
+            // just blinks out. Which is exactly what «no outro» looked like,
+            // and why putting .transition() on every branch changed nothing.
+            //
+            // Giving the content an identity that changes leaves SwiftUI no
+            // choice: the old identity is REMOVED and the new one INSERTED, so
+            // both halves of the transition run.
+            currentScreen
+                .id(placeID)
                 .transition(.screenChange)
-
-            case .arriving:
-                ArrivingScreen(story: app.story, wishes: app.wishes) { name in
-                    if !name.isEmpty { app.remember(companionName: name) }
-                    app.markArrived()
-                    go(.companion)
-                }
-                .transition(.screenChange)
-
-            case .companion:
-                CompanionScreen(
-                    conversation: conversation,
-                    onDiary:    { overlay = .diary },
-                    onAccount:  { overlay = .account },
-                    onSettings: { overlay = .settings }
-                )
-                .transition(.screenChange)
-            }
         }
-        .animation(.easeInOut(duration: 0.55), value: screen)
+        .animation(.easeInOut(duration: 0.55), value: placeID)
         .onAppear {
             screen = app.startingScreen
             story = app.story
@@ -128,6 +90,69 @@ struct AppFlow: View {
         .onChange(of: overlay) { _, now in
             guard screen == .companion else { return }
             now == nil ? conversation.start() : conversation.stop()
+        }
+    }
+
+    @ViewBuilder private var currentScreen: some View {
+        switch screen {
+        case .signIn:
+            SignInScreen { go(.takeCare) }
+
+        case .takeCare:
+            TakeCareScreen { go(.story) }
+
+        // 3 and 4 are ONE place. The photograph is drawn here, once, and only
+        // the sheet changes — the first rolls away, the next unrolls in the
+        // same spot. Nothing about the clearing moves.
+        case .story, .meet:
+            ZStack {
+                PhotoBackground(place: .story, treatment: .scrim)
+
+                if screen == .story {
+                    ScrollScreen(kind: .story, text: $story, drawsBackground: false) {
+                        app.saveStory(story)
+                        go(.meet)
+                    }
+                    .transition(.opacity)
+                } else {
+                    ScrollScreen(kind: .meet, text: $wishes, drawsBackground: false) {
+                        app.saveWishes(wishes)
+                        go(.arriving)
+                    }
+                    .transition(.opacity)
+                }
+            }
+
+        case .arriving:
+            ArrivingScreen(story: app.story, wishes: app.wishes) { name in
+                if !name.isEmpty { app.remember(companionName: name) }
+                app.markArrived()
+                go(.companion)
+            }
+
+        case .companion:
+            CompanionScreen(
+                conversation: conversation,
+                onDiary:    { overlay = .diary },
+                onAccount:  { overlay = .account },
+                onSettings: { overlay = .settings }
+            )
+        }
+    }
+
+    /// What counts as «somewhere else» for the purpose of transitions.
+    ///
+    /// Screens 3 and 4 deliberately share one value: they are the same clearing
+    /// an hour apart, so moving between them must NOT rebuild the screen or
+    /// re-fade the land. Everywhere else gets its own, and so gets a full
+    /// arrival and departure.
+    private var placeID: Int {
+        switch screen {
+        case .signIn:        return 0
+        case .takeCare:      return 1
+        case .story, .meet:  return 2
+        case .arriving:      return 3
+        case .companion:     return 4
         }
     }
 

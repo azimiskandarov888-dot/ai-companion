@@ -117,6 +117,33 @@ Add `orb.imageset` to the asset catalog the same way as the photos. Nothing else
 in the app changes — every screen asks for `OrbView`, and the sizes, light and
 motion stay exactly as designed.
 
+## Using Nunito instead of SF Rounded (optional)
+
+The app's warm lines are set in **SF Rounded**, which ships with iOS. **Nunito**
+is a little warmer and more human, has full Cyrillic, and is free for commercial
+use (SIL Open Font License). To use it:
+
+1. Download it from [fonts.google.com/specimen/Nunito](https://fonts.google.com/specimen/Nunito)
+   → **Get font** → **Download all**. Unzip.
+2. From `static/`, drag these four into `BobCompanion/Resources/` in Xcode,
+   ticking **Copy items if needed** and the **BobCompanion** target:
+   `Nunito-Light.ttf` · `Nunito-Regular.ttf` · `Nunito-Medium.ttf` ·
+   `Nunito-SemiBold.ttf`
+3. Add them to `App/Info.plist`:
+
+```xml
+<key>UIAppFonts</key>
+<array>
+    <string>Nunito-Light.ttf</string>
+    <string>Nunito-Regular.ttf</string>
+    <string>Nunito-Medium.ttf</string>
+    <string>Nunito-SemiBold.ttf</string>
+</array>
+```
+
+That's all — `Design/Typography.swift` picks it up on its own and falls straight
+back to SF Rounded if it isn't there, so nothing breaks either way.
+
 ## Renaming the app
 
 Two places: `CFBundleDisplayName` in `App/Info.plist`, and `AppInfo.displayName`
