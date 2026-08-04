@@ -125,6 +125,24 @@ enum Strings {
         ru: "Друга не делают на заказ. Друга встречают.",
         en: "A friend isn't made to order. A friend is met.")
 
+    // MARK: - He is coming
+    //
+    // Said while the server writes him. Never «creating», «generating» or
+    // «loading» — nothing is being MADE here as far as the app is concerned.
+    // Someone is on his way, and this is what that looks like from where you're
+    // standing.
+
+    static let arriving = [
+        Phrase(ru: "Где-то далеко он откладывает свои дела.",
+               en: "Somewhere far off, he sets down what he was doing."),
+        Phrase(ru: "Он идёт к тебе.",
+               en: "He's coming to meet you."),
+        Phrase(ru: "Уже недалеко.",
+               en: "Not far now."),
+        Phrase(ru: "Почти здесь.",
+               en: "Almost here."),
+    ]
+
     // MARK: - 5 · Companion
 
     static let statusListening = Phrase(ru: "слушаю", en: "listening")

@@ -96,8 +96,9 @@ private struct SoftLeave: ViewModifier {
     func body(content: Content) -> some View {
         content
             .opacity(gone ? 0 : 1)
-            .blur(radius: gone ? 10 : 0)
-            .scaleEffect(gone ? 0.985 : 1)
+            .blur(radius: gone ? 14 : 0)
+            .scaleEffect(gone ? 0.97 : 1)
+            .offset(y: gone ? 10 : 0)
     }
 }
 

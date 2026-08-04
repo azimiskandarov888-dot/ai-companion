@@ -70,7 +70,12 @@ struct AppFlow: View {
                         .transition(.screenChange)
                     }
                 }
-                .transition(.identity)      // the land itself never transitions
+                // The land doesn't transition BETWEEN 3 and 4 — it's one view
+                // that simply stays put while the sheet inside it changes. But
+                // this pair still has to arrive and leave like any other screen,
+                // and .identity here silently killed the outro on the two
+                // screens you pass through most.
+                .transition(.screenChange)
 
             case .arriving:
                 ArrivingScreen(story: app.story, wishes: app.wishes) { name in
@@ -128,47 +133,5 @@ struct AppFlow: View {
 
     private func go(_ next: AppScreen) {
         withAnimation(.easeInOut(duration: 0.55)) { screen = next }
-    }
-}
-
-// MARK: - He is being written
-//
-// The one honest wait in the app: the server is composing a whole person from
-// their story. It takes a few seconds, so instead of a spinner the scene simply
-// holds, and he warms into being. No progress bar, no "generating…".
-
-private struct ArrivingScreen: View {
-    let story: String
-    let wishes: String
-    var onArrived: (String) -> Void
-
-    @State private var state: OrbState = .resting
-
-    var body: some View {
-        GeometryReader { geo in
-            ZStack {
-                PhotoBackground(place: .companion, treatment: .bare)
-                OrbView(state: state)
-                    .position(x: geo.size.width / 2, y: geo.size.height * Metrics.opticalCentre)
-            }
-        }
-        .task {
-            // He wakes as he is written.
-            withAnimation(.easeInOut(duration: 1.2)) { state = .thinking }
-
-            let client = BackendClient(baseURL: AppConfig.shared.backendURL)
-            var name = ""
-            do {
-                name = try await client.createCompanion(story: story, wishes: wishes).name
-            } catch {
-                // If the server can't be reached, we don't strand them on a
-                // dead screen — he arrives anyway and says so himself.
-                name = ""
-            }
-
-            withAnimation(.easeInOut(duration: 0.8)) { state = .speaking }
-            try? await Task.sleep(nanoseconds: 900_000_000)
-            onArrived(name)
-        }
     }
 }
