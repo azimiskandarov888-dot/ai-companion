@@ -1,117 +1,64 @@
 // The only chrome on the companion screen.
 //
-// A small brass ring at the bottom edge. Press or pull it and three quiet words
-// rise — Diary · You · Settings. Let go and they sink again.
+// Three quiet words at the bottom edge — Diary · You · Settings — with a small
+// brass rule above them. That's it.
 //
-// Resting shows no words at all, which is the point: the screen has to stay
-// empty enough to live with all day. There is no tab bar, because a tab bar
-// would turn a friend into an app.
+// This started as a hidden pull-handle that showed the words only when tugged.
+// It was beautiful and it did not work: the handle could not be found, twice,
+// by the person who knew it was there. A control nobody can find is not
+// minimalism — it's a missing feature, and the app has no other way to reach
+// three of its screens.
+//
+// So the words are simply always there. It stays minimal by being SMALL and
+// QUIET — three words in caption type at 78 % — rather than by being hidden.
+// There is still no tab bar, no icons, nothing across the top; a tab bar would
+// turn a friend into an app.
 
 import SwiftUI
 
 struct BrassRing: View {
+    /// Kept so the companion screen's existing state and its swipe-to-dismiss
+    /// still line up, though the words no longer need opening.
     @Binding var isOpen: Bool
     var onDiary: () -> Void
     var onAccount: () -> Void
     var onSettings: () -> Void
 
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var pull: CGFloat = 0
-    /// The three words show themselves ONCE, the first time he is ever on
-    /// screen, and then never again unasked. A handle nobody can find is not
-    /// minimalism, it's a missing feature — but it only has to be taught once.
-    @AppStorage("hasSeenNavHint") private var hasSeenHint = false
-    @State private var hinting = false
-
-    private var springy: Animation {
-        reduceMotion ? .easeInOut(duration: 0.35)
-                     : .spring(response: 0.42, dampingFraction: 0.86)
-    }
-
-    private var showingWords: Bool { isOpen || hinting }
-
     var body: some View {
-        VStack(spacing: 18) {
-            if showingWords {
-                HStack(spacing: 28) {
-                    word(Strings.navDiary(),    action: onDiary)
-                    word(Strings.navAccount(),  action: onAccount)
-                    word(Strings.navSettings(), action: onSettings)
-                }
-                .transition(
-                    reduceMotion
-                        ? .opacity
-                        : .asymmetric(
-                            insertion: .move(edge: .bottom).combined(with: .opacity),
-                            removal: .opacity)
+        VStack(spacing: 12) {
+            // The brass rule. Decoration now rather than a control — it marks
+            // the bottom of his world the way the rollers mark the scroll, and
+            // fades out at both ends so it never becomes a bar.
+            Capsule()
+                .fill(
+                    LinearGradient(colors: [Theme.brassLight.opacity(0.0),
+                                            Theme.brassLight.opacity(0.55),
+                                            Theme.brass.opacity(0.45),
+                                            Theme.brassLight.opacity(0.0)],
+                                   startPoint: .leading, endPoint: .trailing)
                 )
+                .frame(width: 132, height: 1)
+
+            HStack(spacing: 26) {
+                word(Strings.navDiary(),    action: onDiary)
+                word(Strings.navAccount(),  action: onAccount)
+                word(Strings.navSettings(), action: onSettings)
             }
-
-            ring
         }
-        .padding(.bottom, 6)
-        .animation(springy, value: isOpen)
-        .animation(.easeInOut(duration: 0.9), value: hinting)
-        .onAppear(perform: hintOnce)
-    }
-
-    /// Shown once, well after the screen has settled, and gone again on its own.
-    private func hintOnce() {
-        guard !hasSeenHint else { return }
-        hasSeenHint = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + 3.4) {
-            hinting = true
-            DispatchQueue.main.asyncAfter(deadline: .now() + 4.2) { hinting = false }
-        }
+        .padding(.bottom, 4)
     }
 
     private func word(_ title: String, action: @escaping () -> Void) -> some View {
-        Button(action: {
-            withAnimation(springy) { isOpen = false }
-            hinting = false
-            action()
-        }) {
+        Button(action: action) {
             Text(title)
-                .appFont(AppType.secondary)
+                .appFont(AppType.caption)
                 .tracking(AppType.statusTracking)
-                .foregroundStyle(Theme.linen)
-                .legible()
-                .padding(.horizontal, 10)
+                .foregroundStyle(Theme.onLand.opacity(0.78))
+                .legible(0.8)
+                .padding(.horizontal, 8)
                 .frame(minHeight: Metrics.minTouch)
         }
         .buttonStyle(SoftPress())
-    }
-
-    private var ring: some View {
-        Capsule()
-            .fill(
-                LinearGradient(colors: [Theme.brassLight.opacity(0.95),
-                                        Theme.brass.opacity(0.85),
-                                        Theme.brassDark.opacity(0.9)],
-                               startPoint: .leading, endPoint: .trailing)
-            )
-            .frame(width: 64, height: 5)
-            // A little light pooling under it, so it is findable on a dark
-            // photograph without becoming a piece of furniture.
-            .shadow(color: Theme.brassLight.opacity(0.35), radius: 8)
-            .shadow(color: Color(hex: 0x0A0D08, alpha: 0.6), radius: 6, y: 2)
-            .offset(y: -pull * 0.35)
-            .frame(minWidth: Metrics.minTouch * 2, minHeight: Metrics.minTouch)
-            .contentShape(Rectangle())
-            .onTapGesture { withAnimation(springy) { isOpen.toggle() } }
-            .gesture(
-                DragGesture(minimumDistance: 4)
-                    .onChanged { value in
-                        pull = max(-40, min(0, value.translation.height))
-                        if pull < -18, !isOpen { withAnimation(springy) { isOpen = true } }
-                    }
-                    .onEnded { _ in withAnimation(springy) { pull = 0 } }
-            )
-            .accessibilityElement()
-            .accessibilityLabel(Strings.language == .russian ? "Меню" : "Menu")
-            .accessibilityHint(Strings.language == .russian
-                               ? "Дневник, Ты, Настройки"
-                               : "Diary, You, Settings")
-            .accessibilityAddTraits(.isButton)
+        .accessibilityAddTraits(.isButton)
     }
 }

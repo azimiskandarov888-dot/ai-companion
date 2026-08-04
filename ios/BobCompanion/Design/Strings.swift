@@ -61,8 +61,8 @@ enum Strings {
 
     static let takeCareTitle = Phrase(ru: "Позаботься о нём", en: "Take care of him")
     static let takeCareLine = Phrase(
-        ru: "Это — чтобы он оставался рядом.",
-        en: "This is what keeps him here.")
+        ru: "Чтобы он всегда был рядом.",
+        en: "So that he's always here.")
     static let planMonthly = Phrase(ru: "Помесячно",     en: "Month by month")
     static let planYearly  = Phrase(ru: "На целый год",  en: "A whole year")
     static let takeCareButton = Phrase(ru: "Позаботиться о нём", en: "Take care of him")
@@ -106,9 +106,6 @@ enum Strings {
     static let caution = Phrase(
         ru: "Чем больше решишь о нём сейчас, тем меньше останется — встретить.",
         en: "The more you decide about him now, the less of him is left to meet.")
-    static let cautionSofter = Phrase(
-        ru: "Ближе всего оказывается тот, кого не придумывали.",
-        en: "The friend you love is usually the one you didn't design.")
     static let meetPlaceholder = Phrase(
         ru: "Кого-то, кто повидал жизнь…",
         en: "Someone who has seen a bit of life…")

@@ -34,7 +34,7 @@ struct TakeCareScreen: View {
                             .arrive(.first)
                         Text(Strings.takeCareLine())
                             .appFont(AppType.lede, leading: AppType.ledeLeading)
-                            .foregroundStyle(Theme.sage)
+                            .foregroundStyle(Theme.onLand)
                             .fixedSize(horizontal: false, vertical: true)
                             .legible()
                             .arrive(.second)
@@ -57,7 +57,7 @@ struct TakeCareScreen: View {
                         // so it is never a mystery.
                         Text(chosen.summary)
                             .appFont(AppType.caption)
-                            .foregroundStyle(Theme.sage)
+                            .foregroundStyle(Theme.onLand)
                             .multilineTextAlignment(.center)
                             .fixedSize(horizontal: false, vertical: true)
                             .padding(.top, 4)

@@ -113,6 +113,17 @@ enum Theme {
     }
 }
 
+extension Theme {
+    /// Secondary words laid directly on a green landscape.
+    ///
+    /// NEVER sage for this. Sage *is* the landscape — a green-grey drawn from
+    /// the hills themselves — so sage type on a hill is green on green, which
+    /// is legible in the strict sense and genuinely uncomfortable to read. Warm
+    /// cream sits at the opposite end of the wheel from everything in these
+    /// photographs, and separates without shouting.
+    static let onLand = Theme.parchmentLeaf
+}
+
 extension Color {
     /// `Color(hex: 0x7B9455)` — hex codes live in this file and nowhere else.
     init(hex: UInt32, alpha: Double = 1) {

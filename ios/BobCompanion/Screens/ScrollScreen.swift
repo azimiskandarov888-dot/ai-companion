@@ -117,7 +117,7 @@ struct ScrollScreen: View {
                         Text(Strings.friendshipQuote())
                             .font(AppType.quote)
                             .lineSpacing(AppType.quoteLeading)
-                            .foregroundStyle(Theme.sage)
+                            .foregroundStyle(Theme.onLand)
                             .multilineTextAlignment(.leading)
                             .fixedSize(horizontal: false, vertical: true)
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -255,19 +255,15 @@ struct ScrollScreen: View {
                 .fill(Theme.sun400)
                 .frame(width: 2)
             VStack(alignment: .leading, spacing: 8) {
+                // One caution, said once. It used to be followed by a softer
+                // restatement of itself, which was a third helping of the same
+                // thought on a screen that already carries the quote.
                 Text(Strings.caution())
                     .font(.system(size: isWriting ? 14.5 : 18, weight: .regular))
                     .lineSpacing(isWriting ? 4 : 5)
                     .foregroundStyle(Theme.sun300)
                     .fixedSize(horizontal: false, vertical: true)
                     .legible()
-                if !isWriting {
-                    Text(Strings.cautionSofter())
-                        .appFont(AppType.caption)
-                        .foregroundStyle(Theme.sage)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .legible()
-                }
             }
         }
         .fixedSize(horizontal: false, vertical: true)
@@ -280,7 +276,7 @@ struct ScrollScreen: View {
             if showNudge {
                 Text(Strings.storyNudge())
                     .appFont(AppType.caption)
-                    .foregroundStyle(Theme.sage)
+                    .foregroundStyle(Theme.onLand)
                     .multilineTextAlignment(.center)
                     .transition(.opacity)
             }

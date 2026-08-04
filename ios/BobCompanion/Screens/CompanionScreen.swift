@@ -60,7 +60,7 @@ struct CompanionScreen: View {
                 if case .problem = conversation.status {
                     Text(Strings.cannotHear())
                         .appFont(AppType.body)
-                        .foregroundStyle(Theme.sage)
+                        .foregroundStyle(Theme.onLand)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, Metrics.sideMargin)
                         .position(x: geo.size.width / 2, y: h * 0.63)

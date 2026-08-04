@@ -62,7 +62,7 @@ struct SignInScreen: View {
                         Button(action: { signIn(with: "email") }) {
                             Text(Strings.orUseEmail())
                                 .appFont(AppType.secondary)
-                                .foregroundStyle(Theme.sage)
+                                .foregroundStyle(Theme.onLand)
                                 .legible(0.7)
                                 .frame(minHeight: Metrics.minTouch)
                         }
