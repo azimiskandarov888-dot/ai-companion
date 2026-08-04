@@ -4,17 +4,26 @@
 // both, because that is exactly what they are: you didn't get up, you turned to
 // a second page.
 //
+// The scroll hangs VERTICALLY — a roller above, a roller below, paper between —
+// and writing behaves the way writing behaves everywhere else on a phone: type
+// past the bottom line and the text slides up inside the paper. The paper never
+// grows, never overruns its rollers, and never has to be fought with.
+//
 // The two things that must not go wrong:
 //
-//   1. THE KEYBOARD MUST NEVER COVER THE SCROLL. At rest the paper's centre sits
-//      on the optical centre (45.5 %). When the keyboard rises the whole object
-//      rises with it, to 12 %–50 % of the screen, and the writing scrolls INSIDE
-//      the parchment — the paper never grows and never slides under the keys.
-//      If the scroll can't be seen, the screen has failed.
+//   1. THE KEYBOARD MUST NEVER COVER THE SCROLL. At rest the paper sits on the
+//      optical centre (45.5 %). When the keyboard rises the whole object rises
+//      with it and the paper shortens — the writing scrolls INSIDE the parchment
+//      rather than sliding under the keys. If the scroll can't be seen, the
+//      screen has failed.
 //
-//   2. THE ROLL-AWAY IS THE SIGNATURE MOMENT. The sheet winds onto the far
-//      roller, lifts, tilts, and drifts out past the right edge — and the
-//      landscape behind it never moves.
+//   2. THE ROLL-AWAY IS THE SIGNATURE MOMENT. The sheet winds up onto the top
+//      roller, and the whole object lifts and drifts away — and the landscape
+//      behind it never moves.
+//
+// Everything here is laid out in ONE vertical stack with definite heights.
+// Nothing is placed by absolute coordinates, because that is how the caution on
+// screen 4 ended up sitting on top of the paper.
 
 import SwiftUI
 
@@ -43,7 +52,7 @@ struct ScrollScreen: View {
     @FocusState private var writing: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    /// 0 at rest → 1 when the sheet has wound onto the far roller and gone.
+    /// 0 at rest → 1 when the sheet has wound onto the top roller and gone.
     @State private var winding: CGFloat = 0
     @State private var showNudge = false
 
@@ -51,8 +60,9 @@ struct ScrollScreen: View {
         GeometryReader { geo in
             let h = geo.size.height
             let isWriting = keyboard.isShowing
+            let paper = paperHeight(in: h, isWriting: isWriting)
 
-            ZStack(alignment: .top) {
+            ZStack {
                 PhotoBackground(place: kind.place, treatment: .scrim)
 
                 // Tapping the world outside the paper puts the pen down. This
@@ -63,113 +73,101 @@ struct ScrollScreen: View {
                     .contentShape(Rectangle())
                     .onTapGesture { writing = false }
 
-                // ── screen 4's caution: the one thing that survives the keyboard
-                if kind == .meet {
-                    caution(isWriting: isWriting)
-                        .padding(.horizontal, Metrics.sideMargin)
-                        .padding(.top, isWriting ? h * 0.075 : h * 0.20)
-                        .opacity(winding > 0.1 ? 0 : 1)
-                }
+                VStack(spacing: 0) {
+                    // ── screen 4's caution, above the paper and never on it
+                    if kind == .meet {
+                        caution(isWriting: isWriting)
+                            .opacity(winding > 0.1 ? 0 : 1)
+                        Spacer(minLength: 14)
+                    }
 
-                // ── the scroll itself
-                scroll(width: geo.size.width, height: h, isWriting: isWriting)
-                    .position(x: geo.size.width / 2 + winding * geo.size.width * 1.15,
-                              y: centreY(in: h, isWriting: isWriting))
-                    .rotationEffect(.degrees(-winding * 7), anchor: .center)
-                    .offset(y: -winding * 10)
+                    // ── the scroll itself
+                    scroll(isWriting: isWriting)
+                        .frame(height: paper)
+                        .offset(y: -winding * h * 0.28)
+                        .opacity(1 - winding * 0.55)
 
-                // ── screen 4's quote: read before writing, steps back after
-                if kind == .meet {
-                    VStack {
-                        Spacer()
+                    Spacer(minLength: 12)
+
+                    // ── screen 4's quote: read before writing, steps back after
+                    if kind == .meet, !isWriting, winding < 0.1 {
                         Text(Strings.friendshipQuote())
                             .font(AppType.quote)
                             .lineSpacing(AppType.quoteLeading)
                             .foregroundStyle(Theme.sage)
                             .multilineTextAlignment(.leading)
                             .fixedSize(horizontal: false, vertical: true)
-                            .padding(.horizontal, Metrics.sideMargin)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(.bottom, 18)
-                            .opacity(isWriting || winding > 0.1 ? 0 : 1)
-                        confirmButton
-                            .padding(.horizontal, Metrics.sideMargin)
-                            .padding(.bottom, geo.safeAreaInsets.bottom > 0 ? 8 : 24)
-                            .opacity(isWriting ? 0 : 1)
                     }
-                } else {
-                    VStack {
-                        Spacer()
-                        confirmButton
-                            .padding(.horizontal, Metrics.sideMargin)
-                            .padding(.bottom, geo.safeAreaInsets.bottom > 0 ? 8 : 24)
-                            .opacity(isWriting ? 0 : 1)
-                    }
-                }
 
-                // ── while writing, the confirm moves to a blurred bar just
-                //    above the keys, so it is never buried
-                if isWriting {
-                    VStack {
-                        Spacer()
-                        confirmButton
-                            .padding(.horizontal, Metrics.sideMargin)
-                            .padding(.vertical, 10)
-                            .background(.ultraThinMaterial.opacity(0.9))
-                            .environment(\.colorScheme, .dark)
-                            .padding(.bottom, keyboard.height)
-                    }
-                    .transition(.opacity)
-                    .ignoresSafeArea(.keyboard)
+                    confirmButton
                 }
+                .padding(.horizontal, Metrics.sideMargin)
+                .padding(.top, topInset(in: h, paper: paper, isWriting: isWriting))
+                .padding(.bottom, isWriting
+                         ? keyboard.height + 12
+                         : (geo.safeAreaInsets.bottom > 0 ? 8 : 24))
             }
             .animation(.easeOut(duration: keyboard.duration), value: keyboard.height)
         }
         .ignoresSafeArea(.keyboard)      // we position against the keyboard ourselves
     }
 
-    // MARK: - where the paper sits
+    // MARK: - where the paper sits, and how tall it is
+    //
+    // Both are definite. The paper is exactly as tall as it is told to be, so it
+    // can never overrun its rollers or collide with the words above it.
 
-    /// Rest: the paper's centre on the optical centre, 45.5 %.
-    /// Writing: optically centred in what's left above the keyboard — the
-    /// midpoint of 12 % and 50 %.
-    private func centreY(in height: CGFloat, isWriting: Bool) -> CGFloat {
-        isWriting
-            ? height * (Metrics.scrollWritingTop + Metrics.scrollWritingBottom) / 2
-            : height * Metrics.opticalCentre
+    private func paperHeight(in height: CGFloat, isWriting: Bool) -> CGFloat {
+        let fraction: CGFloat
+        switch (kind, isWriting) {
+        case (.story, false): fraction = 0.42
+        case (.story, true):  fraction = 0.34
+        case (.meet,  false): fraction = 0.33
+        case (.meet,  true):  fraction = 0.30
+        }
+        return height * fraction
     }
 
-    /// The paper never grows past the room it has — long writing scrolls inside
-    /// it instead.
-    private func maxPaperHeight(in height: CGFloat, isWriting: Bool) -> CGFloat {
-        isWriting
-            ? height * (Metrics.scrollWritingBottom - Metrics.scrollWritingTop)
-            : height * 0.44
+    /// Rest: the paper's centre lands on the optical centre, 45.5 %.
+    /// Writing: it rises to just under the top of the screen.
+    private func topInset(in height: CGFloat, paper: CGFloat, isWriting: Bool) -> CGFloat {
+        if isWriting { return height * Metrics.scrollWritingTop }
+        switch kind {
+        case .story:
+            return max(16, height * Metrics.opticalCentre - paper / 2)
+        case .meet:
+            // The caution sits above the paper, so the stack starts higher.
+            return max(16, height * 0.11)
+        }
     }
 
     // MARK: - the scroll
 
-    private func scroll(width: CGFloat, height: CGFloat, isWriting: Bool) -> some View {
+    private func scroll(isWriting: Bool) -> some View {
         ParchmentScroll(winding: winding) {
-            VStack(alignment: .leading, spacing: 12) {
-                // Priority, so a short screen squeezes the writing area and
-                // never the words that say what to write.
+            VStack(alignment: .leading, spacing: 10) {
                 Text(kind.heading)
                     .font(AppType.writtenHeading)
                     .foregroundStyle(Theme.ink)
                     .fixedSize(horizontal: false, vertical: true)
-                    .layoutPriority(2)
 
                 if !isWriting, text.isEmpty, kind == .story {
                     Text(Strings.storyLine())
                         .appFont(AppType.caption)
                         .foregroundStyle(Theme.inkSoft.opacity(0.88))
                         .fixedSize(horizontal: false, vertical: true)
-                        .layoutPriority(2)
                 }
 
+                // The writing surface takes everything left over, and scrolls
+                // its own contents. It is NOT inside a ScrollView — two nested
+                // scrollers is what made the text vanish and stop accepting
+                // more once it passed the bottom.
                 writingSurface
+                    .frame(maxHeight: .infinity)
 
-                if kind == .meet {
+                if kind == .meet, !isWriting {
                     // The chips live ON the paper — drawn in ink, not linen.
                     // They insert a phrase into their own writing; they are
                     // never a field, and never required.
@@ -178,13 +176,9 @@ struct ScrollScreen: View {
                         SoftChip(title: Strings.chipGender()) { insert(Strings.chipGenderText()) }
                         SoftChip(title: Strings.chipOrigin()) { insert(Strings.chipOriginText()) }
                     }
-                    .padding(.top, 2)
-                    .layoutPriority(2)
                 }
             }
         }
-        .frame(width: min(Metrics.scrollWidth, width - Metrics.sideMargin * 2))
-        .frame(maxHeight: maxPaperHeight(in: height, isWriting: isWriting))
         // Touching the paper anywhere picks the pen up — the margins count too,
         // not only the exact line you're writing on. Simultaneous, so the text
         // view still places its own cursor where you tapped.
@@ -193,30 +187,25 @@ struct ScrollScreen: View {
     }
 
     private var writingSurface: some View {
-        ScrollView {
-            ZStack(alignment: .topLeading) {
-                if text.isEmpty {
-                    Text(kind.placeholder)
-                        .font(AppType.writtenBody)
-                        .italic()
-                        .foregroundStyle(Theme.inkSoft.opacity(0.88))
-                        .allowsHitTesting(false)
-                        .padding(.top, 8)
-                        .padding(.leading, 5)    // sits on the text view's own inset
-                }
-                TextEditor(text: $text)
+        ZStack(alignment: .topLeading) {
+            if text.isEmpty {
+                Text(kind.placeholder)
                     .font(AppType.writtenBody)
-                    .lineSpacing(AppType.writtenLeading)
-                    .foregroundStyle(Theme.ink)
-                    .tint(Theme.leaf500)                 // the caret, in ink's world
-                    .scrollContentBackground(.hidden)
-                    .background(.clear)
-                    .frame(minHeight: 120)
-                    .focused($writing)
+                    .italic()
+                    .foregroundStyle(Theme.inkSoft.opacity(0.88))
+                    .allowsHitTesting(false)
+                    .padding(.top, 8)
+                    .padding(.leading, 5)    // sits on the text view's own inset
             }
+            TextEditor(text: $text)
+                .font(AppType.writtenBody)
+                .lineSpacing(AppType.writtenLeading)
+                .foregroundStyle(Theme.ink)
+                .tint(Theme.leaf500)                 // the caret, in ink's world
+                .scrollContentBackground(.hidden)
+                .background(.clear)
+                .focused($writing)
         }
-        .frame(minHeight: 96)        // always a real place to write, never a sliver
-        .scrollBounceBehavior(.basedOnSize)
     }
 
     private func insert(_ phrase: String) {
@@ -234,8 +223,8 @@ struct ScrollScreen: View {
                 .frame(width: 2)
             VStack(alignment: .leading, spacing: 8) {
                 Text(Strings.caution())
-                    .font(.system(size: isWriting ? 14.5 : 19, weight: .regular))
-                    .lineSpacing(isWriting ? 4 : 6)
+                    .font(.system(size: isWriting ? 14.5 : 18, weight: .regular))
+                    .lineSpacing(isWriting ? 4 : 5)
                     .foregroundStyle(Theme.sun300)
                     .fixedSize(horizontal: false, vertical: true)
                 if !isWriting {
@@ -282,8 +271,8 @@ struct ScrollScreen: View {
             return
         }
 
-        // The signature moment, ~0.8 s: winds onto the far roller, lifts, tilts,
-        // and drifts out right. The landscape never moves.
+        // The signature moment, ~0.8 s: the sheet winds up onto the top roller
+        // and the whole object lifts away. The landscape never moves.
         withAnimation(.timingCurve(0.32, 0, 0.2, 1, duration: 0.8)) { winding = 1 }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.78) { onConfirm() }
     }

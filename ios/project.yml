@@ -36,10 +36,15 @@ targets:
     platform: iOS
     sources:
       - path: BobCompanion
-    info:
-      path: BobCompanion/App/Info.plist
+        excludes:
+          - "App/Info.plist"      # named below instead, never copied as a resource
+    # NOT `info:` — that key makes XcodeGen GENERATE an Info.plist at that path,
+    # overwriting the real one with $(EXECUTABLE_NAME) boilerplate on every run
+    # and silently dropping the microphone permission, the local-network
+    # permission and the launch screen. Point at the file instead.
     settings:
       base:
+        INFOPLIST_FILE: BobCompanion/App/Info.plist
         PRODUCT_BUNDLE_IDENTIFIER: com.yourfamily.bobcompanion
         MARKETING_VERSION: "0.1.0"
         CURRENT_PROJECT_VERSION: "1"

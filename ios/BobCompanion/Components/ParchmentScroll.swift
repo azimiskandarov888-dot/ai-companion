@@ -1,10 +1,12 @@
 // The scroll — the app's signature object, and its writing surface.
 //
-// A parchment panel held between two turned wooden rollers with aged brass end
-// caps, lying flat and SQUARE to the viewer, like a sheet of paper set down in
-// front of you. Not photographed — drawn — because it has to hold live text,
-// grow with Dynamic Type, scroll internally when the writing gets long, and
-// roll away when it's finished.
+// A parchment sheet hanging between two turned wooden rollers, one above and one
+// below, with aged brass end caps. VERTICAL, the way a scroll actually hangs:
+// you read down it, and when you write past the bottom the writing slides up
+// inside the paper exactly like any other text field. The paper never grows.
+//
+// Not photographed — drawn — because it has to hold live text, grow with Dynamic
+// Type, scroll internally, and roll away when it's finished.
 //
 // It rests on the world rather than floating: a soft warm shadow beneath, and a
 // faint highlight along its top edge where the light catches the paper.
@@ -12,16 +14,16 @@
 import SwiftUI
 
 struct ParchmentScroll<Content: View>: View {
-    /// Winding progress for the roll-away, 0 (open) → 1 (wound onto the far
+    /// Winding progress for the roll-away, 0 (open) → 1 (wound onto the top
     /// roller and gone). Left at 0 for the ordinary resting and writing states.
     var winding: CGFloat = 0
     @ViewBuilder var content: Content
 
     var body: some View {
-        HStack(spacing: 0) {
-            Roller(thickness: 1 - winding * 0.45)         // near roller thins…
+        VStack(spacing: 0) {
+            Roller(thickness: 1 + winding * 0.57)     // the sheet winds up onto this one
             paper
-            Roller(thickness: 1 + winding * 0.57)         // …far roller thickens as it takes the paper
+            Roller(thickness: 1 - winding * 0.45)     // …and this one empties
         }
         .shadow(color: Color(hex: 0x120E06, alpha: 0.55),
                 radius: 26 + winding * 10, x: 0, y: 12 + winding * 6)
@@ -30,8 +32,10 @@ struct ParchmentScroll<Content: View>: View {
     private var paper: some View {
         content
             .padding(.horizontal, 22)
-            .padding(.vertical, 20)
-            .frame(maxWidth: .infinity)
+            .padding(.vertical, 18)
+            // Fills whatever room the screen gave the scroll, and no more — so
+            // the paper is always exactly as tall as the rollers are apart.
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .background(
                 ZStack {
                     // The paper itself — soft cream, faintly warmer at the fold.
@@ -51,12 +55,16 @@ struct ParchmentScroll<Content: View>: View {
                     .frame(height: 1)
                     .blendMode(.softLight)
             }
-            .scaleEffect(x: max(0.02, 1 - winding), anchor: .trailing)
+            // Rolls up into the top roller.
+            .scaleEffect(y: max(0.02, 1 - winding), anchor: .top)
             .opacity(winding > 0.94 ? 0 : 1)
     }
 }
 
 // MARK: - The rollers
+//
+// Lying horizontally now, so the wood's shading runs top to bottom across the
+// cylinder and the brass caps sit at the left and right ends.
 
 private struct Roller: View {
     /// 1 at rest; grows as the sheet winds onto it.
@@ -69,18 +77,18 @@ private struct Roller: View {
                 .fill(
                     LinearGradient(
                         colors: [Theme.woodDark, Theme.woodLight, Theme.woodMid, Theme.woodDark],
-                        startPoint: .leading, endPoint: .trailing)
+                        startPoint: .top, endPoint: .bottom)
                 )
             RoundedRectangle(cornerRadius: 6, style: .continuous)
                 .strokeBorder(Color(hex: 0x241A08, alpha: 0.7), lineWidth: 1)
         }
-        .frame(width: Metrics.rollerWidth * thickness)
-        .overlay(alignment: .top)    { BrassCap() }
-        .overlay(alignment: .bottom) { BrassCap() }
+        .frame(height: Metrics.rollerWidth * thickness)
+        .overlay(alignment: .leading)  { BrassCap() }
+        .overlay(alignment: .trailing) { BrassCap() }
     }
 }
 
-/// The aged brass end cap, with its little pin. 36 × 18.
+/// The aged brass end cap, with its little pin. 18 × 36 on a horizontal roller.
 private struct BrassCap: View {
     var body: some View {
         ZStack {
@@ -95,7 +103,7 @@ private struct BrassCap: View {
                 .fill(Color(hex: 0x5B441A, alpha: 0.55))
                 .frame(width: 3, height: 3)      // the pin
         }
-        .frame(width: Metrics.brassCapSize.width, height: Metrics.brassCapSize.height)
+        .frame(width: Metrics.brassCapSize.height, height: Metrics.brassCapSize.width)
         .shadow(color: Color(hex: 0x1A1206, alpha: 0.5), radius: 3, y: 1)
     }
 }
