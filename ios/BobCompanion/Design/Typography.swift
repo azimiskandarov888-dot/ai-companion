@@ -21,12 +21,16 @@ enum AppType {
     // edge and a warmth that the photographs deserve, and separates the app
     // SPEAKING from the app LABELLING.
 
-    /// 32 / 1.22 serif. Sign-in's warm line, "Take care of him".
-    static let hero = Font.system(size: 32, design: .serif)
-    /// 27 / Medium serif. Screen titles.
-    static let title = Font.system(size: 27, weight: .medium, design: .serif)
-    /// 19 / 1.5 serif. The sentence under a hero line.
-    static let lede = Font.system(size: 19, design: .serif)
+    /// 32 / 1.22 serif, Light. Sign-in's warm line, "Take care of him".
+    ///
+    /// Light, not regular. At 32 pt a regular-weight serif has thick stems and
+    /// hard, high-contrast serifs — it reads as cut rather than spoken. The
+    /// lighter weight thins the strokes and lets the line breathe.
+    static let hero = Font.system(size: 32, weight: .light, design: .serif)
+    /// 27 / Regular serif. Screen titles.
+    static let title = Font.system(size: 27, design: .serif)
+    /// 19 / 1.5 serif, Light. The sentence under a hero line.
+    static let lede = Font.system(size: 19, weight: .light, design: .serif)
     /// 17 / Regular. Body, list labels.
     static let body = Font.system(size: 17)
     /// 17 / Semibold. Button labels.

@@ -90,13 +90,18 @@ extension View {
 // MARK: - Text laid on a photograph
 
 extension View {
-    /// Text sitting directly on a landscape needs its own shadow to hold an
-    /// edge, or it dissolves into whatever happens to be behind it. Two shadows:
-    /// a tight one for the letterforms, a wide soft one that darkens the
-    /// photograph itself just enough to seat them.
+    /// Text sitting directly on a landscape needs help holding its edge, or it
+    /// dissolves into whatever happens to be behind it.
+    ///
+    /// The trick is WHERE the darkness goes. A tight offset shadow traces every
+    /// letterform and stamps the words onto the photograph — hard, crisp, cheap.
+    /// So there isn't one. Both of these are wide and centred, with no offset at
+    /// all: they darken the PHOTOGRAPH behind the words rather than outlining
+    /// the words themselves. The text keeps its own softness and simply has
+    /// somewhere quieter to sit.
     func legible(_ strength: Double = 1) -> some View {
         self
-            .shadow(color: Color(hex: 0x0A0D08, alpha: 0.55 * strength), radius: 2, x: 0, y: 1)
-            .shadow(color: Color(hex: 0x0A0D08, alpha: 0.40 * strength), radius: 14, x: 0, y: 4)
+            .shadow(color: Color(hex: 0x0A0D08, alpha: 0.42 * strength), radius: 12)
+            .shadow(color: Color(hex: 0x0A0D08, alpha: 0.30 * strength), radius: 30)
     }
 }
