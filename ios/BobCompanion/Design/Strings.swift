@@ -205,6 +205,8 @@ enum Strings {
     }
     static let startOverConfirm = Phrase(ru: "Начать заново", en: "Start over")
     static let cancel = Phrase(ru: "Отмена", en: "Cancel")
+    /// Under the grabber on every sheet, so leaving one is never a guess.
+    static let close = Phrase(ru: "закрыть", en: "close")
 
     // MARK: - Connection (the one technical thing, kept plain)
 

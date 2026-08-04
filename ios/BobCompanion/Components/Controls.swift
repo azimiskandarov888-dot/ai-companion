@@ -188,6 +188,37 @@ struct SoftChip: View {
     }
 }
 
+// MARK: - The way out of a sheet
+//
+// Diary, You and Settings all open over him, and all three used to be
+// dismissable ONLY by swiping down. All three also contain a ScrollView, which
+// swallows vertical drags — so there was no way out of any of them. A gesture
+// that a child view can eat is not an exit; an exit has to be a thing you can
+// see and press.
+
+struct SheetGrabber: View {
+    var onClose: () -> Void
+
+    var body: some View {
+        Button(action: onClose) {
+            VStack(spacing: 6) {
+                Capsule()
+                    .fill(Theme.linen.opacity(0.34))
+                    .frame(width: 40, height: 5)
+                Text(Strings.close())
+                    .appFont(AppType.micro)
+                    .tracking(AppType.statusTracking)
+                    .foregroundStyle(Theme.linen.opacity(0.55))
+            }
+            .padding(.vertical, 10)
+            .frame(maxWidth: .infinity)          // the whole strip is the target
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(SoftPress())
+        .accessibilityLabel(Strings.close())
+    }
+}
+
 // MARK: - List groups
 //
 // Several small rounded groups with air between them — never one long block.

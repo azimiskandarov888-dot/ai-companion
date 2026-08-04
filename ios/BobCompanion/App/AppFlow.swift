@@ -37,27 +37,46 @@ struct AppFlow: View {
     @State private var overlay: Overlay?
     @State private var story = ""
     @State private var wishes = ""
+    /// 0 the world is visible · 1 the light is fully down. The screen is only
+    /// ever swapped at 1.
+    @State private var veil: Double = 0
+    @State private var crossing = false
 
     var body: some View {
         ZStack {
-            // WHY .id() IS HERE, AND WHY THE OUTRO DIDN'T WORK WITHOUT IT
+            // WHY THIS IS A VEIL AND NOT A .transition()
             //
-            // A `switch` inside a container builds a conditional view, and
-            // SwiftUI frequently treats a change of branch as an UPDATE of one
-            // slot rather than a remove-and-insert. When that happens the
-            // insertion transition still runs — the new screen fades up — but
-            // the removal transition is silently dropped, so the old screen
-            // just blinks out. Which is exactly what «no outro» looked like,
-            // and why putting .transition() on every branch changed nothing.
+            // Four attempts at SwiftUI transitions produced no visible outro,
+            // and the reason is z-order, not timing. Inside a ZStack, z
+            // positions are assigned IMPLICITLY by order. When the screen
+            // changes, the incoming screen — a full-bleed, fully opaque
+            // photograph — takes the departing screen's z position and is drawn
+            // ON TOP of it. The removal transition runs perfectly and is
+            // completely invisible underneath. Nothing about the animation
+            // itself could ever have fixed that.
             //
-            // Giving the content an identity that changes leaves SwiftUI no
-            // choice: the old identity is REMOVED and the new one INSERTED, so
-            // both halves of the transition run.
+            // Both documented fixes (explicit .zIndex, or an outer container)
+            // work by fighting that ordering. This does something simpler and
+            // deterministic: it never relies on two screens being on screen at
+            // once. One always-present veil dims the world, the screen is
+            // swapped while nothing can be seen, and the veil lifts. It is the
+            // dissolve a film uses, and it has no identity, no insertion, no
+            // removal and no z-order to get wrong.
+            //
+            // It also suits the app better than a cross-fade: every screen is
+            // the same world, so dipping through its own deep green reads as
+            // the light going down and coming back up, rather than as one
+            // picture being swapped for another.
             currentScreen
                 .id(placeID)
-                .transition(.screenChange)
+                .zIndex(0)
+
+            Theme.night
+                .ignoresSafeArea()
+                .opacity(veil)
+                .allowsHitTesting(veil > 0.02)   // no taps land mid-change
+                .zIndex(10)                      // explicitly above everything
         }
-        .animation(.easeInOut(duration: 0.55), value: placeID)
         .onAppear {
             screen = app.startingScreen
             story = app.story
@@ -146,7 +165,9 @@ struct AppFlow: View {
     /// an hour apart, so moving between them must NOT rebuild the screen or
     /// re-fade the land. Everywhere else gets its own, and so gets a full
     /// arrival and departure.
-    private var placeID: Int {
+    private var placeID: Int { placeID(for: screen) }
+
+    private func placeID(for screen: AppScreen) -> Int {
         switch screen {
         case .signIn:        return 0
         case .takeCare:      return 1
@@ -156,7 +177,33 @@ struct AppFlow: View {
         }
     }
 
+    // MARK: - crossing from one place to another
+
+    /// How long the light takes to go down, and to come back up. Down is
+    /// quicker than up: leaving should feel decisive, arriving unhurried.
+    private enum Cross {
+        static let down = 0.34
+        static let up   = 0.50
+    }
+
     private func go(_ next: AppScreen) {
-        withAnimation(.easeInOut(duration: 0.55)) { screen = next }
+        // Screens 3 and 4 are the same clearing. Moving between them must not
+        // dim anything — the scroll rolls away and the next unrolls in place.
+        guard placeID(for: next) != placeID(for: screen) else {
+            withAnimation(.easeInOut(duration: 0.55)) { screen = next }
+            return
+        }
+        guard !crossing else { return }          // a double tap can't double-fire
+        crossing = true
+
+        withAnimation(.easeIn(duration: Cross.down)) { veil = 1 }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + Cross.down + 0.05) {
+            screen = next                        // swapped while nothing shows
+            withAnimation(.easeOut(duration: Cross.up)) { veil = 0 }
+            DispatchQueue.main.asyncAfter(deadline: .now() + Cross.up) {
+                crossing = false
+            }
+        }
     }
 }

@@ -24,11 +24,9 @@ struct DiaryScreen: View {
                 PhotoBackground(place: .diary, treatment: .blurred(radius: 16, dim: 0.42))
 
                 VStack(spacing: 0) {
-                    // The grabber — 36 × 5 at y 62 — and the title, high.
-                    Capsule()
-                        .fill(Theme.linen.opacity(0.28))
-                        .frame(width: 36, height: 5)
-                        .padding(.top, 12)
+                    // The way out, and the title, high.
+                    SheetGrabber(onClose: onClose)
+                        .padding(.top, 8)
 
                     Text(Strings.diaryTitle(app.displayName)())
                         .appFont(AppType.writtenHeading)

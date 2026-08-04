@@ -21,11 +21,8 @@ struct AccountScreen: View {
                 PhotoBackground(place: .account, treatment: .blurred(radius: 20, dim: 0.38))
 
                 VStack(alignment: .leading, spacing: Metrics.groupSpacing) {
-                    Capsule()
-                        .fill(Theme.linen.opacity(0.28))
-                        .frame(width: 36, height: 5)
-                        .frame(maxWidth: .infinity)
-                        .padding(.top, 12)
+                    SheetGrabber(onClose: onClose)
+                        .padding(.top, 8)
 
                     Text(Strings.accountTitle())
                         .appFont(AppType.title)

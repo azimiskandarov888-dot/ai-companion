@@ -88,36 +88,19 @@ extension View {
 }
 
 // MARK: - Leaving
-
-/// A screen on its way out: fading, softening and settling back a little, so it
-/// recedes rather than being switched off.
-private struct SoftLeave: ViewModifier {
-    let gone: Bool
-    func body(content: Content) -> some View {
-        content
-            .opacity(gone ? 0 : 1)
-            .blur(radius: gone ? 14 : 0)
-            .scaleEffect(gone ? 0.97 : 1)
-            .offset(y: gone ? 10 : 0)
-    }
-}
-
-extension AnyTransition {
-    /// How one screen becomes the next.
-    ///
-    /// The app had an arrival and no departure: screens faded up slowly and
-    /// then vanished in an instant, which is exactly what reads as lag — the
-    /// eye is still following something that is already gone. The two halves
-    /// are matched now, and the leaving is a touch quicker than the arriving so
-    /// they overlap in the middle instead of leaving a hole.
-    static var screenChange: AnyTransition {
-        .asymmetric(
-            insertion: .opacity,
-            removal: .modifier(active: SoftLeave(gone: true),
-                               identity: SoftLeave(gone: false))
-        )
-    }
-}
+//
+// There is deliberately no screen-removal transition here any more.
+//
+// Four attempts at one produced nothing visible, and the cause turned out to be
+// z-order rather than animation: inside a ZStack, the incoming full-bleed
+// photograph takes the departing screen's implicit z position and covers it, so
+// the removal plays perfectly and is never seen. AppFlow crosses between places
+// with a veil instead — see the note there — which has no identity, no
+// insertion, no removal and no z-order to get wrong.
+//
+// `arrive` below is still the whole entrance system, and is unaffected: it
+// animates properties of views that are already on screen, which is exactly the
+// kind of animation SwiftUI is reliable about.
 
 // MARK: - Text laid on a photograph
 
