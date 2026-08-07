@@ -18,6 +18,12 @@ final class ConversationController: ObservableObject {
         case thinking        // backend is working
         case speaking        // playing Bob's reply
         case problem(String) // something went wrong; loop keeps trying
+        /// He dozed off — nothing has sounded like a conversation for a while,
+        /// which is what a room with a television sounds like. A tap wakes him.
+        case asleep
+        /// He's talked out for today. Not an error, and not a paywall: he says
+        /// it himself and means it. Tomorrow he's fine.
+        case restedForToday
     }
 
     @Published private(set) var status: Status = .idle
@@ -87,6 +93,16 @@ final class ConversationController: ObservableObject {
         status = .idle
     }
 
+    /// Someone tapped him. He opens his eyes and the loop starts again.
+    /// Waking never gives back time that's been spent — the server decides.
+    func wake() {
+        guard status == .asleep else { return }
+        Task {
+            try? await client.wake()
+            start()
+        }
+    }
+
     private func handle(_ fileURL: URL) async {
         defer { try? FileManager.default.removeItem(at: fileURL) }
 
@@ -96,6 +112,24 @@ final class ConversationController: ObservableObject {
                 audioFileURL: fileURL,
                 sessionID: AppConfig.shared.sessionID
             )
+
+            // The server decides whether he answers, and it has already
+            // decided. It says so in his own words — we just stop listening
+            // and show it.
+            switch response.state {
+            case "asleep":
+                lastReply = response.reply
+                status = .asleep
+                stop()
+                return
+            case "daily_limit":
+                lastReply = response.reply
+                status = .restedForToday
+                stop()
+                return
+            default:
+                break
+            }
 
             // Whisper heard nothing usable — just go back to listening.
             guard !response.transcript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {

@@ -75,6 +75,13 @@ ELDER_NAME: str = os.getenv("ELDER_NAME", "")
 # Keep replies short — this is spoken aloud to an elderly listener.
 MAX_REPLY_TOKENS: int = int(os.getenv("MAX_REPLY_TOKENS", "400"))
 
+# --- How much of the day he has ---------------------------------------------
+# Three hours of conversation a day. Not rationing for its own sake: at API
+# prices that is already about $40 a month, more than the subscription. The
+# limit exists so one person cannot cost more than they pay. Enforced on the
+# server (see allowance.py), never in the app.
+DAILY_SECONDS: int = int(os.getenv("DAILY_SECONDS", str(3 * 60 * 60)))
+
 # Where per-user memory + logs live (git-ignored).
 DATA_DIR: Path = Path(os.getenv("DATA_DIR", Path(__file__).resolve().parent.parent / "data"))
 DATA_DIR.mkdir(parents=True, exist_ok=True)

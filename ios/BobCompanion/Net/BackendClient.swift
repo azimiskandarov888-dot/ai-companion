@@ -12,11 +12,18 @@ struct TalkResponse: Decodable {
     let audioBase64: String?
     let audioMime: String?
     let note: String?
+    /// Set when the SERVER declined to answer: "asleep" or "daily_limit".
+    /// The limit lives there, not here — an app-side limit is defeated by a
+    /// modified app and, far more likely, by a bug in this one.
+    let state: String?
+    /// Seconds of conversation left today, as the server counts them.
+    let secondsLeft: Int?
 
     enum CodingKeys: String, CodingKey {
-        case transcript, reply, note
+        case transcript, reply, note, state
         case audioBase64 = "audio_base64"
         case audioMime = "audio_mime"
+        case secondsLeft = "seconds_left"
     }
 }
 
@@ -75,6 +82,19 @@ struct DiaryResponse: Decodable {
 
 struct BackendClient {
     let baseURL: URL
+
+    /// He dozed off, and someone has come back and tapped. Waking is free and
+    /// never refills the day's allowance.
+    func wake() async throws {
+        var request = URLRequest(url: baseURL.appendingPathComponent("api/wake"))
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONSerialization.data(
+            withJSONObject: ["session_id": AppConfig.shared.sessionID]
+        )
+        request.timeoutInterval = 10
+        _ = try? await URLSession.shared.data(for: request)
+    }
 
     /// Send one recorded utterance, get Bob's spoken reply back.
     func talk(audioFileURL: URL, sessionID: String) async throws -> TalkResponse {

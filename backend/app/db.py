@@ -8,6 +8,10 @@ Tables:
               elder ('elder') from Bob's own life-details ('bob'), so Bob stays
               consistent about himself without polluting the elder's memory.
               This distilled memory is INTERNAL — users never see it.
+  - usage:    seconds of conversation per person per day — the daily allowance
+              is counted here, on the server, because a limit that lives in the
+              phone app is defeated by a modified app and, more likely, by a bug
+              in the app itself.
   - diary:    the single living book the user *does* see — the companion's
               beautifully written diary about his friend, composed from the
               memories above (see diary.py) and cached here.
@@ -48,6 +52,14 @@ CREATE TABLE IF NOT EXISTS memories (
     created_ts        REAL NOT NULL,
     last_recalled_ts  REAL,
     recall_count      INTEGER DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS usage (
+    session_id  TEXT NOT NULL,
+    day         TEXT NOT NULL,          -- 'YYYY-MM-DD', local time
+    seconds     REAL NOT NULL DEFAULT 0,
+    turns       INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (session_id, day)
 );
 
 CREATE TABLE IF NOT EXISTS diary (

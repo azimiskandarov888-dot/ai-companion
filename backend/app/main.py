@@ -23,6 +23,7 @@ Endpoints:
 from __future__ import annotations
 
 import base64
+import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -31,6 +32,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 
 from . import (
+    allowance,
     brain,
     companion,
     config,
@@ -145,6 +147,25 @@ async def talk(
     if not audio_bytes:
         raise HTTPException(status_code=400, detail="Empty audio upload.")
 
+    # Before ANY paid work: has he got the day left, and is he even awake?
+    # This is deliberately the first thing that happens — checking after
+    # transcribing would already have cost money.
+    verdict = allowance.check(session_id)
+    if not verdict.allowed:
+        return JSONResponse(
+            {
+                "transcript": "",
+                "reply": verdict.reason,
+                "audio_base64": "",
+                "audio_mime": "",
+                "voice": "client",
+                "state": verdict.code,
+                "seconds_left": verdict.seconds_left,
+            }
+        )
+
+    started = time.monotonic()
+
     try:
         transcript = await stt.transcribe(
             audio_bytes, filename=audio.filename or "audio.webm"
@@ -152,9 +173,29 @@ async def talk(
     except RuntimeError as e:
         raise HTTPException(status_code=503, detail=str(e))
 
+    # Judge whether that sounded like a person before spending on a reply. A
+    # room with a television produces a steady trickle of short fragments; a
+    # person produces sentences.
+    allowance.note_turn(session_id, transcript)
+
     if not transcript:
+        allowance.spend(session_id, time.monotonic() - started)
         return JSONResponse(
             {"transcript": "", "reply": "", "note": "No speech detected."}
+        )
+
+    if allowance.is_asleep(session_id):
+        allowance.spend(session_id, time.monotonic() - started)
+        return JSONResponse(
+            {
+                "transcript": transcript,
+                "reply": "",
+                "audio_base64": "",
+                "audio_mime": "",
+                "voice": "client",
+                "state": "asleep",
+                "seconds_left": allowance.seconds_left(session_id),
+            }
         )
 
     try:
@@ -162,7 +203,15 @@ async def talk(
     except RuntimeError as e:
         raise HTTPException(status_code=503, detail=str(e))
 
-    return JSONResponse({"transcript": transcript, **result})
+    allowance.spend(session_id, time.monotonic() - started)
+
+    return JSONResponse(
+        {
+            "transcript": transcript,
+            **result,
+            "seconds_left": allowance.seconds_left(session_id),
+        }
+    )
 
 
 class SayRequest(BaseModel):
@@ -181,6 +230,42 @@ async def say(req: SayRequest, background_tasks: BackgroundTasks) -> JSONRespons
     except RuntimeError as e:
         raise HTTPException(status_code=503, detail=str(e))
     return JSONResponse({"transcript": text, **result})
+
+
+class WakeRequest(BaseModel):
+    session_id: str = "default"
+
+
+@app.post("/api/wake")
+async def wake(req: WakeRequest) -> JSONResponse:
+    """Someone came back and tapped — he opens his eyes.
+
+    The daily allowance is NOT reset by this; only the dozing is. Waking him is
+    always free.
+    """
+    allowance.wake(req.session_id)
+    return JSONResponse(
+        {"awake": True, "seconds_left": allowance.seconds_left(req.session_id)}
+    )
+
+
+@app.get("/api/usage")
+async def usage(session_id: str = "default") -> JSONResponse:
+    """What this person has used today, and what's left.
+
+    Also the honest answer to «how much is this costing me» during the test
+    month: seconds x the per-second rate of whichever providers are configured.
+    """
+    used = allowance.used_today(session_id)
+    return JSONResponse(
+        {
+            "session_id": session_id,
+            "seconds_used_today": round(used, 1),
+            "seconds_left_today": allowance.seconds_left(session_id),
+            "daily_allowance": allowance.SECONDS_PER_DAY,
+            "asleep": allowance.is_asleep(session_id),
+        }
+    )
 
 
 class CreateCompanionRequest(BaseModel):

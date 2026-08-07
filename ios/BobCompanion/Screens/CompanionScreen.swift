@@ -32,6 +32,9 @@ struct CompanionScreen: View {
         case .thinking:  return .thinking
         case .speaking:  return .speaking
         case .problem:   return .unreachable
+        // Asleep and talked-out both look the same on him: the light goes
+        // down and the breathing stops. Nothing about either is an error.
+        case .asleep, .restedForToday: return .unreachable
         }
     }
 
@@ -55,16 +58,29 @@ struct CompanionScreen: View {
                     .arrive(.second)
                     .position(x: geo.size.width / 2, y: h * Metrics.statusWordY)
 
-                // When he can't hear you, he says so himself — on this screen,
-                // in his own words. Never a banner, never an error code.
-                if case .problem = conversation.status {
-                    Text(Strings.cannotHear())
-                        .appFont(AppType.body)
+                // Everything he has to say about himself is said HERE, in his
+                // own words, in the same place. Never a banner, never an error
+                // code, never a paywall — whether he can't hear you, has dozed
+                // off, or is simply talked out for today.
+                if let said = hisWords {
+                    Text(said)
+                        .appFont(AppType.body, leading: AppType.bodyLeading)
                         .foregroundStyle(Theme.onLand)
                         .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .legible()
                         .padding(.horizontal, Metrics.sideMargin)
                         .position(x: geo.size.width / 2, y: h * 0.63)
                         .transition(.opacity)
+                }
+
+                // Asleep is the ONE state you can do something about, so the
+                // whole screen becomes the way to do it. No button: you touch
+                // him, the way you'd touch a shoulder.
+                if conversation.status == .asleep {
+                    Color.clear
+                        .contentShape(Rectangle())
+                        .onTapGesture { conversation.wake() }
                 }
 
                 VStack {
@@ -82,6 +98,20 @@ struct CompanionScreen: View {
         .persistentSystemOverlays(.hidden)
         .task { await checkMicrophone() }
         .sheet(isPresented: $showMicHelp) { MicrophoneHelp() }
+    }
+
+    /// What he's saying about himself right now, if anything. His own words
+    /// come from the server; only «I can't hear you» is ours, because when the
+    /// server is unreachable there are no words to receive.
+    private var hisWords: String? {
+        switch conversation.status {
+        case .problem:
+            return Strings.cannotHear()
+        case .asleep, .restedForToday:
+            return conversation.lastReply.isEmpty ? nil : conversation.lastReply
+        default:
+            return nil
+        }
     }
 
     private func checkMicrophone() async {
