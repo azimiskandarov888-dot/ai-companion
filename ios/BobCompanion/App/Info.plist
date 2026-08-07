@@ -64,14 +64,16 @@
         <string>audio</string>
     </array>
 
-    <!-- DEV ONLY: the test backend is plain http on the LAN. For production use
-         https and remove NSAllowsArbitraryLoads. NSAllowsLocalNetworking permits
-         http to a local IP without opening everything up. -->
+    <!-- NSAllowsLocalNetworking ONLY. It permits plain http to an address on
+         your own Wi-Fi — which is how you test against the Mac — and Apple
+         accepts it. NSAllowsArbitraryLoads, which used to be here, permits
+         plain http to ANY address on the internet; Apple rejects apps that ask
+         for it without a written justification, and it would let a real user's
+         conversation travel unencrypted. The real server will be https, which
+         needs no exception at all. -->
     <key>NSAppTransportSecurity</key>
     <dict>
         <key>NSAllowsLocalNetworking</key>
-        <true/>
-        <key>NSAllowsArbitraryLoads</key>
         <true/>
     </dict>
 
