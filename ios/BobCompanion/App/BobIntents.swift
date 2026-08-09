@@ -53,11 +53,16 @@ struct SpeakInHisVoiceIntent: AppIntent {
             let spoken = try await BackgroundVoice.speak(line)
             // The dialog is what Siri shows/says. When his own audio played we
             // keep it silent-ish and short, so his voice is the thing heard.
-            return .result(dialog: IntentDialog(spoken ? "" : line))
+            //
+            // `line` is a String VARIABLE here, not a literal token in this
+            // call — Swift's string-literal sugar for IntentDialog only kicks
+            // in for an actual literal written at the call site, so passing a
+            // variable needs the explicit stringLiteral: label.
+            return .result(dialog: IntentDialog(stringLiteral: spoken ? "" : line))
         } catch {
             // Falling back to the dialog means SIRI speaks the line. That is a
             // meaningful result, not a failure — write it down.
-            return .result(dialog: IntentDialog(line))
+            return .result(dialog: IntentDialog(stringLiteral: line))
         }
     }
 }
