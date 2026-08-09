@@ -40,6 +40,24 @@ cd ~/ai-companion/backend && ./run.sh
 curl -s http://localhost:8000/api/health
 ```
 
+### Choosing the voice first
+
+The voice matters more than anything in the code, and the samples on fish.audio
+are whatever text each creator picked. Put your shortlist through the real thing
+instead — same code path the app uses, on a sentence he would actually say:
+
+```bash
+cd ~/ai-companion/backend
+python3 audition.py <voice-id> <voice-id> <voice-id>
+```
+
+It saves each one to `backend/data/auditions/` and plays them in turn, so you
+can come back a day later and compare properly rather than trusting your memory
+of the third one. Costs a fraction of a cent per line.
+
+Ask of each: **would you believe this person is in the room?** Does the question
+sound *asked* or recited? Could you listen to it for an hour?
+
 The health output must show the voice provider configured. If it doesn't, add
 `FISH_API_KEY` and `FISH_VOICE_ID` to `backend/.env` first — otherwise stop
 here, the test can't tell you anything.
