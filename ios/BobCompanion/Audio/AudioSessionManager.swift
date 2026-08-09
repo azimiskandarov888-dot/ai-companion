@@ -16,7 +16,7 @@ enum AudioSessionManager {
         try session.setCategory(
             .playAndRecord,
             mode: .spokenAudio,
-            options: [.defaultToSpeaker, .duckOthers, .allowBluetooth, .allowBluetoothA2DP]
+            options: [.defaultToSpeaker, .duckOthers, .allowBluetoothHFP, .allowBluetoothA2DP]
         )
         try session.setActive(true, options: [])
     }
