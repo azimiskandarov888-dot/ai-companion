@@ -26,6 +26,40 @@ def _classify(error: Exception) -> str:
     return "unreachable"
 
 
+def shape_report() -> None:
+    """What .env actually contains — shapes only, never the keys themselves.
+
+    Nearly every 401 is one of four boring things: the key isn't loaded at all,
+    it has quotes or spaces around it, it was pasted truncated, or it's the
+    wrong kind of key. All four show up here without anything secret being
+    printed.
+    """
+    print("What .env is giving the app:\n")
+
+    def describe(name: str, value: str | None, expect: str) -> None:
+        if not value:
+            print(f"  {name:<20} MISSING — not set at all")
+            return
+        problems = []
+        if value != value.strip():
+            problems.append("has spaces around it")
+        if value[:1] in "\"'" or value[-1:] in "\"'":
+            problems.append("has quotes around it — remove them")
+        if not value.startswith(expect):
+            problems.append(f"doesn't start with {expect!r}")
+        if len(value) < 40:
+            problems.append(f"looks short ({len(value)} chars) — pasted incompletely?")
+
+        status = "; ".join(problems) if problems else "looks right"
+        print(f"  {name:<20} {len(value)} chars, starts {value[:7]}…  → {status}")
+
+    describe("ANTHROPIC_API_KEY", config.ANTHROPIC_API_KEY, "sk-ant-")
+    describe("OPENAI_API_KEY", config.OPENAI_API_KEY, "sk-")
+    if config.FISH_API_KEY:
+        describe("FISH_API_KEY", config.FISH_API_KEY, "")
+    print()
+
+
 def check_claude() -> bool:
     if not config.ANTHROPIC_API_KEY:
         print("🧠 Claude (brain): нет ключа в .env  → добавьте ANTHROPIC_API_KEY")
@@ -77,6 +111,7 @@ def check_openai() -> bool:
 
 
 def main() -> None:
+    shape_report()
     print("Проверяю ключи (сами ключи не показываю)…\n")
     brain_ok = check_claude()
     ears_ok = check_openai()
