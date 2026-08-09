@@ -57,6 +57,23 @@ ELEVENLABS_API_KEY: str | None = os.getenv("ELEVENLABS_API_KEY")
 ELEVENLABS_VOICE_ID: str = os.getenv("ELEVENLABS_VOICE_ID", "EXAVITQu4vr4xnSDxMaL")
 ELEVENLABS_MODEL: str = os.getenv("ELEVENLABS_MODEL", "eleven_multilingual_v2")
 
+# --- Mouth: Yandex SpeechKit (TTS_PROVIDER=yandex) --------------------------
+# Russian voices made by Russians, and it shows — the stress, the intonation and
+# the way sentences end are right in a way that voices trained mostly on English
+# rarely manage on Russian text.
+#
+# Male voices: filipp · zahar · ermil · anton   (add ":premium" for the best
+# quality, e.g. filipp:premium). Female: alena · jane · oksana · omazh.
+# Some voices take an emotion: neutral | good | evil.
+#
+# Needs a Yandex Cloud account: an API key and the folder ID it belongs to.
+YANDEX_API_KEY: str | None = os.getenv("YANDEX_API_KEY")
+YANDEX_FOLDER_ID: str = os.getenv("YANDEX_FOLDER_ID", "")
+YANDEX_VOICE: str = os.getenv("YANDEX_VOICE", "filipp")
+YANDEX_EMOTION: str = os.getenv("YANDEX_EMOTION", "good")
+# 1.0 is normal. Slightly under is kinder to an older listener.
+YANDEX_SPEED: str = os.getenv("YANDEX_SPEED", "0.95")
+
 # --- Mouth: OpenAI (TTS_PROVIDER=openai) ------------------------------------
 # The same key that already does the ears, so there is nothing new to sign up
 # for. Costs the same as Fish ($15 per million characters), speaks Russian, and
@@ -83,6 +100,8 @@ def tts_configured() -> bool:
         return bool(FISH_API_KEY)
     if TTS_PROVIDER == "openai":
         return bool(OPENAI_API_KEY)
+    if TTS_PROVIDER == "yandex":
+        return bool(YANDEX_API_KEY) and bool(YANDEX_FOLDER_ID)
     if TTS_PROVIDER == "elevenlabs":
         return bool(ELEVENLABS_API_KEY) and bool(ELEVENLABS_VOICE_ID)
     return False

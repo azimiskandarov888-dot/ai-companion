@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Hear several voices say the same line, and pick him.
 
-    python3 audition.py --openai                 # all 8 OpenAI voices worth trying
-    python3 audition.py --openai ash onyx fable  # just these
-    python3 audition.py <fish-voice-id> ...      # Fish Audio voices
-    python3 audition.py --text "Своя фраза" ...  # your own line
+    python3 audition.py --yandex                 # Russian voices, made for Russian
+    python3 audition.py --openai                 # uses the key you already have
+    python3 audition.py --eleven <voice-id> ...  # the best quality, priciest
+    python3 audition.py <fish-voice-id> ...      # Fish Audio
+    python3 audition.py --openai --text "Своя фраза"
 
 Why not just use the samples on fish.audio: those are whatever text the voice's
 creator chose — often theatrical, often not even Russian. They are good enough
@@ -51,6 +52,13 @@ OUT_DIR = config.DATA_DIR / "auditions"
 #: rather than take my word for it.
 OPENAI_VOICES = ["ash", "onyx", "fable", "ballad", "echo", "sage", "verse", "alloy"]
 
+#: Yandex's male voices, best first. The `:premium` variants are noticeably
+#: better and cost a little more — worth hearing both of the same voice.
+YANDEX_VOICES = [
+    "filipp:premium", "zahar:premium", "ermil:premium", "anton:premium",
+    "filipp", "zahar", "ermil",
+]
+
 
 def play(path: Path) -> None:
     """Play it, on whichever machine this is."""
@@ -73,37 +81,43 @@ def play(path: Path) -> None:
         print("   (couldn't play it — the file is saved, open it yourself)")
 
 
-async def audition(voice_ids: list[str], line: str, quiet: bool, openai: bool) -> None:
-    if openai:
-        if not config.OPENAI_API_KEY:
-            sys.exit("OPENAI_API_KEY is not set. Add it to backend/.env first.")
-    elif not config.FISH_API_KEY:
+async def audition(voice_ids: list[str], line: str, quiet: bool, provider: str) -> None:
+    needs = {
+        "openai": (config.OPENAI_API_KEY, "OPENAI_API_KEY"),
+        "yandex": (config.YANDEX_API_KEY and config.YANDEX_FOLDER_ID,
+                   "YANDEX_API_KEY and YANDEX_FOLDER_ID"),
+        "elevenlabs": (config.ELEVENLABS_API_KEY, "ELEVENLABS_API_KEY"),
+        "fish": (config.FISH_API_KEY, "FISH_API_KEY"),
+    }
+    have, name = needs[provider]
+    if not have:
         sys.exit(
-            "FISH_API_KEY is not set.\n"
-            "Add it to backend/.env, or use --openai to audition with the key\n"
-            "you already have for the ears."
+            f"{name} is not set — add it to backend/.env.\n"
+            "Or use --openai, which works with the key you already have for the ears."
         )
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
 
-    print(f"\n  Provider:  {'OpenAI' if openai else 'Fish Audio'}")
+    print(f"\n  Provider:  {provider}")
     print(f'  Line:  "{line}"')
     print(f"  Saving to:  {OUT_DIR}\n")
 
-    was_provider = config.TTS_PROVIDER
-    was_fish_voice = config.FISH_VOICE_ID
-    was_openai_voice = config.OPENAI_VOICE
+    was = (config.TTS_PROVIDER, config.FISH_VOICE_ID, config.OPENAI_VOICE,
+           config.YANDEX_VOICE, config.ELEVENLABS_VOICE_ID)
     results: list[tuple[str, Path]] = []
 
     try:
         for i, voice_id in enumerate(voice_ids, start=1):
             # Point the real tts module at this candidate, so this goes through
             # exactly the code path the app uses — same model, same settings.
-            if openai:
-                config.TTS_PROVIDER = "openai"
+            config.TTS_PROVIDER = provider
+            if provider == "openai":
                 config.OPENAI_VOICE = voice_id
+            elif provider == "yandex":
+                config.YANDEX_VOICE = voice_id
+            elif provider == "elevenlabs":
+                config.ELEVENLABS_VOICE_ID = voice_id
             else:
-                config.TTS_PROVIDER = "fish"
                 config.FISH_VOICE_ID = voice_id
 
             print(f"  {i}. {voice_id}")
@@ -113,7 +127,8 @@ async def audition(voice_ids: list[str], line: str, quiet: bool, openai: bool) -
                 print(f"     ✗ {e}\n")
                 continue
 
-            path = OUT_DIR / f"{i}-{voice_id[:12]}.mp3"
+            safe = voice_id.replace(":", "-")[:16] or "default"
+            path = OUT_DIR / f"{provider}-{i}-{safe}.mp3"
             path.write_bytes(audio)
             results.append((voice_id, path))
             print(f"     saved  {path.name}  ({len(audio) // 1024} KB)")
@@ -122,9 +137,8 @@ async def audition(voice_ids: list[str], line: str, quiet: bool, openai: bool) -
                 play(path)
             print()
     finally:
-        config.TTS_PROVIDER = was_provider
-        config.FISH_VOICE_ID = was_fish_voice
-        config.OPENAI_VOICE = was_openai_voice
+        (config.TTS_PROVIDER, config.FISH_VOICE_ID, config.OPENAI_VOICE,
+         config.YANDEX_VOICE, config.ELEVENLABS_VOICE_ID) = was
 
     if not results:
         sys.exit("  Nothing was generated. Check the voice IDs and the API key.")
@@ -134,7 +148,12 @@ async def audition(voice_ids: list[str], line: str, quiet: bool, openai: bool) -
         print(f"  {i}. {voice_id}")
         print(f"     {path}")
 
-    setting = "OPENAI_VOICE" if openai else "FISH_VOICE_ID"
+    setting = {
+        "openai": "OPENAI_VOICE",
+        "yandex": "YANDEX_VOICE",
+        "elevenlabs": "ELEVENLABS_VOICE_ID",
+        "fish": "FISH_VOICE_ID",
+    }[provider]
     print(
         "\n  Ask of each one:\n"
         "    · Would you believe this person is in the room?\n"
@@ -153,23 +172,33 @@ def main() -> None:
         help="voice IDs (Fish) or voice names (OpenAI). Empty with --openai "
              "auditions the whole shortlist.",
     )
-    parser.add_argument(
-        "--openai", action="store_true",
-        help="audition OpenAI voices using the key you already have",
-    )
+    parser.add_argument("--openai", action="store_true",
+                        help="OpenAI voices — uses the key you already have")
+    parser.add_argument("--yandex", action="store_true",
+                        help="Yandex SpeechKit — Russian voices made for Russian")
+    parser.add_argument("--eleven", action="store_true",
+                        help="ElevenLabs — the best quality, and the priciest")
     parser.add_argument("--text", default=DEFAULT_LINE, help="line to say")
     parser.add_argument(
         "--quiet", action="store_true", help="save the files without playing them"
     )
     args = parser.parse_args()
 
+    provider = ("openai" if args.openai else
+                "yandex" if args.yandex else
+                "elevenlabs" if args.eleven else "fish")
+
     voices = args.voice_ids
     if not voices:
-        if not args.openai:
-            parser.error("give at least one voice ID, or use --openai")
-        voices = OPENAI_VOICES
+        defaults = {"openai": OPENAI_VOICES, "yandex": YANDEX_VOICES}
+        if provider not in defaults:
+            parser.error(
+                f"give at least one voice ID for {provider}, "
+                "or use --openai / --yandex to hear a ready-made shortlist"
+            )
+        voices = defaults[provider]
 
-    asyncio.run(audition(voices, args.text, args.quiet, args.openai))
+    asyncio.run(audition(voices, args.text, args.quiet, provider))
 
 
 if __name__ == "__main__":

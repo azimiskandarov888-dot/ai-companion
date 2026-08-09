@@ -4,6 +4,8 @@ Three providers, chosen by config.TTS_PROVIDER:
   - "fish"       Fish Audio — open-weight, fast, good Russian. Default.
   - "openai"     OpenAI — same key as the ears, same price as Fish, speaks
                  Russian, and reachable where fish.audio is not.
+  - "yandex"     Yandex SpeechKit — Russian voices made for Russian. Best
+                 prosody of the lot on Russian text, and cheap.
   - "elevenlabs" ElevenLabs — warmest, and several times the price.
 Both return MP3 bytes, so the rest of the app doesn't care which spoke.
 
@@ -21,6 +23,7 @@ from . import config
 _FISH_API_URL = "https://api.fish.audio/v1/tts"
 _ELEVENLABS_API_BASE = "https://api.elevenlabs.io/v1/text-to-speech"
 _OPENAI_TTS_URL = "https://api.openai.com/v1/audio/speech"
+_YANDEX_TTS_URL = "https://tts.api.cloud.yandex.net/speech/v1/tts:synthesize"
 
 
 def configured() -> bool:
@@ -51,6 +54,14 @@ async def synthesize(text: str) -> bytes:
                 "OPENAI_API_KEY is not set — the OpenAI voice is not configured."
             )
         return await _synthesize_openai(text)
+
+    if config.TTS_PROVIDER == "yandex":
+        if not (config.YANDEX_API_KEY and config.YANDEX_FOLDER_ID):
+            raise RuntimeError(
+                "YANDEX_API_KEY / YANDEX_FOLDER_ID not set — the Yandex voice "
+                "is not configured."
+            )
+        return await _synthesize_yandex(text)
 
     if config.TTS_PROVIDER == "elevenlabs":
         if not (config.ELEVENLABS_API_KEY and config.ELEVENLABS_VOICE_ID):
@@ -119,6 +130,31 @@ async def _synthesize_openai(text: str) -> bytes:
         if resp.status_code != 200:
             raise RuntimeError(
                 f"OpenAI TTS failed ({resp.status_code}): {resp.text[:300]}"
+            )
+        return resp.content
+
+
+async def _synthesize_yandex(text: str) -> bytes:
+    """Yandex SpeechKit. Form-encoded, not JSON. Returns MP3 bytes."""
+    headers = {"Authorization": f"Api-Key {config.YANDEX_API_KEY}"}
+    data = {
+        "text": text,
+        "lang": "ru-RU",
+        "voice": config.YANDEX_VOICE,
+        "speed": config.YANDEX_SPEED,
+        "format": "mp3",
+        "folderId": config.YANDEX_FOLDER_ID,
+    }
+    # Not every voice accepts an emotion, and sending one to a voice that
+    # doesn't is an error rather than a shrug — so it stays optional.
+    if config.YANDEX_EMOTION:
+        data["emotion"] = config.YANDEX_EMOTION
+
+    async with httpx.AsyncClient(timeout=60.0) as http:
+        resp = await http.post(_YANDEX_TTS_URL, headers=headers, data=data)
+        if resp.status_code != 200:
+            raise RuntimeError(
+                f"Yandex SpeechKit failed ({resp.status_code}): {resp.text[:300]}"
             )
         return resp.content
 
