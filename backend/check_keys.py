@@ -26,6 +26,31 @@ def _classify(error: Exception) -> str:
     return "unreachable"
 
 
+def venv_report() -> None:
+    """Are we even running in the project's own environment?
+
+    Running these scripts from conda's `base` (or the system Python) is by far
+    the most common reason a check fails with ModuleNotFoundError — the packages
+    are installed in .venv and nowhere else. The error itself doesn't say that,
+    so this does.
+    """
+    import sys
+    from pathlib import Path
+
+    venv = Path(__file__).resolve().parent / ".venv"
+    running_in_venv = str(venv) in sys.prefix or sys.prefix != sys.base_prefix
+
+    if not running_in_venv:
+        print(
+            "⚠️  Не тот Python.\n\n"
+            "   Пакеты стоят в backend/.venv, а сейчас запущен другой Python\n"
+            f"   ({sys.prefix}).\n\n"
+            "   Сначала выполните:\n"
+            "       source .venv/bin/activate\n\n"
+            "   В начале строки появится (.venv) вместо (base).\n"
+        )
+
+
 def shape_report() -> None:
     """What .env actually contains — shapes only, never the keys themselves.
 
@@ -111,6 +136,7 @@ def check_openai() -> bool:
 
 
 def main() -> None:
+    venv_report()
     shape_report()
     print("Проверяю ключи (сами ключи не показываю)…\n")
     brain_ok = check_claude()
