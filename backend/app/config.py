@@ -57,11 +57,32 @@ ELEVENLABS_API_KEY: str | None = os.getenv("ELEVENLABS_API_KEY")
 ELEVENLABS_VOICE_ID: str = os.getenv("ELEVENLABS_VOICE_ID", "EXAVITQu4vr4xnSDxMaL")
 ELEVENLABS_MODEL: str = os.getenv("ELEVENLABS_MODEL", "eleven_multilingual_v2")
 
+# --- Mouth: OpenAI (TTS_PROVIDER=openai) ------------------------------------
+# The same key that already does the ears, so there is nothing new to sign up
+# for. Costs the same as Fish ($15 per million characters), speaks Russian, and
+# is reachable in places where fish.audio is not.
+#
+# Voices: alloy · ash · ballad · coral · echo · fable · onyx · nova · sage ·
+# shimmer · verse.  For a warm older man, `ash` and `onyx` are the ones to try
+# first; `fable` and `ballad` are gentler. Listen before deciding — see
+# backend/audition.py.
+OPENAI_TTS_MODEL: str = os.getenv("OPENAI_TTS_MODEL", "gpt-4o-mini-tts")
+OPENAI_VOICE: str = os.getenv("OPENAI_VOICE", "ash")
+# Free-text direction for how to speak — supported by gpt-4o-mini-tts and
+# genuinely powerful. This is where his warmth is set.
+OPENAI_VOICE_STYLE: str = os.getenv(
+    "OPENAI_VOICE_STYLE",
+    "Тёплый, неторопливый пожилой друг. Говори спокойно и негромко, "
+    "с настоящими паузами, как в живом разговоре. Не декламируй.",
+)
+
 
 def tts_configured() -> bool:
     """Is the selected voice provider set up? If not, the client speaks free."""
     if TTS_PROVIDER == "fish":
         return bool(FISH_API_KEY)
+    if TTS_PROVIDER == "openai":
+        return bool(OPENAI_API_KEY)
     if TTS_PROVIDER == "elevenlabs":
         return bool(ELEVENLABS_API_KEY) and bool(ELEVENLABS_VOICE_ID)
     return False

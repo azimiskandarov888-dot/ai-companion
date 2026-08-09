@@ -1,8 +1,10 @@
 """The mouth: text-to-speech.
 
-Two providers, chosen by config.TTS_PROVIDER:
-  - "fish"       Fish Audio — cheaper, open-weight, fast, good Russian. Default.
-  - "elevenlabs" ElevenLabs — warm, cloud-only.
+Three providers, chosen by config.TTS_PROVIDER:
+  - "fish"       Fish Audio — open-weight, fast, good Russian. Default.
+  - "openai"     OpenAI — same key as the ears, same price as Fish, speaks
+                 Russian, and reachable where fish.audio is not.
+  - "elevenlabs" ElevenLabs — warmest, and several times the price.
 Both return MP3 bytes, so the rest of the app doesn't care which spoke.
 
 If no provider is configured, main.py falls back to letting the client speak
@@ -18,6 +20,7 @@ from . import config
 
 _FISH_API_URL = "https://api.fish.audio/v1/tts"
 _ELEVENLABS_API_BASE = "https://api.elevenlabs.io/v1/text-to-speech"
+_OPENAI_TTS_URL = "https://api.openai.com/v1/audio/speech"
 
 
 def configured() -> bool:
@@ -41,6 +44,13 @@ async def synthesize(text: str) -> bytes:
                 "FISH_API_KEY is not set — the Fish Audio voice is not configured."
             )
         return await _synthesize_fish(text)
+
+    if config.TTS_PROVIDER == "openai":
+        if not config.OPENAI_API_KEY:
+            raise RuntimeError(
+                "OPENAI_API_KEY is not set — the OpenAI voice is not configured."
+            )
+        return await _synthesize_openai(text)
 
     if config.TTS_PROVIDER == "elevenlabs":
         if not (config.ELEVENLABS_API_KEY and config.ELEVENLABS_VOICE_ID):
@@ -79,6 +89,36 @@ async def _synthesize_fish(text: str) -> bytes:
         if resp.status_code != 200:
             raise RuntimeError(
                 f"Fish Audio TTS failed ({resp.status_code}): {resp.text[:300]}"
+            )
+        return resp.content
+
+
+async def _synthesize_openai(text: str) -> bytes:
+    """OpenAI TTS. Returns MP3 bytes.
+
+    `instructions` is the interesting part: gpt-4o-mini-tts takes a plain-language
+    direction for HOW to speak, not just what to say. That is where his warmth
+    actually comes from — the same words read as a news bulletin or as a friend
+    are two different products.
+    """
+    headers = {
+        "Authorization": f"Bearer {config.OPENAI_API_KEY}",
+        "Content-Type": "application/json",
+    }
+    payload: dict = {
+        "model": config.OPENAI_TTS_MODEL,
+        "voice": config.OPENAI_VOICE,
+        "input": text,
+        "response_format": "mp3",
+    }
+    if config.OPENAI_VOICE_STYLE:
+        payload["instructions"] = config.OPENAI_VOICE_STYLE
+
+    async with httpx.AsyncClient(timeout=60.0) as http:
+        resp = await http.post(_OPENAI_TTS_URL, headers=headers, json=payload)
+        if resp.status_code != 200:
+            raise RuntimeError(
+                f"OpenAI TTS failed ({resp.status_code}): {resp.text[:300]}"
             )
         return resp.content
 
