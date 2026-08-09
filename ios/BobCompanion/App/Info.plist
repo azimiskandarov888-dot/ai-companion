@@ -49,6 +49,12 @@
         <string>LaunchBackground</string>
     </dict>
 
+    <!-- Siri, so he can be reached without opening the app. See
+         docs/BACKGROUND-VOICE-TEST.md — whether his own voice can answer from
+         the background is the one thing that decides how far this can go. -->
+    <key>NSSiriUsageDescription</key>
+    <string>Чтобы позвать его, не открывая приложение.</string>
+
     <!-- Why we need the mic. He can't be a friend if he can't hear you. -->
     <key>NSMicrophoneUsageDescription</key>
     <string>Он слушает, только когда вы говорите с ним, чтобы ответить вам вслух.</string>

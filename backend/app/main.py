@@ -217,6 +217,12 @@ async def talk(
 class SayRequest(BaseModel):
     text: str
     session_id: str = "default"
+    #: Speak the text back EXACTLY, without thinking about it and without
+    #: remembering it. Used by the background-voice test, where the question is
+    #: only "does his voice come out of a backgrounded app" — a brain round trip
+    #: would add seconds and another way to fail, and logging the test line as a
+    #: real memory would quietly poison his diary.
+    verbatim: bool = False
 
 
 @app.post("/api/say")
@@ -225,6 +231,25 @@ async def say(req: SayRequest, background_tasks: BackgroundTasks) -> JSONRespons
     text = req.text.strip()
     if not text:
         raise HTTPException(status_code=400, detail="Empty text.")
+
+    if req.verbatim:
+        if not tts.configured():
+            return JSONResponse(
+                {"transcript": text, "reply": text, "audio_base64": "",
+                 "audio_mime": "", "voice": "client"}
+            )
+        try:
+            audio_bytes = await tts.synthesize(text)
+        except RuntimeError as e:
+            raise HTTPException(status_code=503, detail=str(e))
+        return JSONResponse({
+            "transcript": text,
+            "reply": text,
+            "audio_base64": base64.b64encode(audio_bytes).decode("ascii"),
+            "audio_mime": "audio/mpeg",
+            "voice": "server",
+        })
+
     try:
         result = await _think_and_speak(req.session_id, text, background_tasks)
     except RuntimeError as e:
