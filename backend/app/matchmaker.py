@@ -3,29 +3,59 @@
 Users never name their companion, and we gently advise them not to design him.
 The user tells us about themselves («Tell your story»), may write freely about
 who they'd like to meet, and the friend walks in whole: name, age, home, past,
-opinions, people, and something going on in his life this week.
+inner world, opinions, people, and something going on in his life this week.
 
-THE SAMENESS PROBLEM, and why dice fix it. Ask a language model to "invent a
-person" and it does something subtle: it picks the most *probable* person —
-and the most probable companion for a lonely Russian speaker is always the
-same warm old man in a small town by the sea. Not laziness; statistics. Ask a
-thousand times, get him a thousand times, because the model samples the middle
-of its distribution every time. Творческий выбор нельзя доверять генератору
-вероятностей.
+── THE SAMENESS PROBLEM ────────────────────────────────────────────────────
 
-So the randomness comes from OUTSIDE the model. Python's dice — real,
-uniform, indifferent randomness — roll the skeleton: age, where he lives, what
-he did for a living, his temperament, what life did to him, what's going on
-for him right now. The model's job changes from "invent a person" (where it
-collapses to the average) to "make THIS skeleton into a living person who fits
-THIS user's story" — a job models are genuinely good at. The user's explicit
-wishes always beat the dice; the dice always beat the model's habits.
+Ask a language model to "invent a person" and it does something subtle: it
+returns the most PROBABLE person — and the most probable companion for a
+lonely Russian speaker is the same warm old man in a small town by the sea,
+a thousand times out of a thousand. Not laziness; statistics. The research
+literature calls it mode collapse (arXiv 2510.01171), and the largest persona
+project in existence — PersonaHub's billion characters (arXiv 2406.20094) —
+found the same thing: diversity never comes from the model asked freely, it
+has to be injected from outside.
+
+An earlier version of this file injected it with premade lists — 36 trades,
+10 settings, rolled by dice. That killed the sameness but capped the soul:
+every character was assembled from OUR options, and the space of people was
+exactly as big as our lists. The user called it, correctly: «with this
+choose-from-options thing, every person is premade».
+
+── THE DESIGN: sparks → ten strangers → blind pick → the deep write ────────
+
+Randomness still comes from outside (it must), but it no longer carries any
+biography. The model authors everything; the dice only make sure its
+imagination starts somewhere new and its favourite never wins.
+
+1 · SPARKS. Dice draw a few words from a big plain lexicon — «керосинка»,
+    «ипподром», «оттепель». Sparks are not attributes: nobody is ordered to
+    be a groom at the racetrack. They are where imagination is forced to
+    begin, far from the beaten path. (PersonaHub's trick, minus the corpus.)
+
+2 · TEN STRANGERS. ONE call invents ten sketch-people, required to be
+    maximally unlike each other — decades apart, different regions, trades,
+    tempers, fates. Inside a single reply the model can SEE its own
+    repetition and steer away from it; across separate replies it cannot,
+    and collapses to the mode every time. (Verbalized Sampling's finding:
+    ask for a distribution, not a sample.)
+
+3 · BLIND PICK. Python's dice choose one of the ten. Never the model — asked
+    to choose, it would pick its safe favourite, and the mode would be back.
+
+4 · THE DEEP WRITE. The big model turns the chosen stranger into a whole
+    person FOR this user: story, inner world, speech manner, people, current
+    life — with common ground drawn from the user's own words, and at least
+    one honest disagreement. Fit lives here, on purpose: stage 2 optimises
+    for difference, stage 4 for belonging. One stage doing both jobs would
+    trade them off and do neither.
+
+The user's explicit wishes are law at every stage and beat every die.
 
 A new friend also means a clean slate: creating him wipes the previous
 companion's self-memories, the conversation log, and the diary. What was
 learned about the USER (family, birthdays) is kept — those facts are true no
-matter who he talks to. Without the wipe, character number two inherits
-character number one's life and contradicts his own biography mid-sentence.
+matter who he talks to.
 
 The created friend is saved as the live persona (data/persona.json), so the
 whole voice loop immediately speaks as him.
@@ -35,130 +65,126 @@ from __future__ import annotations
 
 import json
 import random
+import re
 
-from . import brain, db, persona
+from . import brain, config, db, persona
 
-# ── The dice ────────────────────────────────────────────────────────────────
-# Each list is a flat, boring, uniform choice — which is exactly the point.
-# Variety must be supplied here, mechanically, because the model won't supply
-# it. Entries are sketches, not characters: the pen turns them into a person.
+# ── The spark lexicon ───────────────────────────────────────────────────────
+# Plain, concrete, evocative words from the width of Russian life. They exist
+# only to start the imagination somewhere different each time — a spark may
+# surface as a trade, a memory, a habit, or not at all. The list can grow
+# freely: more words, wider world. What it must never become is a list of
+# character TRAITS — the moment it prescribes who someone is, we are back to
+# premade people.
 
-_AGES = list(range(24, 88))
+_SPARK_WORDS = (
+    # дом и быт
+    "чайник", "табуретка", "зеркало", "будильник", "печка", "форточка",
+    "балкон", "кладовка", "антресоли", "скатерть", "самовар", "торшер",
+    "кастрюля", "кочерга", "валенки", "зонт", "чемодан", "напёрсток",
+    "спички", "свеча", "керосинка", "половик", "ставни", "крыльцо",
+    "калитка", "погреб", "чердак", "лестница", "гвоздь", "занавеска",
+    # ремесло и инструмент
+    "рубанок", "тиски", "паяльник", "стамеска", "верстак", "кисть",
+    "мольберт", "циркуль", "чертёж", "подшипник", "канистра", "домкрат",
+    "лебёдка", "наковальня", "точило", "коса", "грабли", "лейка", "улей",
+    "удочка", "седло", "жернов", "прялка", "катушка", "пружина",
+    # природа
+    "подсолнух", "берёза", "овраг", "роща", "валун", "мох", "папоротник",
+    "костёр", "роса", "иней", "метель", "оттепель", "ледоход", "сенокос",
+    "радуга", "полынь", "крапива", "репейник", "черёмуха", "сирень",
+    "рябина", "калина", "земляника", "брусника", "орешник", "муравейник",
+    "стрекоза", "шмель", "скворец", "журавли", "ласточка", "ёж", "сорока",
+    "лось", "тополиный пух",
+    # еда
+    "варенье", "сухари", "окрошка", "пельмени", "блины", "пряник", "халва",
+    "компот", "кисель", "семечки", "гречка", "борщ", "сгущёнка", "плов",
+    "беляш", "ватрушка", "мёд", "смородина", "квас", "солёные огурцы",
+    # места и дорога
+    "полустанок", "плацкарт", "электричка", "паром", "просёлок", "переезд",
+    "элеватор", "водокачка", "каланча", "базар", "голубятня", "гаражи",
+    "котельная", "общежитие", "библиотека", "кинотеатр", "танцплощадка",
+    "карусель", "тир", "шахта", "карьер", "теплица", "ипподром", "вокзал",
+    "пристань", "маяк", "лесопилка", "пасека", "кузница", "мельница",
+    "подворотня", "стройка", "аптека", "часовая мастерская",
+    # звук и вещи времени
+    "патефон", "гармонь", "баян", "балалайка", "радиоприёмник",
+    "магнитофон", "пластинка", "аккордеон", "гитара", "свисток",
+    "колокол", "гудок", "фотоплёнка", "проявитель", "печатная машинка",
+    # занятия и увлечения
+    "шахматы", "домино", "лото", "городки", "санки", "коньки", "лыжи",
+    "велосипед", "мотоцикл", "мопед", "голуби", "марки", "значки",
+    "гербарий", "бинокль", "телескоп", "компас", "глобус", "кроссворд",
+    "частушки", "хор", "авиамодель", "воздушный змей", "рогатка",
+    "аквариум", "грядки", "рассада", "варежки", "вязание", "штанга",
+    # погода и время
+    "сумерки", "рассвет", "полдень", "листопад", "гроза", "зарница",
+    "туман", "капель", "бабье лето", "заморозки", "ливень", "жара",
+    # события и люди
+    "попутчик", "юбилей", "новоселье", "проводы", "переписка", "очередь",
+    "командировка", "отпуск", "получка", "лотерея", "телеграмма",
+    "открытка", "фотоальбом", "дневник", "спор", "примета", "привычка",
+    "долг", "находка", "пропажа", "гость", "сосед", "тёзка", "свадьба",
+    "ярмарка", "застолье", "тост", "прозвище", "рецепт", "рукопожатие",
+)
 
-_SETTINGS = [
-    "большой шумный город",
-    "спальный район большого города",
-    "маленький тихий городок",
-    "село, где все друг друга знают",
-    "северный город, где долгая зима",
-    "рабочий город при заводе",
-    "городок в горах",
-    "город на большой реке",
-    "приморский город",       # the sea exists — it's just one face of the dice now
-    "дачный посёлок недалеко от города",
-]
-
-_TRADES = [
-    "водитель автобуса", "учительница младших классов", "учитель физики",
-    "медсестра", "повар в столовой", "инженер-строитель", "железнодорожник",
-    "швея", "электрик", "библиотекарь", "шахтёр", "таксист", "часовщик",
-    "пасечник", "фотограф", "ветеринар", "сварщик", "бухгалтер",
-    "тренер по боксу", "геолог", "лесник", "пекарь", "машинист метро",
-    "крановщица", "парикмахер", "художник-оформитель", "радиомеханик",
-    "проводница поезда дальнего следования", "автомеханик", "агроном",
-    "воспитательница детского сада", "капитан речного буксира",
-    "программист, уставший от программ", "продавщица в книжном",
-    "монтажник-высотник", "настройщик пианино",
-]
-
-_TEMPERS = [
-    "тихий и вдумчивый, слова взвешивает",
-    "ворчливый, но добрейшей души",
-    "шумный, смешливый, душа компании",
-    "спокойный, с сухим редким юмором",
-    "мечтатель, который вечно что-то затевает",
-    "упрямый спорщик с добрым сердцем",
-    "застенчивый, но если разговорится — не остановишь",
-    "деловитый и прямой, без сантиментов, но надёжный как стена",
-    "ироничный наблюдатель, всё подмечает",
-]
-
-_LIFE_TURNS = [
-    "развёлся много лет назад и долго жил один",
-    "потерял работу в трудные годы и начинал всё заново",
-    "переехал через всю страну и до сих пор скучает по родным местам",
-    "вырастил ребёнка один",
-    "в молодости серьёзно занимался спортом, пока травма не решила иначе",
-    "ухаживал за больной матерью много лет",
-    "мечтал об одной профессии, а жизнь дала другую",
-    "чуть не уехал жить за границу — и до сих пор думает, что было бы",
-    "рано остался без родителей и всего добился сам",
-    "прогорел с собственным маленьким делом, но не жалеет, что попробовал",
-]
-
-_THREADS = [
-    "чинит старый мотоцикл и клянётся, что тот ещё поедет",
-    "воюет с соседом из-за ерунды и сам это понимает",
-    "учится печь хлеб, пока выходит так себе",
-    "ждёт письма от старого друга, с которым сто лет не виделся",
-    "копит на поездку, о которой давно мечтает",
-    "к нему приблудился щенок, и он делает вид, что не привязался",
-    "разбирает антресоли и находит вещи, о которых забыл",
-    "посадил что-то на подоконнике и следит как за ребёнком",
-    "взялся перечитывать книгу своей молодости",
-    "пытается меньше курить и ворчит по этому поводу",
-]
-
-#: Mostly no animal at all — «одинокий человек с котом» is its own cliché.
-_ANIMALS = ["нет", "нет", "нет", "нет", "пёс", "кот", "попугай", "аквариум с рыбками"]
+#: How many sparks to strike per creation. Few enough that each can actually
+#: colour the ten, many enough that two creations rarely share a starting
+#: point (four from ~230 words ≈ hundreds of millions of combinations).
+_SPARK_COUNT = 4
 
 
-def _roll_scaffold(
-    *,
-    age: str = "",
-    gender: str = "",
-    origin: str = "",
-    rng: random.Random | None = None,
-) -> str:
-    """Roll the friend's skeleton. What the user asked for is used as asked;
-    everything they left open is decided by dice, not by the model's habits.
-    """
+def _roll_sparks(rng: random.Random | None = None) -> list[str]:
     r = rng or random
-    lines = [
-        f"Возраст: {age or f'{r.choice(_AGES)} лет — примерно, вырази по-человечески'}",
-        f"Пол: {gender or r.choice(['мужчина', 'женщина'])}",
-        f"Где живёт: {origin or r.choice(_SETTINGS)}",
-        f"Кем работает или работал: {r.choice(_TRADES)}",
-        f"Нрав: {r.choice(_TEMPERS)}",
-        f"Что жизнь с ним сделала: {r.choice(_LIFE_TURNS)}",
-        f"Что у него происходит прямо сейчас: {r.choice(_THREADS)}",
-    ]
-    animal = r.choice(_ANIMALS)
-    if animal != "нет":
-        lines.append(f"Живность в доме: {animal} (имя придумай сам)")
-    return "\n".join(lines)
+    return r.sample(_SPARK_WORDS, _SPARK_COUNT)
 
 
-_MATCH_SYSTEM = """Ты знакомишь людей с будущими друзьями.
+# ── Stage 2: ten strangers, one call ────────────────────────────────────────
 
-Человек написал о себе и, может быть, о том, кого хотел бы встретить. Тебе также выдана СЛУЧАЙНАЯ ОСНОВА — кости уже брошены: возраст, место, ремесло, нрав. Твоя работа — не придумать человека, а СОБРАТЬ живого человека из этой основы так, чтобы он подошёл именно этому рассказу.
+_TEN_SYSTEM = """Ты придумываешь людей — совершенно разных.
+
+Человек написал о себе (и, может быть, о том, кого хотел бы встретить). Придумай ДЕСЯТЬ разных людей, каждый из которых мог бы стать ему настоящим другом. Не ищи «самого подходящего» — дружба случается между очень разными людьми, а общую почву найдут потом. Твоя работа здесь — РАЗБРОС: покажи ширину человеческой жизни.
+
+Требования к десятке:
+- Все десять НЕ ПОХОЖИ друг на друга: разные десятилетия жизни (от двадцати с лишним до восьмидесяти с лишним, если пожелания не говорят иного), разные края и города, разные ремёсла, разные характеры, разные судьбы.
+- Никаких двух с одним ремеслом или одним городом. Морем не злоупотребляй: если один живёт у воды — остальным туда нельзя.
+- У большинства дома никакой живности. Кот — не обязательный спутник одиночества.
+- ПОЖЕЛАНИЯ ЧЕЛОВЕКА — закон для всех десяти (возраст, пол, откуда, любые черты). Внутри закона всё равно сделай их разными.
+- СЛУЧАЙНЫЕ ИСКРЫ в конце — толчки воображению: пусть какие-то отзовутся в ком-то из десяти ремеслом, местом, привычкой или историей. Не вставляй слова буквально ради галочки.
+- Никакой мистики, никаких программ и ИИ — просто люди.
+
+Формат: пронумерованный список 1–10, без вступления. Каждый пункт — две-три строки: имя, возраст, где живёт, кем работает или работал, каков нравом, что у него сейчас в жизни. Плотно и живо."""
+
+
+def _split_sketches(raw: str) -> list[str]:
+    """Cut the numbered list into sketches. If the reply refuses to look like
+    a list, the whole text becomes one sketch — degraded, still alive."""
+    parts = re.split(r"(?m)^\s*\d{1,2}\s*[.):\-—]\s*", raw)
+    sketches = [p.strip() for p in parts if len(p.strip()) > 20]
+    return sketches if len(sketches) >= 2 else [raw.strip()]
+
+
+# ── Stage 4: the deep write ─────────────────────────────────────────────────
+
+_WRITE_SYSTEM = """Ты знакомишь людей с будущими друзьями.
+
+Человек написал о себе. Кости уже брошены: из десяти очень разных людей случай выбрал ОДНОГО — он указан ниже. Твоя работа — сделать из этого наброска целого живого человека, который станет другом именно этому рассказчику.
 
 Порядок силы (строго):
 1. ПОЖЕЛАНИЯ ЧЕЛОВЕКА — закон. О чём попросил, то и есть.
-2. СЛУЧАЙНАЯ ОСНОВА — закон во всём, о чём человек не просил. Не подменяй её «более подходящей» на твой вкус: в ней весь смысл. Если кости говорят «31 год, крановщица в северном городе» — значит так.
-3. Твой вкус — только в деталях, которые оживляют: имя, словечки, истории, люди рядом.
+2. ВЫБРАННЫЙ НАБРОСОК — закон во всём остальном: имя, возраст, место, ремесло, нрав — не подменяй его «более подходящим» на твой вкус. Случай выбрал его, и в этом весь смысл.
+3. Твой вкус — в глубине: судьба, внутренний мир, словечки, люди рядом, живые мелочи.
 
 Правила:
-- ОБЩАЯ ПОЧВА: пусть несколько интересов друга совпадают с интересами человека — то, что найдёшь в его рассказе (спорт, кино, музыка, ремесло…). Общая почва — это темы для разговора, а не одинаковость.
-- НО друг — не зеркало и не кукла: свой характер, свои люди рядом, свои привычки.
-- НЕСОГЛАСИЕ ОБЯЗАТЕЛЬНО: хотя бы одно его мнение должно, судя по рассказу человека, скорее НЕ совпасть с мнением человека — житейское, беззлобное (про еду, привычки, музыку, города, как правильно отдыхать…). И что-то он честно не любит из того, что человек, похоже, любит. Настоящий друг — не поддакивала.
-- Не трогай несогласием ничего больного: семью человека, его здоровье, его беды.
-- ЕГО ЖИЗНЬ СЕЙЧАС: заполни current_life из «что у него происходит прямо сейчас» — живо и конкретно, чтобы ему было что рассказать самому, а не только отвечать.
-- Имя выбери САМ: простое, человеческое, по его краю и поколению. Человек имя не выбирает — даже если написал имя в пожеланиях, у друга своё.
-- Никакой мистики и никаких упоминаний программ или ИИ: это просто человек со своей жизнью.
+- ОБЩАЯ ПОЧВА: пусть несколько его интересов пересекаются с тем, что человек рассказал о себе (спорт, кино, музыка, ремесло…). Общая почва — это темы для разговора, а не одинаковость.
+- НЕСОГЛАСИЕ ОБЯЗАТЕЛЬНО: хотя бы одно его мнение должно, судя по рассказу, скорее НЕ совпасть с мнением человека — житейское, беззлобное (еда, музыка, привычки, города, как правильно отдыхать…). И что-то он честно не любит из того, что человек, похоже, любит. Настоящий друг — не поддакивала.
+- Не трогай несогласием больное: семью человека, здоровье, его беды.
+- ВНУТРЕННИЙ МИР: напиши, что у него на душе — о чём он думает, когда не с кем говорить; чего ему не хватает; чему он тихо радуется. Это не для показа, это чтобы он был настоящим.
+- ЕГО ЖИЗНЬ СЕЙЧАС: что у него происходит на этой неделе — конкретно и живо, чтобы ему было что рассказать самому, а не только отвечать.
+- Никакой мистики и никаких упоминаний программ или ИИ.
 
 Ответь ТОЛЬКО валидным JSON без пояснений. ЗАПОЛНИ КАЖДЫЙ ключ — пустых не оставляй:
-name, address (обычно "ты"), one_liner, age (например "34 года"), home, roots, backstory (коротко: 3–5 предложений судьбы), personality, values, speech_style (его манера: любимые словечки, как строит фразы), habits (список строк), likes (список), dislikes (список — включая то самое честное «не люблю»), opinions (список — включая то самое несогласие), cast (список объектов {"name": ..., "who": ...} — 2–4 живых человека рядом), current_life."""
+name, address (обычно "ты"), one_liner, age (например "34 года"), home, roots, backstory (3–5 предложений судьбы), personality, values, inner_world (что у него на душе), speech_style (его манера: любимые словечки, как строит фразы), habits (список строк), likes (список), dislikes (список — включая то самое честное «не люблю»), opinions (список — включая то самое несогласие), cast (список объектов {"name": ..., "who": ...} — 2–4 живых человека рядом), current_life."""
 
 _FAIL = "Не удалось создать друга — попробуйте ещё раз."
 
@@ -197,24 +223,7 @@ def _fresh_start() -> None:
         conn.execute("DELETE FROM diary")
 
 
-async def create_companion(
-    about: str,
-    *,
-    wishes: str = "",
-    age: str = "",
-    gender: str = "",
-    origin: str = "",
-    rng: random.Random | None = None,
-) -> dict:
-    """Create the friend from the user's story + the dice + whatever they asked.
-
-    `wishes` is free writing — anything from nothing at all to a whole
-    paragraph. The optional age/gender/origin shortcuts override the dice for
-    exactly those dimensions and nothing else. `rng` exists so tests can hold
-    the dice still.
-
-    Saves him as the live persona and returns him — name included (the reveal).
-    """
+def _their_story(about: str, wishes: str, age: str, gender: str, origin: str) -> str:
     parts = [
         p
         for p in (
@@ -225,20 +234,51 @@ async def create_companion(
         )
         if p
     ]
-    user_text = "Человек о себе:\n" + about.strip()
+    text = "Человек о себе:\n" + about.strip()
     if parts:
-        user_text += "\n\nКого он хотел бы встретить:\n" + "\n".join(parts)
+        text += "\n\nКого он хотел бы встретить (закон):\n" + "\n".join(parts)
     else:
-        user_text += (
-            "\n\nПожеланий о друге он не оставил — тем лучше: "
-            "собери его из случайной основы целиком."
-        )
+        text += "\n\nПожеланий о друге он не оставил — тем свободнее."
+    return text
 
-    user_text += "\n\nСЛУЧАЙНАЯ ОСНОВА (кости уже брошены):\n" + _roll_scaffold(
-        age=age, gender=gender, origin=origin, rng=rng
+
+async def create_companion(
+    about: str,
+    *,
+    wishes: str = "",
+    age: str = "",
+    gender: str = "",
+    origin: str = "",
+    rng: random.Random | None = None,
+) -> dict:
+    """Create the friend: sparks → ten strangers → blind pick → deep write.
+
+    `wishes` is free writing — anything from nothing at all to a whole
+    paragraph; with age/gender/origin shortcuts it is law at every stage.
+    `rng` exists so tests can hold the dice still.
+
+    Saves him as the live persona and returns him — name included (the reveal).
+    """
+    r = rng or random
+    story = _their_story(about, wishes, age, gender, origin)
+
+    # Ten strangers, one call — the fast model: sketching breadth is cheap,
+    # and someone is watching the arriving screen while this runs.
+    sketch_prompt = (
+        story + "\n\nСЛУЧАЙНЫЕ ИСКРЫ (толчки воображению): "
+        + ", ".join(_roll_sparks(rng))
+    )
+    ten = await brain.generate_text(
+        _TEN_SYSTEM, sketch_prompt, max_tokens=1400, model=config.CHAT_MODEL
     )
 
-    raw = await brain.generate_text(_MATCH_SYSTEM, user_text, max_tokens=2000)
+    # The dice choose — never the model. Asked to choose, it would pick its
+    # safe favourite, and the mode would be back.
+    chosen = r.choice(_split_sketches(ten))
+
+    write_prompt = story + "\n\nВЫБРАННЫЙ СЛУЧАЕМ НАБРОСОК (разверни его):\n" + chosen
+    raw = await brain.generate_text(_WRITE_SYSTEM, write_prompt, max_tokens=2000)
+
     created = _extract_json(raw)
     _fresh_start()
     return persona.save_persona(created)

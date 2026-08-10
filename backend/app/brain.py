@@ -128,16 +128,22 @@ async def generate_reply(
 
 
 async def generate_text(
-    system_prompt: str, user_text: str, max_tokens: int = 1500
+    system_prompt: str,
+    user_text: str,
+    max_tokens: int = 1500,
+    model: str | None = None,
 ) -> str:
-    """One-shot writing call (no tools, no history) — always the deep model.
+    """One-shot writing call (no tools, no history).
 
     Used for composed writing rather than conversation: creating the friend,
-    the diary about him, distilling memory. Nobody is waiting mid-sentence.
+    the diary about him, distilling memory. Defaults to the deep model —
+    nobody is waiting mid-sentence — but `model` lets a caller pick the fast
+    one for work that is broad rather than deep (sketching ten strangers),
+    which keeps the arriving screen short.
     """
     client = _get_client()
     async with client.messages.stream(
-        model=config.BRAIN_MODEL,
+        model=model or config.BRAIN_MODEL,
         max_tokens=max_tokens,
         system=system_prompt,
         messages=[{"role": "user", "content": user_text}],

@@ -30,13 +30,37 @@ FRIEND = {
 }
 
 
+#: Ten sketch-people, as the first call returns them.
+TEN = "\n".join(
+    f"{i}. {name}, {age} лет, {where}, {trade}. Нрав спокойный."
+    for i, (name, age, where, trade) in enumerate(
+        [
+            ("Зоя", 31, "северный город", "крановщица"),
+            ("Пётр", 44, "село под Тверью", "пасечник"),
+            ("Лида", 67, "Ростов", "учительница физики"),
+            ("Марат", 28, "Казань", "машинист метро"),
+            ("Нина", 52, "городок в горах", "фельдшер"),
+            ("Гриша", 73, "посёлок при заводе", "сварщик"),
+            ("Тамара", 39, "Иркутск", "проводница"),
+            ("Фёдор", 62, "город у гор", "архитектор"),
+            ("Слава", 24, "Пермь", "автомеханик"),
+            ("Оля", 81, "деревня на Волге", "почтальон"),
+        ],
+        start=1,
+    )
+)
+
+
 @pytest.fixture
 def pen(monkeypatch):
-    """Fake the AI with a reply wrapped in prose + code fences (the messy case)."""
+    """Fake both AI calls: the ten sketches, then the deep write (wrapped in
+    prose + code fences — the messy case)."""
     calls: list[str] = []
 
-    async def fake_generate(system_prompt, user_text, max_tokens=1500):
+    async def fake_generate(system_prompt, user_text, max_tokens=1500, model=None):
         calls.append(user_text)
+        if "ДЕСЯТЬ" in system_prompt:
+            return TEN
         return "Вот его друг:\n```json\n" + json.dumps(FRIEND, ensure_ascii=False) + "\n```"
 
     monkeypatch.setattr(brain, "generate_text", fake_generate)
@@ -53,13 +77,15 @@ def test_friend_is_created_and_becomes_the_persona(pen):
             origin="Грузия",
         )
     )
-    # The reveal: he has his own name — and the user's wishes reached the pen.
+    # The reveal: he has his own name — and the user's wishes reached BOTH
+    # calls. Wishes are law at every stage, not just the last one.
     assert created["name"] == "Фёдор"
-    assert "кого-то спокойного, кто много читает" in pen[0]
-    assert "возраст: около 60" in pen[0]
-    assert "пол: мужчина" in pen[0]
-    assert "откуда: Грузия" in pen[0]
-    assert "Люблю футбол" in pen[0]
+    for prompt in pen:
+        assert "кого-то спокойного, кто много читает" in prompt
+        assert "возраст: около 60" in prompt
+        assert "пол: мужчина" in prompt
+        assert "откуда: Грузия" in prompt
+        assert "Люблю футбол" in prompt
 
     # He is now the live persona — exactly as created, never topped up from
     # the built-in template (that merge is how every friend got the same cat).
@@ -77,43 +103,76 @@ def test_no_wishes_is_fine(pen):
     created = asyncio.run(matchmaker.create_companion("Люблю рыбалку и тишину."))
     assert created["name"] == "Фёдор"
     assert "Пожеланий о друге он не оставил" in pen[0]
-    assert "СЛУЧАЙНАЯ ОСНОВА" in pen[0]
 
 
-def test_dice_supply_the_variety_not_the_model():
-    """Two rolls, two different skeletons.
+def test_sparks_start_the_imagination_somewhere_new():
+    """The dice carry no biography — only where to start looking.
 
-    This is the sameness fix itself: asked to 'invent a person', a language
-    model returns its most probable person — the same warm old man by the sea,
-    every time. So the skeleton (age, place, trade, temper) is rolled by
-    actual dice OUTSIDE the model, and the model only fleshes it out.
+    Sparks are ordinary nouns («керосинка», «ипподром»), never traits. Nothing
+    about a person is decided here; the model still authors every character.
+    What the sparks buy is a different starting point each time, so its
+    imagination doesn't set off down the same road it always takes.
     """
     import random
 
-    a = matchmaker._roll_scaffold(rng=random.Random(1))
-    b = matchmaker._roll_scaffold(rng=random.Random(2))
+    a = matchmaker._roll_sparks(random.Random(1))
+    b = matchmaker._roll_sparks(random.Random(2))
     assert a != b
-    # Rolling many skeletons must visit many trades — not orbit one archetype.
-    trades = {
-        line
-        for seed in range(30)
-        for line in matchmaker._roll_scaffold(rng=random.Random(seed)).splitlines()
-        if line.startswith("Кем работает")
-    }
-    assert len(trades) >= 10
+    assert len(set(a)) == len(a)  # no word twice in one striking
+
+    # Across many creations the sparks must actually roam the lexicon, or
+    # they're decoration.
+    seen = {w for seed in range(60) for w in matchmaker._roll_sparks(random.Random(seed))}
+    assert len(seen) >= 100
+
+    # And they must stay NOUNS, never character traits — the moment a spark
+    # prescribes who someone is, we're back to premade people.
+    for word in matchmaker._SPARK_WORDS:
+        assert not any(
+            word.startswith(stem)
+            for stem in ("добр", "злой", "весёл", "груст", "умн", "ворчлив")
+        ), f"{word!r} is a trait, not a spark"
 
 
-def test_wishes_beat_the_dice(pen):
-    # What the user asked for is used verbatim — dice fill only the gaps.
+def test_ten_strangers_then_the_dice_choose():
+    """Two mechanisms, and both are load-bearing.
+
+    Asking for TEN at once lets the model see its own repetition inside one
+    reply and steer away from it — across separate replies it can't, and
+    returns its favourite every time. Then Python picks, because a model asked
+    to choose picks that same favourite and undoes the whole thing.
+    """
+    import random
+
+    sketches = matchmaker._split_sketches(TEN)
+    assert len(sketches) == 10
+    assert "крановщица" in sketches[0]
+
+    picked = {random.Random(seed).choice(sketches) for seed in range(40)}
+    assert len(picked) >= 7  # the pick genuinely roams the ten
+
+
+def test_a_reply_that_isnt_a_list_still_yields_someone():
+    """Degraded, not broken: if the ten come back as prose, the whole text
+    becomes one sketch and a friend is still born."""
+    assert matchmaker._split_sketches("Просто человек, живёт и работает.") == [
+        "Просто человек, живёт и работает."
+    ]
+
+
+def test_wishes_are_law_at_every_stage(pen):
+    # Not just in the final write — a wish ignored while sketching is a wish
+    # that never had a chance to be honoured.
     asyncio.run(
         matchmaker.create_companion(
             "Люблю горы.", age="около 30", gender="женщина", origin="с Урала"
         )
     )
-    scaffold = pen[0].split("СЛУЧАЙНАЯ ОСНОВА")[1]
-    assert "Возраст: около 30" in scaffold
-    assert "Пол: женщина" in scaffold
-    assert "Где живёт: с Урала" in scaffold
+    assert len(pen) == 2
+    for prompt in pen:
+        assert "возраст: около 30" in prompt
+        assert "пол: женщина" in prompt
+        assert "откуда: с Урала" in prompt
 
 
 def test_new_friend_starts_with_a_clean_slate(pen):
@@ -135,8 +194,22 @@ def test_new_friend_starts_with_a_clean_slate(pen):
 
 
 def test_unparseable_reply_fails_gently(monkeypatch):
-    async def fake_generate(system_prompt, user_text, max_tokens=1500):
+    async def fake_generate(system_prompt, user_text, max_tokens=1500, model=None):
         return "Извини, сегодня без JSON."
+
+    monkeypatch.setattr(brain, "generate_text", fake_generate)
+    with pytest.raises(RuntimeError):
+        asyncio.run(matchmaker.create_companion("про меня"))
+
+
+def test_half_a_person_is_refused(monkeypatch):
+    """A character missing its core isn't a person yet — and the holes must
+    never again be filled from the template. Rejecting is the only honest
+    option left, so it has to actually happen."""
+    async def fake_generate(system_prompt, user_text, max_tokens=1500, model=None):
+        if "ДЕСЯТЬ" in system_prompt:
+            return TEN
+        return json.dumps({"name": "Аноним", "age": "40 лет"}, ensure_ascii=False)
 
     monkeypatch.setattr(brain, "generate_text", fake_generate)
     with pytest.raises(RuntimeError):

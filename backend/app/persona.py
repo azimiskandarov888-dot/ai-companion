@@ -137,6 +137,10 @@ def build_persona_block(persona: dict | None = None) -> str:
     add("Откуда ты родом", p.get("roots"))
     add("Твоя история", p.get("backstory"))
     add("Твой характер", p.get("personality"))
+    # What's on his mind when nobody's listening. Never recited out loud — it
+    # is there so that what he DOES say comes from somewhere.
+    add("Что у тебя на душе (не рассказывай это прямо — просто живи с этим)",
+        p.get("inner_world"))
     add("Что тебе дорого", p.get("values"))
     add("Твои привычки", p.get("habits"))
     add("Что ты любишь", p.get("likes"))

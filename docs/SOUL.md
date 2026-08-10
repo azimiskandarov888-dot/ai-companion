@@ -17,6 +17,10 @@ different jobs, done at two completely different moments:
 | Model | `BRAIN_MODEL` (Sonnet — deep) | `CHAT_MODEL` (Haiku — fast) |
 | Where | `matchmaker.py` → `data/persona.json` | `main.py → brain.py`, persona injected |
 
+Creation costs two calls: the ten sketches run on the fast model (breadth is
+cheap, and someone is watching the arriving screen), the deep write on the
+big one.
+
 He does **not** invent his life while talking. His life is a document,
 written once, and conversation *inhabits* it. Inventing at reply time is what
 made him slow; a fully-written persona is what makes the fast model warm.
@@ -55,41 +59,84 @@ ask a thousand times, get him a thousand times. This is not laziness;
 it is what sampling the middle of a probability distribution means.
 **Творческий выбор нельзя доверять генератору вероятностей.**
 
-## The fix for 4: dice on the outside
+## The fix for 4 — and the wrong turn taken first
 
-Randomness must come from *outside* the model. In `matchmaker.py`, Python's
-`random` — real, uniform, indifferent — rolls the skeleton before the model
-is ever consulted:
+**The wrong turn.** The first attempt injected diversity with *premade
+lists*: 36 trades, 10 settings, 9 tempers, rolled by dice. It killed the
+sameness and it capped the soul — every character was assembled from OUR
+options, and the space of possible people was exactly as large as our lists.
+The user rejected it in one sentence, and was right:
 
-- **age** — 24 to 87, flat. Old is one face of the dice, not the default
-- **place** — big noisy city, northern town, village, mountain settlement…
-  the sea is *one* entry in the list
-- **trade** — 36 of them: bus driver, crane operator, beekeeper, boxing
-  coach, metro driver, piano tuner…
-- **temper** — including *ворчливый, но добрейшей души* and *упрямый спорщик*
-- **what life did to him** — divorce, a lost job, a move he still misses,
-  raising a child alone…
-- **what's happening right now** — the motorcycle that will ride again, the
-  neighbour feud he knows is silly, the puppy he pretends not to love
-- **animal** — usually *none*: the lonely-man-with-a-cat is its own cliché
+> *"So has all of that created by the AI, or is just premade options that you
+> choose from randomly? … I thought that AI would create a character with the
+> tone, everything. Memory, wishes, story, meaning, soul, thoughts on life.
+> So every time it would be absolutely different person, unlimited types."*
 
-The model's job changes from "invent a person" (where it collapses to the
-average) to "make THIS skeleton into a living person who fits THIS user's
-story" — constraint satisfaction, which models are genuinely good at.
+The lesson is precise: **randomness must come from outside the model, but it
+must not carry biography.** The old scaffold did both jobs; only the first
+was legitimate.
 
-**The order of power is strict:** the user's wishes beat the dice; the dice
-beat the model's habits. Wish for "около 30, женщина, с Урала" and exactly
-those dice are taken off the table; everything else still rolls.
+### The design: sparks → ten strangers → blind pick → the deep write
+
+**1 · Sparks.** Dice draw four words from a lexicon of ~231 ordinary Russian
+nouns — «керосинка», «ипподром», «оттепель», «плацкарт». That is 115 million
+distinct strikings, and *not one of them describes a person*. A spark may
+surface as a trade, a memory, a habit, or not at all. They exist only to make
+imagination start somewhere new instead of setting off down its usual road.
+The rule that keeps this honest: **sparks are nouns, never traits.** The
+moment a list entry prescribes who someone *is*, we are back to premade
+people — there's a test enforcing it.
+
+**2 · Ten strangers, one call.** The model invents ten sketch-people at once,
+required to be maximally unlike each other — decades apart, different
+regions, trades, tempers, fates, no two sharing a city or a job. This is the
+single most important mechanic, and the reason is not obvious: **inside one
+reply the model can see its own repetition and steer away from it; across
+separate replies it cannot, and returns its favourite every time.** This is
+Verbalized Sampling's finding (arXiv 2510.01171) — ask for a distribution,
+not a sample — measured at 1.6–2.1× diversity in creative writing.
+
+**3 · Blind pick.** Python chooses one of the ten. Never the model: asked to
+choose, it picks its safe favourite and the mode walks straight back in.
+
+**4 · The deep write.** The big model turns that sketch into a whole person
+*for this user* — story, inner world, speech manner, people around him,
+what's happening this week — with common ground drawn from the user's own
+words and at least one honest disagreement. **Fit lives here on purpose:**
+stage 2 optimises for difference, stage 4 for belonging. One stage doing both
+would trade them off and do neither well.
+
+Everything about the person — every trait, every memory, every opinion — is
+authored by the model. The dice never touch biography; they only choose
+*where to look* and *which of ten to keep*.
+
+**The order of power is strict:** the user's wishes are law at every stage
+(a wish ignored while sketching is a wish that never had a chance), then the
+dice, then the model's taste.
 
 **Disagreement is mandatory.** The genesis prompt requires at least one
 opinion that — judging from the user's own story — the user will probably
 *not* share, plus something he honestly dislikes that the user seems to love.
-Gentle, живейское: food, music, habits, how to rest. Never their family,
+Gentle, житейское: food, music, habits, how to rest. Never their family,
 their health, their griefs. A friend who agrees with everything is furniture.
+
+**Inner world is written and never recited.** `inner_world` records what's on
+his mind when nobody's listening. It reaches the system prompt labelled
+*«не рассказывай это прямо — просто живи с этим»*: it is there so that what he
+does say comes from somewhere.
 
 **Incomplete is rejected, not patched.** If the pen returns a character
 missing name / age / home / backstory / personality / speech_style, creation
-fails and is retried — the holes are never filled from a template again.
+fails — the holes are never filled from a template again.
+
+### Why not simply turn the temperature up
+
+The obvious knob, and it doesn't work. Temperature perturbs *word choice*,
+not *concept selection*: a hot sample gives the same old man by the sea
+described in odder words, and past ~1.0 prose degrades before variety
+arrives. Mode collapse lives in the shape of the distribution — a bias toward
+familiar text baked in during alignment training — so the fix has to change
+what is *asked*, not how the tokens are drawn.
 
 ---
 
