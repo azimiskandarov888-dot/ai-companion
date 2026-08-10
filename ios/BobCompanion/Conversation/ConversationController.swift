@@ -112,6 +112,7 @@ final class ConversationController: ObservableObject {
                 audioFileURL: fileURL,
                 sessionID: AppConfig.shared.sessionID
             )
+            Trouble.shared.clear()   // a turn got through; whatever it was, it's past
 
             // The server decides whether he answers, and it has already
             // decided. It says so in his own words — we just stop listening
@@ -149,6 +150,12 @@ final class ConversationController: ObservableObject {
                 await voice.speak(response.reply)
             }
         } catch {
+            // He still only ever says «не слышит» — the screen shows nothing
+            // else and never will. But the real reason is written down, once,
+            // where a tester can find it: Настройки → Сервер. Without this,
+            // three unrelated problems with three unrelated fixes all present
+            // as the same two words.
+            Trouble.shared.record(error, url: client.baseURL.appendingPathComponent("api/talk"))
             status = .problem(error.localizedDescription)
             try? await Task.sleep(nanoseconds: 2_000_000_000)
         }

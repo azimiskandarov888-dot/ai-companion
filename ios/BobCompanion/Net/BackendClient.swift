@@ -101,7 +101,12 @@ struct BackendClient {
         let endpoint = baseURL.appendingPathComponent("api/talk")
         var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"
-        request.timeoutInterval = 15   // he says he can't hear you FAST, not after a minute
+        // One turn is three round trips end to end — ears (Whisper), brain
+        // (Claude), voice (Fish) — and on home Wi-Fi that lands at 8–15 s more
+        // often than it looks like it should. At 15 s a perfectly healthy turn
+        // times out, and a timeout is indistinguishable on screen from him not
+        // hearing you. Better a long think than a false «не слышит».
+        request.timeoutInterval = 30
 
         let boundary = "Boundary-\(UUID().uuidString)"
         request.setValue("multipart/form-data; boundary=\(boundary)",

@@ -23,7 +23,9 @@ Endpoints:
 from __future__ import annotations
 
 import base64
+import sys
 import time
+import traceback
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -81,6 +83,33 @@ async def health() -> JSONResponse:
             "bob_self_facts": memory.counts("bob").get("fact", 0),
         }
     )
+
+
+def _unavailable(stage: str, error: Exception) -> HTTPException:
+    """Return a 503 — and say out loud, in the terminal, what actually broke.
+
+    Uvicorn logs an HTTPException as one anonymous line:
+
+        INFO: 192.168.0.107:59760 - "POST /api/talk HTTP/1.1" 503 Service Unavailable
+
+    That is the whole message. No stage, no provider, no reason — while the
+    app, correctly, shows only «не слышит», because it must never show an
+    error code to a lonely person. So the fact needed to fix it existed
+    nowhere. Every 503 in this file now goes through here instead, and the
+    person running the server can always see which of the three parts failed.
+
+    A RuntimeError in this codebase always means "not configured / the
+    provider said no", so its message is the answer and a traceback would
+    only bury it. Anything else is a genuine bug and gets the full traceback.
+    """
+    print(
+        f"\n  ✗ {stage} failed\n    {error}\n",
+        file=sys.stderr,
+        flush=True,
+    )
+    if not isinstance(error, RuntimeError):
+        traceback.print_exc()
+    return HTTPException(status_code=503, detail=f"{stage}: {error}")
 
 
 async def _think_and_speak(
@@ -170,8 +199,8 @@ async def talk(
         transcript = await stt.transcribe(
             audio_bytes, filename=audio.filename or "audio.webm"
         )
-    except RuntimeError as e:
-        raise HTTPException(status_code=503, detail=str(e))
+    except Exception as e:  # noqa: BLE001 — every failure gets named, none is silent
+        raise _unavailable("👂 the ears (Whisper)", e)
 
     # Judge whether that sounded like a person before spending on a reply. A
     # room with a television produces a steady trickle of short fragments; a
@@ -200,8 +229,8 @@ async def talk(
 
     try:
         result = await _think_and_speak(session_id, transcript, background_tasks)
-    except RuntimeError as e:
-        raise HTTPException(status_code=503, detail=str(e))
+    except Exception as e:  # noqa: BLE001
+        raise _unavailable("🧠 the brain (Claude) / 🗣️ the voice", e)
 
     allowance.spend(session_id, time.monotonic() - started)
 
@@ -240,8 +269,8 @@ async def say(req: SayRequest, background_tasks: BackgroundTasks) -> JSONRespons
             )
         try:
             audio_bytes = await tts.synthesize(text)
-        except RuntimeError as e:
-            raise HTTPException(status_code=503, detail=str(e))
+        except Exception as e:  # noqa: BLE001
+            raise _unavailable("🗣️ the voice", e)
         return JSONResponse({
             "transcript": text,
             "reply": text,
@@ -252,8 +281,8 @@ async def say(req: SayRequest, background_tasks: BackgroundTasks) -> JSONRespons
 
     try:
         result = await _think_and_speak(req.session_id, text, background_tasks)
-    except RuntimeError as e:
-        raise HTTPException(status_code=503, detail=str(e))
+    except Exception as e:  # noqa: BLE001
+        raise _unavailable("🧠 the brain (Claude) / 🗣️ the voice", e)
     return JSONResponse({"transcript": text, **result})
 
 
@@ -321,8 +350,8 @@ async def companion_create(req: CreateCompanionRequest) -> JSONResponse:
             gender=req.gender.strip(),
             origin=req.origin.strip(),
         )
-    except RuntimeError as e:
-        raise HTTPException(status_code=503, detail=str(e))
+    except Exception as e:  # noqa: BLE001
+        raise _unavailable("🧠 writing him (Claude)", e)
     return JSONResponse({"name": p.get("name"), "persona": p})
 
 
@@ -335,8 +364,8 @@ async def companion_diary() -> JSONResponse:
     """
     try:
         return JSONResponse(await diary.get_diary())
-    except RuntimeError as e:
-        raise HTTPException(status_code=503, detail=str(e))
+    except Exception as e:  # noqa: BLE001
+        raise _unavailable("📖 the diary (Claude)", e)
 
 
 @app.get("/api/memory")

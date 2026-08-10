@@ -121,46 +121,113 @@ private struct StartOverSheet: View {
 
 private struct ServerSheet: View {
     @Environment(\.dismiss) private var dismiss
+    @StateObject private var trouble = Trouble.shared
     @State private var address = AppConfig.shared.backendURLString
+    @State private var verdict: String = ""
+    @State private var verdictIsGood = false
+    @State private var checking = false
 
     var body: some View {
         ZStack {
             Theme.night.ignoresSafeArea()
-            VStack(alignment: .leading, spacing: 18) {
-                Text(Strings.rowServer())
-                    .appFont(AppType.title)
-                    .foregroundStyle(Theme.linen)
-                    .padding(.top, 28)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    Text(Strings.rowServer())
+                        .appFont(AppType.title)
+                        .foregroundStyle(Theme.linen)
+                        .padding(.top, 28)
 
-                TextField("http://192.168.1.50:8000", text: $address)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                    .keyboardType(.URL)
-                    .appFont(AppType.body)
-                    .foregroundStyle(Theme.linen)
-                    .padding(.horizontal, 16)
-                    .frame(minHeight: Metrics.rowHeight)
-                    .panel()
+                    TextField("http://192.168.1.50:8000", text: $address)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .keyboardType(.URL)
+                        .appFont(AppType.body)
+                        .foregroundStyle(Theme.linen)
+                        .padding(.horizontal, 16)
+                        .frame(minHeight: Metrics.rowHeight)
+                        .panel()
 
-                Text(Strings.language == .russian
-                     ? "Пока вы тестируете — это адрес вашего Mac в той же сети Wi-Fi."
-                     : "While you're testing, this is your Mac's address on the same Wi-Fi.")
-                    .appFont(AppType.caption)
-                    .foregroundStyle(Theme.lichen)
-                    .fixedSize(horizontal: false, vertical: true)
+                    Text(Strings.language == .russian
+                         ? "Пока вы тестируете — это адрес вашего Mac в той же сети Wi-Fi."
+                         : "While you're testing, this is your Mac's address on the same Wi-Fi.")
+                        .appFont(AppType.caption)
+                        .foregroundStyle(Theme.lichen)
+                        .fixedSize(horizontal: false, vertical: true)
 
-                Spacer()
-                AppButton(title: Strings.done(), tone: .leaf) {
-                    AppConfig.shared.backendURLString =
-                        address.trimmingCharacters(in: .whitespacesAndNewlines)
-                    dismiss()
+                    // The one screen in the app allowed to be technical. He
+                    // never says any of this — you have to come here and ask.
+                    AppButton(title: checking
+                              ? (Strings.language == .russian ? "Проверяю…" : "Checking…")
+                              : (Strings.language == .russian ? "Проверить связь" : "Check the connection"),
+                              tone: .sun) {
+                        Task { await check() }
+                    }
+                    .disabled(checking)
+
+                    if !verdict.isEmpty {
+                        Text(verdict)
+                            .appFont(AppType.caption, leading: AppType.bodyLeading)
+                            .foregroundStyle(verdictIsGood ? Theme.linen : Theme.sun300)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(16)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .panel()
+                    }
+
+                    if !trouble.lastFailure.isEmpty, trouble.lastFailure != verdict {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(Strings.language == .russian
+                                 ? "В прошлый раз разговор не дошёл:"
+                                 : "Last time a turn didn't get through:")
+                                .appFont(AppType.caption)
+                                .foregroundStyle(Theme.lichen)
+                            Text(trouble.lastFailure)
+                                .appFont(AppType.caption, leading: AppType.bodyLeading)
+                                .foregroundStyle(Theme.linen)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .padding(16)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .panel()
+                    }
+
+                    AppButton(title: Strings.done(), tone: .leaf) {
+                        save()
+                        dismiss()
+                    }
+                    .padding(.top, 8)
+                    .padding(.bottom, 24)
                 }
-                .padding(.bottom, 24)
+                .padding(.horizontal, Metrics.sideMargin)
             }
-            .padding(.horizontal, Metrics.sideMargin)
+            .scrollDismissesKeyboard(.interactively)
         }
-        .presentationDetents([.medium])
+        .presentationDetents([.medium, .large])
         .presentationCornerRadius(Metrics.sheetRadius)
+    }
+
+    private func save() {
+        AppConfig.shared.backendURLString =
+            address.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// Checking has to use the address currently TYPED, not the saved one —
+    /// otherwise you correct the address, press check, and it tests the old one.
+    @MainActor
+    private func check() async {
+        save()
+        checking = true
+        defer { checking = false }
+
+        switch await ConnectionCheck.run() {
+        case .reachable(let summary):
+            verdict = summary
+            verdictIsGood = true
+            Trouble.shared.clear()
+        case .unreachable(let reason):
+            verdict = reason
+            verdictIsGood = false
+        }
     }
 }
 

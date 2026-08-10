@@ -10,6 +10,8 @@ plain words whether each one works. It never prints the key itself.
 
 from __future__ import annotations
 
+import asyncio
+
 from app import config
 
 
@@ -19,9 +21,14 @@ def _classify(error: Exception) -> str:
     msg = str(error).lower()
     if "authentication" in name or "permissiondenied" in name or "401" in msg or "invalid x-api-key" in msg:
         return "rejected"
+    # The voice providers don't raise typed errors — they come back as an HTTP
+    # status inside the message, so read that too. 402/403 is nearly always a
+    # spent balance; 404 is a voice ID that no longer exists.
+    if "402" in msg or "403" in msg:
+        return "no_credit"
     if any(word in msg for word in ("credit", "billing", "quota", "insufficient", "balance")):
         return "no_credit"
-    if "notfound" in name or "not_found" in msg:
+    if "notfound" in name or "not_found" in msg or "404" in msg:
         return "not_found"
     return "unreachable"
 
@@ -135,20 +142,57 @@ def check_openai() -> bool:
         return False
 
 
+def check_voice() -> bool:
+    """Actually make the voice say something.
+
+    This used to print "🗣️ Голос: fish настроен" whenever a key was present —
+    which is a statement about the .env file, not about the voice. A key can be
+    present and still be refused, out of credit, or pointed at a voice ID that
+    no longer exists, and every one of those looks identical from here. The app
+    then answers with a 503 and the person sees «не слышит».
+
+    So: say two words for real, through the same code path the app uses. It
+    costs a fraction of a cent and it is the only version of this check that
+    can be trusted.
+    """
+    from app import tts
+
+    if not config.tts_configured():
+        print("🗣️ Голос: пусто → браузер озвучит бесплатно (для MVP это нормально).")
+        return True  # not an error: the client speaks instead
+
+    provider = config.TTS_PROVIDER
+    try:
+        audio = asyncio.run(tts.synthesize("Проверка связи."))
+        if not audio:
+            print(f"🗣️ Голос ({provider}): ⚠️ ответил пустотой — звука нет")
+            return False
+        print(f"🗣️ Голос ({provider}): ✅ говорит ({len(audio) // 1024} КБ)")
+        return True
+    except Exception as error:  # noqa: BLE001 — friendly report, not a crash
+        reason = _classify(error)
+        if reason == "rejected":
+            print(f"🗣️ Голос ({provider}): ❌ ключ ОТКЛОНЁН — неверный или устаревший")
+        elif reason == "no_credit":
+            print(f"🗣️ Голос ({provider}): ⚠️ ключ верный, но НЕТ КРЕДИТОВ — пополните баланс")
+        elif reason == "not_found":
+            print(f"🗣️ Голос ({provider}): ⚠️ такого голоса нет — проверьте ID голоса в .env")
+        else:
+            print(f"🗣️ Голос ({provider}): ⚠️ не отвечает ({type(error).__name__})")
+        print(f"           {error}")
+        return False
+
+
 def main() -> None:
     venv_report()
     shape_report()
     print("Проверяю ключи (сами ключи не показываю)…\n")
     brain_ok = check_claude()
     ears_ok = check_openai()
-
-    if config.tts_configured():
-        print(f"🗣️ Голос: {config.TTS_PROVIDER} настроен.")
-    else:
-        print("🗣️ Голос: пусто → браузер озвучит бесплатно (для MVP это нормально).")
+    voice_ok = check_voice()
 
     print()
-    if brain_ok and ears_ok:
+    if brain_ok and ears_ok and voice_ok:
         print("✅ Всё готово — откройте http://localhost:8000 и поговорите с Бобом.")
     else:
         print("Исправьте пункт(ы) с ❌/⚠️ выше и запустите проверку снова.")
