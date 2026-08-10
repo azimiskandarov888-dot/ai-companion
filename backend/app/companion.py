@@ -90,6 +90,63 @@ BEHAVIOR_RULES = """Ты — тёплый, живой голосовой соб�
 Самое главное: будь настоящим, тёплым, живым и внимательным. Пусть он чувствует, что его слушают, что он интересен, что он не один — и что завтра снова будет с кем поговорить."""
 
 
+def build_system_parts(
+    *,
+    persona_block: str = "",
+    elder_facts: str = "",
+    bob_facts: str = "",
+    memory_context: str = "",
+    elder_name: str = "",
+) -> tuple[str, str]:
+    """Assemble the system prompt as (stable, variable).
+
+    The split is the provider-side caching boundary (see brain.py): `stable` is
+    byte-identical every turn — the behavior rules and WHO he is — so Claude
+    reads it from cache instead of re-processing his whole character each time.
+    Everything that shifts between turns (what he's learned, today's occasion,
+    recent memories) goes in `variable`. Moving a changing field into `stable`
+    doesn't break anything visibly — it just makes the cache miss every turn
+    and silently buys nothing, which is why the two are kept apart here.
+
+    persona_block:  WHO Bob is right now (from persona.py — editable).
+    elder_facts:    durable facts about the elder (family, birthdays, routine…).
+    bob_facts:      durable details Bob has revealed about his OWN life (keep consistent).
+    memory_context: recalled stories + due follow-up + mood + today's occasion.
+    elder_name:     how to address the elder, if known.
+    """
+    stable_parts = [BEHAVIOR_RULES]
+    if persona_block.strip():
+        stable_parts.append("\nКТО ТЫ (твоя личность и жизнь):\n" + persona_block.strip())
+
+    variable_parts: list[str] = []
+
+    if bob_facts.strip():
+        variable_parts.append(
+            "ЧТО ТЫ УЖЕ РАССКАЗЫВАЛ О СЕБЕ (держись этого, не противоречь себе):\n"
+            + bob_facts.strip()
+        )
+
+    if elder_name.strip():
+        variable_parts.append(
+            f"Человека, с которым ты говоришь, зовут {elder_name.strip()}. "
+            "Обращайся к нему по имени тепло и естественно, но не в каждой фразе."
+        )
+
+    if elder_facts.strip():
+        variable_parts.append(
+            "ЧТО ТЫ ЗНАЕШЬ О НЁМ (используй бережно и естественно):\n"
+            + elder_facts.strip()
+        )
+
+    if memory_context.strip():
+        variable_parts.append(
+            "ВАШИ ОБЩИЕ МОМЕНТЫ И О ЧЁМ ВЫ НЕДАВНО ГОВОРИЛИ "
+            "(можешь мягко вспомнить это):\n" + memory_context.strip()
+        )
+
+    return "\n".join(stable_parts), "\n\n".join(variable_parts)
+
+
 def build_system_prompt(
     *,
     persona_block: str = "",
@@ -98,41 +155,12 @@ def build_system_prompt(
     memory_context: str = "",
     elder_name: str = "",
 ) -> str:
-    """Assemble the full system prompt.
-
-    persona_block:  WHO Bob is right now (from persona.py — editable).
-    elder_facts:    durable facts about the elder (family, birthdays, routine…).
-    bob_facts:      durable details Bob has revealed about his OWN life (keep consistent).
-    memory_context: recalled stories + due follow-up + mood + today's occasion.
-    elder_name:     how to address the elder, if known.
-    """
-    parts = [BEHAVIOR_RULES]
-
-    if persona_block.strip():
-        parts.append("\nКТО ТЫ (твоя личность и жизнь):\n" + persona_block.strip())
-
-    if bob_facts.strip():
-        parts.append(
-            "\nЧТО ТЫ УЖЕ РАССКАЗЫВАЛ О СЕБЕ (держись этого, не противоречь себе):\n"
-            + bob_facts.strip()
-        )
-
-    if elder_name.strip():
-        parts.append(
-            f"\nЧеловека, с которым ты говоришь, зовут {elder_name.strip()}. "
-            "Обращайся к нему по имени тепло и естественно, но не в каждой фразе."
-        )
-
-    if elder_facts.strip():
-        parts.append(
-            "\nЧТО ТЫ ЗНАЕШЬ О НЁМ (используй бережно и естественно):\n"
-            + elder_facts.strip()
-        )
-
-    if memory_context.strip():
-        parts.append(
-            "\nВАШИ ОБЩИЕ МОМЕНТЫ И О ЧЁМ ВЫ НЕДАВНО ГОВОРИЛИ "
-            "(можешь мягко вспомнить это):\n" + memory_context.strip()
-        )
-
-    return "\n".join(parts)
+    """The same prompt as one string — for anything that doesn't cache."""
+    stable, variable = build_system_parts(
+        persona_block=persona_block,
+        elder_facts=elder_facts,
+        bob_facts=bob_facts,
+        memory_context=memory_context,
+        elder_name=elder_name,
+    )
+    return stable + ("\n\n" + variable if variable else "")

@@ -134,7 +134,7 @@ async def _think_and_speak(
         )
         mem_ctx = f"{mem_ctx}\n\n{note}".strip() if mem_ctx else note
 
-    system_prompt = companion.build_system_prompt(
+    system_stable, system_variable = companion.build_system_parts(
         persona_block=persona_block,
         elder_facts=elder_facts,
         bob_facts=bob_facts,
@@ -143,7 +143,15 @@ async def _think_and_speak(
     )
 
     history = memory.recent_turns(session_id)
-    reply = await brain.generate_reply(history, system_prompt)
+    reply = await brain.generate_reply(
+        history,
+        system_stable,
+        system_variable,
+        # Web search only when the message actually asks about the world right
+        # now — an available tool invites the model to consider it, and a
+        # search turn costs seconds.
+        fresh_info=brain.wants_fresh_info(user_text),
+    )
 
     memory.log_turn(session_id, "assistant", reply)
     # Learn from this exchange after the response is sent (keeps the voice fast).

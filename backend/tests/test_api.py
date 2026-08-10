@@ -14,7 +14,7 @@ from app import brain, learn, main, memory, stt, tts
 
 @pytest.fixture
 def client(monkeypatch):
-    async def fake_reply(history, system_prompt):
+    async def fake_reply(history, system_stable, system_variable="", *, fresh_info=False):
         return "Тёплый ответ от Боба."
 
     async def fake_tts(text):

@@ -13,7 +13,7 @@ import json
 import pytest
 from fastapi.testclient import TestClient
 
-from app import brain, main, matchmaker, persona
+from app import brain, main, matchmaker, memory, persona
 
 FRIEND = {
     "name": "Фёдор",
@@ -21,6 +21,8 @@ FRIEND = {
     "age": "62 года",
     "home": "город у гор",
     "backstory": "работал архитектором, теперь рисует и гуляет",
+    "personality": "спокойный, наблюдательный, с хитрым юмором",
+    "speech_style": "короткие фразы, любит словечко «стало быть»",
     "likes": ["футбол", "старые фильмы", "архитектура"],
     "dislikes": ["спешку"],
     "habits": ["утренние прогулки"],
@@ -59,20 +61,77 @@ def test_friend_is_created_and_becomes_the_persona(pen):
     assert "откуда: Грузия" in pen[0]
     assert "Люблю футбол" in pen[0]
 
-    # He is now the live persona (missing fields filled from the safe default).
+    # He is now the live persona — exactly as created, never topped up from
+    # the built-in template (that merge is how every friend got the same cat).
     live = persona.load_persona()
     assert live["name"] == "Фёдор"
     assert live["age"] == "62 года"
-    assert live["speech_style"]  # default filled in
+    assert live["speech_style"] == FRIEND["speech_style"]
+    assert "opinions" not in live  # the pen didn't write it → it isn't there
     assert "_note" not in live
 
 
 def test_no_wishes_is_fine(pen):
     # Leaving "who would you like to meet?" blank is a perfectly good choice —
-    # the friend is then invented entirely from their own story.
+    # the friend is then built from their story plus the dice alone.
     created = asyncio.run(matchmaker.create_companion("Люблю рыбалку и тишину."))
     assert created["name"] == "Фёдор"
     assert "Пожеланий о друге он не оставил" in pen[0]
+    assert "СЛУЧАЙНАЯ ОСНОВА" in pen[0]
+
+
+def test_dice_supply_the_variety_not_the_model():
+    """Two rolls, two different skeletons.
+
+    This is the sameness fix itself: asked to 'invent a person', a language
+    model returns its most probable person — the same warm old man by the sea,
+    every time. So the skeleton (age, place, trade, temper) is rolled by
+    actual dice OUTSIDE the model, and the model only fleshes it out.
+    """
+    import random
+
+    a = matchmaker._roll_scaffold(rng=random.Random(1))
+    b = matchmaker._roll_scaffold(rng=random.Random(2))
+    assert a != b
+    # Rolling many skeletons must visit many trades — not orbit one archetype.
+    trades = {
+        line
+        for seed in range(30)
+        for line in matchmaker._roll_scaffold(rng=random.Random(seed)).splitlines()
+        if line.startswith("Кем работает")
+    }
+    assert len(trades) >= 10
+
+
+def test_wishes_beat_the_dice(pen):
+    # What the user asked for is used verbatim — dice fill only the gaps.
+    asyncio.run(
+        matchmaker.create_companion(
+            "Люблю горы.", age="около 30", gender="женщина", origin="с Урала"
+        )
+    )
+    scaffold = pen[0].split("СЛУЧАЙНАЯ ОСНОВА")[1]
+    assert "Возраст: около 30" in scaffold
+    assert "Пол: женщина" in scaffold
+    assert "Где живёт: с Урала" in scaffold
+
+
+def test_new_friend_starts_with_a_clean_slate(pen):
+    """A new person means a new life — and only HIS side of memory is wiped.
+
+    Without this, friend number two inherits friend number one's stories about
+    himself and contradicts his own biography mid-sentence. What was learned
+    about the USER stays: their birthday is true no matter who they talk to.
+    """
+    memory.log_turn("default", "user", "привет")
+    memory.add_memory("fact", "Я всю жизнь рыбачил", owner="bob")
+    memory.add_memory("fact", "У него день рождения в мае", owner="elder")
+
+    asyncio.run(matchmaker.create_companion("Люблю тишину."))
+
+    assert memory.recent_turns("default") == []
+    assert memory.counts("bob").get("fact", 0) == 0
+    assert memory.counts("elder").get("fact", 0) == 1
 
 
 def test_unparseable_reply_fails_gently(monkeypatch):

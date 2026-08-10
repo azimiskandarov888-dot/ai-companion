@@ -1,11 +1,23 @@
-"""The brain: Claude (model from config — Sonnet 5 by default, for speed).
+"""The brain: Claude — one model for BEING him, another for WRITING him.
 
-Given the conversation and a fully-assembled system prompt (behavior + persona +
-memory), it produces Bob's spoken reply in warm, simple Russian. Replies are
-intentionally short — they will be spoken aloud to an elderly listener.
+Every turn of conversation is a race against silence: the listener said
+something and is waiting. So conversation runs on CHAT_MODEL (Haiku — fast),
+with the character it plays fully written in advance. The slow, deep work —
+creating the person, rewriting the diary, distilling memory — runs on
+BRAIN_MODEL (Sonnet) where nobody is waiting mid-sentence.
 
-The system prompt is built by the caller (main.py, via companion.build_system_prompt)
-so this module stays focused on the API call.
+Two further speed decisions live here:
+
+  · The web-search tool is attached ONLY when the message actually asks about
+    the current world (news, weather, prices). A tool that is merely available
+    invites the model to consider it, and a search turn costs seconds. When it
+    is needed, the turn runs on BRAIN_MODEL, which supports the tool — those
+    turns are rare and inherently slow anyway.
+
+  · The system prompt's stable head (behavior rules + persona) is marked for
+    provider-side caching. It is identical every turn, so Claude re-reads it
+    from cache instead of re-processing ~3k tokens of character each time —
+    faster and about 10× cheaper for that part.
 """
 
 from __future__ import annotations
@@ -16,12 +28,31 @@ from . import config
 
 _client: AsyncAnthropic | None = None
 
-# Web search lets Bob share real, current news and weather when the elder asks —
-# woven into his own casual talk (see companion.py "НОВОСТИ И ПОГОДА"). Claude
-# only uses it when current info is genuinely needed, so ordinary chat adds no
-# search latency or cost. Capped so one question can't spiral into many searches.
-# (web_search_20260209 is supported on the default model, Sonnet 5, and on Opus.)
+# Capped so one question can't spiral into many searches.
 _WEB_SEARCH_TOOL = {"type": "web_search_20260209", "name": "web_search", "max_uses": 3}
+
+#: Substrings (lowercase) that mean the user is asking about the world right
+#: now, which his own written life can't answer. Deliberately narrow: a missed
+#: match just means he answers from his own head — which is what a person
+#: without a phone in his hand would do anyway, and perfectly in character.
+_FRESH_INFO_HINTS = (
+    "новост",          # новости, новостях…
+    "погод",           # погода, погоду…
+    "прогноз",
+    "температур",
+    "курс доллара",
+    "курс евро",
+    "курс рубля",
+    "что в мире",
+    "что происходит в мире",
+    "что нового в мире",
+)
+
+
+def wants_fresh_info(text: str) -> bool:
+    """Does this message need the real, current world (news/weather/prices)?"""
+    lowered = text.lower()
+    return any(hint in lowered for hint in _FRESH_INFO_HINTS)
 
 
 def _get_client() -> AsyncAnthropic:
@@ -35,29 +66,54 @@ def _get_client() -> AsyncAnthropic:
     return _client
 
 
+def _system_blocks(stable: str, variable: str) -> list[dict]:
+    """The system prompt as two blocks: the unchanging character (cached) and
+    today's context (fresh every turn). The split is the caching boundary —
+    anything that changes per turn must stay OUT of the first block, or the
+    cache misses every time and silently buys nothing.
+    """
+    blocks: list[dict] = [
+        {
+            "type": "text",
+            "text": stable,
+            "cache_control": {"type": "ephemeral"},
+        }
+    ]
+    if variable.strip():
+        blocks.append({"type": "text", "text": variable})
+    return blocks
+
+
 async def generate_reply(
     history: list[dict[str, str]],
-    system_prompt: str,
+    system_stable: str,
+    system_variable: str = "",
+    *,
+    fresh_info: bool = False,
 ) -> str:
-    """Produce Bob's spoken reply.
+    """Produce his spoken reply.
 
-    history: list of {"role": "user"|"assistant", "content": str}, oldest first,
-             ending with the latest user message.
-    system_prompt: the fully-assembled system prompt.
+    history:          [{"role": "user"|"assistant", "content": str}, …], oldest
+                      first, ending with the latest user message.
+    system_stable:    who he is — identical every turn, cached provider-side.
+    system_variable:  what today holds — memory context, occasion, mood.
+    fresh_info:       the message asks about the current world → attach web
+                      search and run on the bigger model that supports it.
     """
     client = _get_client()
 
-    # Streaming keeps us safe against timeouts and lets us add sentence-level
-    # TTS streaming later. For now we collect the full reply.
+    model = config.BRAIN_MODEL if fresh_info else config.CHAT_MODEL
+    tools = [_WEB_SEARCH_TOOL] if fresh_info else []
+
     messages = list(history)
     message = None
     for _ in range(3):  # allow a couple of server-side web-search continuations
         async with client.messages.stream(
-            model=config.BRAIN_MODEL,
+            model=model,
             max_tokens=config.MAX_REPLY_TOKENS,
-            system=system_prompt,
+            system=_system_blocks(system_stable, system_variable),
             messages=messages,
-            tools=[_WEB_SEARCH_TOOL],
+            tools=tools,
         ) as stream:
             message = await stream.get_final_message()
         # If the server-side search loop paused, feed its progress back and
@@ -74,10 +130,10 @@ async def generate_reply(
 async def generate_text(
     system_prompt: str, user_text: str, max_tokens: int = 1500
 ) -> str:
-    """One-shot writing call (no tools, no history).
+    """One-shot writing call (no tools, no history) — always the deep model.
 
-    Used for composed writing rather than conversation: the companion's diary
-    about his friend, and creating the friend from the user's story.
+    Used for composed writing rather than conversation: creating the friend,
+    the diary about him, distilling memory. Nobody is waiting mid-sentence.
     """
     client = _get_client()
     async with client.messages.stream(

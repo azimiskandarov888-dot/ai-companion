@@ -67,16 +67,16 @@ DEFAULT_PERSONA: dict = {
 
 
 def load_persona(path=None) -> dict:
-    """Load the persona from JSON, falling back to the built-in default."""
+    """Load the persona from JSON. The built-in default is used ONLY when no
+    persona exists at all (the browser dev path, a fresh checkout) — a saved
+    character is taken exactly as saved, never topped up from the default.
+    """
     path = path or config.PERSONA_PATH
     if path and path.exists():
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
             if isinstance(data, dict) and data.get("name"):
-                merged = {**DEFAULT_PERSONA, **data}
-                if "_note" not in data:  # a saved persona is no draft
-                    merged.pop("_note", None)
-                return merged
+                return {"address": "ты", **data}
         except (json.JSONDecodeError, OSError):
             pass
     return DEFAULT_PERSONA
@@ -85,21 +85,23 @@ def load_persona(path=None) -> dict:
 def save_persona(data: dict, path=None) -> dict:
     """Persist a persona to data/persona.json — it becomes who the companion is.
 
-    Missing fields fall back to the built-in default so a partially-specified
-    character still works. Used by matchmaker.py when the friend is created
-    from the user's story (and by any future editing tool).
+    NO backfilling from DEFAULT_PERSONA. It used to merge the default under
+    every created character, which meant any field the pen left blank was
+    quietly filled with the template's life — the sea, the cat Мурзик, the
+    café — and every friend came out part template. The user met "his" cat in
+    three different characters before this was found. A gap in a created
+    character stays a gap (build_persona_block simply skips empty fields);
+    a gap is honest, a borrowed life is not.
     """
     path = path or config.PERSONA_PATH
-    merged = {
-        **DEFAULT_PERSONA,
-        **{k: v for k, v in data.items() if v not in (None, "")},
-    }
-    merged.pop("_note", None)
+    cleaned = {k: v for k, v in data.items() if v not in (None, "")}
+    cleaned.setdefault("address", "ты")
+    cleaned.pop("_note", None)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
-        json.dumps(merged, ensure_ascii=False, indent=2), encoding="utf-8"
+        json.dumps(cleaned, ensure_ascii=False, indent=2), encoding="utf-8"
     )
-    return merged
+    return cleaned
 
 
 def persona_name(persona: dict | None = None) -> str:

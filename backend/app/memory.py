@@ -26,8 +26,12 @@ import time
 
 from . import db, embeddings
 
-# How many recent turns to feed the brain as live conversation.
-RECENT_TURNS = 20
+# How many recent turns to feed the brain as live conversation. 12 covers the
+# thread of a spoken chat; anything older that mattered has been distilled into
+# memory and comes back through recall. Every extra turn here is tokens the
+# brain re-reads before EVERY reply — this is spoken conversation, where that
+# wait is a silence — so the window stays small on purpose.
+RECENT_TURNS = 12
 # How many semantically-recalled stories to surface per reply.
 RECALL_K = 4
 # Only keep recalled stories at least this related (cosine) to what he just said.

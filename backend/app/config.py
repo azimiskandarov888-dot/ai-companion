@@ -17,10 +17,21 @@ load_dotenv()
 
 # --- The brain: Claude ------------------------------------------------------
 ANTHROPIC_API_KEY: str | None = os.getenv("ANTHROPIC_API_KEY")
-# Claude Sonnet 5 by default: fast enough for real-time voice, cheaper, and very
-# close to Opus in warmth. For maximum warmth (a touch slower), set
-# ANTHROPIC_MODEL=claude-opus-4-8 in .env.
+# Two models, because the app does two very different kinds of thinking:
+#
+#   WRITING him (once, at the arriving screen) — deep work. Creating a person,
+#   rewriting the diary. Seconds don't matter there; quality does.
+#
+#   BEING him (every turn, out loud) — a short warm sentence or two. Here every
+#   second is a silence the listener sits through, so speed IS the quality.
+#
+# One model for both means either slow conversation or a shallow character.
+# Haiku 4.5 answers noticeably faster than Sonnet and, given a fully written
+# persona to inhabit (it plays the character; it doesn't have to invent one),
+# the warmth survives. If a Mac and budget can take it, CHAT_MODEL=claude-sonnet-5
+# in .env brings the bigger brain back to every turn.
 BRAIN_MODEL: str = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-5")
+CHAT_MODEL: str = os.getenv("CHAT_MODEL", "claude-haiku-4-5-20251001")
 
 # --- The ears: OpenAI Whisper ----------------------------------------------
 OPENAI_API_KEY: str | None = os.getenv("OPENAI_API_KEY")
