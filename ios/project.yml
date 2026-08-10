@@ -38,6 +38,14 @@ targets:
       - path: BobCompanion
         excludes:
           - "App/Info.plist"      # named below instead, never copied as a resource
+    # ADDING A NEW .swift FILE COSTS MORE THAN IT LOOKS. XcodeGen lists source
+    # files individually at generate time, so a file added afterwards is
+    # invisible to Xcode — the build fails with "Cannot find X in scope" — and
+    # the obvious fix, `xcodegen generate`, ALSO throws away the signing team
+    # that has to be set by hand in Xcode (DEVELOPMENT_TEAM below is empty by
+    # design; it's personal, not shareable). So while someone is mid-way
+    # through getting the app onto a real phone, put new code in a file that
+    # already exists. Regenerate deliberately, not as a side effect.
     # NOT `info:` — that key makes XcodeGen GENERATE an Info.plist at that path,
     # overwriting the real one with $(EXECUTABLE_NAME) boilerplate on every run
     # and silently dropping the microphone permission, the local-network
