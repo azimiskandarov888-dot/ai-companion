@@ -178,8 +178,20 @@ def check_voice() -> bool:
         elif reason == "not_found":
             print(f"🗣️ Голос ({provider}): ⚠️ такого голоса нет — проверьте ID голоса в .env")
         else:
-            print(f"🗣️ Голос ({provider}): ⚠️ не отвечает ({type(error).__name__})")
+            print(f"🗣️ Голос ({provider}): ⚠️ не отвечает")
+
+        # The provider's own words. Whatever the guess above, THIS is the fact.
         print(f"           {error}")
+
+        # The voice is the one part with a spare. The ears and the brain each
+        # have a single supplier, so a broken one has to be fixed; the voice
+        # does not — OpenAI speaks with the same key that already listens. Say
+        # so right here, because this is the moment someone is stuck.
+        if provider != "openai" and config.OPENAI_API_KEY:
+            print()
+            print("   Не чините это сейчас — у голоса есть запасной:")
+            print("       python switch_voice.py openai")
+            print("   Это тот же ключ, которым он уже вас слышит.")
         return False
 
 

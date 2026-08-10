@@ -123,6 +123,28 @@ The same caveat applies to `/api/health`, and so to «Проверить свя�
 reports whether keys are **present**, not whether they **work**. That is why it
 says «ключи на месте» and never «всё работает».
 
+### If it's the voice, don't fix it — swap it
+
+The voice is the only one of the three with a spare already paid for. The ears
+and the brain each have exactly one supplier, so a broken one has to be
+repaired. The voice does not: **OpenAI does text-to-speech with the same key
+that already does the ears.**
+
+```bash
+cd backend
+source .venv/bin/activate
+python switch_voice.py openai
+```
+
+That changes one line in `.env` — the line naming the provider — then says two
+words out loud to prove it. Keys are never read, printed, or moved, and every
+other line of the file comes out byte for byte identical.
+
+So a dead Fish balance, a Fish outage, or a voice ID that was deleted are all
+about ninety seconds of inconvenience, not a blocked day. Choosing the voice
+you actually want is a separate job, done later and calmly, with
+`python audition.py`.
+
 ## 6 · The microphone
 
 If he never even reaches «думает», he isn't hearing the room. Настройки →
