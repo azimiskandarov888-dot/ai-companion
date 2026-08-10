@@ -76,7 +76,11 @@ The lesson is precise: **randomness must come from outside the model, but it
 must not carry biography.** The old scaffold did both jobs; only the first
 was legitimate.
 
-### The design: sparks → ten strangers → blind pick → the deep write
+### The design: read → sparks → ten strangers → blind pick → the deep write
+
+**0 · The reading** (`reading.py`) — the deepest work the app does, and the
+stage everything else is built on. Before anyone is invented, the biggest
+model reads the person from *how* they wrote. Its own section is below.
 
 **1 · Sparks.** Dice draw four words from a lexicon of ~231 ordinary Russian
 nouns — «керосинка», «ипподром», «оттепель», «плацкарт». That is 115 million
@@ -128,6 +132,121 @@ does say comes from somewhere.
 **Incomplete is rejected, not patched.** If the pen returns a character
 missing name / age / home / backstory / personality / speech_style, creation
 fails — the holes are never filled from a template again.
+
+---
+
+## The reading — the stage the rest exists to serve
+
+> *"Understanding the text alone is not enough. What the client says and what
+> the client meant to say using specific words is absolutely different. …
+> I mean it not just that the client likes fish and the companion also likes
+> seafood. It is much deeper — it is human psychology."*
+
+That is correct, and it is not a matter of opinion — it is a field. The
+finding that has held since Pennebaker's work on function words is that the
+small words people *don't* choose deliberately — pronouns, particles, hedges,
+tense, voice — carry more about their state than the nouns they do choose.
+**You cannot perform your way out of your own grammar.** Someone determined to
+sound fine will still write like someone who isn't.
+
+### Why it is its own call, on its own model
+
+Reading a person and inventing a person are different jobs. Asked to do both
+at once, a model spends its attention on the invention; the reading collapses
+to a list of hobbies and the character gets built on the list. So the reading
+runs **first, alone**, on `READING_MODEL` (Opus) with adaptive thinking at
+high effort — the one place in the app where minutes and cents are worth it,
+because it happens once per person and everything downstream is built on its
+output. Conversation still runs on the fast model; nothing about a turn slows
+down.
+
+### What it actually reads
+
+Russian carries a layer English doesn't, and the prompt is built on it:
+
+- **Dative impersonals** — «мне грустно», «мне не спится», «мне хочется». The
+  person sits in the *dative case*: life happens **to** them. Someone who
+  writes about themselves only this way is, grammatically, not the subject of
+  their own life — and it shows before they'd ever say it.
+- **Verb aspect** — perfective («поехал», «построил») means life has events and
+  a plot; imperfective («жил», «работал») means an unbounded state. A story
+  told entirely in the imperfective isn't a story, it's a condition.
+- **Retreat into the impersonal** — «живёшь себе», «так у всех». Speaking about
+  yourself in the second or general person to avoid speaking about yourself.
+- **Where the hedges thicken** — «просто», «наверное», «как-то». Their density
+  rises as the text nears what hurts. The *location* is the signal.
+- **Concreteness** — naming the tram, the balcony, the smell of bread, a person
+  by name. Concrete detail is where someone actually lives; pure abstraction
+  («жизнь», «счастье») is talking about yourself from a distance.
+- **Tense, and whether a future appears at all.** Its absence is louder than
+  anything said.
+- **What is missing.** The strongest signal. A whole page and not one living
+  person named. Absence is a fact, not a gap.
+
+### The output, and why it has that shape
+
+The reading answers one question: **what presence would not be a burden to
+this person?** The schema forces a different piece of work per field —
+`register`, `carrying`, `longing`, `absent`, `would_ring_false`,
+`would_reach_them`, `needs_pushback_on`, `do_not_touch`, and
+`common_ground_seeds`. Two constraints keep it honest:
+
+- **Every indirect claim must carry an exact quote** from their text. No quote,
+  no claim — a guess without evidence is worse than no guess.
+- **No clinical language, ever.** No "depression", no "trauma", no disorder
+  names. This is not medicine and it is never a diagnosis. It is a hypothesis
+  about a person, held lightly, used only to choose them a friend.
+
+It also names the **gap between what they asked for and what they seem to
+need** — the person requesting "someone cheerful and positive" is often
+exhausted by having to be cheerful. The request still wins; the gap is just
+made visible to the pen.
+
+### Where it goes, and where it must never go
+
+The reading is **internal, like the distilled memory** — never shown, never
+quoted back, never used to persuade. Two slices leave it:
+
+- **To the pen, at creation** (`as_brief`) — judgement only. The evidence
+  quotes are deliberately withheld: handed someone's own sentences, a model
+  writes a character who echoes them back, which is the most alarming thing
+  this app could do — a stranger repeating your words to you on the first
+  evening.
+- **To every turn** (`standing_block`) — three fields only: how to speak to
+  them, what would ring false, and what must never be teased or argued with.
+  These govern behaviour that has to hold on *every* turn, and one careless
+  turn is what a person remembers. It rides in the **cached half** of the
+  system prompt, so after the first turn it is very nearly free.
+
+It is saved to `data/reading.json` and **outlives any one companion** —
+«Начать заново» gives you a new friend, not a new self.
+
+**If it fails, a friend still walks in.** A character built on the story alone
+is worse than one built on the reading, and far better than an error screen.
+The failure prints loudly in the terminal rather than vanishing.
+
+### "How can we really train it?"
+
+Asked directly, so answered directly: **you don't fine-tune this, and
+fine-tuning would make it worse.**
+
+- Fine-tuning needs hundreds to thousands of examples of *correct output*. We
+  have none. Generating them with the model teaches it to imitate itself — it
+  cannot become more perceptive by studying its own guesses.
+- Fine-tuning is for **style and format consistency**, not for making a model
+  reason better. It *narrows* a model toward a distribution. Depth of insight
+  is the one thing it does not buy.
+- What genuinely deepens a reading is four things, and all four are already in
+  place: **the biggest model** (`READING_MODEL`), **real thinking time**
+  (adaptive thinking at high effort), **a prompt encoding actual method**
+  (the psycholinguistics above, not "be insightful"), and **an output shape
+  that forces evidence** for every claim.
+
+There *is* a real training path, and it is human, not automatic: once real
+people have used it, read what the model wrote about them, mark what it got
+wrong or reached too far on, and sharpen the method — the marker list, the
+schema, the evidence rule. That is an eval set built from reality, and it is
+worth far more than fine-tuning would be. It requires the test month first.
 
 ### Why not simply turn the temperature up
 

@@ -127,6 +127,38 @@ async def generate_reply(
     return "".join(b.text for b in message.content if b.type == "text").strip()
 
 
+async def think(
+    system_prompt: str,
+    user_text: str,
+    *,
+    model: str | None = None,
+    effort: str = "high",
+    max_tokens: int = 8000,
+) -> str:
+    """One deep call, with the model actually allowed to think first.
+
+    Used for the reading (reading.py) and nothing else so far. `generate_text`
+    below is the fast one-shot; this is the one where quality is worth minutes
+    and cents, because it runs once per person and everything is built on it.
+
+    Adaptive thinking lets the model decide how long to think per input — a
+    three-line story doesn't need what a page-long one does. `effort` sets the
+    ceiling on that. `max_tokens` caps thinking AND the answer together, so it
+    is generous here; too tight and the reading truncates mid-sentence.
+    """
+    client = _get_client()
+    async with client.messages.stream(
+        model=model or config.BRAIN_MODEL,
+        max_tokens=max_tokens,
+        system=system_prompt,
+        messages=[{"role": "user", "content": user_text}],
+        thinking={"type": "adaptive"},
+        output_config={"effort": effort},
+    ) as stream:
+        message = await stream.get_final_message()
+    return "".join(b.text for b in message.content if b.type == "text").strip()
+
+
 async def generate_text(
     system_prompt: str,
     user_text: str,

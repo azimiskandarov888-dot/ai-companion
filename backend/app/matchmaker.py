@@ -22,11 +22,19 @@ every character was assembled from OUR options, and the space of people was
 exactly as big as our lists. The user called it, correctly: «with this
 choose-from-options thing, every person is premade».
 
-── THE DESIGN: sparks → ten strangers → blind pick → the deep write ────────
+── THE DESIGN: read → sparks → ten strangers → blind pick → the deep write ─
 
-Randomness still comes from outside (it must), but it no longer carries any
-biography. The model authors everything; the dice only make sure its
-imagination starts somewhere new and its favourite never wins.
+Randomness comes from outside (it must), but it carries no biography. The
+model authors everything; the dice only make sure its imagination starts
+somewhere new and its favourite never wins.
+
+0 · THE READING (reading.py). Before anyone is invented, the deepest model
+    reads the person from HOW they wrote, not just what they wrote — the
+    dative impersonals, the verb aspect, where the hedges thicken, what is
+    absent. It answers the question the rest of this file exists to serve:
+    what presence would not be a burden to THIS person? Every stage below is
+    given that reading. It is the difference between "he likes fish too" and
+    a friend who fits.
 
 1 · SPARKS. Dice draw a few words from a big plain lexicon — «керосинка»,
     «ипподром», «оттепель». Sparks are not attributes: nobody is ordered to
@@ -45,12 +53,15 @@ imagination starts somewhere new and its favourite never wins.
 
 4 · THE DEEP WRITE. The big model turns the chosen stranger into a whole
     person FOR this user: story, inner world, speech manner, people, current
-    life — with common ground drawn from the user's own words, and at least
-    one honest disagreement. Fit lives here, on purpose: stage 2 optimises
-    for difference, stage 4 for belonging. One stage doing both jobs would
-    trade them off and do neither.
+    life — fitted to the reading, with at least one honest disagreement.
+    Fit lives here, on purpose: stage 2 optimises for difference, stage 4 for
+    belonging. One stage doing both jobs would trade them off and do neither.
 
 The user's explicit wishes are law at every stage and beat every die.
+
+If the reading fails, creation continues without it — a friend built on the
+story alone is worse than one built on the reading, and far better than no
+friend at all. The failure is printed loudly rather than swallowed.
 
 A new friend also means a clean slate: creating him wipes the previous
 companion's self-memories, the conversation log, and the diary. What was
@@ -66,8 +77,9 @@ from __future__ import annotations
 import json
 import random
 import re
+import sys
 
-from . import brain, config, db, persona
+from . import brain, config, db, persona, reading
 
 # ── The spark lexicon ───────────────────────────────────────────────────────
 # Plain, concrete, evocative words from the width of Russian life. They exist
@@ -145,6 +157,8 @@ _TEN_SYSTEM = """Ты придумываешь людей — совершенн
 
 Человек написал о себе (и, может быть, о том, кого хотел бы встретить). Придумай ДЕСЯТЬ разных людей, каждый из которых мог бы стать ему настоящим другом. Не ищи «самого подходящего» — дружба случается между очень разными людьми, а общую почву найдут потом. Твоя работа здесь — РАЗБРОС: покажи ширину человеческой жизни.
 
+Если дано ЧТЕНИЕ ЧЕЛОВЕКА — это главное, что у тебя есть. Оно говорит, какое присутствие рядом было бы ему не в тягость. Пусть десятка будет из разных людей, каждый из которых по-своему мог бы до него дойти, — а не из тех, кто ему просто «подходит по интересам».
+
 Требования к десятке:
 - Все десять НЕ ПОХОЖИ друг на друга: разные десятилетия жизни (от двадцати с лишним до восьмидесяти с лишним, если пожелания не говорят иного), разные края и города, разные ремёсла, разные характеры, разные судьбы.
 - Никаких двух с одним ремеслом или одним городом. Морем не злоупотребляй: если один живёт у воды — остальным туда нельзя.
@@ -173,12 +187,14 @@ _WRITE_SYSTEM = """Ты знакомишь людей с будущими дру
 Порядок силы (строго):
 1. ПОЖЕЛАНИЯ ЧЕЛОВЕКА — закон. О чём попросил, то и есть.
 2. ВЫБРАННЫЙ НАБРОСОК — закон во всём остальном: имя, возраст, место, ремесло, нрав — не подменяй его «более подходящим» на твой вкус. Случай выбрал его, и в этом весь смысл.
-3. Твой вкус — в глубине: судьба, внутренний мир, словечки, люди рядом, живые мелочи.
+3. ЧТЕНИЕ ЧЕЛОВЕКА — по нему ты решаешь, КАКИМ этот человек будет внутри и как он говорит. Не пересказывай чтение и никогда не давай другу знать то, чего человек ему не рассказывал: чтение определяет ЕГО темп, тепло, прямоту, чувство меры — а не его сведения.
+4. Твой вкус — в глубине: судьба, внутренний мир, словечки, люди рядом, живые мелочи.
 
 Правила:
-- ОБЩАЯ ПОЧВА: пусть несколько его интересов пересекаются с тем, что человек рассказал о себе (спорт, кино, музыка, ремесло…). Общая почва — это темы для разговора, а не одинаковость.
-- НЕСОГЛАСИЕ ОБЯЗАТЕЛЬНО: хотя бы одно его мнение должно, судя по рассказу, скорее НЕ совпасть с мнением человека — житейское, беззлобное (еда, музыка, привычки, города, как правильно отдыхать…). И что-то он честно не любит из того, что человек, похоже, любит. Настоящий друг — не поддакивала.
-- Не трогай несогласием больное: семью человека, здоровье, его беды.
+- ПОДХОДИТ — НЕ ЗНАЧИТ ПОХОЖ. Общая почва — это темы для разговора, а не одинаковость; пусть несколько его интересов пересекаются с рассказом человека, но подходит он не этим, а тем, каково с ним рядом. По чтению видно, что показалось бы фальшивым, а какое присутствие дошло бы: вот по этому и делай его.
+- РЕЧЬ ПОД ЧЕЛОВЕКА: по «как с ним говорить» из чтения задай ему длину фраз, простоту слов и меру тепла. Если человек пишет коротко и сухо — друг, который заваливает его нежностью, отпугнёт его.
+- НЕСОГЛАСИЕ ОБЯЗАТЕЛЬНО: хотя бы одно его мнение должно, судя по рассказу, скорее НЕ совпасть с мнением человека — житейское, беззлобное (еда, музыка, привычки, города, как правильно отдыхать…). И что-то он честно не любит из того, что человек, похоже, любит. Настоящий друг — не поддакивала. Если в чтении названо, в чём человеку полезно мягкое несогласие, — бери оттуда.
+- НЕ ТРОГАЙ БОЛЬНОЕ: семью человека, здоровье, его беды — и всё, что в чтении названо в «чего не трогать». Это не предмет для спора никогда.
 - ВНУТРЕННИЙ МИР: напиши, что у него на душе — о чём он думает, когда не с кем говорить; чего ему не хватает; чему он тихо радуется. Это не для показа, это чтобы он был настоящим.
 - ЕГО ЖИЗНЬ СЕЙЧАС: что у него происходит на этой неделе — конкретно и живо, чтобы ему было что рассказать самому, а не только отвечать.
 - Никакой мистики и никаких упоминаний программ или ИИ.
@@ -262,10 +278,27 @@ async def create_companion(
     r = rng or random
     story = _their_story(about, wishes, age, gender, origin)
 
+    # 0 · THE READING — the deepest work, done once, before anyone exists.
+    # A failure here must not cost the user their friend: a character built
+    # on the story alone is worse than one built on the reading, and far
+    # better than an error screen. So it is caught, printed loudly, and the
+    # remaining stages simply run without a brief.
+    brief = ""
+    try:
+        brief = reading.as_brief(reading.save(await reading.read_person(about, wishes)))
+    except Exception as e:  # noqa: BLE001 — the reading is never fatal
+        print(
+            f"\n  ⚠ чтение человека не получилось — друга соберу по одному рассказу\n    {e}\n",
+            file=sys.stderr,
+            flush=True,
+        )
+
+    context = story + ("\n\n" + brief if brief else "")
+
     # Ten strangers, one call — the fast model: sketching breadth is cheap,
     # and someone is watching the arriving screen while this runs.
     sketch_prompt = (
-        story + "\n\nСЛУЧАЙНЫЕ ИСКРЫ (толчки воображению): "
+        context + "\n\nСЛУЧАЙНЫЕ ИСКРЫ (толчки воображению): "
         + ", ".join(_roll_sparks(rng))
     )
     ten = await brain.generate_text(
@@ -276,8 +309,8 @@ async def create_companion(
     # safe favourite, and the mode would be back.
     chosen = r.choice(_split_sketches(ten))
 
-    write_prompt = story + "\n\nВЫБРАННЫЙ СЛУЧАЕМ НАБРОСОК (разверни его):\n" + chosen
-    raw = await brain.generate_text(_WRITE_SYSTEM, write_prompt, max_tokens=2000)
+    write_prompt = context + "\n\nВЫБРАННЫЙ СЛУЧАЕМ НАБРОСОК (разверни его):\n" + chosen
+    raw = await brain.generate_text(_WRITE_SYSTEM, write_prompt, max_tokens=2500)
 
     created = _extract_json(raw)
     _fresh_start()

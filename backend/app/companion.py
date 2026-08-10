@@ -93,6 +93,7 @@ BEHAVIOR_RULES = """Ты — тёплый, живой голосовой соб�
 def build_system_parts(
     *,
     persona_block: str = "",
+    reading_block: str = "",
     elder_facts: str = "",
     bob_facts: str = "",
     memory_context: str = "",
@@ -117,6 +118,10 @@ def build_system_parts(
     stable_parts = [BEHAVIOR_RULES]
     if persona_block.strip():
         stable_parts.append("\nКТО ТЫ (твоя личность и жизнь):\n" + persona_block.strip())
+    # The reading of the person is stable — it's about who they are, not what
+    # today holds — so it belongs in the cached half beside who HE is.
+    if reading_block.strip():
+        stable_parts.append("\n" + reading_block.strip())
 
     variable_parts: list[str] = []
 
@@ -150,6 +155,7 @@ def build_system_parts(
 def build_system_prompt(
     *,
     persona_block: str = "",
+    reading_block: str = "",
     elder_facts: str = "",
     bob_facts: str = "",
     memory_context: str = "",
@@ -158,6 +164,7 @@ def build_system_prompt(
     """The same prompt as one string — for anything that doesn't cache."""
     stable, variable = build_system_parts(
         persona_block=persona_block,
+        reading_block=reading_block,
         elder_facts=elder_facts,
         bob_facts=bob_facts,
         memory_context=memory_context,

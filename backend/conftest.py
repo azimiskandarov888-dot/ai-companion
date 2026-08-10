@@ -18,5 +18,6 @@ def temp_data(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "DATA_DIR", tmp_path)
     monkeypatch.setattr(config, "DB_PATH", tmp_path / "test.db")
     monkeypatch.setattr(config, "PERSONA_PATH", tmp_path / "persona.json")
+    monkeypatch.setattr(config, "READING_PATH", tmp_path / "reading.json")
     db.init_db()
     yield

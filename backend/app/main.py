@@ -45,6 +45,7 @@ from . import (
     memory,
     occasions,
     persona,
+    reading,
     stt,
     tts,
 )
@@ -136,6 +137,9 @@ async def _think_and_speak(
 
     system_stable, system_variable = companion.build_system_parts(
         persona_block=persona_block,
+        # How this person needs to be spoken to, and what must never be
+        # joked about. Stable, so it rides in the cached half for free.
+        reading_block=reading.standing_block(reading.load()),
         elder_facts=elder_facts,
         bob_facts=bob_facts,
         memory_context=mem_ctx,

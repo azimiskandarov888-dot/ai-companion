@@ -33,6 +33,15 @@ ANTHROPIC_API_KEY: str | None = os.getenv("ANTHROPIC_API_KEY")
 BRAIN_MODEL: str = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-5")
 CHAT_MODEL: str = os.getenv("CHAT_MODEL", "claude-haiku-4-5-20251001")
 
+# READING him — once, before he even exists. The deepest work the app does:
+# understanding a person from HOW they wrote, not just what they wrote (see
+# reading.py). This is the one call where the best model and real thinking
+# time are worth minutes and cents, because it happens once per person and
+# every other stage is built on its output.
+READING_MODEL: str = os.getenv("READING_MODEL", "claude-opus-5")
+#: low | medium | high | xhigh | max — how long it may think before answering.
+READING_EFFORT: str = os.getenv("READING_EFFORT", "high")
+
 # --- The ears: OpenAI Whisper ----------------------------------------------
 OPENAI_API_KEY: str | None = os.getenv("OPENAI_API_KEY")
 WHISPER_MODEL: str = os.getenv("WHISPER_MODEL", "whisper-1")
@@ -145,6 +154,12 @@ DB_PATH: Path = Path(os.getenv("DB_PATH", DATA_DIR / "companion.db"))
 # and habits can be changed anytime WITHOUT touching code. If the file is
 # absent, a built-in default persona is used. See app/persona.py.
 PERSONA_PATH: Path = Path(os.getenv("PERSONA_PATH", DATA_DIR / "persona.json"))
+
+# The reading of the USER (app/reading.py) — kept beside the persona but
+# outliving it: a new companion doesn't make the person a different person, so
+# «Начать заново» replaces persona.json and leaves this alone. Internal, like
+# the distilled memory — never shown, never quoted back.
+READING_PATH: Path = Path(os.getenv("READING_PATH", DATA_DIR / "reading.json"))
 
 
 def service_status() -> dict[str, bool]:
