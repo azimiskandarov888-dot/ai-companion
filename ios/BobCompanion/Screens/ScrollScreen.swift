@@ -391,7 +391,10 @@ private struct IntakeConversation: View {
     /// reading more than the old blank page ever did, so the way out is never
     /// locked — but it isn't offered on the very first question either, where
     /// it would read as permission to skip the whole thing.
-    private var mayFinishEarly: Bool { turns.count >= 2 }
+    /// Not offered during the greeting. An exit put in front of someone who
+    /// has said two words reads as permission to leave, and they take it;
+    /// after the introductions it reads as courtesy, which is what it is.
+    private var mayFinishEarly: Bool { turns.count >= 4 }
 
     var body: some View {
       GeometryReader { geo in
@@ -585,17 +588,25 @@ private struct IntakeConversation: View {
 
     // ── The warm-up, held locally ───────────────────────────────────────────
     //
-    // THE LADDER. Aron's fast-friends work found the thing that actually makes
-    // strangers open up: ESCALATING self-disclosure. Light and playful first,
-    // deeper as you warm. Ask the deep question cold and people close; ask it
-    // once they're warm and they answer it properly. So the shape is: name →
-    // rapid-fire taps → their life → one real question at the end.
+    // THE LADDER. Aron's fast-friends work found what actually opens strangers
+    // up: ESCALATING self-disclosure. Light first, deeper as you warm. Ask the
+    // deep question cold and people close; ask it warm and they answer it.
     //
-    // The rapid-fire half lives HERE, in the app, for two reasons. It has to
-    // feel instant — a network round trip between «горы или море?» and «утро
-    // или ночь?» destroys the rhythm that makes it fun. And it's universal:
-    // nothing about these depends on the person, so there is nothing to
-    // generate. By the time the network is needed, they're already talking.
+    // BUT LIGHT MEANS LOW-INTIMACY, NOT LOW-EFFORT — and getting that wrong is
+    // how the previous version went «Как вас зовут?» → «Горы или море?», which
+    // is meeting someone and immediately firing a quiz at them. Aron's opening
+    // questions are still real questions; they are simply not intimate ones. A
+    // quiz is not gentle conversation, it is not conversation at all.
+    //
+    // So the shape is now: a normal greeting → ordinary getting-to-know-you
+    // talk → and only THEN, once someone is actually talking, the quick tapped
+    // ones arrive as an ASIDE («кстати, а что вам ближе…»), worded the way a
+    // person asks rather than the way a form does. They're a change of pace in
+    // the middle of a conversation, not the opening act.
+    //
+    // All of it lives HERE, in the app, because it must feel instant and none
+    // of it depends on the person, so there is nothing to generate. By the
+    // time the network is needed, they're already talking.
     //
     // The reactions are the whole personality. No name, no "I", nothing about
     // itself — just someone taking an interest. Not every answer gets one:
@@ -612,42 +623,40 @@ private struct IntakeConversation: View {
     }
 
     private static let warmUp: [Step] = Strings.language == .russian ? [
+        // 1 · Знакомство. Ordinary, unhurried, the way anyone would begin.
         Step(say: "Как вас зовут?"),
-        Step(say: "Горы или море?",
+        Step(say: "Как ваш день сегодня?"),
+        Step(say: "А чем обычно занимаетесь? Работа, дом, что-то своё —\nкак проходят дни?"),
+        Step(say: "Сколько вам лет, если не секрет?",
+             reaction: "Спасибо."),
+
+        // 2 · Только теперь — лёгкие, и как бы между делом. Разговор уже идёт,
+        // так что смена темпа читается как оживление, а не как анкета.
+        Step(say: "Кстати, а что вам ближе по духу — горы или море?",
              options: ["Горы", "Море"],
              reactions: ["Горы": "Простор, значит.", "Море": "К воде тянет."]),
-        Step(say: "Утро или ночь?",
-             options: ["Утро", "Ночь"],
-             reactions: ["Ночь": "Тихое время."]),
-        Step(say: "Чай или кофе?",
-             options: ["Чай", "Кофе"]),
-        Step(say: "Тишина или музыка?",
-             options: ["Тишина", "Музыка"],
-             reactions: ["Тишина": "Понятно."]),
-        Step(say: "Дом или дорога?",
-             options: ["Дом", "Дорога"],
-             reactions: ["Дорога": "Не сидится, значит."]),
-        Step(say: "Позвонить или написать?",
-             options: ["Позвонить", "Написать"],
-             reaction: "Хорошо. Теперь чуть медленнее."),
+        Step(say: "А просыпаться пораньше или сидеть допоздна?",
+             options: ["Утро моё", "Скорее вечер"],
+             reactions: ["Скорее вечер": "Тихое время, понимаю."]),
+        Step(say: "И что чаще пьёте?",
+             options: ["Чай", "Кофе", "Просто воду"],
+             reaction: "Хорошо. Теперь чуть серьёзнее."),
     ] : [
         Step(say: "What's your name?"),
-        Step(say: "Mountains or the sea?",
+        Step(say: "How's your day been?"),
+        Step(say: "What do you usually get up to? Work, home,\nsomething of your own — how do the days go?"),
+        Step(say: "How old are you, if you don't mind?",
+             reaction: "Thank you."),
+
+        Step(say: "By the way — are you more of a mountains or a sea person?",
              options: ["Mountains", "The sea"],
              reactions: ["Mountains": "Room to breathe.", "The sea": "Drawn to water."]),
-        Step(say: "Morning or night?",
-             options: ["Morning", "Night"],
-             reactions: ["Night": "The quiet hours."]),
-        Step(say: "Tea or coffee?", options: ["Tea", "Coffee"]),
-        Step(say: "Silence or music?",
-             options: ["Silence", "Music"],
-             reactions: ["Silence": "Understood."]),
-        Step(say: "Home or the road?",
-             options: ["Home", "The road"],
-             reactions: ["The road": "Restless, then."]),
-        Step(say: "Call or text?",
-             options: ["Call", "Text"],
-             reaction: "Good. Now a little slower."),
+        Step(say: "And do you wake early, or sit up late?",
+             options: ["Early riser", "More of an evening"],
+             reactions: ["More of an evening": "The quiet hours."]),
+        Step(say: "And what do you usually drink?",
+             options: ["Tea", "Coffee", "Just water"],
+             reaction: "Good. Something a bit more serious now."),
     ]
 
     private static let firstPreamble = Strings.language == .russian
