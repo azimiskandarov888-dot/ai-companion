@@ -61,11 +61,63 @@ def asker(monkeypatch):
 
     async def fake_generate(system_prompt, user_text, max_tokens=1500, model=None):
         seen.append(user_text)
-        return json.dumps({"say": "А кто вас научил рыбачить?", "enough": False},
-                          ensure_ascii=False)
+        return json.dumps({"reaction": "Река — хорошо.",
+                           "say": "А кто вас научил рыбачить?",
+                           "kind": "short", "enough": False}, ensure_ascii=False)
 
     monkeypatch.setattr(brain, "generate_text", fake_generate)
     return seen
+
+
+def _talked(n: int) -> list[dict]:
+    return [{"q": f"в{i}", "a": f"о{i}"} for i in range(n)]
+
+
+def test_the_ladder_is_paced_by_us_not_guessed_by_the_model(asker):
+    """Escalating self-disclosure only works if it actually escalates.
+
+    Left to judge "is it time for the deep one?", the model either fires it
+    at someone who has said four words — which closes people, the exact
+    failure the ladder exists to avoid — or never arrives at it at all. So
+    the stage is computed here and handed over.
+    """
+    asyncio.run(intake.next_question(_talked(1)))
+    assert "рано для настоящего вопроса" in asker[-1]
+
+    asyncio.run(intake.next_question(_talked(intake.MIN_TURNS + 1)))
+    assert "прибереги на конец" in asker[-1]
+
+    asyncio.run(intake.next_question(_talked(intake.MAX_TURNS - 1)))
+    assert "Пора" in asker[-1] and '"open"' in asker[-1]
+
+
+def test_the_deep_question_gets_a_bigger_box(monkeypatch):
+    """`kind` is how the app knows to hand over a taller field — the size of
+    the space you're given is itself an instruction about how much to say."""
+    async def deep(system_prompt, user_text, max_tokens=1500, model=None):
+        return json.dumps({"reaction": "", "say": "О чём думаете, когда не спится?",
+                           "kind": "open", "enough": False}, ensure_ascii=False)
+
+    monkeypatch.setattr(brain, "generate_text", deep)
+    assert asyncio.run(intake.next_question(_talked(2)))["kind"] == "open"
+
+
+def test_an_unknown_kind_degrades_to_the_safe_one(monkeypatch):
+    async def odd(system_prompt, user_text, max_tokens=1500, model=None):
+        return json.dumps({"say": "Кем работали?", "kind": "gigantic"}, ensure_ascii=False)
+
+    monkeypatch.setattr(brain, "generate_text", odd)
+    assert asyncio.run(intake.next_question(_talked(2)))["kind"] == "short"
+
+
+def test_ending_needs_no_question(monkeypatch):
+    """A turn that ends the conversation carries no question, and that is not
+    a malformed reply — refusing it would strand people at the last step."""
+    async def done(system_prompt, user_text, max_tokens=1500, model=None):
+        return json.dumps({"say": "", "enough": True}, ensure_ascii=False)
+
+    monkeypatch.setattr(brain, "generate_text", done)
+    assert asyncio.run(intake.next_question(_talked(5)))["enough"] is True
 
 
 def test_the_next_question_sees_the_whole_conversation(asker):
@@ -75,19 +127,6 @@ def test_the_next_question_sees_the_whole_conversation(asker):
     assert result["say"] == "А кто вас научил рыбачить?"
     assert "Река. Я там рыбачил с отцом." in asker[0]
     assert "Что видно из окна?" in asker[0]
-
-
-def test_it_cannot_bail_at_the_door(asker):
-    """Below MIN_TURNS you have someone's register and nothing else — not a
-    person. The prompt is told so explicitly."""
-    asyncio.run(intake.next_question([{"q": "Что видно из окна?", "a": "Двор."}]))
-    assert "Рано заканчивать" in asker[0]
-
-
-def test_it_may_finish_once_there_is_enough(asker):
-    conversation = [{"q": f"вопрос {i}", "a": f"ответ {i}"} for i in range(intake.MIN_TURNS)]
-    asyncio.run(intake.next_question(conversation))
-    assert "Можно заканчивать" in asker[0]
 
 
 def test_it_always_stops_eventually(monkeypatch):

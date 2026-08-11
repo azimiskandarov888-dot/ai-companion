@@ -57,6 +57,13 @@ struct IntakeTurn: Codable, Equatable {
 struct IntakeQuestion: Decodable {
     let say: String
     let enough: Bool
+    /// A short warm line about what they just said, shown above the question.
+    /// The entire personality of something with no identity.
+    let reaction: String?
+    /// "short" for a few words, "open" for the last real question — which
+    /// gets a taller box, because the size of the space is itself a hint
+    /// about how much is wanted.
+    let kind: String?
     /// Only on the very first call: the honest frame that makes the whole
     /// conversation work — he isn't here yet, he'll be made out of this.
     let preamble: String?

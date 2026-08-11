@@ -365,8 +365,14 @@ private struct IntakeConversation: View {
     var onDone: () -> Void
 
     @State private var preamble = ""
+    @State private var reaction = ""
     @State private var question = ""
     @State private var answer = ""
+    /// Tappable choices for this question. Empty = it wants writing.
+    @State private var options: [String] = []
+    /// The last, real question — it gets a taller box, because the size of the
+    /// space you're given is itself an instruction about how much to say.
+    @State private var deepAnswer = false
     @State private var turns: [IntakeTurn] = []
     /// False at birth: the first question is local and instant, so the screen
     /// must never open in the dimmed "waiting" state.
@@ -405,6 +411,21 @@ private struct IntakeConversation: View {
             VStack(spacing: 0) {
                 Spacer(minLength: 0)
 
+                // The reaction to what they just said. One short line, above
+                // the question, in a quieter voice — this is the entire
+                // personality of a thing with no identity.
+                if !reaction.isEmpty && !isWriting {
+                    Text(reaction)
+                        .appFont(AppType.body)
+                        .foregroundStyle(Theme.onLand.opacity(0.75))
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .legible()
+                        .padding(.horizontal, Metrics.sideMargin)
+                        .padding(.bottom, 14)
+                        .transition(.opacity)
+                }
+
                 if !preamble.isEmpty && turns.isEmpty && !isWriting {
                     Text(preamble)
                         .appFont(AppType.caption, leading: AppType.bodyLeading)
@@ -430,42 +451,61 @@ private struct IntakeConversation: View {
                     .transition(.opacity)
                     .opacity(asking ? 0.35 : 1)
 
-                // Their answer. A quiet panel, not the parchment scroll: the
-                // scroll with its two rollers is a whole ceremonial object,
-                // and bringing one out per question would turn a light
-                // conversation into twelve formal documents.
-                TextEditor(text: $answer)
-                    .scrollContentBackground(.hidden)
-                    .background(.clear)
-                    .appFont(AppType.body, leading: AppType.bodyLeading)
-                    .foregroundStyle(Theme.linen)
-                    .focused($writing)
-                    .frame(height: isWriting ? 128 : 168)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-                    .panel()
+                if !options.isEmpty {
+                    // TAP TO ANSWER. Nothing about «горы или море?» is worth a
+                    // keyboard — and typing it would kill the tempo that makes
+                    // the rapid-fire half enjoyable at all. No wrong answers,
+                    // no effort, one finger.
+                    VStack(spacing: 12) {
+                        ForEach(options, id: \.self) { option in
+                            AppButton(title: option, tone: .quiet) { choose(option) }
+                        }
+                    }
                     .padding(.horizontal, Metrics.sideMargin)
-                    .padding(.top, 26)
+                    .padding(.top, 30)
                     .disabled(asking || finished)
-                    .opacity(asking ? 0.5 : 1)
+                    .transition(.opacity)
 
-                AppButton(title: Strings.language == .russian ? "Дальше" : "Next",
-                          tone: .leaf) { send() }
-                    .disabled(asking || answer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                    .opacity(answer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.45 : 1)
-                    .padding(.horizontal, Metrics.sideMargin)
-                    .padding(.top, 20)
+                } else {
+                    // Their answer, on a quiet panel — not the parchment
+                    // scroll, whose two rollers are a whole ceremonial object;
+                    // bringing one out per question would turn a light
+                    // conversation into twelve formal documents.
+                    TextEditor(text: $answer)
+                        .scrollContentBackground(.hidden)
+                        .background(.clear)
+                        .appFont(AppType.body, leading: AppType.bodyLeading)
+                        .foregroundStyle(Theme.linen)
+                        .focused($writing)
+                        .frame(height: answerHeight(isWriting: isWriting))
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 10)
+                        .panel()
+                        .padding(.horizontal, Metrics.sideMargin)
+                        .padding(.top, 26)
+                        .disabled(asking || finished)
+                        .opacity(asking ? 0.5 : 1)
+
+                    AppButton(title: Strings.language == .russian ? "Дальше" : "Next",
+                              tone: .leaf) { send() }
+                        .disabled(asking || answer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        .opacity(answer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.45 : 1)
+                        .padding(.horizontal, Metrics.sideMargin)
+                        .padding(.top, 20)
+                }
 
                 // Never trapped, never rushed. Both ways out sit quietly below
                 // the real action rather than competing with it.
                 HStack(spacing: 22) {
-                    if !answer.isEmpty || !asking {
+                    // Nothing to skip on a two-button question — the whole
+                    // point is that answering costs nothing.
+                    if options.isEmpty && !asking {
                         quietly(Strings.language == .russian ? "пропустить" : "skip") {
                             answer = ""
                             send(skipping: true)
                         }
                     }
-                    if mayFinishEarly {
+                    if mayFinishEarly && !asking {
                         quietly(Strings.language == .russian ? "хватит, дальше" : "that's enough") {
                             finish()
                         }
@@ -502,6 +542,38 @@ private struct IntakeConversation: View {
 
     // MARK: - the conversation
 
+    /// A short answer gets a small box, the last real question gets a tall
+    /// one. The size of the space you're handed is itself an instruction
+    /// about how much is wanted — a one-line field asks for one line.
+    private func answerHeight(isWriting: Bool) -> CGFloat {
+        if deepAnswer { return isWriting ? 150 : 210 }
+        return isWriting ? 96 : 120
+    }
+
+    /// The warm line to show above the next question, given what they just
+    /// answered. Silence is the common case: a remark on every single answer
+    /// is exhausting, and is exactly what gives a machine away.
+    private func reactionAfterLastAnswer() -> String {
+        guard let last = turns.last, turns.count - 1 < Self.warmUp.count else { return "" }
+        let step = Self.warmUp[turns.count - 1]
+        if !step.reaction.isEmpty { return step.reaction }
+        if let keyed = step.reactions[last.a] { return keyed }
+        // The name is the one answer that always deserves an answer.
+        if turns.count == 1, !last.a.isEmpty {
+            return Strings.language == .russian
+                ? "Очень приятно, \(last.a)."
+                : "Good to know, \(last.a)."
+        }
+        return ""
+    }
+
+    private func choose(_ option: String) {
+        turns.append(IntakeTurn(q: question, a: option))
+        options = []
+        rebuildStory()
+        Task { await ask() }
+    }
+
     private func send(skipping: Bool = false) {
         writing = false
         let said = answer.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -511,34 +583,95 @@ private struct IntakeConversation: View {
         Task { await ask() }
     }
 
-    /// THE FIRST QUESTION NEVER TOUCHES THE NETWORK.
-    ///
-    /// It used to be fetched, which meant the screen sat empty until the round
-    /// trip finished — and when the backend was unreachable, until the request
-    /// timed out. Half a minute of nothing, on the very first screen of a
-    /// conversation about someone's life. The opener is fixed anyway, so the
-    /// app simply knows it: it appears the instant the screen does, and the
-    /// network isn't needed until someone has already chosen to answer.
-    ///
-    /// Deliberately the same wording as the backend's own opener list
-    /// (`intake.py` → `_OPENERS`) — easy to answer AND plainly about them.
-    private static let firstQuestion = Strings.language == .russian
-        ? "Как обычно проходит ваш день?"
-        : "What does an ordinary day look like for you?"
+    // ── The warm-up, held locally ───────────────────────────────────────────
+    //
+    // THE LADDER. Aron's fast-friends work found the thing that actually makes
+    // strangers open up: ESCALATING self-disclosure. Light and playful first,
+    // deeper as you warm. Ask the deep question cold and people close; ask it
+    // once they're warm and they answer it properly. So the shape is: name →
+    // rapid-fire taps → their life → one real question at the end.
+    //
+    // The rapid-fire half lives HERE, in the app, for two reasons. It has to
+    // feel instant — a network round trip between «горы или море?» and «утро
+    // или ночь?» destroys the rhythm that makes it fun. And it's universal:
+    // nothing about these depends on the person, so there is nothing to
+    // generate. By the time the network is needed, they're already talking.
+    //
+    // The reactions are the whole personality. No name, no "I", nothing about
+    // itself — just someone taking an interest. Not every answer gets one:
+    // constant reacting is exhausting and is what gives a bot away.
+
+    private struct Step {
+        let say: String
+        /// Empty = typed answer. Otherwise the tappable choices.
+        var options: [String] = []
+        /// Warm one-liner shown before the NEXT question, keyed by their answer.
+        var reactions: [String: String] = [:]
+        /// Shown before the next question regardless of what they answered.
+        var reaction: String = ""
+    }
+
+    private static let warmUp: [Step] = Strings.language == .russian ? [
+        Step(say: "Как вас зовут?"),
+        Step(say: "Горы или море?",
+             options: ["Горы", "Море"],
+             reactions: ["Горы": "Простор, значит.", "Море": "К воде тянет."]),
+        Step(say: "Утро или ночь?",
+             options: ["Утро", "Ночь"],
+             reactions: ["Ночь": "Тихое время."]),
+        Step(say: "Чай или кофе?",
+             options: ["Чай", "Кофе"]),
+        Step(say: "Тишина или музыка?",
+             options: ["Тишина", "Музыка"],
+             reactions: ["Тишина": "Понятно."]),
+        Step(say: "Дом или дорога?",
+             options: ["Дом", "Дорога"],
+             reactions: ["Дорога": "Не сидится, значит."]),
+        Step(say: "Позвонить или написать?",
+             options: ["Позвонить", "Написать"],
+             reaction: "Хорошо. Теперь чуть медленнее."),
+    ] : [
+        Step(say: "What's your name?"),
+        Step(say: "Mountains or the sea?",
+             options: ["Mountains", "The sea"],
+             reactions: ["Mountains": "Room to breathe.", "The sea": "Drawn to water."]),
+        Step(say: "Morning or night?",
+             options: ["Morning", "Night"],
+             reactions: ["Night": "The quiet hours."]),
+        Step(say: "Tea or coffee?", options: ["Tea", "Coffee"]),
+        Step(say: "Silence or music?",
+             options: ["Silence", "Music"],
+             reactions: ["Silence": "Understood."]),
+        Step(say: "Home or the road?",
+             options: ["Home", "The road"],
+             reactions: ["The road": "Restless, then."]),
+        Step(say: "Call or text?",
+             options: ["Call", "Text"],
+             reaction: "Good. Now a little slower."),
+    ]
 
     private static let firstPreamble = Strings.language == .russian
-        ? "Его ещё нет. Он появится из того, что вы расскажете.\n"
-          + "Несколько вопросов, не спеша. Отвечайте как получится — "
-          + "хоть словом, хоть долго. Закончить можно в любой момент."
-        : "He isn't here yet. He'll be made out of what you say.\n"
-          + "A few questions, unhurried. Answer however you like — "
-          + "a word or a while. You can stop whenever."
+        ? "Его ещё нет — он появится из того, что вы расскажете.\n"
+          + "Сначала несколько быстрых, потом пара настоящих. "
+          + "Закончить можно в любой момент."
+        : "He isn't here yet — he'll be made out of what you say.\n"
+          + "A few quick ones first, then a couple of real ones. "
+          + "You can stop whenever."
+
+    /// The warm-up step this answer belongs to, or nil once it's finished.
+    private var warmUpStep: Step? {
+        turns.count < Self.warmUp.count ? Self.warmUp[turns.count] : nil
+    }
 
     private func ask() async {
-        // Nothing said yet → show the opener immediately, locally.
-        guard !turns.isEmpty else {
-            preamble = Self.firstPreamble
-            question = Self.firstQuestion
+        // The warm-up needs no network at all, so it runs at the speed of a
+        // finger. This is the part that has to feel like play.
+        if let step = warmUpStep {
+            if turns.isEmpty { preamble = Self.firstPreamble }
+            reaction = reactionAfterLastAnswer()
+            question = step.say
+            options = step.options
+            deepAnswer = false
             questionID += 1
             asking = false
             return
@@ -552,7 +685,10 @@ private struct IntakeConversation: View {
                 finish()
                 return
             }
+            reaction = next.reaction ?? ""
             question = next.say
+            options = []
+            deepAnswer = (next.kind == "open")
             questionID += 1
         } catch {
             // A broken question must never strand someone mid-sentence about
