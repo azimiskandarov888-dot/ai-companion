@@ -81,12 +81,20 @@ def test_the_ladder_is_paced_by_us_not_guessed_by_the_model(asker):
     failure the ladder exists to avoid — or never arrives at it at all. So
     the stage is computed here and handed over.
     """
+    # Only the browser dev page reaches this rung — the app's own warm-up has
+    # already produced nine answers before the backend is ever called.
     asyncio.run(intake.next_question(_talked(1)))
     assert "рано для настоящего вопроса" in asker[-1]
 
-    asyncio.run(intake.next_question(_talked(intake.MIN_TURNS + 1)))
-    assert "прибереги на конец" in asker[-1]
+    # Where the app actually hands over: plenty of room, so ask about a life.
+    asyncio.run(intake.next_question(_talked(9)))
+    assert "Спроси про его жизнь" in asker[-1]
 
+    # Nearing the end: their people, and hold the real question back.
+    asyncio.run(intake.next_question(_talked(intake.MAX_TURNS - 4)))
+    assert "про людей" in asker[-1] and "прибереги на конец" in asker[-1]
+
+    # The last rung, and the only one that may ask for a written answer.
     asyncio.run(intake.next_question(_talked(intake.MAX_TURNS - 1)))
     assert "Пора" in asker[-1] and '"open"' in asker[-1]
 

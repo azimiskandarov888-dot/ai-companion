@@ -622,41 +622,67 @@ private struct IntakeConversation: View {
         var reaction: String = ""
     }
 
+    // WRITTEN TO BE SPOKEN, NOT READ. Every line here should sound like
+    // somebody saying it out loud, which in Russian means the small particles
+    // that carry all the warmth — «ну», «а», «вот», «-то» — and in English
+    // means contractions and idiom. «Как ваш день сегодня?» is a translation;
+    // «Ну, как сегодня день?» is a person. «Do you wake early or sit up late?»
+    // is a form; «Are you an early bird or a night owl?» is a person. The
+    // idiomatic version is almost always the shorter one.
     private static let warmUp: [Step] = Strings.language == .russian ? [
-        // 1 · Знакомство. Ordinary, unhurried, the way anyone would begin.
+        // 1 · Знакомство. Обычное, неспешное — как начал бы любой.
         Step(say: "Как вас зовут?"),
-        Step(say: "Как ваш день сегодня?"),
-        Step(say: "А чем обычно занимаетесь? Работа, дом, что-то своё —\nкак проходят дни?"),
+        Step(say: "Ну, как сегодня день?"),
+        Step(say: "А чем обычно занимаетесь?"),
         Step(say: "Сколько вам лет, если не секрет?",
              reaction: "Спасибо."),
 
         // 2 · Только теперь — лёгкие, и как бы между делом. Разговор уже идёт,
         // так что смена темпа читается как оживление, а не как анкета.
-        Step(say: "Кстати, а что вам ближе по духу — горы или море?",
+        Step(say: "Кстати, а вам что больше по душе — горы или море?",
              options: ["Горы", "Море"],
              reactions: ["Горы": "Простор, значит.", "Море": "К воде тянет."]),
-        Step(say: "А просыпаться пораньше или сидеть допоздна?",
-             options: ["Утро моё", "Скорее вечер"],
-             reactions: ["Скорее вечер": "Тихое время, понимаю."]),
-        Step(say: "И что чаще пьёте?",
+        Step(say: "А вы жаворонок или сова?",
+             options: ["Жаворонок", "Сова"],
+             reactions: ["Сова": "Тихое время, понимаю."]),
+        Step(say: "Пьёте что обычно?",
              options: ["Чай", "Кофе", "Просто воду"],
-             reaction: "Хорошо. Теперь чуть серьёзнее."),
+             reactions: ["Чай": "Правильно."]),
+        // «Никого» здесь — не пустой ответ, а важный. Поэтому на него нет
+        // отклика: любой отклик прозвучал бы жалостью.
+        Step(say: "А дома у вас кто-нибудь есть — кот, собака?",
+             options: ["Кот", "Собака", "Никого"],
+             reactions: ["Кот": "Хозяин, значит, не вы."]),
+        // The transition line rides on the answer rather than replacing it —
+        // a blanket reaction would swallow the joke, and the pace change
+        // needs saying or the next question lands as a jolt.
+        Step(say: "И последнее лёгкое: летом лучше или зимой?",
+             options: ["Летом", "Зимой"],
+             reactions: ["Зимой": "Редкий человек. Ну, теперь чуть серьёзнее.",
+                         "Летом": "Как все нормальные люди. Теперь чуть серьёзнее."]),
     ] : [
         Step(say: "What's your name?"),
-        Step(say: "How's your day been?"),
-        Step(say: "What do you usually get up to? Work, home,\nsomething of your own — how do the days go?"),
-        Step(say: "How old are you, if you don't mind?",
+        Step(say: "So how's your day been?"),
+        Step(say: "And what do you usually get up to?"),
+        Step(say: "How old are you, if you don't mind me asking?",
              reaction: "Thank you."),
 
-        Step(say: "By the way — are you more of a mountains or a sea person?",
+        Step(say: "By the way — mountains or the sea?",
              options: ["Mountains", "The sea"],
              reactions: ["Mountains": "Room to breathe.", "The sea": "Drawn to water."]),
-        Step(say: "And do you wake early, or sit up late?",
-             options: ["Early riser", "More of an evening"],
-             reactions: ["More of an evening": "The quiet hours."]),
-        Step(say: "And what do you usually drink?",
+        Step(say: "Are you an early bird or a night owl?",
+             options: ["Early bird", "Night owl"],
+             reactions: ["Night owl": "The quiet hours."]),
+        Step(say: "What do you usually drink?",
              options: ["Tea", "Coffee", "Just water"],
-             reaction: "Good. Something a bit more serious now."),
+             reactions: ["Tea": "Good answer."]),
+        Step(say: "Anyone at home with you — a cat, a dog?",
+             options: ["A cat", "A dog", "Just me"],
+             reactions: ["A cat": "So they're in charge, then."]),
+        Step(say: "Last easy one: summer or winter?",
+             options: ["Summer", "Winter"],
+             reactions: ["Winter": "Not many of you about. Right — something a bit more serious now.",
+                         "Summer": "Like every sensible person. Right — something a bit more serious now."]),
     ]
 
     private static let firstPreamble = Strings.language == .russian
