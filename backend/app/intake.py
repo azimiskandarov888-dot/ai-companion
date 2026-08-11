@@ -79,16 +79,29 @@ MIN_TURNS = 4
 #: keep going by saying more; someone tiring should never be held longer.
 MAX_TURNS = 12
 
-#: The first question is never generated. It has one job — be answerable by
-#: anyone, in one breath, with no thinking — because the person who freezes
-#: here never gets a companion at all. Every one of these is about a THING,
-#: in the present, within arm's reach.
+#: The first question is never generated, and it has TWO jobs, not one.
+#:
+#: Easy to answer, yes — the person who freezes here never gets a companion.
+#: But also OBVIOUSLY ABOUT THEM. The first draft optimised only for easy and
+#: opened with «что видно у вас из окна?», which was rejected on sight, and
+#: correctly: *"what does that gotta do with anything?"*
+#:
+#: The technique behind it is real — journalists and therapists start
+#: trivially concrete to get someone talking before they feel examined — but
+#: it only works once trust exists. On the first screen of an app nobody has
+#: any reason to trust, a question with no visible purpose doesn't read as
+#: gentle; it reads as a machine working through a list. Obliqueness is
+#: earned later, by the follow-ups, once someone is already talking.
+#:
+#: So every opener here is something a person would actually be asked by
+#: someone taking an interest in them, and every one of them is plainly about
+#: their own life.
 _OPENERS = (
-    "Что видно у вас из окна?",
-    "Какая у вас сегодня погода за окном?",
-    "Что у вас сегодня было на завтрак?",
-    "В какой комнате вы сейчас сидите?",
-    "Сколько сейчас времени у вас и что слышно вокруг?",
+    "Как обычно проходит ваш день?",
+    "Кем вы работали?",
+    "Расскажите, где вы живёте и давно ли?",
+    "Как прошёл ваш сегодняшний день?",
+    "Откуда вы родом?",
 )
 
 #: Said once, before the first question. The honest frame — and the reason

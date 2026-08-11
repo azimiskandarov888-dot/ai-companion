@@ -368,7 +368,9 @@ private struct IntakeConversation: View {
     @State private var question = ""
     @State private var answer = ""
     @State private var turns: [IntakeTurn] = []
-    @State private var asking = true          // waiting on the next question
+    /// False at birth: the first question is local and instant, so the screen
+    /// must never open in the dimmed "waiting" state.
+    @State private var asking = false
     @State private var finished = false
     /// Bumped on every new question so the arrival animation replays.
     @State private var questionID = 0
@@ -386,13 +388,24 @@ private struct IntakeConversation: View {
     private var mayFinishEarly: Bool { turns.count >= 2 }
 
     var body: some View {
+      GeometryReader { geo in
+        let isWriting = keyboard.isShowing
+
         ZStack {
             if drawsBackground { PhotoBackground(place: .story, treatment: .scrim) }
+
+            // Putting the pen down. This must sit BEHIND the content, not as a
+            // modifier on the whole screen — as a modifier it competes with
+            // the TextEditor's own gestures and the keyboard becomes
+            // impossible to dismiss. Exactly the bug the scroll screen had.
+            Color.clear
+                .contentShape(Rectangle())
+                .onTapGesture { writing = false }
 
             VStack(spacing: 0) {
                 Spacer(minLength: 0)
 
-                if !preamble.isEmpty && turns.isEmpty {
+                if !preamble.isEmpty && turns.isEmpty && !isWriting {
                     Text(preamble)
                         .appFont(AppType.caption, leading: AppType.bodyLeading)
                         .foregroundStyle(Theme.onLand.opacity(0.85))
@@ -427,7 +440,7 @@ private struct IntakeConversation: View {
                     .appFont(AppType.body, leading: AppType.bodyLeading)
                     .foregroundStyle(Theme.linen)
                     .focused($writing)
-                    .frame(height: 168)
+                    .frame(height: isWriting ? 128 : 168)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
                     .panel()
@@ -459,17 +472,23 @@ private struct IntakeConversation: View {
                     }
                 }
                 .padding(.top, 16)
-                .padding(.bottom, keyboard.height > 0 ? 12 : 34)
 
                 Spacer(minLength: 0)
             }
-            .padding(.bottom, keyboard.height)
+            // We position against the keyboard OURSELVES (see .ignoresSafeArea
+            // below). Setting this padding while SwiftUI was also shifting the
+            // view for the keyboard moved everything twice, which is how the
+            // question ended up above the top of the screen — answering a
+            // question you cannot see.
+            .padding(.bottom, isWriting ? keyboard.height + 10
+                                        : (geo.safeAreaInsets.bottom > 0 ? 12 : 30))
             .animation(reduceMotion ? nil : .easeInOut(duration: 0.45), value: questionID)
-            .animation(reduceMotion ? nil : .easeOut(duration: 0.25), value: keyboard.height)
+            .animation(.easeOut(duration: keyboard.duration), value: keyboard.height)
         }
-        .statusBarHidden(true)
-        .task { await ask() }
-        .onTapGesture { writing = false }
+      }
+      .ignoresSafeArea(.keyboard)
+      .statusBarHidden(true)
+      .task { await ask() }
     }
 
     private func quietly(_ title: String, _ action: @escaping () -> Void) -> some View {
@@ -492,12 +511,43 @@ private struct IntakeConversation: View {
         Task { await ask() }
     }
 
+    /// THE FIRST QUESTION NEVER TOUCHES THE NETWORK.
+    ///
+    /// It used to be fetched, which meant the screen sat empty until the round
+    /// trip finished — and when the backend was unreachable, until the request
+    /// timed out. Half a minute of nothing, on the very first screen of a
+    /// conversation about someone's life. The opener is fixed anyway, so the
+    /// app simply knows it: it appears the instant the screen does, and the
+    /// network isn't needed until someone has already chosen to answer.
+    ///
+    /// Deliberately the same wording as the backend's own opener list
+    /// (`intake.py` → `_OPENERS`) — easy to answer AND plainly about them.
+    private static let firstQuestion = Strings.language == .russian
+        ? "Как обычно проходит ваш день?"
+        : "What does an ordinary day look like for you?"
+
+    private static let firstPreamble = Strings.language == .russian
+        ? "Его ещё нет. Он появится из того, что вы расскажете.\n"
+          + "Несколько вопросов, не спеша. Отвечайте как получится — "
+          + "хоть словом, хоть долго. Закончить можно в любой момент."
+        : "He isn't here yet. He'll be made out of what you say.\n"
+          + "A few questions, unhurried. Answer however you like — "
+          + "a word or a while. You can stop whenever."
+
     private func ask() async {
+        // Nothing said yet → show the opener immediately, locally.
+        guard !turns.isEmpty else {
+            preamble = Self.firstPreamble
+            question = Self.firstQuestion
+            questionID += 1
+            asking = false
+            return
+        }
+
         asking = true
         defer { asking = false }
         do {
             let next = try await client.intakeNext(conversation: turns)
-            if let text = next.preamble, !text.isEmpty { preamble = text }
             if next.enough || next.say.isEmpty {
                 finish()
                 return
@@ -507,17 +557,9 @@ private struct IntakeConversation: View {
         } catch {
             // A broken question must never strand someone mid-sentence about
             // their own life. Whatever they've already said is enough to build
-            // on — and if they've said nothing yet, the fixed opener still
-            // gives them somewhere to start.
+            // on, so the conversation ends rather than showing an error.
             Trouble.shared.record(error, url: AppConfig.shared.backendURL)
-            if turns.isEmpty {
-                question = Strings.language == .russian
-                    ? "Что видно у вас из окна?"
-                    : "What can you see out of your window?"
-                questionID += 1
-            } else {
-                finish()
-            }
+            finish()
         }
     }
 

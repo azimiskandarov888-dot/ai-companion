@@ -34,15 +34,24 @@ def test_the_first_question_costs_nothing_and_cannot_go_wrong(monkeypatch):
     assert "Его ещё нет" in first["preamble"]
 
 
-def test_every_opener_is_answerable_without_thinking():
-    """Each one asks about a THING, in the present, within arm's reach. The
-    person who freezes on question one never gets a companion at all."""
+def test_every_opener_is_easy_AND_obviously_about_them():
+    """Two jobs, not one — and the second is the one the first draft missed.
+
+    Optimising only for "easy to answer" produced «что видно у вас из окна?»,
+    which was rejected on sight: *what does that gotta do with anything?* The
+    trivially-concrete opener is a real technique, but it only works once
+    trust exists; on a cold first screen a question with no visible purpose
+    reads as a machine working through a list. So each opener must also be
+    plainly about the person's own life.
+    """
     for opener in intake._OPENERS:
         assert opener.endswith("?")
         assert len(opener) < 70
-        # None of them asks about a feeling, a life, or a self.
-        for forbidden in ("чувств", "себе", "жизн", "переживa"):
+        # Never a feeling asked about directly — that's a therapist, not a friend.
+        for forbidden in ("чувств", "переживa", "на душе"):
             assert forbidden not in opener.lower()
+        # …and it must be addressed to them, not to the room around them.
+        assert any(word in opener.lower() for word in ("вы", "ваш", "вас"))
 
 
 @pytest.fixture
