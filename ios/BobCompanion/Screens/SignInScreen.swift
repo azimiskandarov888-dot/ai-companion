@@ -16,6 +16,8 @@ struct SignInScreen: View {
 
     @State private var isWorking = false
     @State private var trouble: String?
+    /// Long-press escape hatch — see the gesture at the end of `body`.
+    @State private var showServer = false
 
     var body: some View {
         GeometryReader { geo in
@@ -83,7 +85,18 @@ struct SignInScreen: View {
                 }
                 .padding(.horizontal, Metrics.sideMargin)
             }
+            // THE WAY IN, ON A PHONE THAT HAS NEVER BEEN SET UP.
+            //
+            // Settings live behind the brass ring on the companion screen —
+            // which you only reach by finishing onboarding, which needs the
+            // backend, which needs an address you can only set in settings.
+            // A fresh phone was deadlocked. A long press on this first screen
+            // breaks it: invisible to anyone who isn't looking for it, and
+            // always there for whoever is holding a new device.
+            .contentShape(Rectangle())
+            .onLongPressGesture(minimumDuration: 1.2) { showServer = true }
         }
+        .sheet(isPresented: $showServer) { ServerSheet() }
     }
 
     private func signIn(with provider: String) {

@@ -119,7 +119,7 @@ private struct StartOverSheet: View {
 
 // MARK: - Where the backend lives
 
-private struct ServerSheet: View {
+struct ServerSheet: View {
     @Environment(\.dismiss) private var dismiss
     @StateObject private var trouble = Trouble.shared
     @State private var address = AppConfig.shared.backendURLString
