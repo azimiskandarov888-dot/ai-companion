@@ -74,6 +74,24 @@ struct ScrollScreen: View {
     }
 
     var body: some View {
+        // Screen 3 is no longer a blank sheet. A blank box asking «расскажите
+        // о себе» is a FORM, and a form is the one thing this app must not put
+        // in front of a lonely person: nobody knows where to start, what does
+        // get written is a résumé, and a composed paragraph is the single
+        // register in which none of the signals the reading looks for survive.
+        // So it asks instead — one small question at a time. Screen 4 keeps
+        // the scroll: «кого бы вы хотели встретить» is a different question,
+        // and one you're gently advised not to answer at length.
+        if kind == .story {
+            IntakeConversation(story: $text,
+                               drawsBackground: drawsBackground,
+                               onDone: onConfirm)
+        } else {
+            scrollBody
+        }
+    }
+
+    private var scrollBody: some View {
         GeometryReader { geo in
             let h = geo.size.height
             let isWriting = keyboard.isShowing
@@ -309,5 +327,214 @@ struct ScrollScreen: View {
         // and the whole object lifts away. The landscape never moves.
         withAnimation(.timingCurve(0.32, 0, 0.2, 1, duration: 0.8)) { winding = 1 }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.78) { onConfirm() }
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 3 · «Пока его нет» — the conversation that replaced the blank page
+//
+// WHAT WAS WRONG. A sheet of parchment saying «Расскажите о себе» is a form.
+// It freezes people — hardest of all the eighty-year-old this app is for —
+// and what does get written comes out as a résumé: «Люблю рыбалку и тишину.»
+// Nothing to read there. Ask the same person what's out of their window and
+// they talk for five minutes, in their own voice, and every signal the
+// reading looks for is right there in it.
+//
+// WHO IS ASKING. Nobody, and that is deliberate. The obvious build is a blank
+// "interviewer companion", and it's a trap twice over: a personality-less
+// interviewer IS an AI questionnaire with a voice, and a fake person is worse
+// — you'd tell a stranger your life and then watch them be replaced by
+// someone else. So there is no name, no "I", no character. Only questions,
+// arriving one at a time, and one honest sentence at the start: HE ISN'T HERE
+// YET, HE WILL BE MADE OUT OF WHAT YOU SAY. That's true, which is why it
+// works — it turns the tedious part into the consequential part.
+//
+// ONE QUESTION ON THE SCREEN, AND NOTHING ELSE. No transcript above, no
+// progress bar, no counter. Re-reading your own answers is not the point and
+// a counter turns a conversation back into a form; a question you can't see
+// past is what makes the next sentence come easily.
+//
+// It writes into the same `story` binding screen 3 always wrote into, so
+// nothing else in the flow changes: what reaches the backend is what they
+// actually said.
+// ═══════════════════════════════════════════════════════════════════════════
+
+private struct IntakeConversation: View {
+    @Binding var story: String
+    var drawsBackground: Bool = true
+    var onDone: () -> Void
+
+    @State private var preamble = ""
+    @State private var question = ""
+    @State private var answer = ""
+    @State private var turns: [IntakeTurn] = []
+    @State private var asking = true          // waiting on the next question
+    @State private var finished = false
+    /// Bumped on every new question so the arrival animation replays.
+    @State private var questionID = 0
+
+    @StateObject private var keyboard = KeyboardObserver()
+    @FocusState private var writing: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var client: BackendClient { BackendClient(baseURL: AppConfig.shared.backendURL) }
+
+    /// Enough to build on. Someone who said three real sentences has given the
+    /// reading more than the old blank page ever did, so the way out is never
+    /// locked — but it isn't offered on the very first question either, where
+    /// it would read as permission to skip the whole thing.
+    private var mayFinishEarly: Bool { turns.count >= 2 }
+
+    var body: some View {
+        ZStack {
+            if drawsBackground { PhotoBackground(place: .story, treatment: .scrim) }
+
+            VStack(spacing: 0) {
+                Spacer(minLength: 0)
+
+                if !preamble.isEmpty && turns.isEmpty {
+                    Text(preamble)
+                        .appFont(AppType.caption, leading: AppType.bodyLeading)
+                        .foregroundStyle(Theme.onLand.opacity(0.85))
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .legible()
+                        .padding(.horizontal, Metrics.sideMargin)
+                        .padding(.bottom, 28)
+                        .transition(.opacity)
+                }
+
+                // THE QUESTION. Large, because it is the only thing on screen
+                // and because it will be read by someone whose eyes are tired.
+                Text(question)
+                    .appFont(AppType.title, leading: AppType.bodyLeading)
+                    .foregroundStyle(Theme.onLand)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .legible()
+                    .padding(.horizontal, Metrics.sideMargin)
+                    .id(questionID)
+                    .transition(.opacity)
+                    .opacity(asking ? 0.35 : 1)
+
+                // Their answer. A quiet panel, not the parchment scroll: the
+                // scroll with its two rollers is a whole ceremonial object,
+                // and bringing one out per question would turn a light
+                // conversation into twelve formal documents.
+                TextEditor(text: $answer)
+                    .scrollContentBackground(.hidden)
+                    .background(.clear)
+                    .appFont(AppType.body, leading: AppType.bodyLeading)
+                    .foregroundStyle(Theme.linen)
+                    .focused($writing)
+                    .frame(height: 168)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .panel()
+                    .padding(.horizontal, Metrics.sideMargin)
+                    .padding(.top, 26)
+                    .disabled(asking || finished)
+                    .opacity(asking ? 0.5 : 1)
+
+                AppButton(title: Strings.language == .russian ? "Дальше" : "Next",
+                          tone: .leaf) { send() }
+                    .disabled(asking || answer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .opacity(answer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.45 : 1)
+                    .padding(.horizontal, Metrics.sideMargin)
+                    .padding(.top, 20)
+
+                // Never trapped, never rushed. Both ways out sit quietly below
+                // the real action rather than competing with it.
+                HStack(spacing: 22) {
+                    if !answer.isEmpty || !asking {
+                        quietly(Strings.language == .russian ? "пропустить" : "skip") {
+                            answer = ""
+                            send(skipping: true)
+                        }
+                    }
+                    if mayFinishEarly {
+                        quietly(Strings.language == .russian ? "хватит, дальше" : "that's enough") {
+                            finish()
+                        }
+                    }
+                }
+                .padding(.top, 16)
+                .padding(.bottom, keyboard.height > 0 ? 12 : 34)
+
+                Spacer(minLength: 0)
+            }
+            .padding(.bottom, keyboard.height)
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.45), value: questionID)
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.25), value: keyboard.height)
+        }
+        .statusBarHidden(true)
+        .task { await ask() }
+        .onTapGesture { writing = false }
+    }
+
+    private func quietly(_ title: String, _ action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .appFont(AppType.caption)
+                .foregroundStyle(Theme.onLand.opacity(0.7))
+                .legible()
+        }
+    }
+
+    // MARK: - the conversation
+
+    private func send(skipping: Bool = false) {
+        writing = false
+        let said = answer.trimmingCharacters(in: .whitespacesAndNewlines)
+        turns.append(IntakeTurn(q: question, a: skipping ? "" : said))
+        answer = ""
+        rebuildStory()
+        Task { await ask() }
+    }
+
+    private func ask() async {
+        asking = true
+        defer { asking = false }
+        do {
+            let next = try await client.intakeNext(conversation: turns)
+            if let text = next.preamble, !text.isEmpty { preamble = text }
+            if next.enough || next.say.isEmpty {
+                finish()
+                return
+            }
+            question = next.say
+            questionID += 1
+        } catch {
+            // A broken question must never strand someone mid-sentence about
+            // their own life. Whatever they've already said is enough to build
+            // on — and if they've said nothing yet, the fixed opener still
+            // gives them somewhere to start.
+            Trouble.shared.record(error, url: AppConfig.shared.backendURL)
+            if turns.isEmpty {
+                question = Strings.language == .russian
+                    ? "Что видно у вас из окна?"
+                    : "What can you see out of your window?"
+                questionID += 1
+            } else {
+                finish()
+            }
+        }
+    }
+
+    private func finish() {
+        guard !finished else { return }
+        finished = true
+        rebuildStory()
+        onDone()
+    }
+
+    /// Their words, in the shape the reading expects: the question as quiet
+    /// context, the answer as the thing that counts. Skipped questions vanish
+    /// entirely — an unanswered question is not a fact about anyone.
+    private func rebuildStory() {
+        story = turns
+            .filter { !$0.a.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+            .map { "— \($0.q)\n\($0.a)" }
+            .joined(separator: "\n\n")
     }
 }

@@ -40,6 +40,7 @@ from . import (
     config,
     db,
     diary,
+    intake,
     learn,
     matchmaker,
     memory,
@@ -334,22 +335,72 @@ async def usage(session_id: str = "default") -> JSONResponse:
     )
 
 
+class IntakeTurn(BaseModel):
+    q: str = ""   # what was asked
+    a: str = ""   # what they answered
+
+
+class IntakeRequest(BaseModel):
+    #: Everything said so far, oldest first. The client holds it: an intake is
+    #: one continuous sitting, and half a personal conversation is not
+    #: something to resume days later — starting fresh is the kinder default.
+    conversation: list[IntakeTurn] = []
+
+
+@app.post("/api/intake/next")
+async def intake_next(req: IntakeRequest) -> JSONResponse:
+    """The next question in «пока его нет» — the conversation that replaces
+    the blank «расскажите о себе» page. See app/intake.py for the design.
+
+    Empty conversation → the fixed opener, with no model call at all: the one
+    question that decides whether someone engages must be instant and can't
+    be allowed to come out badly.
+    """
+    if not req.conversation:
+        return JSONResponse(intake.opening())
+
+    turns = [t.model_dump() for t in req.conversation]
+    try:
+        return JSONResponse(await intake.next_question(turns))
+    except Exception as e:  # noqa: BLE001
+        # A dead question must not strand someone mid-conversation with no way
+        # forward. Ending gracefully hands them whatever they've already said,
+        # which the reading can still work with.
+        print(f"\n  ⚠ следующий вопрос не получился — заканчиваю разговор\n    {e}\n",
+              file=sys.stderr, flush=True)
+        return JSONResponse({"say": "", "enough": True})
+
+
 class CreateCompanionRequest(BaseModel):
-    about: str  # «Tell your story» — the user's free writing about themselves
+    #: «Tell your story» — free writing. Still supported, and still how the
+    #: browser dev page works, but no longer what the app shows anyone.
+    about: str = ""
+    #: The intake conversation (app/intake.py). When present it BECOMES the
+    #: story — a dozen natural answers carry far more of a person than a
+    #: composed paragraph, which is the whole reason the blank page went.
+    conversation: list[IntakeTurn] = []
     wishes: str = ""  # «Who would you like to meet?» — free writing, may be empty
     age: str = ""  # the optional chips that screen offers…
     gender: str = ""
     origin: str = ""  # …never a name: he arrives with his own.
 
+    def story(self) -> str:
+        spoken = intake.as_story([t.model_dump() for t in self.conversation])
+        written = self.about.strip()
+        if spoken and written:
+            return spoken + "\n\n" + written
+        return spoken or written
+
 
 @app.post("/api/companion/create")
 async def companion_create(req: CreateCompanionRequest) -> JSONResponse:
-    """From the user's story, and whatever they asked for, the friend walks in.
+    """From the user's own words, and whatever they asked for, the friend walks in.
 
     They may describe him as much or as little as they like — including not at
     all. However much they specify, he still arrives as his own person, with his
     own name, opinions, and things he honestly doesn't like.
     """
+    req = req.model_copy(update={"about": req.story()})
     if not req.about.strip():
         raise HTTPException(
             status_code=400, detail="Расскажите о себе — хоть немного."

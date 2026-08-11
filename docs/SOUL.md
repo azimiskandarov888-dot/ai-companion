@@ -135,6 +135,94 @@ fails — the holes are never filled from a template again.
 
 ---
 
+## «Пока его нет» — the conversation that replaced the blank page
+
+> *"I genuinely don't like it because there is nothing where the client can
+> start from. Why are they gonna talk about themselves? What are they gonna
+> write? … With a new blank, you just need to write something about you —
+> that's strange and not good."*
+
+Correct, and it was the weakest thing in the app. A sheet of parchment saying
+«Расскажите о себе» is a **form**, and a form is the one thing this app must
+not put in front of a lonely person. Three failures at once:
+
+1. **Nobody knows where to start.** "Tell me about yourself" freezes people,
+   and freezes an isolated eighty-year-old hardest of all.
+2. **What gets written is a résumé.** «Люблю рыбалку и тишину.» Nothing to
+   read there.
+3. **It destroys the reading.** A composed paragraph is the single register in
+   which none of the psycholinguistic signals survive — no dative impersonals,
+   no thickening hedges, no telling absence. The blank page was actively
+   sabotaging the most important stage in the app.
+
+Ask the same person *«что видно у вас из окна?»* and they talk for five
+minutes, in their own voice, and every signal is right there.
+
+### Who is asking — the trap, and the answer
+
+The obvious build is the one the request described: a blank "interviewer
+companion" with no personality. It is a trap twice over.
+
+- **A personality-less interviewer IS an AI questionnaire with a voice** —
+  precisely the thing the app's one law forbids.
+- **A fake person is worse.** You would tell a stranger your life, and then
+  that stranger would evaporate and be replaced by someone else. A small
+  betrayal, at the worst possible moment.
+
+So: **questions with no questioner.** No name, no "I", no character, nothing
+to meet and lose. Just questions arriving one at a time — and one honest
+sentence first:
+
+> «Его ещё нет. Он появится из того, что вы расскажете — поэтому не о анкете
+> речь, а о вас.»
+
+That frame is **true**, which is why it works. It turns the tedious part into
+the consequential part: you are not filling in a profile, you are the material
+he is made of. People answer that very differently from how they answer a form.
+
+### How the questions are built
+
+The **opener is fixed, never generated** — no latency before the first word,
+and no chance that the one question deciding whether someone engages comes out
+badly. Every opener asks about a *thing*, in the present, within arm's reach
+(a test enforces that none of them mentions feelings, life, or the self).
+Everything after it is generated from what was actually said.
+
+The rules that matter (`intake.py` → `_ASK_SYSTEM`):
+
+- **Concrete before abstract.** Ask about things; feelings arrive attached.
+  «Чем пахло у мамы на кухне?» goes further than «какое у вас было детство?».
+- **Never ask about a feeling directly.** That is a therapist, not a friend.
+- **Follow what they gave you** — a script produces a survey.
+- **One question, short, speakable aloud.**
+- **Never praise the answer.** «Как интересно!» is what a bot says.
+- **A one-word answer means the next question gets *smaller*, not more
+  serious.** They aren't refusing; they're finding it hard to start.
+- **Notice absence quietly.** Several answers with no living person in them is
+  the most important thing learned so far — ask about someone, gently, without
+  pointing at it.
+
+It stops when there's enough to read a person, not at a count. `MAX_TURNS` is
+a stop, not a target; `MIN_TURNS` stops it bailing at the door. Unanswered
+questions don't count toward the cap — skipping three questions is not three
+turns of talking. And it may be ended at any time: three real sentences give
+the reading more than the old blank page ever did.
+
+**On the screen: one question, and nothing else.** No transcript above, no
+progress bar, no counter — re-reading your own answers isn't the point, and a
+counter turns a conversation back into a form.
+
+**Safety:** if real distress appears in an answer, the intake does not ask the
+next question as though nothing happened. It responds warmly, points toward
+family or a doctor, and ends.
+
+**When it breaks, nobody is stranded.** A failed question ends the
+conversation gracefully and builds on whatever was already said; a failure on
+the very first question falls back to the fixed opener. Somebody halfway
+through telling you about their life must never see an error screen.
+
+---
+
 ## The reading — the stage the rest exists to serve
 
 > *"Understanding the text alone is not enough. What the client says and what

@@ -39,6 +39,13 @@ CHAT_MODEL: str = os.getenv("CHAT_MODEL", "claude-haiku-4-5-20251001")
 # time are worth minutes and cents, because it happens once per person and
 # every other stage is built on its output.
 READING_MODEL: str = os.getenv("READING_MODEL", "claude-opus-5")
+
+# ASKING him about himself (app/intake.py) — the conversation that replaces
+# the blank «расскажите о себе» page. Not deep work, but the quality of each
+# follow-up decides whether someone opens up or gives up, so it gets the
+# middle model rather than the fast one: a bad question wastes the only
+# chance the app has to hear this person in their own voice.
+INTAKE_MODEL: str = os.getenv("INTAKE_MODEL", BRAIN_MODEL)
 #: low | medium | high | xhigh | max — how long it may think before answering.
 READING_EFFORT: str = os.getenv("READING_EFFORT", "high")
 

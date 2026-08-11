@@ -47,6 +47,21 @@ struct CreateCompanionResponse: Decodable {
     let name: String
 }
 
+/// One exchange in «пока его нет»: what was asked, what they answered.
+struct IntakeTurn: Codable, Equatable {
+    var q: String
+    var a: String
+}
+
+/// POST /api/intake/next — the next question, or the end of the conversation.
+struct IntakeQuestion: Decodable {
+    let say: String
+    let enough: Bool
+    /// Only on the very first call: the honest frame that makes the whole
+    /// conversation work — he isn't here yet, he'll be made out of this.
+    let preamble: String?
+}
+
 /// GET /api/diary — what he has written about his friend so far.
 struct DiaryResponse: Decodable {
     let companion: String
@@ -132,6 +147,25 @@ struct BackendClient {
         }
 
         return try JSONDecoder().decode(TalkResponse.self, from: data)
+    }
+
+    /// The next question in «пока его нет» — the conversation that replaced
+    /// the blank «расскажите о себе» page (backend/app/intake.py).
+    ///
+    /// A failure here ENDS the conversation rather than surfacing an error:
+    /// whatever they've already said is enough to build on, and a person
+    /// halfway through telling you about their life should never be shown a
+    /// broken screen. The caller treats a thrown error as `enough`.
+    func intakeNext(conversation: [IntakeTurn]) async throws -> IntakeQuestion {
+        var request = URLRequest(url: baseURL.appendingPathComponent("api/intake/next"))
+        request.httpMethod = "POST"
+        request.timeoutInterval = 25
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONEncoder().encode(["conversation": conversation])
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        try Self.check(response, data)
+        return try JSONDecoder().decode(IntakeQuestion.self, from: data)
     }
 
     /// Their story, plus whatever they asked for, and he walks in — with his
