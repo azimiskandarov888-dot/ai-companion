@@ -8,6 +8,8 @@ remembers his stories and can start a conversation on its own.
 > **Who Bob is** (his life, story & soul): **[docs/BOB-PERSONA.md](./docs/BOB-PERSONA.md)**
 > **How the companion behaves** (character & guardrails): **[docs/VISION.md](./docs/VISION.md)**
 > **Always-on listening design** (iOS research): **[docs/ALWAYS-ON.md](./docs/ALWAYS-ON.md)**
+> **How a friend is made** (the soul): **[docs/SOUL.md](./docs/SOUL.md)**
+> **Many people, one server** (identity & privacy): **[docs/MANY-PEOPLE.md](./docs/MANY-PEOPLE.md)**
 > **The family's original plan:** **[PLAN.md](./PLAN.md)**
 
 ## The parts (like a person)

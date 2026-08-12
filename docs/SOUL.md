@@ -15,7 +15,7 @@ different jobs, done at two completely different moments:
 | What | A whole person: past, opinions, manner, people, current life | One or two warm sentences AS that person |
 | Time budget | 20–30 s is fine — the screen is beautiful | Every second is a silence someone sits through |
 | Model | `BRAIN_MODEL` (Sonnet — deep) | `CHAT_MODEL` (Haiku — fast) |
-| Where | `matchmaker.py` → `data/persona.json` | `main.py → brain.py`, persona injected |
+| Where | `matchmaker.py` → that person's `persona.json` | `main.py → brain.py`, persona injected |
 
 Creation costs two calls: the ten sketches run on the fast model (breadth is
 cheap, and someone is watching the arriving screen), the deep write on the
@@ -400,7 +400,12 @@ forgotten.
 ## What "Начать заново" must mean
 
 Recreating the friend goes through `POST /api/companion/create`, which now
-implies the clean slate (`_fresh_start`). An existing install that met Мурзик
-has him **baked into its `data/persona.json`** — the file was saved through
-the old merging code. The escape is simply to create a new friend once on the
-new code: настройки → «Начать заново».
+implies the clean slate (`memory.forget_companion`) — for THAT person and
+nobody else. An existing install that met Мурзик has him **baked into its
+saved persona** — the file was written through the old merging code. The
+escape is simply to create a new friend once on the new code: настройки →
+«Начать заново».
+
+Where the persona file lives is now per person: `data/persona.json` for
+anyone with no token (the browser dev page, builds that predate multi-user),
+`data/users/<id>/persona.json` for everybody else. See docs/MANY-PEOPLE.md.

@@ -13,7 +13,11 @@ import json
 import pytest
 from fastapi.testclient import TestClient
 
-from app import brain, main, matchmaker, memory, persona
+from app import brain, identity, main, matchmaker, memory, persona
+
+#: The endpoint tests post with no token, so the created friend belongs to the
+#: anonymous user — the same one the direct calls below use.
+U = identity.ANONYMOUS
 
 FRIEND = {
     "name": "Фёдор",
@@ -70,6 +74,7 @@ def pen(monkeypatch):
 def test_friend_is_created_and_becomes_the_persona(pen):
     created = asyncio.run(
         matchmaker.create_companion(
+            U,
             "Люблю футбол, старые фильмы и архитектуру.",
             wishes="Хотел бы кого-то спокойного, кто много читает.",
             age="около 60",
@@ -89,7 +94,7 @@ def test_friend_is_created_and_becomes_the_persona(pen):
 
     # He is now the live persona — exactly as created, never topped up from
     # the built-in template (that merge is how every friend got the same cat).
-    live = persona.load_persona()
+    live = persona.load_persona(U)
     assert live["name"] == "Фёдор"
     assert live["age"] == "62 года"
     assert live["speech_style"] == FRIEND["speech_style"]
@@ -100,7 +105,7 @@ def test_friend_is_created_and_becomes_the_persona(pen):
 def test_no_wishes_is_fine(pen):
     # Leaving "who would you like to meet?" blank is a perfectly good choice —
     # the friend is then built from their story plus the dice alone.
-    created = asyncio.run(matchmaker.create_companion("Люблю рыбалку и тишину."))
+    created = asyncio.run(matchmaker.create_companion(U, "Люблю рыбалку и тишину."))
     assert created["name"] == "Фёдор"
     assert "Пожеланий о друге он не оставил" in pen[0]
 
@@ -165,6 +170,7 @@ def test_wishes_are_law_at_every_stage(pen):
     # that never had a chance to be honoured.
     asyncio.run(
         matchmaker.create_companion(
+            U,
             "Люблю горы.", age="около 30", gender="женщина", origin="с Урала"
         )
     )
@@ -182,15 +188,15 @@ def test_new_friend_starts_with_a_clean_slate(pen):
     himself and contradicts his own biography mid-sentence. What was learned
     about the USER stays: their birthday is true no matter who they talk to.
     """
-    memory.log_turn("default", "user", "привет")
-    memory.add_memory("fact", "Я всю жизнь рыбачил", owner="bob")
-    memory.add_memory("fact", "У него день рождения в мае", owner="elder")
+    memory.log_turn(U, "user", "привет")
+    memory.add_memory(U, "fact", "Я всю жизнь рыбачил", owner="bob")
+    memory.add_memory(U, "fact", "У него день рождения в мае", owner="elder")
 
-    asyncio.run(matchmaker.create_companion("Люблю тишину."))
+    asyncio.run(matchmaker.create_companion(U, "Люблю тишину."))
 
-    assert memory.recent_turns("default") == []
-    assert memory.counts("bob").get("fact", 0) == 0
-    assert memory.counts("elder").get("fact", 0) == 1
+    assert memory.recent_turns(U) == []
+    assert memory.counts(U, "bob").get("fact", 0) == 0
+    assert memory.counts(U, "elder").get("fact", 0) == 1
 
 
 def test_unparseable_reply_fails_gently(monkeypatch):
@@ -199,7 +205,7 @@ def test_unparseable_reply_fails_gently(monkeypatch):
 
     monkeypatch.setattr(brain, "generate_text", fake_generate)
     with pytest.raises(RuntimeError):
-        asyncio.run(matchmaker.create_companion("про меня"))
+        asyncio.run(matchmaker.create_companion(U, "про меня"))
 
 
 def test_half_a_person_is_refused(monkeypatch):
@@ -213,7 +219,7 @@ def test_half_a_person_is_refused(monkeypatch):
 
     monkeypatch.setattr(brain, "generate_text", fake_generate)
     with pytest.raises(RuntimeError):
-        asyncio.run(matchmaker.create_companion("про меня"))
+        asyncio.run(matchmaker.create_companion(U, "про меня"))
 
 
 def test_create_endpoint(pen):

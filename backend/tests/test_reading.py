@@ -13,7 +13,11 @@ import json
 
 import pytest
 
-from app import brain, companion, config, matchmaker, persona, reading
+from app import brain, companion, config, identity, matchmaker, persona, reading
+
+#: These tests check config.READING_PATH / config.PERSONA_PATH directly, which
+#: are the anonymous user's files — so that is whose reading this is.
+U = identity.ANONYMOUS
 
 READING = {
     "register": "пишет коротко и сухо; говори так же — без обилия нежности",
@@ -55,8 +59,8 @@ def test_reads_the_person_and_keeps_the_reading(reader):
     assert "Мне не спится. Так вышло." in reader[0]
     assert "кого-то весёлого" in reader[0]
 
-    reading.save(result)
-    assert reading.load()["register"] == READING["register"]
+    reading.save(U, result)
+    assert reading.load(U)["register"] == READING["register"]
 
 
 def test_a_reading_without_the_essentials_is_refused(monkeypatch):
@@ -144,7 +148,7 @@ def test_a_failed_reading_still_lets_a_friend_walk_in(monkeypatch, capsys):
     monkeypatch.setattr(reading, "read_person", broken_reading)
     monkeypatch.setattr(brain, "generate_text", fake_generate)
 
-    created = asyncio.run(matchmaker.create_companion("Люблю тишину."))
+    created = asyncio.run(matchmaker.create_companion(U, "Люблю тишину."))
     assert created["name"] == "Зоя"
     assert "чтение человека не получилось" in capsys.readouterr().err
 
@@ -152,7 +156,7 @@ def test_a_failed_reading_still_lets_a_friend_walk_in(monkeypatch, capsys):
 def test_the_reading_survives_starting_over(reader, monkeypatch):
     """A new companion doesn't make the person a different person. «Начать
     заново» replaces who they talk to, not who they are."""
-    reading.save(READING)
+    reading.save(U, READING)
 
     async def fake_generate(system_prompt, user_text, max_tokens=1500, model=None):
         if "ДЕСЯТЬ" in system_prompt:
@@ -167,8 +171,8 @@ def test_the_reading_survives_starting_over(reader, monkeypatch):
         )
 
     monkeypatch.setattr(brain, "generate_text", fake_generate)
-    asyncio.run(matchmaker.create_companion("Люблю тишину."))
+    asyncio.run(matchmaker.create_companion(U, "Люблю тишину."))
 
-    assert persona.load_persona()["name"] == "Гриша"
-    assert reading.load() is not None          # the person is still known
+    assert persona.load_persona(U)["name"] == "Гриша"
+    assert reading.load(U) is not None          # the person is still known
     assert config.READING_PATH.exists()

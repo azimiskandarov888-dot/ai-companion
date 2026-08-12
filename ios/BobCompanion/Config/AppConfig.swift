@@ -1,10 +1,12 @@
-// Where the app finds the backend, plus the tunable "feel" of the conversation.
+// Where the app finds the backend, who this phone is, and the tunable "feel"
+// of the conversation.
 //
-// Nothing secret lives here — no API keys. The keys all live on the backend
-// server (see backend/app/config.py). This app only needs to know the backend's
-// address on the network.
+// No API keys live here. They are all on the backend server (see
+// backend/app/config.py). The one secret this app holds is the token below —
+// which is not a key to anything shared, only to this person's own friend.
 
 import Foundation
+import Security
 
 final class AppConfig {
     static let shared = AppConfig()
@@ -12,7 +14,6 @@ final class AppConfig {
 
     private enum Keys {
         static let backendURL = "backendURL"
-        static let sessionID = "sessionID"
     }
 
     /// The backend address. During testing this is your Mac's IP on the same
@@ -27,11 +28,106 @@ final class AppConfig {
         URL(string: backendURLString) ?? URL(string: "http://localhost:8000")!
     }
 
-    /// One elder, one ongoing memory. Kept stable so the backend threads his
-    /// whole history together.
-    var sessionID: String {
-        get { defaults.string(forKey: Keys.sessionID) ?? "default" }
-        set { defaults.set(newValue, forKey: Keys.sessionID) }
+    // ═══════════════════════════════════════════════════════════════════════
+    // WHO THIS PHONE IS
+    //
+    // 32 random bytes, made once, kept in the Keychain, sent on every request
+    // as `Authorization: Bearer <token>`. The server hashes it and that hash
+    // is the person (see backend/app/identity.py). No login, no password, no
+    // account to remember — because the people this is for cannot be asked to
+    // remember one, and every account screen is a place to give up at.
+    //
+    // It replaces `sessionID`, which was the literal string "default" on every
+    // device ever built. Two phones on one server were therefore one person:
+    // the second phone met the first phone's friend and picked up their
+    // conversation mid-thread.
+    // ═══════════════════════════════════════════════════════════════════════
+
+    /// This person's identity, or nil if the Keychain could not be read.
+    ///
+    /// Nil is deliberately distinct from "make a new one". A transient
+    /// Keychain failure that minted a fresh token would quietly lose the
+    /// friend and everything he remembers; sending no token at all would drop
+    /// this person into the pre-multi-user data, i.e. somebody else's life. A
+    /// turn that fails is recoverable — the app already knows how to say he
+    /// couldn't come. A wrong identity is not recoverable.
+    ///
+    /// Resolved once, in `init`, rather than lazily: `shared` is reached from
+    /// several tasks at once, and a racing `lazy var` can run its initialiser
+    /// twice — where the second run's SecItemAdd fails as a duplicate and
+    /// hands somebody a nil identity for the rest of the launch.
+    let userToken: String?
+
+    private init() {
+        userToken = Self.loadOrCreateToken()
+    }
+
+    /// Keychain coordinates. `service` is what the item is FOR; `account` is
+    /// which one — there is only ever one.
+    private static let tokenService = "com.bob.companion.identity"
+    private static let tokenAccount = "friend-token"
+
+    private static func loadOrCreateToken() -> String? {
+        var query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: tokenService,
+            kSecAttrAccount as String: tokenAccount,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne,
+        ]
+
+        var item: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &item)
+
+        if status == errSecSuccess {
+            guard
+                let data = item as? Data,
+                let token = String(data: data, encoding: .utf8),
+                !token.isEmpty
+            else { return nil }
+            return token
+        }
+
+        // ONLY "there is nothing stored" may create a new identity. Any other
+        // error (the device hasn't been unlocked since boot, the Keychain is
+        // busy) means we don't KNOW whether this person already has a friend,
+        // and guessing wrong costs them one.
+        guard status == errSecItemNotFound else { return nil }
+
+        let token = randomToken()
+        query.removeValue(forKey: kSecReturnData as String)
+        query.removeValue(forKey: kSecMatchLimit as String)
+        query[kSecValueData as String] = Data(token.utf8)
+        // AfterFirstUnlock, not WhenUnlocked: the App Intent that lets him
+        // speak from a locked phone runs in the background and must be able to
+        // read this. Not a ...ThisDeviceOnly variant either — those are left
+        // out of encrypted backups, and someone restoring a new iPhone from a
+        // backup should find their friend still there.
+        query[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
+        // Deliberately NOT synchronizable (iCloud Keychain). It would be a
+        // lovely way to carry the friend to a new phone — but among the people
+        // this app is for, a son setting up both parents' phones with HIS
+        // Apple ID is ordinary, and syncing would hand those two phones one
+        // shared friend. That is the exact bug this token exists to end.
+
+        guard SecItemAdd(query as CFDictionary, nil) == errSecSuccess else { return nil }
+        return token
+    }
+
+    /// 256 bits from the OS CSPRNG, in base64url so it is safe in an HTTP
+    /// header with nothing to escape.
+    private static func randomToken() -> String {
+        var bytes = [UInt8](repeating: 0, count: 32)
+        if SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes) != errSecSuccess {
+            // SecRandomCopyBytes does not fail in practice; if it ever did,
+            // UUIDs are still 122 bits of OS randomness and a great deal
+            // better than a predictable fallback.
+            return (UUID().uuidString + UUID().uuidString).replacingOccurrences(of: "-", with: "")
+        }
+        return Data(bytes).base64EncodedString()
+            .replacingOccurrences(of: "+", with: "-")
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: "=", with: "")
     }
 
     // --- Conversation feel (see docs/ALWAYS-ON.md "Conversation flow") ----------

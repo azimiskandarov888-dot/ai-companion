@@ -82,6 +82,12 @@ struct AppFlow: View {
             story = app.story
             wishes = app.wishes
         }
+        // Once, quietly, at launch: does the server actually have a friend for
+        // this person? It runs after the screen is already up, so nothing waits
+        // on the network, and it only ever acts on a clear "no" — see
+        // AppState.reconcileWithServer. If it does clear the arrival, the
+        // .onChange below carries them to «кого бы вы хотели встретить».
+        .task { await app.reconcileWithServer() }
         // The three ways out. Each rises over him and sinks back down.
         .fullScreenCover(item: $overlay) { which in
             Group {

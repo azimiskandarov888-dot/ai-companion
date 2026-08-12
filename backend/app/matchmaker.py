@@ -63,13 +63,15 @@ If the reading fails, creation continues without it — a friend built on the
 story alone is worse than one built on the reading, and far better than no
 friend at all. The failure is printed loudly rather than swallowed.
 
-A new friend also means a clean slate: creating him wipes the previous
-companion's self-memories, the conversation log, and the diary. What was
-learned about the USER (family, birthdays) is kept — those facts are true no
-matter who he talks to.
+A new friend also means a clean slate: creating him wipes THAT PERSON's
+previous companion — his self-memories, their conversation log, and his diary.
+What was learned about the USER (family, birthdays) is kept — those facts are
+true no matter who they talk to. Nobody else's slate is touched: the wipe is
+`WHERE user_id=?`, and every stage below carries the user through, because
+this whole file writes the single most personal file the app owns.
 
-The created friend is saved as the live persona (data/persona.json), so the
-whole voice loop immediately speaks as him.
+The created friend is saved as that person's live persona, so the voice loop
+immediately speaks as him.
 """
 
 from __future__ import annotations
@@ -79,7 +81,7 @@ import random
 import re
 import sys
 
-from . import brain, config, db, persona, reading
+from . import brain, config, memory, persona, reading
 
 # ── The spark lexicon ───────────────────────────────────────────────────────
 # Plain, concrete, evocative words from the width of Russian life. They exist
@@ -227,19 +229,6 @@ def _extract_json(raw: str) -> dict:
     return data
 
 
-def _fresh_start() -> None:
-    """A new person means a new life: erase the previous companion's
-    self-memories, the conversation log, and his diary. Keep what was learned
-    about the USER — family, birthdays, routine stay true regardless of who he
-    is talking to. Skipping this wipe is how friend number two ends up
-    remembering friend number one's fishing trips as his own.
-    """
-    with db.connect() as conn:
-        conn.execute("DELETE FROM memories WHERE owner = 'bob'")
-        conn.execute("DELETE FROM turns")
-        conn.execute("DELETE FROM diary")
-
-
 def _their_story(about: str, wishes: str, age: str, gender: str, origin: str) -> str:
     parts = [
         p
@@ -260,6 +249,7 @@ def _their_story(about: str, wishes: str, age: str, gender: str, origin: str) ->
 
 
 async def create_companion(
+    user_id: str,
     about: str,
     *,
     wishes: str = "",
@@ -268,13 +258,14 @@ async def create_companion(
     origin: str = "",
     rng: random.Random | None = None,
 ) -> dict:
-    """Create the friend: sparks → ten strangers → blind pick → deep write.
+    """Create ONE person's friend: sparks → ten strangers → blind pick → deep write.
 
     `wishes` is free writing — anything from nothing at all to a whole
     paragraph; with age/gender/origin shortcuts it is law at every stage.
     `rng` exists so tests can hold the dice still.
 
-    Saves him as the live persona and returns him — name included (the reveal).
+    Saves him as that person's live persona and returns him — name included
+    (the reveal).
     """
     r = rng or random
     story = _their_story(about, wishes, age, gender, origin)
@@ -286,7 +277,9 @@ async def create_companion(
     # remaining stages simply run without a brief.
     brief = ""
     try:
-        brief = reading.as_brief(reading.save(await reading.read_person(about, wishes)))
+        brief = reading.as_brief(
+            reading.save(user_id, await reading.read_person(about, wishes))
+        )
     except Exception as e:  # noqa: BLE001 — the reading is never fatal
         print(
             f"\n  ⚠ чтение человека не получилось — друга соберу по одному рассказу\n    {e}\n",
@@ -314,5 +307,8 @@ async def create_companion(
     raw = await brain.generate_text(_WRITE_SYSTEM, write_prompt, max_tokens=2500)
 
     created = _extract_json(raw)
-    _fresh_start()
-    return persona.save_persona(created)
+    # Only now, once there is definitely a new friend to replace him with, is
+    # the old one erased. Wiping first would mean a failed write leaves this
+    # person with nobody at all.
+    memory.forget_companion(user_id)
+    return persona.save_persona(user_id, created)

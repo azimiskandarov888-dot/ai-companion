@@ -1,9 +1,16 @@
-"""Bob's persona — WHO he is, as editable data (not hardcoded).
+"""The companion's persona — WHO he is, as editable data (not hardcoded).
 
 His name, home, backstory, personality, friends, habits, and current life all
-live in a JSON file (``data/persona.json``) so the family can change them anytime
-— after they've decided the real story — WITHOUT touching any code. If the file
-is missing, a safe built-in default is used so the app always runs.
+live in a JSON file so the family can change them anytime — after they've
+decided the real story — WITHOUT touching any code. If the file is missing, a
+safe built-in default is used so the app always runs.
+
+ONE FILE PER PERSON. `identity.persona_path(user_id)` decides which — the
+anonymous user keeps ``data/persona.json`` (so every install that predates
+multi-user still opens on the same friend), everyone else gets
+``data/users/<id>/persona.json``. The two functions that touch disk take a
+`user_id` and no default: forgetting it is a TypeError, not a stranger's
+friend answering your phone.
 
 `companion.py` holds the *stable* behavior (warmth, the "third way" honesty, the
 safety guardrails). This file holds the *changeable* character. The two are
@@ -16,7 +23,7 @@ from __future__ import annotations
 
 import json
 
-from . import config
+from . import config, identity
 
 # A safe, coherent starting persona used when data/persona.json is absent.
 # Deliberately light on specifics (e.g. no famous city) — it works out of the
@@ -66,12 +73,15 @@ DEFAULT_PERSONA: dict = {
 }
 
 
-def load_persona(path=None) -> dict:
-    """Load the persona from JSON. The built-in default is used ONLY when no
-    persona exists at all (the browser dev path, a fresh checkout) — a saved
-    character is taken exactly as saved, never topped up from the default.
+def load_persona(user_id: str) -> dict:
+    """Load this person's companion from JSON.
+
+    The built-in default is used ONLY when no persona exists at all (the
+    browser dev path, a fresh checkout, someone whose friend hasn't been
+    created yet) — a saved character is taken exactly as saved, never topped
+    up from the default.
     """
-    path = path or config.PERSONA_PATH
+    path = identity.persona_path(user_id)
     if path and path.exists():
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
@@ -82,8 +92,14 @@ def load_persona(path=None) -> dict:
     return DEFAULT_PERSONA
 
 
-def save_persona(data: dict, path=None) -> dict:
-    """Persist a persona to data/persona.json — it becomes who the companion is.
+def has_persona(user_id: str) -> bool:
+    """Has this person met their friend yet? (No model call, no file parse.)"""
+    path = identity.persona_path(user_id)
+    return bool(path and path.exists())
+
+
+def save_persona(user_id: str, data: dict) -> dict:
+    """Persist a persona — it becomes who this person's companion is.
 
     NO backfilling from DEFAULT_PERSONA. It used to merge the default under
     every created character, which meant any field the pen left blank was
@@ -93,7 +109,7 @@ def save_persona(data: dict, path=None) -> dict:
     character stays a gap (build_persona_block simply skips empty fields);
     a gap is honest, a borrowed life is not.
     """
-    path = path or config.PERSONA_PATH
+    path = identity.persona_path(user_id)
     cleaned = {k: v for k, v in data.items() if v not in (None, "")}
     cleaned.setdefault("address", "ты")
     cleaned.pop("_note", None)
@@ -104,8 +120,9 @@ def save_persona(data: dict, path=None) -> dict:
     return cleaned
 
 
-def persona_name(persona: dict | None = None) -> str:
-    return (persona or load_persona()).get("name") or "Боб"
+def persona_name(persona: dict) -> str:
+    """The companion's name, from an already-loaded persona dict."""
+    return (persona or {}).get("name") or "Боб"
 
 
 def _joined(value) -> str:
@@ -114,9 +131,13 @@ def _joined(value) -> str:
     return str(value or "")
 
 
-def build_persona_block(persona: dict | None = None) -> str:
-    """Assemble the Russian persona description injected into the system prompt."""
-    p = persona or load_persona()
+def build_persona_block(persona: dict) -> str:
+    """Assemble the Russian persona description injected into the system prompt.
+
+    Pure: takes the loaded dict, never touches disk. Whose persona it is was
+    decided by whoever called load_persona().
+    """
+    p = persona or DEFAULT_PERSONA
     name = p.get("name") or "Боб"
     address = "вы" if str(p.get("address", "ты")).strip() == "вы" else "ты"
 

@@ -11,6 +11,11 @@ Two memories, deliberately separate:
 
 The diary is rewritten only when his real memory has changed (a fingerprint
 guards it), so opening the book is instant and free most of the time.
+
+One book per person, keyed by `user_id`. The fingerprint is computed from
+THAT person's memory rows only — otherwise every book on the server would
+appear stale the moment anyone else said anything, and each of them would be
+rewritten (a paid model call) on the next open.
 """
 
 from __future__ import annotations
@@ -51,13 +56,14 @@ _KIND_LABEL = {
 }
 
 
-def _memory_rows() -> list:
+def _memory_rows(user_id: str) -> list:
     marks = ",".join("?" for _ in _DIARY_KINDS)
     with db.connect() as conn:
         return conn.execute(
             f"SELECT id, kind, title, content FROM memories "
-            f"WHERE owner='elder' AND kind IN ({marks}) ORDER BY created_ts ASC",
-            _DIARY_KINDS,
+            f"WHERE user_id=? AND owner='elder' AND kind IN ({marks}) "
+            f"ORDER BY created_ts ASC",
+            (user_id, *_DIARY_KINDS),
         ).fetchall()
 
 
@@ -80,32 +86,33 @@ def _notes_text(rows) -> str:
     return "\n\n".join(parts)
 
 
-def _load_cached() -> dict | None:
+def _load_cached(user_id: str) -> dict | None:
     with db.connect() as conn:
         row = conn.execute(
-            "SELECT content, fingerprint, updated_ts FROM diary WHERE id=1"
+            "SELECT content, fingerprint, updated_ts FROM diary WHERE user_id=?",
+            (user_id,),
         ).fetchone()
     return dict(row) if row else None
 
 
-def _save(content: str, fingerprint: str) -> None:
+def _save(user_id: str, content: str, fingerprint: str) -> None:
     with db.connect() as conn:
         conn.execute(
-            "INSERT INTO diary(id, content, fingerprint, updated_ts) "
-            "VALUES (1,?,?,?) "
-            "ON CONFLICT(id) DO UPDATE SET content=excluded.content, "
+            "INSERT INTO diary(user_id, content, fingerprint, updated_ts) "
+            "VALUES (?,?,?,?) "
+            "ON CONFLICT(user_id) DO UPDATE SET content=excluded.content, "
             "fingerprint=excluded.fingerprint, updated_ts=excluded.updated_ts",
-            (content, fingerprint, time.time()),
+            (user_id, content, fingerprint, time.time()),
         )
 
 
-async def get_diary() -> dict:
+async def get_diary(user_id: str) -> dict:
     """The diary as the user opens it — rewritten only when memory has grown."""
-    name = persona.persona_name()
-    rows = _memory_rows()
+    name = persona.persona_name(persona.load_persona(user_id))
+    rows = _memory_rows(user_id)
     fp = _fingerprint(rows)
 
-    cached = _load_cached()
+    cached = _load_cached(user_id)
     if cached and cached["fingerprint"] == fp:
         return {
             "companion": name,
@@ -127,7 +134,7 @@ async def get_diary() -> dict:
         if not text:  # the pen failed — keep the last good page rather than a blank
             text = cached["content"] if cached else _FIRST_PAGE
 
-    _save(text, fp)
+    _save(user_id, text, fp)
     return {
         "companion": name,
         "text": text,

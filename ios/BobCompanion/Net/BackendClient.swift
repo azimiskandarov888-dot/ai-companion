@@ -31,6 +31,10 @@ struct TalkResponse: Decodable {
 enum BackendError: LocalizedError {
     case badStatus(Int, String)
     case notConfigured
+    /// The Keychain wouldn't give us this phone's token. We stop rather than
+    /// ask anonymously — see AppConfig.userToken for why an unknown identity
+    /// is worse than a failed turn.
+    case noIdentity
 
     var errorDescription: String? {
         switch self {
@@ -38,6 +42,8 @@ enum BackendError: LocalizedError {
             return "Сервер ответил \(code): \(detail)"
         case .notConfigured:
             return "Не задан адрес сервера"
+        case .noIdentity:
+            return "Связка ключей недоступна — не могу узнать, чей это телефон"
         }
     }
 }
@@ -106,23 +112,39 @@ struct DiaryResponse: Decodable {
 struct BackendClient {
     let baseURL: URL
 
+    // MARK: - Who is asking
+    //
+    // Every request carries this phone's token, and identity travels ONLY
+    // here. It used to ride as a `session_id` form field / JSON key, which
+    // meant the caller chose who it was — and an identity the caller chooses
+    // is an identity anyone can borrow. A header also stays out of access
+    // logs, proxy logs and browser history, which a query string does not.
+
+    /// A request with this person's identity attached, or a throw if we can't
+    /// establish who they are. Never falls back to asking anonymously.
+    static func authorized(_ url: URL) throws -> URLRequest {
+        guard let token = AppConfig.shared.userToken else { throw BackendError.noIdentity }
+        var request = URLRequest(url: url)
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        return request
+    }
+
+    private func authorized(_ path: String) throws -> URLRequest {
+        try Self.authorized(baseURL.appendingPathComponent(path))
+    }
+
     /// He dozed off, and someone has come back and tapped. Waking is free and
     /// never refills the day's allowance.
     func wake() async throws {
-        var request = URLRequest(url: baseURL.appendingPathComponent("api/wake"))
+        var request = try authorized("api/wake")
         request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try JSONSerialization.data(
-            withJSONObject: ["session_id": AppConfig.shared.sessionID]
-        )
         request.timeoutInterval = 10
         _ = try? await URLSession.shared.data(for: request)
     }
 
-    /// Send one recorded utterance, get Bob's spoken reply back.
-    func talk(audioFileURL: URL, sessionID: String) async throws -> TalkResponse {
-        let endpoint = baseURL.appendingPathComponent("api/talk")
-        var request = URLRequest(url: endpoint)
+    /// Send one recorded utterance, get his spoken reply back.
+    func talk(audioFileURL: URL) async throws -> TalkResponse {
+        var request = try authorized("api/talk")
         request.httpMethod = "POST"
         // One turn is three round trips end to end — ears (Whisper), brain
         // (Claude), voice (Fish) — and on home Wi-Fi that lands at 8–15 s more
@@ -137,7 +159,6 @@ struct BackendClient {
 
         let audioData = try Data(contentsOf: audioFileURL)
         var body = Data()
-        body.appendFormField(named: "session_id", value: sessionID, boundary: boundary)
         body.appendFileField(named: "audio",
                              filename: "utterance.m4a",
                              contentType: "audio/m4a",
@@ -164,7 +185,7 @@ struct BackendClient {
     /// halfway through telling you about their life should never be shown a
     /// broken screen. The caller treats a thrown error as `enough`.
     func intakeNext(conversation: [IntakeTurn]) async throws -> IntakeQuestion {
-        var request = URLRequest(url: baseURL.appendingPathComponent("api/intake/next"))
+        var request = try authorized("api/intake/next")
         request.httpMethod = "POST"
         request.timeoutInterval = 25
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -188,7 +209,7 @@ struct BackendClient {
     /// His diary about his friend. Cheap and instant unless his memory has
     /// grown since last time, in which case he rewrites it.
     func diary() async throws -> DiaryResponse {
-        var request = URLRequest(url: baseURL.appendingPathComponent("api/diary"))
+        var request = try authorized("api/diary")
         request.timeoutInterval = 15   // he says he can't hear you FAST, not after a minute
         let (data, response) = try await URLSession.shared.data(for: request)
         try Self.check(response, data)
@@ -200,7 +221,7 @@ struct BackendClient {
     private func postJSON<T: Decodable>(_ path: String,
                                         body: [String: String],
                                         timeout: TimeInterval) async throws -> T {
-        var request = URLRequest(url: baseURL.appendingPathComponent(path))
+        var request = try authorized(path)
         request.httpMethod = "POST"
         request.timeoutInterval = timeout
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -303,7 +324,12 @@ enum ConnectionCheck {
     /// and a long wait here teaches nothing.
     static func run() async -> Outcome {
         let url = AppConfig.shared.backendURL.appendingPathComponent("api/health")
-        var request = URLRequest(url: url)
+        // Signed as this phone, so the summary below describes THIS person's
+        // friend rather than whoever the server happens to know about.
+        guard var request = try? BackendClient.authorized(url) else {
+            return .unreachable(ru("Связка ключей недоступна — не могу узнать, чей это телефон.",
+                                   "The Keychain is unavailable — can't tell whose phone this is."))
+        }
         request.timeoutInterval = 8
         request.cachePolicy = .reloadIgnoringLocalCacheData
 

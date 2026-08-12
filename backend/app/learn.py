@@ -67,26 +67,33 @@ _EXTRACTION_SYSTEM = """Ты ведёшь память для тёплого д�
 
 
 async def learn_from_exchange(
-    session_id: str, user_text: str, assistant_text: str
+    user_id: str, user_text: str, assistant_text: str
 ) -> None:
+    """Distil one exchange into ONE person's memory.
+
+    This runs as a background task, after the reply has already been sent, so
+    nothing here can be traced back to a request. `user_id` is carried in
+    explicitly for that reason: there is no ambient "current user" to fall
+    back on, and inventing one would file this conversation under a stranger.
+    """
     if not config.ANTHROPIC_API_KEY:
         return
     try:
-        data = await _extract(user_text, assistant_text)
+        data = await _extract(user_id, user_text, assistant_text)
     except Exception as e:  # never let learning crash the request lifecycle
         print(f"[learn] extraction failed: {e}", file=sys.stderr)
         return
 
     try:
-        await _store(data)
+        await _store(user_id, data)
     except Exception as e:
         print(f"[learn] storing failed: {e}", file=sys.stderr)
 
 
-async def _extract(user_text: str, assistant_text: str) -> dict:
+async def _extract(user_id: str, user_text: str, assistant_text: str) -> dict:
     client = _get_client()
-    known_elder = memory.facts_context("elder") or "(пока ничего)"
-    known_bob = memory.bob_self_context() or "(пока ничего)"
+    known_elder = memory.facts_context(user_id, "elder") or "(пока ничего)"
+    known_bob = memory.bob_self_context(user_id) or "(пока ничего)"
     prompt = (
         f"Что уже известно о ЧЕЛОВЕКЕ (не повторяй это):\n{known_elder}\n\n"
         f"Что уже известно о БОБЕ (не повторяй это):\n{known_bob}\n\n"
@@ -123,15 +130,17 @@ def _parse_json(text: str) -> dict:
     return data if isinstance(data, dict) else {}
 
 
-async def _store(data: dict) -> None:
-    # --- About the elder ---
+async def _store(user_id: str, data: dict) -> None:
+    # --- About the person ---
     for fact in data.get("facts") or []:
         if not isinstance(fact, dict):
             continue
         cat = (fact.get("category") or "прочее").strip()
         val = (fact.get("value") or "").strip()
         if val:
-            memory.add_memory("fact", f"{cat}: {val}", owner="elder", title=cat, importance=2)
+            memory.add_memory(
+                user_id, "fact", f"{cat}: {val}", owner="elder", title=cat, importance=2
+            )
 
     for story in data.get("stories") or []:
         if not isinstance(story, dict):
@@ -140,28 +149,34 @@ async def _store(data: dict) -> None:
         summary = (story.get("summary") or "").strip()
         if summary:
             emb = await _safe_embed(f"{title or ''} {summary}")
-            memory.add_memory("story", summary, owner="elder", title=title, embedding=emb)
+            memory.add_memory(
+                user_id, "story", summary, owner="elder", title=title, embedding=emb
+            )
 
     for note in data.get("health") or []:
         note = (note or "").strip()
         if note:
             emb = await _safe_embed(note)
-            memory.add_memory("health", note, owner="elder", embedding=emb, importance=2)
+            memory.add_memory(
+                user_id, "health", note, owner="elder", embedding=emb, importance=2
+            )
 
     mood = (data.get("mood") or "").strip()
     if mood:
-        memory.add_memory("mood", mood, owner="elder")
+        memory.add_memory(user_id, "mood", mood, owner="elder")
 
     for fup in data.get("follow_ups") or []:
         fup = (fup or "").strip()
         if fup:
-            memory.add_memory("follow_up", fup, owner="elder", status="open", importance=2)
+            memory.add_memory(
+                user_id, "follow_up", fup, owner="elder", status="open", importance=2
+            )
 
-    # --- About Bob himself (consistency) ---
+    # --- About the companion himself (consistency) ---
     for bf in data.get("bob_facts") or []:
         bf = (bf or "").strip()
         if bf:
-            memory.add_memory("fact", bf, owner="bob", importance=2)
+            memory.add_memory(user_id, "fact", bf, owner="bob", importance=2)
 
 
 async def _safe_embed(text: str) -> list[float] | None:

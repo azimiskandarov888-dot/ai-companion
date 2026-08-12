@@ -1,16 +1,27 @@
 """FastAPI app — the voice loop and memory.
 
-Voice only. HE always speaks first (even by launching the app hands-free); Bob
-only ever *responds* — never initiates.
+Voice only. HE always speaks first (even by launching the app hands-free); the
+companion only ever *responds* — never initiates.
 
 Talking loop (with memory + persona):
     audio → 👂 Whisper → [persona + recalled facts/stories/follow-ups/mood]
           → 🧠 Claude → 🗣️ Fish Audio → audio
           → (in the background) learn new memories
 
+── WHO IS TALKING ──────────────────────────────────────────────────────────
+
+Every endpoint that touches a person's life takes `user_id` from the
+`Authorization: Bearer <token>` header, through the `_user` dependency and
+identity.py. It is NEVER taken from the request body, the form, or the query
+string — those are chosen by the caller, and an identity the caller can choose
+is an identity anyone can borrow. The old `session_id` field is gone for
+exactly that reason; clients that still send it are simply ignored, and land
+where a request with no token lands (the anonymous user, i.e. the data that
+existed before multi-user).
+
 Endpoints:
     GET  /            → browser mic test page (a developer tool)
-    GET  /api/health  → which services are configured + memory counts
+    GET  /api/health  → which services are configured + this person's memory
     POST /api/talk    → audio in  → {transcript, reply, audio}   (the real loop)
     POST /api/say     → text in   → {reply, audio}   (dev only: test brain+memory)
     POST /api/companion/create → the user's story + age/gender/origin → the friend
@@ -29,9 +40,17 @@ import traceback
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import (
+    BackgroundTasks,
+    Depends,
+    FastAPI,
+    File,
+    Header,
+    HTTPException,
+    UploadFile,
+)
 from fastapi.responses import FileResponse, JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from . import (
     allowance,
@@ -40,6 +59,7 @@ from . import (
     config,
     db,
     diary,
+    identity,
     intake,
     learn,
     matchmaker,
@@ -55,13 +75,26 @@ from . import (
 @asynccontextmanager
 async def _lifespan(app: FastAPI):
     db.init_db()
-    memory.seed_facts_from_file()  # import data/facts.json if the family provided one
+    # data/facts.json belongs to whoever runs the server, so it seeds the
+    # anonymous user and nobody else.
+    memory.seed_facts_from_file(identity.ANONYMOUS)
     yield
 
 
-app = FastAPI(title="Voice Companion", version="0.3.0", lifespan=_lifespan)
+app = FastAPI(title="Voice Companion", version="0.4.0", lifespan=_lifespan)
 
 _STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
+
+
+def _user(authorization: str | None = Header(default=None)) -> str:
+    """Whose request this is. The ONLY place identity enters the server.
+
+    A missing header is not an error: it means the anonymous user, which is
+    how the browser dev page, curl, and every build that predates the token
+    keep working. See identity.py for why a *malformed* token is never
+    anonymous.
+    """
+    return identity.user_id_from_token(authorization)
 
 
 @app.get("/")
@@ -70,19 +103,25 @@ async def index() -> FileResponse:
 
 
 @app.get("/api/health")
-async def health() -> JSONResponse:
+async def health(user_id: str = Depends(_user)) -> JSONResponse:
     services = config.service_status()
+    p = persona.load_persona(user_id)
     return JSONResponse(
         {
             "ok": True,
-            "companion_name": persona.persona_name(),
+            "companion_name": persona.persona_name(p),
+            # Has THIS person met their friend yet? The app uses it to tell a
+            # fresh phone from one that already has someone waiting — the
+            # question that, answered from a single global persona file, gave
+            # a new phone somebody else's companion.
+            "has_companion": persona.has_persona(user_id),
             "language": config.LANGUAGE,
             "brain_model": config.BRAIN_MODEL,
             "tts_provider": tts.provider_name(),
             "services": services,
             "all_ready": all(services.values()),
-            "memory": memory.counts("elder"),
-            "bob_self_facts": memory.counts("bob").get("fact", 0),
+            "memory": memory.counts(user_id, "elder"),
+            "bob_self_facts": memory.counts(user_id, "bob").get("fact", 0),
         }
     )
 
@@ -115,16 +154,16 @@ def _unavailable(stage: str, error: Exception) -> HTTPException:
 
 
 async def _think_and_speak(
-    session_id: str, user_text: str, background_tasks: BackgroundTasks
+    user_id: str, user_text: str, background_tasks: BackgroundTasks
 ) -> dict[str, str]:
     """Shared path: recall → assemble prompt → reply → speak, then learn."""
-    memory.log_turn(session_id, "user", user_text)
+    memory.log_turn(user_id, "user", user_text)
 
-    # Assemble everything Bob should have in mind.
-    persona_block = persona.build_persona_block()
-    elder_facts = memory.facts_context("elder")
-    bob_facts = memory.bob_self_context()
-    mem_ctx = await memory.build_memory_context(session_id, user_text)
+    # Assemble everything he should have in mind — all of it this person's.
+    persona_block = persona.build_persona_block(persona.load_persona(user_id))
+    elder_facts = memory.facts_context(user_id, "elder")
+    bob_facts = memory.bob_self_context(user_id)
+    mem_ctx = await memory.build_memory_context(user_id, user_text)
 
     # If today is a special date, let Bob mention it warmly — but only in reply
     # to him (he never speaks first).
@@ -140,14 +179,14 @@ async def _think_and_speak(
         persona_block=persona_block,
         # How this person needs to be spoken to, and what must never be
         # joked about. Stable, so it rides in the cached half for free.
-        reading_block=reading.standing_block(reading.load()),
+        reading_block=reading.standing_block(reading.load(user_id)),
         elder_facts=elder_facts,
         bob_facts=bob_facts,
         memory_context=mem_ctx,
         elder_name=config.ELDER_NAME,
     )
 
-    history = memory.recent_turns(session_id)
+    history = memory.recent_turns(user_id)
     reply = await brain.generate_reply(
         history,
         system_stable,
@@ -158,9 +197,9 @@ async def _think_and_speak(
         fresh_info=brain.wants_fresh_info(user_text),
     )
 
-    memory.log_turn(session_id, "assistant", reply)
+    memory.log_turn(user_id, "assistant", reply)
     # Learn from this exchange after the response is sent (keeps the voice fast).
-    background_tasks.add_task(learn.learn_from_exchange, session_id, user_text, reply)
+    background_tasks.add_task(learn.learn_from_exchange, user_id, user_text, reply)
 
     # The mouth is optional. With a voice provider configured (Fish Audio) we
     # return warm spoken audio.
@@ -182,7 +221,7 @@ async def _think_and_speak(
 async def talk(
     background_tasks: BackgroundTasks,
     audio: UploadFile = File(...),
-    session_id: str = Form("default"),
+    user_id: str = Depends(_user),
 ) -> JSONResponse:
     """Full voice loop: audio → transcript → reply → spoken audio."""
     audio_bytes = await audio.read()
@@ -192,7 +231,7 @@ async def talk(
     # Before ANY paid work: has he got the day left, and is he even awake?
     # This is deliberately the first thing that happens — checking after
     # transcribing would already have cost money.
-    verdict = allowance.check(session_id)
+    verdict = allowance.check(user_id)
     if not verdict.allowed:
         return JSONResponse(
             {
@@ -218,16 +257,16 @@ async def talk(
     # Judge whether that sounded like a person before spending on a reply. A
     # room with a television produces a steady trickle of short fragments; a
     # person produces sentences.
-    allowance.note_turn(session_id, transcript)
+    allowance.note_turn(user_id, transcript)
 
     if not transcript:
-        allowance.spend(session_id, time.monotonic() - started)
+        allowance.spend(user_id, time.monotonic() - started)
         return JSONResponse(
             {"transcript": "", "reply": "", "note": "No speech detected."}
         )
 
-    if allowance.is_asleep(session_id):
-        allowance.spend(session_id, time.monotonic() - started)
+    if allowance.is_asleep(user_id):
+        allowance.spend(user_id, time.monotonic() - started)
         return JSONResponse(
             {
                 "transcript": transcript,
@@ -236,29 +275,28 @@ async def talk(
                 "audio_mime": "",
                 "voice": "client",
                 "state": "asleep",
-                "seconds_left": allowance.seconds_left(session_id),
+                "seconds_left": allowance.seconds_left(user_id),
             }
         )
 
     try:
-        result = await _think_and_speak(session_id, transcript, background_tasks)
+        result = await _think_and_speak(user_id, transcript, background_tasks)
     except Exception as e:  # noqa: BLE001
         raise _unavailable("🧠 the brain (Claude) / 🗣️ the voice", e)
 
-    allowance.spend(session_id, time.monotonic() - started)
+    allowance.spend(user_id, time.monotonic() - started)
 
     return JSONResponse(
         {
             "transcript": transcript,
             **result,
-            "seconds_left": allowance.seconds_left(session_id),
+            "seconds_left": allowance.seconds_left(user_id),
         }
     )
 
 
 class SayRequest(BaseModel):
     text: str
-    session_id: str = "default"
     #: Speak the text back EXACTLY, without thinking about it and without
     #: remembering it. Used by the background-voice test, where the question is
     #: only "does his voice come out of a backgrounded app" — a brain round trip
@@ -268,7 +306,11 @@ class SayRequest(BaseModel):
 
 
 @app.post("/api/say")
-async def say(req: SayRequest, background_tasks: BackgroundTasks) -> JSONResponse:
+async def say(
+    req: SayRequest,
+    background_tasks: BackgroundTasks,
+    user_id: str = Depends(_user),
+) -> JSONResponse:
     """Text-in voice loop (skips the ears) — for testing brain + memory + mouth."""
     text = req.text.strip()
     if not text:
@@ -293,62 +335,77 @@ async def say(req: SayRequest, background_tasks: BackgroundTasks) -> JSONRespons
         })
 
     try:
-        result = await _think_and_speak(req.session_id, text, background_tasks)
+        result = await _think_and_speak(user_id, text, background_tasks)
     except Exception as e:  # noqa: BLE001
         raise _unavailable("🧠 the brain (Claude) / 🗣️ the voice", e)
     return JSONResponse({"transcript": text, **result})
 
 
-class WakeRequest(BaseModel):
-    session_id: str = "default"
-
-
 @app.post("/api/wake")
-async def wake(req: WakeRequest) -> JSONResponse:
+async def wake(user_id: str = Depends(_user)) -> JSONResponse:
     """Someone came back and tapped — he opens his eyes.
 
     The daily allowance is NOT reset by this; only the dozing is. Waking him is
     always free.
     """
-    allowance.wake(req.session_id)
+    allowance.wake(user_id)
     return JSONResponse(
-        {"awake": True, "seconds_left": allowance.seconds_left(req.session_id)}
+        {"awake": True, "seconds_left": allowance.seconds_left(user_id)}
     )
 
 
 @app.get("/api/usage")
-async def usage(session_id: str = "default") -> JSONResponse:
+async def usage(user_id: str = Depends(_user)) -> JSONResponse:
     """What this person has used today, and what's left.
 
     Also the honest answer to «how much is this costing me» during the test
     month: seconds x the per-second rate of whichever providers are configured.
+
+    Read from the token, never from a query string — `?session_id=` would have
+    let anyone read anyone's usage, and a limit you can look up for someone
+    else is a limit you can work out how to dodge for yourself.
     """
-    used = allowance.used_today(session_id)
+    used = allowance.used_today(user_id)
     return JSONResponse(
         {
-            "session_id": session_id,
             "seconds_used_today": round(used, 1),
-            "seconds_left_today": allowance.seconds_left(session_id),
+            "seconds_left_today": allowance.seconds_left(user_id),
             "daily_allowance": allowance.SECONDS_PER_DAY,
-            "asleep": allowance.is_asleep(session_id),
+            "asleep": allowance.is_asleep(user_id),
         }
     )
 
 
+# ── Size limits ─────────────────────────────────────────────────────────────
+#
+# Every field below reaches a model, and a model is charged by the character.
+# With one user these caps were pointless; on a shared server an uncapped text
+# field is a bill anybody can run up. The numbers are generous — far past what
+# the app itself can produce — so no real person will ever meet one.
+_MAX_QUESTION = 2_000
+_MAX_ANSWER = 8_000
+_MAX_TURNS = 40          # the intake stops itself at 18; this is the hard floor
+_MAX_STORY = 40_000
+_MAX_WISHES = 4_000
+_MAX_CHIP = 200
+
+
 class IntakeTurn(BaseModel):
-    q: str = ""   # what was asked
-    a: str = ""   # what they answered
+    q: str = Field("", max_length=_MAX_QUESTION)   # what was asked
+    a: str = Field("", max_length=_MAX_ANSWER)     # what they answered
 
 
 class IntakeRequest(BaseModel):
     #: Everything said so far, oldest first. The client holds it: an intake is
     #: one continuous sitting, and half a personal conversation is not
     #: something to resume days later — starting fresh is the kinder default.
-    conversation: list[IntakeTurn] = []
+    conversation: list[IntakeTurn] = Field(default_factory=list, max_length=_MAX_TURNS)
 
 
 @app.post("/api/intake/next")
-async def intake_next(req: IntakeRequest) -> JSONResponse:
+async def intake_next(
+    req: IntakeRequest, user_id: str = Depends(_user)
+) -> JSONResponse:
     """The next question in «пока его нет» — the conversation that replaces
     the blank «расскажите о себе» page. See app/intake.py for the design.
 
@@ -359,9 +416,21 @@ async def intake_next(req: IntakeRequest) -> JSONResponse:
     if not req.conversation:
         return JSONResponse(intake.opening())
 
+    # This is a paid call, so it is metered like every other paid call. On a
+    # server with one person that didn't matter; on a shared one, an endpoint
+    # that spends money without counting is a hole anybody can pour through.
+    # Someone out of allowance is simply told the conversation is finished —
+    # the client already knows how to end gracefully, and what they've said so
+    # far is enough to build a friend from.
+    if not allowance.check(user_id).allowed:
+        return JSONResponse({"say": "", "enough": True})
+
+    started = time.monotonic()
     turns = [t.model_dump() for t in req.conversation]
     try:
-        return JSONResponse(await intake.next_question(turns))
+        result = await intake.next_question(turns)
+        allowance.spend(user_id, time.monotonic() - started)
+        return JSONResponse(result)
     except Exception as e:  # noqa: BLE001
         # A dead question must not strand someone mid-conversation with no way
         # forward. Ending gracefully hands them whatever they've already said,
@@ -374,15 +443,16 @@ async def intake_next(req: IntakeRequest) -> JSONResponse:
 class CreateCompanionRequest(BaseModel):
     #: «Tell your story» — free writing. Still supported, and still how the
     #: browser dev page works, but no longer what the app shows anyone.
-    about: str = ""
+    about: str = Field("", max_length=_MAX_STORY)
     #: The intake conversation (app/intake.py). When present it BECOMES the
     #: story — a dozen natural answers carry far more of a person than a
     #: composed paragraph, which is the whole reason the blank page went.
-    conversation: list[IntakeTurn] = []
-    wishes: str = ""  # «Who would you like to meet?» — free writing, may be empty
-    age: str = ""  # the optional chips that screen offers…
-    gender: str = ""
-    origin: str = ""  # …never a name: he arrives with his own.
+    conversation: list[IntakeTurn] = Field(default_factory=list, max_length=_MAX_TURNS)
+    #: «Who would you like to meet?» — free writing, may be empty
+    wishes: str = Field("", max_length=_MAX_WISHES)
+    age: str = Field("", max_length=_MAX_CHIP)  # the optional chips that screen offers…
+    gender: str = Field("", max_length=_MAX_CHIP)
+    origin: str = Field("", max_length=_MAX_CHIP)  # …never a name: he arrives with his own.
 
     def story(self) -> str:
         spoken = intake.as_story([t.model_dump() for t in self.conversation])
@@ -393,7 +463,9 @@ class CreateCompanionRequest(BaseModel):
 
 
 @app.post("/api/companion/create")
-async def companion_create(req: CreateCompanionRequest) -> JSONResponse:
+async def companion_create(
+    req: CreateCompanionRequest, user_id: str = Depends(_user)
+) -> JSONResponse:
     """From the user's own words, and whatever they asked for, the friend walks in.
 
     They may describe him as much or as little as they like — including not at
@@ -405,8 +477,20 @@ async def companion_create(req: CreateCompanionRequest) -> JSONResponse:
         raise HTTPException(
             status_code=400, detail="Расскажите о себе — хоть немного."
         )
+
+    # By some distance the most expensive thing the server does — the deepest
+    # model, real thinking time, then two more calls — and until multi-user it
+    # was completely unmetered. A person meeting their friend has spent
+    # nothing yet and will never see this; someone hammering the endpoint will
+    # see it immediately.
+    verdict = allowance.check(user_id)
+    if not verdict.allowed:
+        raise HTTPException(status_code=429, detail=verdict.reason)
+
+    started = time.monotonic()
     try:
         p = await matchmaker.create_companion(
+            user_id,
             req.about,
             wishes=req.wishes.strip(),
             age=req.age.strip(),
@@ -415,34 +499,42 @@ async def companion_create(req: CreateCompanionRequest) -> JSONResponse:
         )
     except Exception as e:  # noqa: BLE001
         raise _unavailable("🧠 writing him (Claude)", e)
+    finally:
+        allowance.spend(user_id, time.monotonic() - started)
     return JSONResponse({"name": p.get("name"), "persona": p})
 
 
 @app.get("/api/diary")
-async def companion_diary() -> JSONResponse:
+async def companion_diary(user_id: str = Depends(_user)) -> JSONResponse:
     """His diary — the beautifully written book about his friend.
 
     This is the ONLY memory view users ever see; the raw distilled memory
     below stays internal.
     """
     try:
-        return JSONResponse(await diary.get_diary())
+        return JSONResponse(await diary.get_diary(user_id))
     except Exception as e:  # noqa: BLE001
         raise _unavailable("📖 the diary (Claude)", e)
 
 
 @app.get("/api/memory")
-async def memory_dump() -> JSONResponse:
-    """Raw distilled memory — internal/dev inspection only, never shown in the app."""
+async def memory_dump(user_id: str = Depends(_user)) -> JSONResponse:
+    """Raw distilled memory — internal/dev inspection only, never shown in the app.
+
+    Scoped to the caller. It used to `SELECT ... FROM memories` with no WHERE
+    at all, which on a server with more than one person on it is a single
+    unauthenticated GET that returns everybody's private life.
+    """
     with db.connect() as conn:
         rows = conn.execute(
             "SELECT owner, kind, title, content, status, recall_count, created_ts "
-            "FROM memories ORDER BY created_ts DESC LIMIT 200"
+            "FROM memories WHERE user_id=? ORDER BY created_ts DESC LIMIT 200",
+            (user_id,),
         ).fetchall()
     return JSONResponse(
         {
-            "elder": memory.counts("elder"),
-            "bob": memory.counts("bob"),
+            "elder": memory.counts(user_id, "elder"),
+            "bob": memory.counts(user_id, "bob"),
             "memories": [dict(r) for r in rows],
         }
     )

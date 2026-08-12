@@ -108,7 +108,9 @@
       const hint = document.getElementById("hint");
       const micBtn = document.getElementById("mic");
       const statusEl = document.getElementById("status");
-      const SESSION_ID = "test";
+      // No token: this dev page is deliberately the ANONYMOUS user (see
+      // app/identity.py). Identity now travels in an Authorization header
+      // and nowhere else, so there is nothing here to set.
 
       function addMsg(who, label, text) {
         const el = document.createElement("div");
@@ -191,7 +193,7 @@
           const r = await fetch("/api/say", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ text, session_id: SESSION_ID }),
+            body: JSON.stringify({ text }),
           });
           const data = await r.json();
           if (!r.ok) throw new Error(data.detail || "Ошибка");
@@ -252,7 +254,6 @@
       async function sendAudio(blob) {
         const form = new FormData();
         form.append("audio", blob, "audio.webm");
-        form.append("session_id", SESSION_ID);
         try {
           const r = await fetch("/api/talk", { method: "POST", body: form });
           const data = await r.json();

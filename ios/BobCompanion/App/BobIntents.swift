@@ -149,14 +149,13 @@ enum BackgroundVoice {
     /// One turn through the backend. `asRawText` sends the line to be spoken
     /// verbatim rather than answered — used by the fixed-line test.
     static func ask(_ text: String, asRawText: Bool = false) async throws -> Reply {
-        var request = URLRequest(
-            url: AppConfig.shared.backendURL.appendingPathComponent("api/say")
+        var request = try BackendClient.authorized(
+            AppConfig.shared.backendURL.appendingPathComponent("api/say")
         )
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONSerialization.data(withJSONObject: [
             "text": text,
-            "session_id": AppConfig.shared.sessionID,
             "verbatim": asRawText,
         ])
         // Short: a background intent does not get long to live, and a hang here

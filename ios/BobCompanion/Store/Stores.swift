@@ -185,6 +185,49 @@ final class AppState: ObservableObject {
         wishes = ""; companionName = ""; hasArrived = false
     }
 
+    /// The server is the one that actually holds the friend, so it is the one
+    /// that knows whether there is one. This phone only remembers that
+    /// onboarding FINISHED — which stops being the same question the moment
+    /// the two can disagree, and they now can:
+    ///
+    ///   · this build sends a token, so the server looks this person up
+    ///     properly instead of handing everyone the one persona it had;
+    ///   · a phone that finished onboarding before tokens existed has no
+    ///     friend under its new id;
+    ///   · someone could point the app at a different server entirely.
+    ///
+    /// In all three the phone would open straight to a companion screen and
+    /// talk to the built-in template character — the 87-year-old by the sea
+    /// with the cat Мурзик — which is precisely the "borrowed life" this whole
+    /// design exists to prevent. So when the server says there is nobody, the
+    /// app goes back to «кого бы вы хотели встретить», the same place «Начать
+    /// заново» leads, and they meet someone who is actually theirs.
+    ///
+    /// It ONLY ever acts on a clear "no". An unreachable server, a timeout, a
+    /// wrong address — anything short of the server plainly saying it has no
+    /// companion for this person — changes nothing. Losing your friend to a
+    /// dropped Wi-Fi packet would be far worse than the problem this solves.
+    func reconcileWithServer() async {
+        guard hasArrived else { return }
+        guard
+            var request = try? BackendClient.authorized(
+                AppConfig.shared.backendURL.appendingPathComponent("api/health")
+            )
+        else { return }
+        request.timeoutInterval = 10
+        request.cachePolicy = .reloadIgnoringLocalCacheData
+
+        guard
+            let (data, response) = try? await URLSession.shared.data(for: request),
+            let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode),
+            let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+            let hasCompanion = json["has_companion"] as? Bool,
+            hasCompanion == false
+        else { return }
+
+        startOver()
+    }
+
     /// A fallback so a screen never has to say "his name" out loud before he
     /// has arrived.
     var displayName: String {

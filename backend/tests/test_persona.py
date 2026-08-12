@@ -4,11 +4,15 @@ from __future__ import annotations
 
 import json
 
-from app import config, persona
+from app import config, identity, persona
+
+#: These tests write straight to config.PERSONA_PATH, which is the anonymous
+#: user's file — so that is who they are about.
+U = identity.ANONYMOUS
 
 
 def test_default_persona_when_no_file():
-    p = persona.load_persona()
+    p = persona.load_persona(U)
     assert p is persona.DEFAULT_PERSONA
     assert p["name"]
 
@@ -26,7 +30,7 @@ def test_persona_loaded_from_file_is_taken_as_saved():
         ),
         encoding="utf-8",
     )
-    p = persona.load_persona()
+    p = persona.load_persona(U)
     assert p["name"] == "Гриша"
     # A saved character is NEVER topped up from the default template. A field
     # he doesn't have simply isn't there — the block builder skips it. This is
@@ -47,7 +51,7 @@ def test_build_persona_block_contains_key_fields():
         ),
         encoding="utf-8",
     )
-    block = persona.build_persona_block()
+    block = persona.build_persona_block(persona.load_persona(U))
     assert "Гриша" in block
     assert "городок в горах" in block
     assert "Пётр" in block
@@ -55,13 +59,13 @@ def test_build_persona_block_contains_key_fields():
 
 
 def test_default_block_uses_ty_address():
-    block = persona.build_persona_block()
+    block = persona.build_persona_block(persona.load_persona(U))
     assert "«ты»" in block
 
 
 def test_invalid_persona_file_falls_back(monkeypatch):
     config.PERSONA_PATH.write_text("{ not valid json", encoding="utf-8")
-    p = persona.load_persona()
+    p = persona.load_persona(U)
     assert p is persona.DEFAULT_PERSONA
 
 
@@ -73,17 +77,17 @@ def test_save_never_borrows_from_the_template():
     template's life — the sea, Мурзик, the café. Three different characters,
     one identical cat. A created character must contain ONLY what was created.
     """
-    saved = persona.save_persona({"name": "Зоя", "age": "31 год", "home": "северный город"})
+    saved = persona.save_persona(U, {"name": "Зоя", "age": "31 год", "home": "северный город"})
     assert saved["name"] == "Зоя"
     for field in ("likes", "habits", "cast", "backstory"):
         assert field not in saved
 
     # …and it stays clean through a reload.
-    loaded = persona.load_persona()
+    loaded = persona.load_persona(U)
     assert loaded["name"] == "Зоя"
     assert "cast" not in loaded
 
     # The block builder is happy with the gaps: no cat is mentioned anywhere.
-    block = persona.build_persona_block()
+    block = persona.build_persona_block(persona.load_persona(U))
     assert "Зоя" in block
     assert "Мурзик" not in block

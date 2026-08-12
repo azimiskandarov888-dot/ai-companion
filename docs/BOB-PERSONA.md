@@ -257,12 +257,14 @@ family decides it):
 - `backend/app/companion.py` — the **stable** behavior: warmth, the "third way"
   honesty (never confess to being a machine, never claim to be human), and the
   safety guardrails from §9. Enforced and unit-tested.
-- `backend/app/persona.py` + `backend/data/persona.json` — **WHO Bob is, as
+- `backend/app/persona.py` + each person's `persona.json` — **WHO he is, as
   editable data.** Change his name, home, story, cast, habits anytime by editing
   the JSON — no code changes. (`data/persona.example.json` is the template.)
+  One file per person: `data/persona.json` with no token,
+  `data/users/<id>/persona.json` otherwise — see docs/MANY-PEOPLE.md.
 - `backend/app/memory.py` — the `owner='bob'` scope gives Bob a **self-memory**
   so improvised details stay consistent (§8).
 - **Still to build:** the daily *life-state* simulation (§7 — moods + ongoing
   threads that evolve day to day). For now, the editable `current_life` field in
-  `persona.json` holds "what's going on in Bob's life."
+  his `persona.json` holds "what's going on in his life."
 - Referenced from `docs/BUILD-PLAN.md` (§2) and `docs/VISION.md`.

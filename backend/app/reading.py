@@ -60,7 +60,7 @@ from __future__ import annotations
 
 import json
 
-from . import brain, config
+from . import brain, config, identity
 
 # ── The method ──────────────────────────────────────────────────────────────
 
@@ -173,17 +173,23 @@ async def read_person(about: str, wishes: str = "") -> dict:
     return _extract_json(raw)
 
 
-def save(data: dict, path=None) -> dict:
+def save(user_id: str, data: dict) -> dict:
     """Keep the reading. It outlives any one companion — a new friend doesn't
-    make the person a different person, so «Начать заново» leaves it alone."""
-    path = path or config.READING_PATH
+    make the person a different person, so «Начать заново» leaves it alone.
+
+    One file per person (identity.reading_path). This is the most private
+    thing the app holds — a stranger's honest read of someone's inner life —
+    so `user_id` is required and has no default. There is no code path here
+    that can write one person's reading into another person's folder.
+    """
+    path = identity.reading_path(user_id)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
     return data
 
 
-def load(path=None) -> dict | None:
-    path = path or config.READING_PATH
+def load(user_id: str) -> dict | None:
+    path = identity.reading_path(user_id)
     if path and path.exists():
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
@@ -203,7 +209,7 @@ def standing_block(reading: dict | None) -> str:
     turn is what a person remembers. It rides in the STABLE half of the system
     prompt, so it is cached and costs almost nothing after the first turn.
 
-    Takes the reading explicitly (callers pass `load()`), because a default
+    Takes the reading explicitly (callers pass `load(user_id)`), because a default
     that loaded from disk made `standing_block(None)` mean two opposite
     things — "there is no reading" and "go find one" — and silently returned
     a block for a caller that had just established there wasn't one.

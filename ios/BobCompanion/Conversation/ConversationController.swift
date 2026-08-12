@@ -108,10 +108,7 @@ final class ConversationController: ObservableObject {
 
         status = .thinking
         do {
-            let response = try await client.talk(
-                audioFileURL: fileURL,
-                sessionID: AppConfig.shared.sessionID
-            )
+            let response = try await client.talk(audioFileURL: fileURL)
             Trouble.shared.clear()   // a turn got through; whatever it was, it's past
 
             // The server decides whether he answers, and it has already
