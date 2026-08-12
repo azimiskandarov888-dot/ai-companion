@@ -43,6 +43,7 @@ Fish Audio's speech-to-text doesn't support Russian (see stt.py).
 from __future__ import annotations
 
 import re
+import sys
 
 import httpx
 
@@ -274,29 +275,76 @@ async def _synthesize_openai(text: str) -> bytes:
         return resp.content
 
 
-async def _synthesize_yandex(text: str) -> bytes:
-    """Yandex SpeechKit. Form-encoded, not JSON. Returns MP3 bytes."""
-    headers = {"Authorization": f"Api-Key {config.YANDEX_API_KEY}"}
-    data = {
-        "text": text,
-        "lang": "ru-RU",
-        "voice": config.YANDEX_VOICE,
-        "speed": config.YANDEX_SPEED,
-        "format": "mp3",
-        "folderId": config.YANDEX_FOLDER_ID,
-    }
-    # Not every voice accepts an emotion, and sending one to a voice that
-    # doesn't is an error rather than a shrug — so it stays optional.
-    if config.YANDEX_EMOTION:
-        data["emotion"] = config.YANDEX_EMOTION
+#: Set once, the first time a voice turns out not to accept an emotion, so the
+#: retry below happens once rather than on every sentence he speaks.
+_yandex_drop_emotion = False
 
+
+async def _synthesize_yandex(text: str) -> bytes:
+    """Yandex SpeechKit. Form-encoded, not JSON. Returns MP3 bytes.
+
+    Emotion is the one fiddly part. Some voices take `good | evil | neutral`
+    and some — the `:premium` ones especially — reject the parameter outright
+    with a 400. Sending it is worth it when it works, and a config detail must
+    never be the reason a lonely person's friend goes silent, so a rejection
+    retries once without it and remembers.
+    """
+    global _yandex_drop_emotion
+
+    def form(with_emotion: bool) -> dict:
+        data = {
+            "text": text,
+            "lang": "ru-RU",
+            "voice": config.YANDEX_VOICE,
+            "speed": config.YANDEX_SPEED,
+            "format": "mp3",
+            "folderId": config.YANDEX_FOLDER_ID,
+        }
+        if with_emotion and config.YANDEX_EMOTION:
+            data["emotion"] = config.YANDEX_EMOTION
+        return data
+
+    headers = {"Authorization": f"Api-Key {config.YANDEX_API_KEY}"}
     async with httpx.AsyncClient(timeout=60.0) as http:
-        resp = await http.post(_YANDEX_TTS_URL, headers=headers, data=data)
+        resp = await http.post(
+            _YANDEX_TTS_URL, headers=headers, data=form(not _yandex_drop_emotion)
+        )
+
+        if resp.status_code == 400 and not _yandex_drop_emotion and config.YANDEX_EMOTION:
+            print(
+                f"\n  ℹ voice {config.YANDEX_VOICE!r} doesn't take an emotion — "
+                "speaking without one from now on.\n"
+                "    Set YANDEX_EMOTION= (empty) in backend/.env to silence this.\n",
+                file=sys.stderr,
+                flush=True,
+            )
+            _yandex_drop_emotion = True
+            resp = await http.post(_YANDEX_TTS_URL, headers=headers, data=form(False))
+
         if resp.status_code != 200:
             raise RuntimeError(
                 f"Yandex SpeechKit failed ({resp.status_code}): {resp.text[:300]}"
+                + _yandex_hint(resp.status_code)
             )
         return resp.content
+
+
+def _yandex_hint(status: int) -> str:
+    """Turn Yandex's terse HTTP codes into the thing you actually have to go
+    and fix. Every one of these has cost somebody an evening."""
+    if status in (401, 403):
+        return (
+            "\n    → the API key is wrong, or its service account is missing the "
+            "role ai.speechkit-tts.user"
+        )
+    if status == 400:
+        return (
+            "\n    → usually YANDEX_FOLDER_ID is missing or wrong, or the voice "
+            "name doesn't exist (see docs/HIS-VOICE.md)"
+        )
+    if status == 429:
+        return "\n    → too many requests at once, or the billing account is out of credit"
+    return ""
 
 
 async def _synthesize_elevenlabs(text: str) -> bytes:

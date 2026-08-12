@@ -49,6 +49,142 @@ trusting your memory of the third one.
 
 ---
 
+## 1b · "Can't I just self-host it and pay nothing?"
+
+Mostly no, and the exceptions are not the ones you'd expect.
+
+| | self-host? |
+|---|---|
+| **ElevenLabs** | **No.** Closed weights, API only. There is nothing to host. |
+| **Yandex SpeechKit** | **No.** Cloud only. |
+| **OpenAI** | **No.** |
+| **Fish Audio** | **Not usefully.** The weights on HuggingFace are `openaudio-s1-mini` — the small 0.5B distilled model, under **CC-BY-NC-SA-4.0, which is non-commercial**. The full S1 (4B, the one you're actually paying for) is cloud-only. Real self-hosting is an Enterprise contract with them. |
+
+So "self-hosting ElevenLabs" and "self-hosting the Fish voice you picked" are
+not things that exist. Nothing you can download is the voice you heard.
+
+### Two things people get wrong about the economics
+
+**Self-hosting is not free — it moves the cost from per-word to per-month.** A
+neural TTS model wants a GPU, and a rented GPU is roughly €150–200/month
+*whether or not anyone speaks*. At Yandex standard rates that same money buys
+around 500 hours of speech a month. So a GPU only starts winning past roughly
+50 heavy users. With two phones on it, renting a GPU costs about twenty times
+more than the API.
+
+**The one that IS free is a CPU model.** [Silero](https://github.com/snakers4/silero-models)
+is made by a Russian team, is Russian-first (v5 does automatic stress placement
+and homograph resolution, which is exactly what makes synthetic Russian sound
+wrong), and runs fast on plain CPU — the same €4–8/month box the backend was
+already going to live on. Licensing is the catch and it is worth reading
+carefully: the repository is CC-BY-NC (non-commercial), **but the
+`v5_cis_base` and `v5_cis_base_nostress` models are MIT**, which is the only
+combination here that is both free to run and legal in a paid app.
+
+Quality is a step below Yandex premium. It is the right escape hatch — if
+Yandex ever becomes unreachable or unaffordable, this is where to go — and the
+wrong place to start.
+
+**Start on Yandex.** It is cheap enough that self-hosting cannot pay for itself
+until there are a lot of people using this, and by then the decision will be
+made with real numbers instead of guesses.
+
+---
+
+## 1c · Setting up Yandex, step by step
+
+You need a Yandex account and a card. Budget about fifteen minutes. Nothing
+here involves writing code.
+
+**1. Sign in to the console.** Go to <https://console.yandex.cloud> and sign in
+with your Yandex account.
+
+**2. Set up billing.** It will ask you to create a billing account and attach a
+card. There is a trial grant, so the first while is free. Speech synthesis is
+billed per character — for testing, this is pennies.
+
+**3. Find your folder ID.** On the console home page you'll see a cloud with a
+folder inside it, usually called `default`. Click it. The folder ID is on that
+page, near the top — a string like `b1gc1t4cb638xxxxxxxx`. **Copy it.**
+
+**4. Make a service account.** In the left menu of that folder, open
+**Identity and Access Management → Service accounts → Create service account**.
+
+- Name it `speechkit-sa`
+- Click **Add role** and choose **`ai.speechkit-tts.user`**
+- Click **Create**
+
+**5. Make an API key.** Click the service account you just made. Find the
+**API keys** section → **Create API key** → choose the SpeechKit / general
+scope if it offers one → **Create**.
+
+> The key is shown **once**. Copy it now. If you lose it, delete it and make
+> another — no harm done.
+
+**6. Put both into `backend/.env`.** Open that file and add three lines:
+
+```ini
+TTS_PROVIDER=yandex
+YANDEX_API_KEY=<the key from step 5>
+YANDEX_FOLDER_ID=<the folder id from step 3>
+```
+
+Leave `FISH_API_KEY` where it is. Nothing removes it, and switching back is one
+word (`TTS_PROVIDER=fish`).
+
+**7. Restart the server** — stop `./run.sh` with `Ctrl-C` and start it again.
+The `.env` file is only read at startup.
+
+**8. Listen before you commit to a voice:**
+
+```bash
+cd backend
+python3 audition.py --yandex
+```
+
+That speaks the same sentence in each of the male voices, best first, and
+saves the files so you can compare again tomorrow. Put the winner in `.env`:
+
+```ini
+YANDEX_VOICE=filipp:premium
+```
+
+### The voices
+
+Male: `filipp` · `zahar` · `ermil` · `anton` — add `:premium` to any of them
+(e.g. `filipp:premium`) for the noticeably better model, at double the price
+that is still cheaper than everyone else's standard tier.
+Female: `alena` · `jane` · `oksana` · `omazh`.
+
+`YANDEX_SPEED=0.95` is set slightly under 1.0 on purpose — kinder to an older
+listener. `YANDEX_EMOTION` can be `good`, `evil` or `neutral`, but not every
+voice accepts it; if the voice you pick rejects it, the server says so once in
+the terminal and simply speaks without it rather than going silent.
+
+### If something goes wrong
+
+The terminal names it. `401`/`403` means the API key is wrong or the service
+account is missing `ai.speechkit-tts.user`. `400` almost always means
+`YANDEX_FOLDER_ID` is missing or the voice name doesn't exist. `429` means too
+many requests at once, or the billing account has run out.
+
+### If Yandex won't take your card
+
+It happens outside Russia and Kazakhstan. The fallback is **OpenAI**, using the
+key you already have for the ears — about $0.71 an hour, still less than half
+of Fish:
+
+```ini
+TTS_PROVIDER=openai
+OPENAI_VOICE=ash
+```
+
+`OPENAI_VOICE_STYLE` in `config.py` is where his warmth is set: it takes a
+plain-language direction for *how* to speak, not just what to say, and it is
+the single most powerful knob on that provider.
+
+---
+
 ## 2 · Why he answers faster
 
 A turn used to be three waits laid end to end:
