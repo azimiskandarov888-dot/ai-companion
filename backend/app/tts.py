@@ -1,13 +1,39 @@
 """The mouth: text-to-speech.
 
-Three providers, chosen by config.TTS_PROVIDER:
-  - "fish"       Fish Audio — open-weight, fast, good Russian. Default.
-  - "openai"     OpenAI — same key as the ears, same price as Fish, speaks
-                 Russian, and reachable where fish.audio is not.
-  - "yandex"     Yandex SpeechKit — Russian voices made for Russian. Best
-                 prosody of the lot on Russian text, and cheap.
+Four providers, chosen by config.TTS_PROVIDER:
+  - "yandex"     Yandex SpeechKit — Russian voices made BY Russians for
+                 Russian. Best prosody of the lot on Russian text, and by some
+                 distance the cheapest for it. The right default for this app.
+  - "openai"     OpenAI — same key as the ears, takes a plain-language
+                 direction for HOW to speak, and reachable where the others
+                 are not.
+  - "fish"       Fish Audio — excellent model, but see the cost note below
+                 before choosing it for Russian.
   - "elevenlabs" ElevenLabs — warmest, and several times the price.
-Both return MP3 bytes, so the rest of the app doesn't care which spoke.
+All return MP3 bytes, so the rest of the app doesn't care which spoke.
+
+── WHAT RUSSIAN ACTUALLY COSTS ─────────────────────────────────────────────
+
+Every published price for these is quoted per CHARACTER or per "1M UTF-8
+bytes", and for English those are the same number. For Russian they are not:
+Cyrillic is TWO bytes per character in UTF-8, so a provider that bills bytes
+charges exactly double its advertised rate for this app, on every single
+sentence, forever.
+
+    Yandex   standard   ~600 ₽ / 1M chars     ← cheapest, and Russian-native
+    Yandex   premium   ~1200 ₽ / 1M chars
+    OpenAI   gpt-4o-mini-tts   ~$12–15 / 1M chars
+    Fish     s1 / s2-pro       $15 / 1M BYTES = ~$30 / 1M Russian chars
+    ElevenLabs                 several times all of the above
+
+An hour of speech is roughly 55 000 characters. A person using their full
+daily allowance is on the order of 1.5M characters a month — which is about
+$45 on Fish and about $11 on Yandex standard. That is the difference between
+the voice eating the subscription and the voice being a rounding error.
+
+None of this is a reason to avoid Fish if it sounds better to the person who
+has to listen to it. It is a reason to KNOW, and to audition the cheap one
+first (`python3 audition.py --compare`).
 
 If no provider is configured, main.py falls back to letting the client speak
 with its own free voice (the MVP path). The EARS stay on Whisper regardless —
@@ -15,6 +41,8 @@ Fish Audio's speech-to-text doesn't support Russian (see stt.py).
 """
 
 from __future__ import annotations
+
+import re
 
 import httpx
 
@@ -24,6 +52,114 @@ _FISH_API_URL = "https://api.fish.audio/v1/tts"
 _ELEVENLABS_API_BASE = "https://api.elevenlabs.io/v1/text-to-speech"
 _OPENAI_TTS_URL = "https://api.openai.com/v1/audio/speech"
 _YANDEX_TTS_URL = "https://tts.api.cloud.yandex.net/speech/v1/tts:synthesize"
+
+
+# --------------------------------------------------------------------------- #
+# Cutting a reply into things worth speaking one at a time
+# --------------------------------------------------------------------------- #
+#
+# THE POINT OF THIS SECTION, since it is the whole latency story:
+#
+# A turn used to be strictly serial — hear it all, think it all, say it all,
+# THEN send it. The listener sat through the sum of three waits. Cut the reply
+# at sentence boundaries and the three overlap: the first sentence is being
+# spoken out loud while the second is still being written.
+#
+# The seams land where a person would draw breath anyway, which is why this
+# works with plain MP3 files played back to back and needs no gapless audio
+# engine, no WebSocket, and no provider-specific streaming protocol. It works
+# identically on all four providers — which matters a great deal, because
+# binding the app to one provider's live API is exactly how you end up unable
+# to leave the expensive one.
+
+#: The first chunk is cut as early as a sentence allows, however short — it is
+#: the entire win, and «Доброе утро.» arriving in one second is worth more than
+#: a perfectly balanced paragraph arriving in five.
+FIRST_CHUNK_MIN = 10
+#: And after that, near enough the same. The floor was 90 at first, on the
+#: reasoning that a short chunk is a wasted round trip — which was measurably
+#: wrong. A high floor makes the SECOND piece swallow the whole rest of the
+#: reply, and the rest of the reply cannot exist until it has been written, so
+#: he says «Доброе утро.» and then stops for a second and a half. The round
+#: trip a low floor costs is paid while the previous sentence is still being
+#: spoken aloud, where nobody can hear it; the gap a high floor costs happens
+#: in the middle of him talking, where everybody can.
+#:
+#: Synthesising a sentence at a time does cost a little prosody — the voice
+#: can't lean across a full stop it hasn't seen. Against a silence in the
+#: middle of a sentence, that is a trade worth making.
+LATER_CHUNK_MIN = 12
+#: One enormous sentence would defeat the whole thing, so past this length we
+#: cut at a comma or a dash — places a speaker would pause anyway.
+CHUNK_MAX = 220
+
+#: Greedy on purpose: matches through the LAST sentence-ending punctuation that
+#: has something after it, so several finished sentences go to the voice in one
+#: call rather than one round trip each.
+_COMPLETE_SENTENCES = re.compile(r"^.*[.!?…]+(?=\s)", re.DOTALL)
+#: Where it is acceptable to break a sentence that has run too long, best first.
+_SOFT_BREAKS = (" — ", "; ", ", ", " – ", " - ")
+
+
+def ready_split(text: str, *, first: bool) -> int:
+    """How much of this HALF-WRITTEN reply is finished enough to speak now.
+
+    Returns a character count, or 0 for "nothing yet — wait for more". The
+    answer is only ever allowed to grow, which is what makes this safe to use
+    on a reply that is still arriving: once a piece has been handed to the
+    voice it can never be revised, because it may already have been heard.
+
+    A sentence counts as finished only when something FOLLOWS its full stop.
+    That costs one token of waiting and buys the difference between «Ну.» and
+    «Ну. Здравствуй.» — and it is what stops «т. д.» being spoken as two
+    sentences.
+    """
+    floor = FIRST_CHUNK_MIN if first else LATER_CHUNK_MIN
+
+    match = _COMPLETE_SENTENCES.search(text)
+    if match and len(match.group(0).strip()) >= floor:
+        return match.end()
+
+    # No finished sentence yet. If it has run very long, break at a pause a
+    # speaker would take anyway — otherwise one rambling sentence holds up the
+    # entire reply and streaming has bought nothing.
+    if len(text) > CHUNK_MAX:
+        cut = max(
+            (text.rfind(sep, 0, CHUNK_MAX) + len(sep) for sep in _SOFT_BREAKS),
+            default=-1,
+        )
+        if cut > floor:
+            return cut
+    return 0
+
+
+def speakable_chunks(text: str) -> list[str]:
+    """Cut a FINISHED reply into pieces that can each be spoken on their own.
+
+    The batch form of `ready_split`, built on it so the two can never drift
+    apart. Guarantees: every character survives, in order; no chunk is empty;
+    the first chunk is as early as the first sentence allows.
+    """
+    chunks: list[str] = []
+    rest = text.strip()
+    while rest:
+        cut = ready_split(rest, first=not chunks)
+        if not cut:
+            break
+        piece = rest[:cut].strip()
+        if piece:
+            chunks.append(piece)
+        rest = rest[cut:].lstrip()
+
+    if rest:
+        # The final sentence has no whitespace after it, so it always lands
+        # here. A tail too short to stand alone joins the piece before it
+        # rather than becoming a lone «Да.» after a pause.
+        if chunks and len(rest) < LATER_CHUNK_MIN:
+            chunks[-1] = f"{chunks[-1]} {rest}"
+        else:
+            chunks.append(rest)
+    return chunks
 
 
 def configured() -> bool:

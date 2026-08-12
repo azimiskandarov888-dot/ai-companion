@@ -19,11 +19,33 @@ struct TalkResponse: Decodable {
     let state: String?
     /// Seconds of conversation left today, as the server counts them.
     let secondsLeft: Int?
+    /// True when he was already spoken aloud piece by piece as he thought, so
+    /// there is nothing left for the caller to play. Never sent by the server —
+    /// it is how the streaming path reports itself back through the same type.
+    var spokenAsHeThought: Bool = false
 
     enum CodingKeys: String, CodingKey {
         case transcript, reply, note, state
         case audioBase64 = "audio_base64"
         case audioMime = "audio_mime"
+        case secondsLeft = "seconds_left"
+    }
+}
+
+/// One line of the streaming reply (`application/x-ndjson`). See the wire
+/// format documented in backend/app/main.py.
+private struct TalkEvent: Decodable {
+    let kind: String
+    let transcript: String?
+    let text: String?
+    let audioBase64: String?
+    let reply: String?
+    let detail: String?
+    let secondsLeft: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case kind, transcript, text, reply, detail
+        case audioBase64 = "audio_base64"
         case secondsLeft = "seconds_left"
     }
 }
@@ -142,16 +164,37 @@ struct BackendClient {
         _ = try? await URLSession.shared.data(for: request)
     }
 
-    /// Send one recorded utterance, get his spoken reply back.
-    func talk(audioFileURL: URL) async throws -> TalkResponse {
+    /// The wire format that lets him start speaking before he has finished
+    /// thinking. One JSON object per line — see backend/app/main.py.
+    private static let ndjson = "application/x-ndjson"
+
+    /// Send one recorded utterance and hear him answer.
+    ///
+    /// `onPiece` is handed each fragment of audio the moment it exists, in
+    /// order, WHILE the rest of his reply is still being written. That is the
+    /// whole point: the turn used to be three waits laid end to end — hear it
+    /// all, think it all, say it all — and the listener sat through the sum.
+    ///
+    /// The server may decline to stream (out of allowance, dozing, or a
+    /// question that needs a web search), in which case this quietly falls
+    /// back to reading one whole JSON reply. Both come back as a TalkResponse,
+    /// so the caller has one shape to handle either way.
+    func talk(
+        audioFileURL: URL,
+        onPiece: @escaping (Data) async -> Void
+    ) async throws -> TalkResponse {
         var request = try authorized("api/talk")
         request.httpMethod = "POST"
         // One turn is three round trips end to end — ears (Whisper), brain
-        // (Claude), voice (Fish) — and on home Wi-Fi that lands at 8–15 s more
-        // often than it looks like it should. At 15 s a perfectly healthy turn
-        // times out, and a timeout is indistinguishable on screen from him not
+        // (Claude), voice — and on home Wi-Fi that lands at 8–15 s more often
+        // than it looks like it should. At 15 s a perfectly healthy turn times
+        // out, and a timeout is indistinguishable on screen from him not
         // hearing you. Better a long think than a false «не слышит».
+        //
+        // On the streaming path this is the gap BETWEEN pieces, not the length
+        // of the whole turn, so it is generous even for a long reply.
         request.timeoutInterval = 30
+        request.setValue(Self.ndjson, forHTTPHeaderField: "Accept")
 
         let boundary = "Boundary-\(UUID().uuidString)"
         request.setValue("multipart/form-data; boundary=\(boundary)",
@@ -165,16 +208,83 @@ struct BackendClient {
                              fileData: audioData,
                              boundary: boundary)
         body.appendClosingBoundary(boundary)
+        request.httpBody = body
 
-        // upload(for:from:) uses `body` as the request body.
-        let (data, response) = try await URLSession.shared.upload(for: request, from: body)
+        // bytes(for:) — not upload(for:from:) — because only this one hands the
+        // response back as it arrives instead of when it is complete.
+        let (stream, response) = try await URLSession.shared.bytes(for: request)
+        let http = response as? HTTPURLResponse
 
-        if let http = response as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
-            let detail = String(data: data, encoding: .utf8) ?? ""
-            throw BackendError.badStatus(http.statusCode, detail)
+        if let http, !(200...299).contains(http.statusCode) {
+            throw BackendError.badStatus(http.statusCode, try await Self.text(of: stream))
         }
 
-        return try JSONDecoder().decode(TalkResponse.self, from: data)
+        let contentType = http?.value(forHTTPHeaderField: "Content-Type") ?? ""
+        guard contentType.contains(Self.ndjson) else {
+            let whole = try await Self.data(of: stream)
+            return try JSONDecoder().decode(TalkResponse.self, from: whole)
+        }
+
+        var transcript = ""
+        var pieces: [String] = []
+        var finalReply = ""
+        var secondsLeft: Int?
+        var trouble: String?
+        var spoke = false
+
+        for try await line in stream.lines {
+            guard
+                let data = line.data(using: .utf8),
+                let event = try? JSONDecoder().decode(TalkEvent.self, from: data)
+            else { continue }   // a line we don't understand is not a reason to stop
+
+            switch event.kind {
+            case "heard":
+                transcript = event.transcript ?? ""
+            case "say":
+                if let text = event.text, !text.isEmpty { pieces.append(text) }
+                if let encoded = event.audioBase64, !encoded.isEmpty,
+                   let audio = Data(base64Encoded: encoded), !audio.isEmpty {
+                    await onPiece(audio)
+                    spoke = true
+                }
+            case "trouble":
+                trouble = event.detail
+            case "done":
+                finalReply = event.reply ?? ""
+                secondsLeft = event.secondsLeft
+            default:
+                break
+            }
+        }
+
+        // It broke before he managed a single word — that is a failed turn, and
+        // the caller should treat it exactly like any other. If he DID get
+        // something out, it has already been heard, so the turn stands.
+        if let trouble, !spoke, pieces.isEmpty {
+            throw BackendError.badStatus(503, trouble)
+        }
+
+        return TalkResponse(
+            transcript: transcript,
+            reply: finalReply.isEmpty ? pieces.joined(separator: " ") : finalReply,
+            audioBase64: nil,
+            audioMime: nil,
+            note: nil,
+            state: nil,
+            secondsLeft: secondsLeft,
+            spokenAsHeThought: spoke
+        )
+    }
+
+    private static func data(of stream: URLSession.AsyncBytes) async throws -> Data {
+        var data = Data()
+        for try await byte in stream { data.append(byte) }
+        return data
+    }
+
+    private static func text(of stream: URLSession.AsyncBytes) async throws -> String {
+        String(data: try await data(of: stream), encoding: .utf8) ?? ""
     }
 
     /// The next question in «пока его нет» — the conversation that replaced

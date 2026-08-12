@@ -33,7 +33,9 @@ Endpoints:
 
 from __future__ import annotations
 
+import asyncio
 import base64
+import json
 import sys
 import time
 import traceback
@@ -49,7 +51,7 @@ from fastapi import (
     HTTPException,
     UploadFile,
 )
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 from . import (
@@ -126,6 +128,13 @@ async def health(user_id: str = Depends(_user)) -> JSONResponse:
     )
 
 
+def _log_failure(stage: str, error: Exception) -> None:
+    """Say out loud, in the terminal, what actually broke."""
+    print(f"\n  ✗ {stage} failed\n    {error}\n", file=sys.stderr, flush=True)
+    if not isinstance(error, RuntimeError):
+        traceback.print_exc()
+
+
 def _unavailable(stage: str, error: Exception) -> HTTPException:
     """Return a 503 — and say out loud, in the terminal, what actually broke.
 
@@ -143,23 +152,19 @@ def _unavailable(stage: str, error: Exception) -> HTTPException:
     provider said no", so its message is the answer and a traceback would
     only bury it. Anything else is a genuine bug and gets the full traceback.
     """
-    print(
-        f"\n  ✗ {stage} failed\n    {error}\n",
-        file=sys.stderr,
-        flush=True,
-    )
-    if not isinstance(error, RuntimeError):
-        traceback.print_exc()
+    _log_failure(stage, error)
     return HTTPException(status_code=503, detail=f"{stage}: {error}")
 
 
-async def _think_and_speak(
-    user_id: str, user_text: str, background_tasks: BackgroundTasks
-) -> dict[str, str]:
-    """Shared path: recall → assemble prompt → reply → speak, then learn."""
+async def _assemble(user_id: str, user_text: str) -> tuple[str, str, list]:
+    """Recall everything he should have in mind, and log that he was spoken to.
+
+    Shared by both reply paths — the whole-reply one and the streaming one —
+    so there is exactly one place where what he knows is decided.
+    """
     memory.log_turn(user_id, "user", user_text)
 
-    # Assemble everything he should have in mind — all of it this person's.
+    # All of it this person's.
     persona_block = persona.build_persona_block(persona.load_persona(user_id))
     elder_facts = memory.facts_context(user_id, "elder")
     bob_facts = memory.bob_self_context(user_id)
@@ -186,7 +191,26 @@ async def _think_and_speak(
         elder_name=config.ELDER_NAME,
     )
 
-    history = memory.recent_turns(user_id)
+    return system_stable, system_variable, memory.recent_turns(user_id)
+
+
+def _remember(
+    user_id: str, user_text: str, reply: str, background_tasks: BackgroundTasks
+) -> None:
+    """Log what he said back, and learn from the exchange once nobody's waiting."""
+    memory.log_turn(user_id, "assistant", reply)
+    background_tasks.add_task(learn.learn_from_exchange, user_id, user_text, reply)
+
+
+async def _think_and_speak(
+    user_id: str, user_text: str, background_tasks: BackgroundTasks
+) -> dict[str, str]:
+    """The whole reply, in one piece — the original path, still the fallback.
+
+    Used for clients that don't ask for a stream, and for the turns that can't
+    be streamed honestly (web search — see brain.stream_reply).
+    """
+    system_stable, system_variable, history = await _assemble(user_id, user_text)
     reply = await brain.generate_reply(
         history,
         system_stable,
@@ -197,15 +221,12 @@ async def _think_and_speak(
         fresh_info=brain.wants_fresh_info(user_text),
     )
 
-    memory.log_turn(user_id, "assistant", reply)
-    # Learn from this exchange after the response is sent (keeps the voice fast).
-    background_tasks.add_task(learn.learn_from_exchange, user_id, user_text, reply)
+    _remember(user_id, user_text, reply, background_tasks)
 
-    # The mouth is optional. With a voice provider configured (Fish Audio) we
-    # return warm spoken audio.
-    # Without one (MVP / browser testing), we return no audio and let the client
-    # speak the reply with its own free voice — so testing needs only Whisper +
-    # Claude. "voice" tells the client which path to take.
+    # The mouth is optional. With a voice provider configured we return warm
+    # spoken audio. Without one (MVP / browser testing), we return no audio and
+    # let the client speak the reply with its own free voice — so testing needs
+    # only Whisper + Claude. "voice" tells the client which path to take.
     if tts.configured():
         audio_bytes = await tts.synthesize(reply)
         return {
@@ -217,13 +238,155 @@ async def _think_and_speak(
     return {"reply": reply, "audio_base64": "", "audio_mime": "", "voice": "client"}
 
 
+# --------------------------------------------------------------------------- #
+# Speaking while still thinking
+# --------------------------------------------------------------------------- #
+#
+# A turn used to be three waits end to end: hear it all, think it all, say it
+# all, and only then send anything. The listener sat through the sum. Here the
+# three overlap — the first sentence is spoken aloud while the second is still
+# being written — which takes several seconds out of every silence.
+#
+# The wire format is newline-delimited JSON, one object per line:
+#
+#   {"kind":"heard","transcript":"…"}      what Whisper made of it
+#   {"kind":"say","text":"…","audio_base64":"…"}   speak this now
+#   {"kind":"say", …}                       …and this next
+#   {"kind":"done","reply":"…","seconds_left":1234}
+#   {"kind":"trouble","detail":"…"}         it broke mid-sentence
+#
+# NDJSON rather than SSE because the phone is not a browser and has no use for
+# EventSource, and because a line is trivially parseable from
+# URLSession.bytes(for:) with no framing library.
+#
+# `trouble` exists because a StreamingResponse has already sent its status line
+# by the time anything can go wrong, so a 503 is no longer available. That is
+# an improvement, not a workaround: some of his answer may already have been
+# heard, and the phone knows how to keep it.
+
+_NDJSON = "application/x-ndjson"
+
+
+def _line(payload: dict) -> bytes:
+    return (json.dumps(payload, ensure_ascii=False) + "\n").encode("utf-8")
+
+
+async def _speak_as_he_thinks(
+    user_id: str,
+    transcript: str,
+    started: float,
+    background_tasks: BackgroundTasks,
+):
+    """Yield his reply as spoken pieces, in order, as fast as each is ready."""
+    yield _line({"kind": "heard", "transcript": transcript})
+
+    reply = ""
+    try:
+        system_stable, system_variable, history = await _assemble(user_id, transcript)
+        speak = tts.configured()
+
+        # TWO TASKS, NOT ONE LOOP. The obvious version — read a token, and when
+        # a sentence is finished go and synthesise it — was measurably wrong:
+        # an async generator only advances when it is asked to, so the half
+        # second spent waiting on the voice is half a second in which Claude is
+        # not being read. Writing and speaking serialise, and the streaming
+        # buys a fraction of what it should.
+        #
+        # Here the writer runs flat out and drops finished sentences into a
+        # queue; this loop takes them to the voice. The model is never waiting
+        # on the voice, and the voice is never waiting on the model.
+        fragments: asyncio.Queue = asyncio.Queue()
+
+        async def write() -> None:
+            nonlocal reply
+            try:
+                committed = 0
+                first = True
+                async for reply in brain.stream_reply(
+                    history, system_stable, system_variable
+                ):
+                    tail = reply[committed:]
+                    cut = tts.ready_split(tail, first=first)
+                    if not cut:
+                        continue
+                    committed += cut
+                    fragment = tail[:cut].strip()
+                    if fragment:
+                        await fragments.put(fragment)
+                        first = False
+                # Whatever is left when he stops — usually the last sentence,
+                # which never gets whitespace after it to prove it finished.
+                rest = reply[committed:].strip()
+                if rest:
+                    await fragments.put(rest)
+            finally:
+                # The consumer below waits on this. Without it in a `finally`,
+                # a failure while writing hangs the request open forever.
+                await fragments.put(None)
+
+        writer = asyncio.create_task(write())
+        try:
+            while True:
+                fragment = await fragments.get()
+                if fragment is None:
+                    break
+                if not speak:
+                    yield _line({"kind": "say", "text": fragment, "audio_base64": ""})
+                    continue
+                audio = await tts.synthesize(fragment)
+                yield _line(
+                    {
+                        "kind": "say",
+                        "text": fragment,
+                        "audio_base64": base64.b64encode(audio).decode("ascii"),
+                        "audio_mime": "audio/mpeg",
+                    }
+                )
+            await writer  # re-raise whatever went wrong while writing
+        finally:
+            writer.cancel()
+
+        reply = reply.strip()
+        if reply:
+            _remember(user_id, transcript, reply, background_tasks)
+
+    except Exception as e:  # noqa: BLE001 — a stream cannot raise a status code
+        _log_failure("🧠 the brain (Claude) / 🗣️ the voice", e)
+        yield _line({"kind": "trouble", "detail": str(e)})
+
+    allowance.spend(user_id, time.monotonic() - started)
+    yield _line(
+        {
+            "kind": "done",
+            "reply": reply,
+            "voice": "server" if tts.configured() else "client",
+            "seconds_left": allowance.seconds_left(user_id),
+        }
+    )
+
+
 @app.post("/api/talk")
 async def talk(
     background_tasks: BackgroundTasks,
     audio: UploadFile = File(...),
     user_id: str = Depends(_user),
-) -> JSONResponse:
-    """Full voice loop: audio → transcript → reply → spoken audio."""
+    accept: str = Header(default=""),
+):
+    """Full voice loop: audio → transcript → reply → spoken audio.
+
+    Two shapes, chosen by the caller's `Accept` header:
+
+      application/x-ndjson  → he starts speaking while he is still thinking
+                              (see _speak_as_he_thinks). What the app asks for.
+      anything else         → one JSON object with the whole reply and the
+                              whole audio. The original shape, kept exactly as
+                              it was so the browser dev page, curl and every
+                              build that predates streaming keep working.
+
+    Content negotiation rather than a second URL: the phone has one address to
+    know, and a client that has never heard of streaming cannot accidentally
+    receive one.
+    """
     audio_bytes = await audio.read()
     if not audio_bytes:
         raise HTTPException(status_code=400, detail="Empty audio upload.")
@@ -277,6 +440,21 @@ async def talk(
                 "state": "asleep",
                 "seconds_left": allowance.seconds_left(user_id),
             }
+        )
+
+    # Web-search turns can't be streamed honestly — the answer may still change
+    # after the search returns, and half of it has already been spoken aloud by
+    # then. Those turns are rare and slow anyway, so they take the whole-reply
+    # path even when the caller asked for a stream.
+    if _NDJSON in accept and not brain.wants_fresh_info(transcript):
+        return StreamingResponse(
+            _speak_as_he_thinks(user_id, transcript, started, background_tasks),
+            media_type=_NDJSON,
+            # Nothing between here and the phone may hold these lines back
+            # waiting for more: the entire point is that the first one leaves
+            # immediately.
+            headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"},
+            background=background_tasks,
         )
 
     try:

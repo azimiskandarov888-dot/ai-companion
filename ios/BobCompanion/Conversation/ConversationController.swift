@@ -108,7 +108,16 @@ final class ConversationController: ObservableObject {
 
         status = .thinking
         do {
-            let response = try await client.talk(audioFileURL: fileURL)
+            // Each piece of his reply is played the moment it arrives, so he
+            // begins answering while he is still deciding how to finish. The
+            // first fragment flipping us to .speaking is what the person
+            // actually experiences as "he answered quickly".
+            let response = try await client.talk(audioFileURL: fileURL) { [player] audio in
+                await MainActor.run {
+                    if self.status != .speaking { self.status = .speaking }
+                    player.enqueue(audio)
+                }
+            }
             Trouble.shared.clear()   // a turn got through; whatever it was, it's past
 
             // The server decides whether he answers, and it has already
@@ -136,10 +145,19 @@ final class ConversationController: ObservableObject {
             lastHeard = response.transcript
             lastReply = response.reply
 
-            // Speak Bob's reply. If the backend sent real audio (Fish Audio),
-            // play it; otherwise (MVP, no voice key) speak it with the free
-            // on-device voice — exactly like the browser does. Never stay silent.
-            if let audio = decodedAudio(from: response) {
+            // Three ways his reply reaches the room, in order of preference:
+            //
+            //  1. He was already speaking it, piece by piece, while he thought.
+            //     Nothing left to play — just wait for the last sentence to
+            //     finish before listening again, or he answers his own voice.
+            //  2. The server sent one whole audio file (no streaming: out of
+            //     allowance, a web-search turn, an older server).
+            //  3. No voice provider at all — the free on-device voice reads it,
+            //     exactly like the browser does. Never stay silent.
+            if response.spokenAsHeThought {
+                status = .speaking
+                await player.waitUntilQuiet()
+            } else if let audio = decodedAudio(from: response) {
                 status = .speaking
                 await player.play(data: audio)
             } else if !response.reply.isEmpty {

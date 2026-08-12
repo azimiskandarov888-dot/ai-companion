@@ -127,6 +127,38 @@ async def generate_reply(
     return "".join(b.text for b in message.content if b.type == "text").strip()
 
 
+async def stream_reply(
+    history: list[dict[str, str]],
+    system_stable: str,
+    system_variable: str = "",
+):
+    """The same reply as `generate_reply`, but handed over as it is written.
+
+    Yields the text so far, growing — the caller decides where to cut it (see
+    tts.speakable_chunks). Yielding the accumulated text rather than raw deltas
+    is deliberate: a delta can be half a word or a lone comma, and every caller
+    would otherwise have to reassemble it before it could look for a sentence.
+
+    Web search is NOT available here. That path runs several rounds with
+    server-side pauses between them, and there is no honest way to speak the
+    first sentence of an answer that might still change once the search comes
+    back. Those turns are rare and inherently slow, so main.py sends them down
+    the whole-reply path instead.
+    """
+    client = _get_client()
+    text = ""
+    async with client.messages.stream(
+        model=config.CHAT_MODEL,
+        max_tokens=config.MAX_REPLY_TOKENS,
+        system=_system_blocks(system_stable, system_variable),
+        messages=list(history),
+    ) as stream:
+        async for event in stream:
+            if event.type == "text":
+                text += event.text
+                yield text
+
+
 async def think(
     system_prompt: str,
     user_text: str,
