@@ -141,6 +141,11 @@ def build_persona_block(persona: dict | None = None) -> str:
     # is there so that what he DOES say comes from somewhere.
     add("Что у тебя на душе (не рассказывай это прямо — просто живи с этим)",
         p.get("inner_world"))
+    # The one thing he's a genuine authority on. Without it he answers every
+    # subject with the same mild interest, which is what makes a character
+    # read as empty — real people have one topic they know far too much about.
+    add("Твоя тема — в ней ты знаток и говорить о ней можешь сколько угодно",
+        p.get("expertise"))
     add("Что тебе дорого", p.get("values"))
     add("Твои привычки", p.get("habits"))
     add("Что ты любишь", p.get("likes"))

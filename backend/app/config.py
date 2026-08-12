@@ -140,7 +140,11 @@ COMPANION_NAME: str = os.getenv("COMPANION_NAME", "Соня")
 ELDER_NAME: str = os.getenv("ELDER_NAME", "")
 
 # Keep replies short — this is spoken aloud to an elderly listener.
-MAX_REPLY_TOKENS: int = int(os.getenv("MAX_REPLY_TOKENS", "400"))
+# 260, not 400. Two reasons, both of them the same reason: a long reply takes
+# longer to WRITE and much longer to SPEAK, and the voice is the slowest link
+# in the turn. Cutting the ceiling shortens the silence before he answers —
+# and he was talking too much anyway.
+MAX_REPLY_TOKENS: int = int(os.getenv("MAX_REPLY_TOKENS", "260"))
 
 # --- How much of the day he has ---------------------------------------------
 # Three hours of conversation a day. Not rationing for its own sake: at API

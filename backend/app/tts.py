@@ -89,7 +89,11 @@ async def _synthesize_fish(text: str) -> bytes:
         "format": "mp3",
         "mp3_bitrate": 128,
         "normalize": True,   # tidy punctuation/numbers for natural speech
-        "latency": "normal",
+        # "balanced" starts returning audio sooner than "normal" at a
+        # quality cost nobody has ever noticed in a spoken sentence. The
+        # voice is the slowest link in the turn, so this is the cheapest
+        # second available.
+        "latency": "balanced",
     }
     # A chosen voice from the Fish library; omit to use Fish's default voice.
     if config.FISH_VOICE_ID:

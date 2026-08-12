@@ -34,6 +34,9 @@ struct ArrivingScreen: View {
     @State private var ready = false
     @State private var name = ""
     @State private var finishing = false
+    /// He couldn't be written — the walk stops and the retry is offered.
+    @State private var trouble = false
+    @State private var showServer = false
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -86,7 +89,43 @@ struct ArrivingScreen: View {
             }
         }
         .statusBarHidden(true)
+        .overlay { if trouble { couldNotCome } }
+        .sheet(isPresented: $showServer) { ServerSheet() }
         .task { await bringHim() }
+    }
+
+    /// He hasn't set off. Said in plain words, with no error and no code —
+    /// and with the one thing that actually fixes it within reach, because
+    /// this nearly always means the address is wrong or the Mac is asleep.
+    private var couldNotCome: some View {
+        ZStack {
+            Theme.night.opacity(0.86).ignoresSafeArea()
+            VStack(spacing: 26) {
+                Spacer()
+                Text(Strings.language == .russian
+                     ? "Он пока не смог прийти.\nПодождите немного и позовите его снова."
+                     : "He couldn't come just yet.\nGive it a moment and call him again.")
+                    .appFont(AppType.title, leading: AppType.bodyLeading)
+                    .foregroundStyle(Theme.linen)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer()
+                AppButton(title: Strings.language == .russian ? "Позвать снова" : "Call him again",
+                          tone: .sun) {
+                    trouble = false
+                    Task { await bringHim() }
+                }
+                Button(action: { showServer = true }) {
+                    Text(Strings.language == .russian ? "проверить связь" : "check the connection")
+                        .appFont(AppType.caption)
+                        .foregroundStyle(Theme.onLand.opacity(0.75))
+                        .frame(minHeight: Metrics.minTouch)
+                }
+            }
+            .padding(.horizontal, Metrics.sideMargin)
+            .padding(.bottom, 34)
+        }
+        .transition(.opacity)
     }
 
     /// Low on the hill when he's far, at his resting place when he's here.
@@ -112,9 +151,22 @@ struct ArrivingScreen: View {
         do {
             name = try await client.createCompanion(story: story, wishes: wishes).name
         } catch {
-            // If the server can't be reached we don't strand them on a dead
-            // screen. He arrives anyway, and says so himself once he's here.
-            name = ""
+            // HE MUST NOT ARRIVE IF HE WAS NEVER WRITTEN.
+            //
+            // This used to swallow the failure and walk on, on the reasoning
+            // that a dead screen is worse than a silent one. It is not. The
+            // server still holds the PREVIOUS companion and the previous
+            // conversation, so carrying on doesn't produce a stranger — it
+            // produces the last person, mid-sentence, greeting someone who
+            // just spent ten minutes telling their life story to nobody. A
+            // second phone met its owner's old friend and picked up a
+            // conversation it had never had.
+            //
+            // So the walk stops here and the retry is offered instead. Still
+            // no error code — he simply hasn't set off yet.
+            Trouble.shared.record(error, url: AppConfig.shared.backendURL)
+            trouble = true
+            return
         }
         ready = true
 
