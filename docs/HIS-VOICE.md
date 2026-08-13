@@ -207,11 +207,24 @@ Yandex SpeechKit failed (401): {"error_code":"UNAUTHORIZED",
 ```
 
 **This is not a bad key.** `UNAUTHORIZED` on the outside with
-`PermissionDenied` on the inside means the key was read perfectly well, and
-then the service account behind it turned out to be allowed nothing. Three
-different mistakes produce this identical message:
+`PermissionDenied` on the inside means the key was read perfectly well and the
+request was refused anyway. **Four** unrelated mistakes produce this identical
+message, and nothing in the response distinguishes them.
 
-**1. The service account has no role.** The commonest. In the console it is
+**0. The billing account isn't active — check this first.** It is the one
+cause that has nothing to do with anything you configured, and on a brand-new
+cloud it is the likeliest. SpeechKit requires the billing account to be
+`ACTIVE` or `TRIAL_ACTIVE`. Anything else — no card attached yet, a trial that
+was never activated, `TRIAL_SUSPENDED` (the grant went to an earlier account
+of yours), `TRIAL_EXPIRED`, `PAYMENT_REQUIRED` — denies permission to
+everything in the cloud, and says so in exactly the words above.
+
+Console → **Billing (Биллинг)** → look at the status. If it is not `ACTIVE` or
+`TRIAL_ACTIVE`, activate the paid version and top up the minimum amount. Then
+retry; nothing else needs changing.
+
+**1. The service account has no role.** The commonest of the configuration
+ones. In the console it is
 easy to open the "add role" dialog and close it without the binding actually
 saving. Check: **folder → Access bindings** (Права доступа). Your
 `speechkit-sa` must be listed there with `ai.speechkit-tts.user`. If it isn't,
@@ -230,19 +243,23 @@ what they may be used for. A key scoped to anything that isn't SpeechKit is
 refused no matter what roles exist. Delete it and create one with **no scope
 restriction**.
 
-To tell which it is without touching the app, ask Yandex directly:
+To tell which it is without touching the app, ask Yandex directly — and
+**read the body**, because that is where the answer is:
 
 ```bash
 curl -s -X POST https://tts.api.cloud.yandex.net/speech/v1/tts:synthesize \
   -H "Authorization: Api-Key ВАШ_КЛЮЧ" \
   -d "text=проверка" -d "lang=ru-RU" -d "voice=filipp" \
   -d "folderId=ВАШ_FOLDER_ID" -d "format=mp3" \
-  -o /tmp/test.mp3 -w "%{http_code}\n"
+  -o /tmp/test.mp3 -w "HTTP %{http_code}\n"
+
+cat /tmp/test.mp3        # ← the actual reason lives here
 ```
 
-`200` and a playable `/tmp/test.mp3` means the credentials are fine and the
-problem is in `.env`. Anything else is the cloud console, and the body says
-which of the three it is.
+`-o` sends the *response* to the file, and on a failure the response is the
+error text, not audio. `HTTP 200` plus a `/tmp/test.mp3` that plays means the
+credentials are fine and the problem is in `.env`. Anything else, and `cat`
+prints the JSON that says which of the four it is.
 
 ### The other errors
 

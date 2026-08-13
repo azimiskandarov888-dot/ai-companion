@@ -352,15 +352,22 @@ def _yandex_hint(status: int) -> str:
     and fix. Every one of these has cost somebody an evening."""
     if status in (401, 403):
         # A 401 whose body says PermissionDenied is not about the key at all —
-        # the key was read fine, and then the service account behind it turned
-        # out to be allowed nothing. Three separate causes look identical here,
-        # so all three get named rather than making someone guess.
+        # the key was read fine, and then the request was refused anyway. FOUR
+        # unrelated causes produce this identical message, and there is no way
+        # to tell them apart from the response, so all four get named rather
+        # than making someone guess in the dark.
         return (
-            "\n    → the key was accepted but the SERVICE ACCOUNT behind it is "
-            "allowed nothing. One of three things:"
-            "\n      1. it has no role — give it ai.speechkit-tts.user"
-            "\n      2. the role is on a DIFFERENT folder than YANDEX_FOLDER_ID"
-            "\n      3. the API key was created with a restricted scope that "
+            "\n    → the key was accepted and the request refused anyway. Four "
+            "things look exactly like this:"
+            "\n      1. BILLING. The billing account must be ACTIVE or "
+            "TRIAL_ACTIVE. A cloud with no card attached, an unactivated trial "
+            "or a spent grant denies permission to everything. Check this first "
+            "— it is the one that has nothing to do with your setup."
+            "\n      2. the service account has no role — give it "
+            "ai.speechkit-tts.user, and verify it on the FOLDER's access-"
+            "bindings page (the create dialog often fails to save it)"
+            "\n      3. the role is on a DIFFERENT folder than YANDEX_FOLDER_ID"
+            "\n      4. the API key was created with a restricted scope that "
             "excludes SpeechKit — make one with no scope limit"
             "\n      (docs/HIS-VOICE.md § «Если он говорит 401»)"
         )
