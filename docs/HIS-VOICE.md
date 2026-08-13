@@ -114,9 +114,18 @@ page, near the top — a string like `b1gc1t4cb638xxxxxxxx`. **Copy it.**
 - Click **Add role** and choose **`ai.speechkit-tts.user`**
 - Click **Create**
 
+> Then go back to the **folder** page → **Access bindings** and check that
+> `speechkit-sa` is actually listed there with that role. The dialog in the
+> create-service-account flow silently fails to save the binding often enough
+> that this is worth thirty seconds — it is the single most common reason for
+> the 401 below.
+
 **5. Make an API key.** Click the service account you just made. Find the
-**API keys** section → **Create API key** → choose the SpeechKit / general
-scope if it offers one → **Create**.
+**API keys** section → **Create API key**.
+
+> If it offers a **scope**, leave it unrestricted. A key narrowed to the wrong
+> scope is refused no matter what roles the account has, and the error looks
+> exactly like a missing role.
 
 > The key is shown **once**. Copy it now. If you lose it, delete it and make
 > another — no harm done.
@@ -157,16 +166,89 @@ that is still cheaper than everyone else's standard tier.
 Female: `alena` · `jane` · `oksana` · `omazh`.
 
 `YANDEX_SPEED=0.95` is set slightly under 1.0 on purpose — kinder to an older
-listener. `YANDEX_EMOTION` can be `good`, `evil` or `neutral`, but not every
-voice accepts it; if the voice you pick rejects it, the server says so once in
-the terminal and simply speaks without it rather than going silent.
+listener.
 
-### If something goes wrong
+### "Emotion off" means MORE expression, not less
 
-The terminal names it. `401`/`403` means the API key is wrong or the service
-account is missing `ai.speechkit-tts.user`. `400` almost always means
-`YANDEX_FOLDER_ID` is missing or the voice name doesn't exist. `429` means too
-many requests at once, or the billing account has run out.
+`YANDEX_EMOTION` is empty by default and should usually stay that way. It is
+easy to read that as "he'll speak flatly", and it is the opposite.
+
+`emotion` is a **crude override**: one of `neutral | good | evil`, applied to a
+whole utterance, and supported only on the **standard** voices (in Russian,
+`jane` and `omazh`). The **premium** voices refuse the parameter — because they
+already do, properly, the thing it approximates. Yandex's own description: a
+premium voice *evaluates the entire text before synthesis and selects the
+intonation characteristic of human speech.*
+
+So:
+
+| | |
+|---|---|
+| `filipp:premium`, no emotion | reads the sentence, decides how it should sound |
+| `jane` + `emotion=good` | every line pinned to the same cheerful tone |
+
+Pinning every sentence a lonely person hears to "good" is exactly what makes
+synthetic speech sound like a call centre. The code sends `emotion` only when
+you have explicitly set it *and* the voice can actually use it, and if the API
+rejects it anyway it says so once in the terminal and carries on speaking
+rather than going silent.
+
+One honest cost of the streaming (§2): a premium voice plans intonation across
+the text it is given, and it is now given one sentence at a time. Intonation
+*within* each sentence — the bulk of it — is unaffected; what is lost is the
+lean from one sentence into the next.
+
+### If he says 401
+
+```
+Yandex SpeechKit failed (401): {"error_code":"UNAUTHORIZED",
+"error_message":"rpc error: code = PermissionDenied desc = Permission to
+[resource-manager.folder …, resource-manager.cloud …] denied"}
+```
+
+**This is not a bad key.** `UNAUTHORIZED` on the outside with
+`PermissionDenied` on the inside means the key was read perfectly well, and
+then the service account behind it turned out to be allowed nothing. Three
+different mistakes produce this identical message:
+
+**1. The service account has no role.** The commonest. In the console it is
+easy to open the "add role" dialog and close it without the binding actually
+saving. Check: **folder → Access bindings** (Права доступа). Your
+`speechkit-sa` must be listed there with `ai.speechkit-tts.user`. If it isn't,
+add it *from the folder's page* rather than from the service account's.
+
+**2. The role is on a different folder than `YANDEX_FOLDER_ID`.** Also very
+common — a cloud usually has more than one folder, and the service account was
+made in one while the ID was copied from another. The folder id in the error
+message is the one your request used: confirm the role is on **that** folder.
+
+Careful: folder IDs and cloud IDs both start with `b1g…` and are easy to swap.
+The folder ID is on the folder's own overview page, not the cloud's.
+
+**3. The API key has a restricted scope.** Newer Yandex API keys let you narrow
+what they may be used for. A key scoped to anything that isn't SpeechKit is
+refused no matter what roles exist. Delete it and create one with **no scope
+restriction**.
+
+To tell which it is without touching the app, ask Yandex directly:
+
+```bash
+curl -s -X POST https://tts.api.cloud.yandex.net/speech/v1/tts:synthesize \
+  -H "Authorization: Api-Key ВАШ_КЛЮЧ" \
+  -d "text=проверка" -d "lang=ru-RU" -d "voice=filipp" \
+  -d "folderId=ВАШ_FOLDER_ID" -d "format=mp3" \
+  -o /tmp/test.mp3 -w "%{http_code}\n"
+```
+
+`200` and a playable `/tmp/test.mp3` means the credentials are fine and the
+problem is in `.env`. Anything else is the cloud console, and the body says
+which of the three it is.
+
+### The other errors
+
+`400` almost always means `YANDEX_FOLDER_ID` is missing or the voice name
+doesn't exist. `429` means too many requests at once, or the billing account
+has run out of credit.
 
 ### If Yandex won't take your card
 

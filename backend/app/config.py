@@ -91,13 +91,22 @@ ELEVENLABS_MODEL: str = os.getenv("ELEVENLABS_MODEL", "eleven_multilingual_v2")
 #
 # Male voices: filipp · zahar · ermil · anton   (add ":premium" for the best
 # quality, e.g. filipp:premium). Female: alena · jane · oksana · omazh.
-# Some voices take an emotion: neutral | good | evil.
+#
+# EMOTION IS OFF BY DEFAULT, and that makes him MORE expressive, not less.
+# `emotion` is a crude override — one of neutral | good | evil applied to a
+# whole utterance — and it only works on the standard voices (jane, omazh in
+# Russian). The premium voices don't accept it because they don't need it:
+# they read the sentence first and choose the intonation themselves, the way a
+# person does. Forcing "good" onto every line he ever says is the thing that
+# makes synthetic speech sound like a call centre.
+#
+# Set it only if you deliberately want a standard voice held to one tone.
 #
 # Needs a Yandex Cloud account: an API key and the folder ID it belongs to.
 YANDEX_API_KEY: str | None = os.getenv("YANDEX_API_KEY")
 YANDEX_FOLDER_ID: str = os.getenv("YANDEX_FOLDER_ID", "")
 YANDEX_VOICE: str = os.getenv("YANDEX_VOICE", "filipp")
-YANDEX_EMOTION: str = os.getenv("YANDEX_EMOTION", "good")
+YANDEX_EMOTION: str = os.getenv("YANDEX_EMOTION", "")
 # 1.0 is normal. Slightly under is kinder to an older listener.
 YANDEX_SPEED: str = os.getenv("YANDEX_SPEED", "0.95")
 

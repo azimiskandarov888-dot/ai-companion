@@ -280,14 +280,32 @@ async def _synthesize_openai(text: str) -> bytes:
 _yandex_drop_emotion = False
 
 
+def _yandex_takes_emotion() -> bool:
+    """Should `emotion` be sent at all for the configured voice?
+
+    Not sending it is the BETTER outcome, which is the opposite of how it
+    reads. `emotion` is a crude override — one of neutral | good | evil, held
+    across a whole utterance — and only the standard voices accept it. The
+    premium ones refuse it because they already do the thing it approximates:
+    they read the sentence first and pick human intonation for it. Pinning
+    every line he ever says to "good" is what makes synthetic speech sound
+    like a call centre.
+
+    So it goes only where it is asked for AND can actually work.
+    """
+    if not config.YANDEX_EMOTION:
+        return False
+    # filipp:premium, alena:rc — anything with a quality suffix chooses its own.
+    return ":" not in config.YANDEX_VOICE
+
+
 async def _synthesize_yandex(text: str) -> bytes:
     """Yandex SpeechKit. Form-encoded, not JSON. Returns MP3 bytes.
 
-    Emotion is the one fiddly part. Some voices take `good | evil | neutral`
-    and some — the `:premium` ones especially — reject the parameter outright
-    with a 400. Sending it is worth it when it works, and a config detail must
-    never be the reason a lonely person's friend goes silent, so a rejection
-    retries once without it and remembers.
+    Emotion is the one fiddly part — see `_yandex_takes_emotion`. The rule
+    there covers what the documentation says; the retry below covers what the
+    API actually does, because a config detail must never be the reason a
+    lonely person's friend goes silent.
     """
     global _yandex_drop_emotion
 
@@ -300,7 +318,7 @@ async def _synthesize_yandex(text: str) -> bytes:
             "format": "mp3",
             "folderId": config.YANDEX_FOLDER_ID,
         }
-        if with_emotion and config.YANDEX_EMOTION:
+        if with_emotion and _yandex_takes_emotion():
             data["emotion"] = config.YANDEX_EMOTION
         return data
 
@@ -310,7 +328,7 @@ async def _synthesize_yandex(text: str) -> bytes:
             _YANDEX_TTS_URL, headers=headers, data=form(not _yandex_drop_emotion)
         )
 
-        if resp.status_code == 400 and not _yandex_drop_emotion and config.YANDEX_EMOTION:
+        if resp.status_code == 400 and not _yandex_drop_emotion and _yandex_takes_emotion():
             print(
                 f"\n  ℹ voice {config.YANDEX_VOICE!r} doesn't take an emotion — "
                 "speaking without one from now on.\n"
@@ -333,9 +351,18 @@ def _yandex_hint(status: int) -> str:
     """Turn Yandex's terse HTTP codes into the thing you actually have to go
     and fix. Every one of these has cost somebody an evening."""
     if status in (401, 403):
+        # A 401 whose body says PermissionDenied is not about the key at all —
+        # the key was read fine, and then the service account behind it turned
+        # out to be allowed nothing. Three separate causes look identical here,
+        # so all three get named rather than making someone guess.
         return (
-            "\n    → the API key is wrong, or its service account is missing the "
-            "role ai.speechkit-tts.user"
+            "\n    → the key was accepted but the SERVICE ACCOUNT behind it is "
+            "allowed nothing. One of three things:"
+            "\n      1. it has no role — give it ai.speechkit-tts.user"
+            "\n      2. the role is on a DIFFERENT folder than YANDEX_FOLDER_ID"
+            "\n      3. the API key was created with a restricted scope that "
+            "excludes SpeechKit — make one with no scope limit"
+            "\n      (docs/HIS-VOICE.md § «Если он говорит 401»)"
         )
     if status == 400:
         return (
