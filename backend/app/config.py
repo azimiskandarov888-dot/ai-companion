@@ -59,6 +59,16 @@ EMBEDDING_MODEL: str = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
 EMBEDDING_DIM: int = int(os.getenv("EMBEDDING_DIM", "512"))
 
 # --- The mouth: text-to-speech ---------------------------------------------
+#
+# TWO VOICES, NOT ONE. The companion is invented per person (matchmaker.py)
+# and roughly half of the people it invents are women — Зоя the crane
+# operator, Тамара who spent thirty years as a train conductor. With a
+# single global voice setting, every one of them spoke as a man. Nothing
+# breaks the illusion faster, and it is the illusion the whole app rests on.
+#
+# So each provider has a male and a female voice, and the persona says which
+# it is. Leaving the female one empty falls back to the other — the old
+# behaviour, kept so nothing silently stops speaking.
 # Which voice provider speaks Bob's replies:
 #   "yandex"     — Yandex SpeechKit. Cheapest for Russian by a distance, and
 #                  the most Russian-sounding. See docs/HIS-VOICE.md.
@@ -78,6 +88,11 @@ FISH_API_KEY: str | None = os.getenv("FISH_API_KEY")
 # pick a warm Russian voice on fish.audio and paste its id here. Empty string
 # uses Fish's default voice.
 FISH_VOICE_ID: str = os.getenv("FISH_VOICE_ID", "")
+#: The voice for a companion who turns out to be a woman. Fish has no
+#: sensible default here — pick a second id from fish.audio/discovery. Left
+#: empty, a female character speaks in the voice above, which is wrong and
+#: audible.
+FISH_VOICE_ID_FEMALE: str = os.getenv("FISH_VOICE_ID_FEMALE", "")
 # Fish model version, sent as the `model` HTTP header. "s1" is stable; set
 # FISH_MODEL=s2-pro (or the current name) for the newest open-weight model.
 FISH_MODEL: str = os.getenv("FISH_MODEL", "s1")
@@ -86,6 +101,9 @@ FISH_MODEL: str = os.getenv("FISH_MODEL", "s1")
 # multilingual voice; default = "Sarah". eleven_multilingual_v2 handles Russian.
 ELEVENLABS_API_KEY: str | None = os.getenv("ELEVENLABS_API_KEY")
 ELEVENLABS_VOICE_ID: str = os.getenv("ELEVENLABS_VOICE_ID", "EXAVITQu4vr4xnSDxMaL")
+#: NOTE the default above ("Sarah") is a WOMAN's voice, so on ElevenLabs it
+#: is the MALE voice that needs setting, not the female one.
+ELEVENLABS_VOICE_ID_FEMALE: str = os.getenv("ELEVENLABS_VOICE_ID_FEMALE", "")
 ELEVENLABS_MODEL: str = os.getenv("ELEVENLABS_MODEL", "eleven_multilingual_v2")
 
 # --- Mouth: Yandex SpeechKit (TTS_PROVIDER=yandex) --------------------------
@@ -113,6 +131,7 @@ ELEVENLABS_MODEL: str = os.getenv("ELEVENLABS_MODEL", "eleven_multilingual_v2")
 YANDEX_API_KEY: str | None = os.getenv("YANDEX_API_KEY")
 YANDEX_FOLDER_ID: str = os.getenv("YANDEX_FOLDER_ID", "")
 YANDEX_VOICE: str = os.getenv("YANDEX_VOICE", "filipp")
+YANDEX_VOICE_FEMALE: str = os.getenv("YANDEX_VOICE_FEMALE", "alena")
 YANDEX_EMOTION: str = os.getenv("YANDEX_EMOTION", "")
 # 1.0 is normal. Slightly under is kinder to an older listener.
 YANDEX_SPEED: str = os.getenv("YANDEX_SPEED", "0.95")
@@ -128,6 +147,7 @@ YANDEX_SPEED: str = os.getenv("YANDEX_SPEED", "0.95")
 # backend/audition.py.
 OPENAI_TTS_MODEL: str = os.getenv("OPENAI_TTS_MODEL", "gpt-4o-mini-tts")
 OPENAI_VOICE: str = os.getenv("OPENAI_VOICE", "ash")
+OPENAI_VOICE_FEMALE: str = os.getenv("OPENAI_VOICE_FEMALE", "sage")
 # Free-text direction for how to speak — supported by gpt-4o-mini-tts and
 # genuinely powerful. This is where his warmth is set.
 OPENAI_VOICE_STYLE: str = os.getenv(

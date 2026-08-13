@@ -156,7 +156,7 @@ def _unavailable(stage: str, error: Exception) -> HTTPException:
     return HTTPException(status_code=503, detail=f"{stage}: {error}")
 
 
-async def _assemble(user_id: str, user_text: str) -> tuple[str, str, list]:
+async def _assemble(user_id: str, user_text: str) -> tuple[str, str, list, str | None]:
     """Recall everything he should have in mind, and log that he was spoken to.
 
     Shared by both reply paths — the whole-reply one and the streaming one —
@@ -164,8 +164,9 @@ async def _assemble(user_id: str, user_text: str) -> tuple[str, str, list]:
     """
     memory.log_turn(user_id, "user", user_text)
 
-    # All of it this person's.
-    persona_block = persona.build_persona_block(persona.load_persona(user_id))
+    # All of it this person's — including WHICH VOICE he or she speaks in.
+    who = persona.load_persona(user_id)
+    persona_block = persona.build_persona_block(who)
     elder_facts = memory.facts_context(user_id, "elder")
     bob_facts = memory.bob_self_context(user_id)
     mem_ctx = await memory.build_memory_context(user_id, user_text)
@@ -191,7 +192,7 @@ async def _assemble(user_id: str, user_text: str) -> tuple[str, str, list]:
         elder_name=config.ELDER_NAME,
     )
 
-    return system_stable, system_variable, memory.recent_turns(user_id)
+    return system_stable, system_variable, memory.recent_turns(user_id), tts.voice_for(who)
 
 
 def _remember(
@@ -210,7 +211,7 @@ async def _think_and_speak(
     Used for clients that don't ask for a stream, and for the turns that can't
     be streamed honestly (web search — see brain.stream_reply).
     """
-    system_stable, system_variable, history = await _assemble(user_id, user_text)
+    system_stable, system_variable, history, voice = await _assemble(user_id, user_text)
     reply = await brain.generate_reply(
         history,
         system_stable,
@@ -228,7 +229,7 @@ async def _think_and_speak(
     # let the client speak the reply with its own free voice — so testing needs
     # only Whisper + Claude. "voice" tells the client which path to take.
     if tts.configured():
-        audio_bytes = await tts.synthesize(reply)
+        audio_bytes = await tts.synthesize(reply, voice)
         return {
             "reply": reply,
             "audio_base64": base64.b64encode(audio_bytes).decode("ascii"),
@@ -282,7 +283,7 @@ async def _speak_as_he_thinks(
 
     reply = ""
     try:
-        system_stable, system_variable, history = await _assemble(user_id, transcript)
+        system_stable, system_variable, history, voice = await _assemble(user_id, transcript)
         speak = tts.configured()
 
         # TWO TASKS, NOT ONE LOOP. The obvious version — read a token, and when
@@ -333,7 +334,7 @@ async def _speak_as_he_thinks(
                 if not speak:
                     yield _line({"kind": "say", "text": fragment, "audio_base64": ""})
                     continue
-                audio = await tts.synthesize(fragment)
+                audio = await tts.synthesize(fragment, voice)
                 yield _line(
                     {
                         "kind": "say",

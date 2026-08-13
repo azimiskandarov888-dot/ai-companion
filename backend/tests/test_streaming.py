@@ -103,7 +103,7 @@ def client(monkeypatch):
             yield REPLY[:i]
         yield REPLY
 
-    async def fake_tts(text):
+    async def fake_tts(text, voice=None):
         return b"MP3:" + text.encode("utf-8")
 
     monkeypatch.setattr(brain, "stream_reply", fake_stream)
@@ -266,7 +266,7 @@ def test_the_voice_never_holds_up_the_writing(client, monkeypatch):
         yield REPLY
         order.append("finished writing")
 
-    async def slow_voice(text):
+    async def slow_voice(text, voice=None):
         await asyncio.sleep(0.05)
         order.append("finished speaking")
         return b"MP3"
@@ -280,3 +280,72 @@ def test_the_voice_never_holds_up_the_writing(client, monkeypatch):
         f"the voice blocked the model: {order}"
     )
     assert order.count("finished speaking") >= 2
+
+
+# --------------------------------------------------------------------------- #
+# Who is speaking
+# --------------------------------------------------------------------------- #
+def test_a_woman_is_not_read_aloud_by_a_man(monkeypatch):
+    """Roughly half the people the matchmaker invents are women — Зоя the
+    crane operator, Тамара who spent thirty years as a train conductor. The
+    voice was ONE global setting, so every one of them spoke as a man.
+
+    Nothing destroys the illusion faster, and the illusion is the product.
+    """
+    from app import config
+
+    monkeypatch.setattr(config, "TTS_PROVIDER", "yandex")
+    monkeypatch.setattr(config, "YANDEX_VOICE", "filipp")
+    monkeypatch.setattr(config, "YANDEX_VOICE_FEMALE", "alena")
+
+    assert tts.voice_for({"name": "Фёдор", "gender": "мужской"}) is None   # default
+    assert tts.voice_for({"name": "Тамара", "gender": "женский"}) == "alena"
+    assert tts.voice_for({"name": "Зоя", "gender": "женщина"}) == "alena"
+    assert tts.voice_for({"name": "Zoya", "gender": "female"}) == "alena"
+
+
+def test_a_persona_written_before_this_existed_still_speaks():
+    """No gender field means an older character. It keeps the configured
+    voice — possibly wrong, definitely not silent."""
+    assert tts.voice_for({"name": "Фёдор"}) is None
+    assert tts.voice_for({}) is None
+    assert tts.voice_for(None) is None
+
+
+def test_the_name_is_never_used_to_guess():
+    """Russian will not support the guess: Гриша, Никита, Илья and Саша all
+    end in -а and are men. Only the persona's own statement counts."""
+    assert tts.voice_for({"name": "Гриша"}) is None
+    assert tts.voice_for({"name": "Никита"}) is None
+
+
+def test_an_unset_female_voice_falls_back_rather_than_failing(monkeypatch):
+    """A wrong-sounding voice is bad. A friend who has stopped speaking
+    altogether is worse."""
+    from app import config
+
+    monkeypatch.setattr(config, "TTS_PROVIDER", "fish")
+    monkeypatch.setattr(config, "FISH_VOICE_ID_FEMALE", "")
+    assert tts.voice_for({"gender": "женский"}) is None
+
+
+def test_the_streamed_voice_follows_the_persona(client, monkeypatch):
+    """End to end: the voice chosen for the character reaches every fragment,
+    not just the first."""
+    from app import config, persona
+
+    monkeypatch.setattr(config, "TTS_PROVIDER", "yandex")
+    monkeypatch.setattr(config, "YANDEX_VOICE_FEMALE", "alena")
+    persona.save_persona(UID, {"name": "Тамара", "gender": "женский", "age": "39 лет"})
+
+    spoken_by: list[str | None] = []
+
+    async def note_voice(text, voice=None):
+        spoken_by.append(voice)
+        return b"MP3"
+
+    monkeypatch.setattr(tts, "synthesize", note_voice)
+    _talk(client, AUTH)
+
+    assert spoken_by, "nothing was spoken at all"
+    assert set(spoken_by) == {"alena"}

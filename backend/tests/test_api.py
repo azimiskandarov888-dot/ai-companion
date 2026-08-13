@@ -22,7 +22,7 @@ def client(monkeypatch):
     async def fake_reply(history, system_stable, system_variable="", *, fresh_info=False):
         return "Тёплый ответ от Боба."
 
-    async def fake_tts(text):
+    async def fake_tts(text, voice=None):
         return b"FAKEMP3"
 
     async def fake_stt(audio_bytes, filename="audio.webm"):

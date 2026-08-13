@@ -18,7 +18,7 @@ def test_verbatim_speaks_the_line_exactly(monkeypatch):
 
     spoken: list[str] = []
 
-    async def fake_synthesize(text: str) -> bytes:
+    async def fake_synthesize(text: str, voice=None) -> bytes:
         spoken.append(text)
         return b"fake-mp3-bytes"
 
@@ -43,7 +43,7 @@ def test_verbatim_does_not_become_a_memory(monkeypatch):
     """The test phrase must never turn up in his diary."""
     monkeypatch.setattr(tts, "configured", lambda: True)
 
-    async def fake_synthesize(text: str) -> bytes:
+    async def fake_synthesize(text: str, voice=None) -> bytes:
         return b"fake-mp3-bytes"
 
     monkeypatch.setattr(tts, "synthesize", fake_synthesize)

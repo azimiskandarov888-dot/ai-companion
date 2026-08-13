@@ -163,6 +163,44 @@ def speakable_chunks(text: str) -> list[str]:
     return chunks
 
 
+# --------------------------------------------------------------------------- #
+# Which voice this particular companion speaks in
+# --------------------------------------------------------------------------- #
+def is_female(persona: dict | None) -> bool:
+    """Did the pen write a woman?
+
+    Read from the persona's own `gender` field rather than guessed from the
+    name, because Russian names will not support the guess: Гриша, Никита,
+    Илья and Саша all end in -а and are men. A missing field means an older
+    persona, written before this existed, and those keep the default voice.
+    """
+    value = str((persona or {}).get("gender") or "").strip().lower()
+    return value.startswith(("ж", "f"))  # женский · женщина · female
+
+
+def voice_for(persona: dict | None) -> str | None:
+    """The provider-specific voice this companion should speak in.
+
+    None means "the configured default", which is the male one — so nothing
+    changes for the companions that already exist.
+
+    Half the people the matchmaker invents are women, and until this existed
+    every one of them was read aloud by a man. There is no faster way to
+    destroy the one thing this app is for.
+    """
+    if not is_female(persona):
+        return None
+    female = {
+        "yandex": config.YANDEX_VOICE_FEMALE,
+        "openai": config.OPENAI_VOICE_FEMALE,
+        "fish": config.FISH_VOICE_ID_FEMALE,
+        "elevenlabs": config.ELEVENLABS_VOICE_ID_FEMALE,
+    }.get(config.TTS_PROVIDER, "")
+    # Unset → fall back rather than fail. A wrong-sounding voice is bad; a
+    # friend who has stopped speaking altogether is worse.
+    return female or None
+
+
 def configured() -> bool:
     """Is the selected voice provider set up? (Single source of truth: config.)"""
     return config.tts_configured()
@@ -173,8 +211,13 @@ def provider_name() -> str:
     return config.TTS_PROVIDER or "none"
 
 
-async def synthesize(text: str) -> bytes:
-    """Turn Bob's reply into spoken audio (MP3 bytes), via the chosen provider."""
+async def synthesize(text: str, voice: str | None = None) -> bytes:
+    """Turn a reply into spoken audio (MP3 bytes), via the chosen provider.
+
+    `voice` is a provider-specific voice id/name — normally whatever
+    `voice_for(persona)` returned, so that a companion who is a woman is
+    not read aloud by a man. None means the configured default.
+    """
     if not text.strip():
         raise ValueError("Nothing to say — empty text passed to synthesize().")
 
@@ -183,14 +226,14 @@ async def synthesize(text: str) -> bytes:
             raise RuntimeError(
                 "FISH_API_KEY is not set — the Fish Audio voice is not configured."
             )
-        return await _synthesize_fish(text)
+        return await _synthesize_fish(text, voice)
 
     if config.TTS_PROVIDER == "openai":
         if not config.OPENAI_API_KEY:
             raise RuntimeError(
                 "OPENAI_API_KEY is not set — the OpenAI voice is not configured."
             )
-        return await _synthesize_openai(text)
+        return await _synthesize_openai(text, voice)
 
     if config.TTS_PROVIDER == "yandex":
         if not (config.YANDEX_API_KEY and config.YANDEX_FOLDER_ID):
@@ -198,7 +241,7 @@ async def synthesize(text: str) -> bytes:
                 "YANDEX_API_KEY / YANDEX_FOLDER_ID not set — the Yandex voice "
                 "is not configured."
             )
-        return await _synthesize_yandex(text)
+        return await _synthesize_yandex(text, voice)
 
     if config.TTS_PROVIDER == "elevenlabs":
         if not (config.ELEVENLABS_API_KEY and config.ELEVENLABS_VOICE_ID):
@@ -206,14 +249,14 @@ async def synthesize(text: str) -> bytes:
                 "ELEVENLABS_API_KEY / ELEVENLABS_VOICE_ID not set — the ElevenLabs "
                 "voice is not configured."
             )
-        return await _synthesize_elevenlabs(text)
+        return await _synthesize_elevenlabs(text, voice)
 
     raise RuntimeError(
         f"No voice provider configured (TTS_PROVIDER={config.TTS_PROVIDER!r})."
     )
 
 
-async def _synthesize_fish(text: str) -> bytes:
+async def _synthesize_fish(text: str, voice: str | None = None) -> bytes:
     """Fish Audio TTS. POST /v1/tts with the model in a header; returns MP3 bytes."""
     headers = {
         "Authorization": f"Bearer {config.FISH_API_KEY}",
@@ -233,8 +276,9 @@ async def _synthesize_fish(text: str) -> bytes:
         "latency": "balanced",
     }
     # A chosen voice from the Fish library; omit to use Fish's default voice.
-    if config.FISH_VOICE_ID:
-        payload["reference_id"] = config.FISH_VOICE_ID
+    chosen = voice or config.FISH_VOICE_ID
+    if chosen:
+        payload["reference_id"] = chosen
 
     async with httpx.AsyncClient(timeout=60.0) as http:
         resp = await http.post(_FISH_API_URL, headers=headers, json=payload)
@@ -245,7 +289,7 @@ async def _synthesize_fish(text: str) -> bytes:
         return resp.content
 
 
-async def _synthesize_openai(text: str) -> bytes:
+async def _synthesize_openai(text: str, voice: str | None = None) -> bytes:
     """OpenAI TTS. Returns MP3 bytes.
 
     `instructions` is the interesting part: gpt-4o-mini-tts takes a plain-language
@@ -259,7 +303,7 @@ async def _synthesize_openai(text: str) -> bytes:
     }
     payload: dict = {
         "model": config.OPENAI_TTS_MODEL,
-        "voice": config.OPENAI_VOICE,
+        "voice": voice or config.OPENAI_VOICE,
         "input": text,
         "response_format": "mp3",
     }
@@ -301,7 +345,7 @@ def _yandex_takes_emotion() -> bool:
     return bool(config.YANDEX_EMOTION)
 
 
-async def _synthesize_yandex(text: str) -> bytes:
+async def _synthesize_yandex(text: str, voice: str | None = None) -> bytes:
     """Yandex SpeechKit. Form-encoded, not JSON. Returns MP3 bytes.
 
     Emotion is the one fiddly part — see `_yandex_takes_emotion`. The rule
@@ -311,11 +355,13 @@ async def _synthesize_yandex(text: str) -> bytes:
     """
     global _yandex_drop_emotion
 
+    speaking_as = voice or config.YANDEX_VOICE
+
     def form(with_emotion: bool) -> dict:
         data = {
             "text": text,
             "lang": "ru-RU",
-            "voice": config.YANDEX_VOICE,
+            "voice": speaking_as,
             "speed": config.YANDEX_SPEED,
             "format": "mp3",
             "folderId": config.YANDEX_FOLDER_ID,
@@ -332,7 +378,7 @@ async def _synthesize_yandex(text: str) -> bytes:
 
         if resp.status_code == 400 and not _yandex_drop_emotion and _yandex_takes_emotion():
             print(
-                f"\n  ℹ voice {config.YANDEX_VOICE!r} doesn't take an emotion — "
+                f"\n  ℹ voice {speaking_as!r} doesn't take an emotion — "
                 "speaking without one from now on.\n"
                 "    Set YANDEX_EMOTION= (empty) in backend/.env to silence this.\n",
                 file=sys.stderr,
@@ -344,12 +390,12 @@ async def _synthesize_yandex(text: str) -> bytes:
         if resp.status_code != 200:
             raise RuntimeError(
                 f"Yandex SpeechKit failed ({resp.status_code}): {resp.text[:300]}"
-                + _yandex_hint(resp.status_code)
+                + _yandex_hint(resp.status_code, speaking_as)
             )
         return resp.content
 
 
-def _yandex_hint(status: int) -> str:
+def _yandex_hint(status: int, speaking_as: str = "") -> str:
     """Turn Yandex's terse HTTP codes into the thing you actually have to go
     and fix. Every one of these has cost somebody an evening."""
     if status in (401, 403):
@@ -375,7 +421,7 @@ def _yandex_hint(status: int) -> str:
         )
     if status == 400:
         return (
-            f"\n    → the voice {config.YANDEX_VOICE!r} may not exist. NOTE: the "
+            f"\n    → the voice {(speaking_as or config.YANDEX_VOICE)!r} may not exist. NOTE: the "
             "`:premium` suffix that much of Yandex's documentation shows "
             "(filipp:premium) is rejected — use the bare name, e.g. `filipp`, "
             "which IS the premium male voice."
@@ -388,9 +434,9 @@ def _yandex_hint(status: int) -> str:
     return ""
 
 
-async def _synthesize_elevenlabs(text: str) -> bytes:
+async def _synthesize_elevenlabs(text: str, voice: str | None = None) -> bytes:
     """ElevenLabs TTS (eleven_multilingual_v2 handles Russian). Returns MP3 bytes."""
-    url = f"{_ELEVENLABS_API_BASE}/{config.ELEVENLABS_VOICE_ID}"
+    url = f"{_ELEVENLABS_API_BASE}/{voice or config.ELEVENLABS_VOICE_ID}"
     headers = {
         "xi-api-key": config.ELEVENLABS_API_KEY,
         "accept": "audio/mpeg",
