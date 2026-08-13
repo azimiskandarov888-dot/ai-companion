@@ -26,8 +26,11 @@ assistant's voice.
 1. **A real iPhone. Not the simulator.** The simulator has a different audio
    stack and different process rules, and will give you a confident wrong
    answer.
-2. **The backend must be running with a voice key.** Without `FISH_API_KEY` the
-   test can only ever produce Siri's voice, and you'd be measuring nothing.
+2. **The backend must be running with a voice provider configured.** With no
+   voice key the app falls back to the phone's own free voice — so the test
+   could only ever produce Siri's voice, and you'd be measuring nothing.
+   `python check_keys.py` must show the voice actually speaking, not merely
+   configured.
 
 ---
 
@@ -42,13 +45,15 @@ curl -s http://localhost:8000/api/health
 
 ### Choosing the voice first
 
-The voice matters more than anything in the code, and the samples on fish.audio
-are whatever text each creator picked. Put your shortlist through the real thing
-instead — same code path the app uses, on a sentence he would actually say:
+The voice matters more than anything in the code, and the samples on the
+providers' own sites are whatever text each creator picked. Put your
+shortlist through the real thing instead — same code path the app uses, on a
+sentence he would actually say:
 
 ```bash
 cd ~/ai-companion/backend
-python3 audition.py <voice-id> <voice-id> <voice-id>
+python3 audition.py --compare      # every provider you have a key for
+python3 audition.py --yandex       # the Russian voices, male and female
 ```
 
 It saves each one to `backend/data/auditions/` and plays them in turn, so you
@@ -58,14 +63,14 @@ of the third one. Costs a fraction of a cent per line.
 Ask of each: **would you believe this person is in the room?** Does the question
 sound *asked* or recited? Could you listen to it for an hour?
 
-The health output must show the voice provider configured. If it doesn't, add
-`FISH_API_KEY` and `FISH_VOICE_ID` to `backend/.env` first — otherwise stop
-here, the test can't tell you anything.
+The health output must show a voice provider. If it doesn't, set one up in
+`backend/.env` first (docs/HIS-VOICE.md) — otherwise stop here, the test
+can't tell you anything.
 
-**2 · The app on your real phone, pointed at the Mac**
+**2 · The app on your real phone, pointed at the computer**
 
 ```bash
-ipconfig getifaddr en0        # e.g. 192.168.1.50
+ipconfig getifaddr en0        # macOS. Windows: ipconfig → IPv4 Address
 ```
 
 In the app: **Настройки → Сервер** → `http://192.168.1.50:8000`
