@@ -74,15 +74,23 @@ OPENAI_VOICES = ["ash", "onyx", "fable", "ballad", "echo", "sage", "verse", "all
 #:
 #: `filipp` and `alena` are the premium-tier voices — no suffix, just the name.
 #: The rest are standard tier, which is half the price and audibly so.
+#: BOTH genders, because you need to choose two. About half the companions the
+#: app invents are women (matchmaker.py), and each phone's friend speaks in
+#: whichever voice matches — YANDEX_VOICE and YANDEX_VOICE_FEMALE.
 YANDEX_VOICES = [
-    "filipp",       # premium, male — the one to beat for this app
+    # male
+    "filipp",       # believed premium tier
     "ermil",
     "zahar",
     "madirus",
     "anton",
     "alexander",
     "kirill",
-    "alena",        # premium, female — here so you can hear the premium tier
+    # female
+    "alena",        # believed premium tier
+    "jane",
+    "omazh",
+    "oksana",
 ]
 
 #: One voice per provider for the side-by-side. The point of --compare is to
