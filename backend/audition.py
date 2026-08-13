@@ -62,11 +62,27 @@ OUT_DIR = config.DATA_DIR / "auditions"
 #: rather than take my word for it.
 OPENAI_VOICES = ["ash", "onyx", "fable", "ballad", "echo", "sage", "verse", "alloy"]
 
-#: Yandex's male voices, best first. The `:premium` variants are noticeably
-#: better and cost a little more — worth hearing both of the same voice.
+#: Yandex voices to try, best guess first.
+#:
+#: These are CANDIDATES, not a promise. Yandex's published voice lists and its
+#: actual API have drifted apart — the `:premium` suffix that half the
+#: documentation still shows (`filipp:premium`) is rejected outright with a
+#: 400, and which names exist appears to vary by account. So the list is
+#: deliberately wide and a rejection is not an error: it prints one quiet line
+#: and moves on, and the summary at the end tells you what your account really
+#: has. Trust that summary over any list, including this one.
+#:
+#: `filipp` and `alena` are the premium-tier voices — no suffix, just the name.
+#: The rest are standard tier, which is half the price and audibly so.
 YANDEX_VOICES = [
-    "filipp:premium", "zahar:premium", "ermil:premium", "anton:premium",
-    "filipp", "zahar", "ermil",
+    "filipp",       # premium, male — the one to beat for this app
+    "ermil",
+    "zahar",
+    "madirus",
+    "anton",
+    "alexander",
+    "kirill",
+    "alena",        # premium, female — here so you can hear the premium tier
 ]
 
 #: One voice per provider for the side-by-side. The point of --compare is to
@@ -200,7 +216,14 @@ async def audition(
             try:
                 audio = await tts.synthesize(line)
             except Exception as e:
-                print(f"     ✗ {e}\n")
+                # A rejected voice NAME is ordinary here — this is a shortlist
+                # of candidates, and finding out which ones your account has is
+                # the point. Anything else is a real problem and gets the full
+                # message, hints and all.
+                if "400" in str(e):
+                    print("     — не годится: такого голоса у вашего аккаунта нет\n")
+                else:
+                    print(f"     ✗ {e}\n")
                 continue
 
             safe = voice_id.replace(":", "-")[:16] or "default"

@@ -60,8 +60,12 @@ EMBEDDING_DIM: int = int(os.getenv("EMBEDDING_DIM", "512"))
 
 # --- The mouth: text-to-speech ---------------------------------------------
 # Which voice provider speaks Bob's replies:
-#   "fish"       — Fish Audio (cheaper, open-weight, fast). The default.
-#   "elevenlabs" — ElevenLabs (warm, cloud-only).
+#   "yandex"     — Yandex SpeechKit. Cheapest for Russian by a distance, and
+#                  the most Russian-sounding. See docs/HIS-VOICE.md.
+#   "openai"     — same key as the ears; takes a direction on HOW to speak.
+#   "fish"       — Fish Audio. Excellent, but bills UTF-8 BYTES, so Russian
+#                  costs double the headline. The current default.
+#   "elevenlabs" — warmest, several times the price.
 #   ""/"none"    — no server voice → the client speaks with its own free voice
 #                  (the MVP path).
 # NOTE: this is only the VOICE. The EARS stay on Whisper above — Fish Audio's
@@ -89,18 +93,21 @@ ELEVENLABS_MODEL: str = os.getenv("ELEVENLABS_MODEL", "eleven_multilingual_v2")
 # the way sentences end are right in a way that voices trained mostly on English
 # rarely manage on Russian text.
 #
-# Male voices: filipp · zahar · ermil · anton   (add ":premium" for the best
-# quality, e.g. filipp:premium). Female: alena · jane · oksana · omazh.
+# Voices are BARE NAMES. The `:premium` suffix that much of Yandex's own
+# documentation still shows is rejected with a 400 by the live API.
+#   premium tier:  filipp (male) · alena (female)
+#   standard tier: ermil · zahar · jane · omazh · oksana
+# `python3 audition.py --yandex` reports what your account really has.
 #
 # EMOTION IS OFF BY DEFAULT, and that makes him MORE expressive, not less.
 # `emotion` is a crude override — one of neutral | good | evil applied to a
-# whole utterance — and it only works on the standard voices (jane, omazh in
-# Russian). The premium voices don't accept it because they don't need it:
-# they read the sentence first and choose the intonation themselves, the way a
-# person does. Forcing "good" onto every line he ever says is the thing that
-# makes synthetic speech sound like a call centre.
+# WHOLE utterance — and not every voice accepts it. The better voices read
+# each sentence and choose its intonation themselves, which is the thing
+# `emotion` crudely approximates. Forcing "good" onto every line he ever says
+# is what makes synthetic speech sound like a call centre.
 #
-# Set it only if you deliberately want a standard voice held to one tone.
+# Set it only if you deliberately want one tone held throughout. If the voice
+# rejects it, tts.py says so once and speaks without it rather than failing.
 #
 # Needs a Yandex Cloud account: an API key and the folder ID it belongs to.
 YANDEX_API_KEY: str | None = os.getenv("YANDEX_API_KEY")

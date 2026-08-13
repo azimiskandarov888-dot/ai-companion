@@ -281,22 +281,24 @@ _yandex_drop_emotion = False
 
 
 def _yandex_takes_emotion() -> bool:
-    """Should `emotion` be sent at all for the configured voice?
+    """Should `emotion` be sent at all?
 
-    Not sending it is the BETTER outcome, which is the opposite of how it
-    reads. `emotion` is a crude override — one of neutral | good | evil, held
-    across a whole utterance — and only the standard voices accept it. The
-    premium ones refuse it because they already do the thing it approximates:
-    they read the sentence first and pick human intonation for it. Pinning
+    Only if it was explicitly asked for — the default is empty, and empty is
+    the better sound. `emotion` is a crude override (one of neutral | good |
+    evil, held across a whole utterance) that only some voices accept; the
+    premium ones refuse it because they already do the thing it approximates,
+    reading the sentence first and picking human intonation for it. Pinning
     every line he ever says to "good" is what makes synthetic speech sound
     like a call centre.
 
-    So it goes only where it is asked for AND can actually work.
+    There is deliberately no cleverness about WHICH voices take it. An earlier
+    version guessed from a `:premium` suffix — which turned out not to exist:
+    Yandex rejects `filipp:premium` with a 400 and wants the bare name, though
+    a good deal of its own documentation still shows the suffix. Guessing from
+    published lists that disagree with the live API is how you get a heuristic
+    that is confidently wrong; the retry below finds out for real, once.
     """
-    if not config.YANDEX_EMOTION:
-        return False
-    # filipp:premium, alena:rc — anything with a quality suffix chooses its own.
-    return ":" not in config.YANDEX_VOICE
+    return bool(config.YANDEX_EMOTION)
 
 
 async def _synthesize_yandex(text: str) -> bytes:
@@ -373,8 +375,13 @@ def _yandex_hint(status: int) -> str:
         )
     if status == 400:
         return (
-            "\n    → usually YANDEX_FOLDER_ID is missing or wrong, or the voice "
-            "name doesn't exist (see docs/HIS-VOICE.md)"
+            f"\n    → the voice {config.YANDEX_VOICE!r} may not exist. NOTE: the "
+            "`:premium` suffix that much of Yandex's documentation shows "
+            "(filipp:premium) is rejected — use the bare name, e.g. `filipp`, "
+            "which IS the premium male voice."
+            "\n      Otherwise YANDEX_FOLDER_ID is missing or wrong."
+            "\n      `python3 audition.py --yandex` lists what your account "
+            "actually has."
         )
     if status == 429:
         return "\n    → too many requests at once, or the billing account is out of credit"

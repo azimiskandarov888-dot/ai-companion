@@ -155,15 +155,23 @@ That speaks the same sentence in each of the male voices, best first, and
 saves the files so you can compare again tomorrow. Put the winner in `.env`:
 
 ```ini
-YANDEX_VOICE=filipp:premium
+YANDEX_VOICE=filipp
 ```
 
 ### The voices
 
-Male: `filipp` · `zahar` · `ermil` · `anton` — add `:premium` to any of them
-(e.g. `filipp:premium`) for the noticeably better model, at double the price
-that is still cheaper than everyone else's standard tier.
-Female: `alena` · `jane` · `oksana` · `omazh`.
+**Bare names — there is no `:premium` suffix.** A great deal of Yandex's own
+documentation still shows `filipp:premium`, and the live API rejects it with
+a 400. `filipp` on its own **is** the premium male voice.
+
+| tier | voices | price |
+|---|---|---|
+| premium | `filipp` (m) · `alena` (f) | ~66 ₽/hour |
+| standard | `ermil` · `zahar` · `jane` · `omazh` · `oksana` | ~33 ₽/hour |
+
+Which names your account actually accepts varies, so don't trust that table
+either — `python3 audition.py --yandex` tries a wide shortlist, skips what
+comes back 400, and prints what really worked.
 
 `YANDEX_SPEED=0.95` is set slightly under 1.0 on purpose — kinder to an older
 listener.
@@ -184,7 +192,7 @@ So:
 
 | | |
 |---|---|
-| `filipp:premium`, no emotion | reads the sentence, decides how it should sound |
+| `filipp`, no emotion | reads the sentence, decides how it should sound |
 | `jane` + `emotion=good` | every line pinned to the same cheerful tone |
 
 Pinning every sentence a lonely person hears to "good" is exactly what makes
