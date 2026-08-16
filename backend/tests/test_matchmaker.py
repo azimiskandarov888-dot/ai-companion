@@ -222,6 +222,83 @@ def test_half_a_person_is_refused(monkeypatch):
         asyncio.run(matchmaker.create_companion(U, "про меня"))
 
 
+def test_a_bad_reply_is_never_shown_blind():
+    """The regression this pins: three different causes (no JSON at all,
+    broken JSON, a missing required field) used to raise the identical blank
+    message, both to the user and in the terminal — there was no way to tell
+    which had happened, or what the model had actually said, without
+    reproducing it live. Every branch must now name itself and show a preview
+    of the real response."""
+    with pytest.raises(RuntimeError):
+        matchmaker._extract_json("Извини, сегодня без JSON.")
+
+    with pytest.raises(RuntimeError):
+        matchmaker._extract_json('{"name": "Аноним", "age":}')  # malformed
+
+    with pytest.raises(RuntimeError):
+        # Valid JSON, but missing everything required except a name.
+        matchmaker._extract_json('{"name": "Аноним"}')
+
+
+def test_missing_required_fields_are_named(capsys):
+    with pytest.raises(RuntimeError):
+        matchmaker._extract_json(
+            json.dumps({"name": "Аноним", "age": "40 лет"}, ensure_ascii=False)
+        )
+    err = capsys.readouterr().err
+    # The exact gap that met the app live: everything present except the
+    # fields the pen skipped. Somebody debugging this later needs to see
+    # WHICH ones, not just "failed".
+    assert "home" in err and "backstory" in err and "personality" in err
+    assert "speech_style" in err
+    assert "Аноним" not in err.split("ответ модели")[0]  # the reason, not the dump
+
+
+def test_a_bad_first_reply_gets_one_retry_before_giving_up(monkeypatch):
+    """The one stage in creation with no fallback of its own: a failed
+    reading is skipped, an unparseable ten-strangers reply degrades to one
+    sketch, but a broken deep write used to fail creation outright — on the
+    single screen where that means «он пока не смог прийти» to someone who
+    came specifically to meet him. A malformed reply is a real, observed
+    failure mode of the model itself, and asking again routinely fixes it."""
+    write_calls = 0
+
+    async def fake_generate(system_prompt, user_text, max_tokens=1500, model=None):
+        nonlocal write_calls
+        if "ДЕСЯТЬ" in system_prompt:
+            return TEN
+        write_calls += 1
+        if write_calls == 1:
+            return "Извини, не в этот раз."  # no JSON — the exact live symptom
+        return json.dumps(FRIEND, ensure_ascii=False)
+
+    monkeypatch.setattr(brain, "generate_text", fake_generate)
+    created = asyncio.run(matchmaker.create_companion(U, "про меня"))
+
+    assert created["name"] == "Фёдор"
+    assert write_calls == 2
+
+
+def test_two_bad_replies_in_a_row_still_fails_and_says_so(monkeypatch, capsys):
+    """The retry is bounded at one — this must not become a silent loop that
+    keeps spending money while someone stares at an arriving screen."""
+    write_calls = 0
+
+    async def fake_generate(system_prompt, user_text, max_tokens=1500, model=None):
+        nonlocal write_calls
+        if "ДЕСЯТЬ" in system_prompt:
+            return TEN
+        write_calls += 1
+        return "Извини, не в этот раз."
+
+    monkeypatch.setattr(brain, "generate_text", fake_generate)
+    with pytest.raises(RuntimeError):
+        asyncio.run(matchmaker.create_companion(U, "про меня"))
+
+    assert write_calls == 2  # tried twice, not once, not forever
+    assert capsys.readouterr().err.count("друг не собрался") == 2
+
+
 def test_create_endpoint(pen):
     with TestClient(main.app) as client:
         r = client.post(

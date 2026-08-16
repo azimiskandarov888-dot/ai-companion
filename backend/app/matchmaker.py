@@ -213,18 +213,42 @@ _FAIL = "Не удалось создать друга — попробуйте 
 _REQUIRED = ("name", "age", "home", "backstory", "personality", "speech_style")
 
 
+def _log_extract_failure(reason: str, raw: str) -> None:
+    """Say WHY, and show what the model actually sent — never just fail quietly.
+
+    Before this, every one of the three ways `_extract_json` can fail — no
+    JSON at all, broken JSON, a required field left empty — raised the exact
+    same blank message, both to the user («не удалось создать друга») and in
+    the terminal. There was no way to tell which of the three had happened, or
+    what the model had actually said, without reproducing it live with someone
+    watching the logs. That is precisely the failure mode this whole codebase
+    otherwise refuses to allow (see `_unavailable` in main.py).
+    """
+    preview = " ⏎ ".join(raw.strip().splitlines())[:500]
+    print(
+        f"\n  ✗ друг не собрался — {reason}\n    ответ модели (обрезано): {preview}\n",
+        file=sys.stderr,
+        flush=True,
+    )
+
+
 def _extract_json(raw: str) -> dict:
     """Pull the persona JSON out of the reply (tolerating code fences/prose)."""
     start, end = raw.find("{"), raw.rfind("}")
     if start == -1 or end <= start:
+        _log_extract_failure("ответ не похож на JSON вовсе", raw)
         raise RuntimeError(_FAIL)
     try:
         data = json.loads(raw[start : end + 1])
-    except json.JSONDecodeError:
+    except json.JSONDecodeError as e:
+        _log_extract_failure(f"JSON не разобрался: {e}", raw)
         raise RuntimeError(_FAIL)
     if not isinstance(data, dict):
+        _log_extract_failure("верхний уровень ответа — не объект", raw)
         raise RuntimeError(_FAIL)
-    if any(not str(data.get(key, "")).strip() for key in _REQUIRED):
+    missing = [key for key in _REQUIRED if not str(data.get(key, "")).strip()]
+    if missing:
+        _log_extract_failure(f"не хватает обязательных полей: {', '.join(missing)}", raw)
         raise RuntimeError(_FAIL)
     return data
 
@@ -304,9 +328,29 @@ async def create_companion(
     chosen = r.choice(_split_sketches(ten))
 
     write_prompt = context + "\n\nВЫБРАННЫЙ СЛУЧАЕМ НАБРОСОК (разверни его):\n" + chosen
-    raw = await brain.generate_text(_WRITE_SYSTEM, write_prompt, max_tokens=2500)
 
-    created = _extract_json(raw)
+    # ONE retry, here specifically. Every earlier stage in this function
+    # degrades gracefully on a bad response — a failed reading is skipped, an
+    # unparseable ten-strangers reply falls back to treating the whole thing
+    # as one sketch — but there is no fallback for a broken deep write: it
+    # either is a person or the entire creation fails, on the one screen where
+    # that means «он пока не смог прийти» to someone who came here specifically
+    # to meet him. Sending the identical prompt again is not guesswork: an
+    # incomplete or malformed JSON reply is a real, observed failure mode of
+    # the model itself (not a network error — it answered, just not cleanly),
+    # and asking a second time routinely gets a clean one.
+    created = None
+    failure: RuntimeError | None = None
+    for _attempt in range(2):
+        raw = await brain.generate_text(_WRITE_SYSTEM, write_prompt, max_tokens=2500)
+        try:
+            created = _extract_json(raw)
+            break
+        except RuntimeError as e:
+            failure = e
+    if created is None:
+        assert failure is not None
+        raise failure
     # Only now, once there is definitely a new friend to replace him with, is
     # the old one erased. Wiping first would mean a failed write leaves this
     # person with nobody at all.
