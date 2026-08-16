@@ -31,6 +31,29 @@ _client: AsyncAnthropic | None = None
 # Capped so one question can't spiral into many searches.
 _WEB_SEARCH_TOOL = {"type": "web_search_20260209", "name": "web_search", "max_uses": 3}
 
+# THE ANTHROPIC SDK'S DEFAULT READ TIMEOUT IS 600 SECONDS. Found the hard way:
+# on a degraded connection (a weak cellular hotspot backhaul, in the one case
+# observed so far), the backend's own call to Claude just sits there — for up
+# to ten minutes — while the phone gives up after 25–30s. The result looks
+# like the app "froze": no error anywhere, because the backend hadn't failed
+# yet, it was still patiently waiting. Nothing in this file bounded that call.
+#
+# So every LIVE call — the ones a person is standing there waiting on — gets an
+# explicit timeout, comfortably under the client-side ceiling for the endpoint
+# that uses it (30s on /api/talk, 25s on /api/intake/next, 12s on the
+# background-voice intent) and comfortably ABOVE normal latency (Haiku without
+# tools answers in a couple of seconds). It fires only when something is
+# actually stuck.
+#
+# This is a STALL detector, not a hard cap on total duration: every call here
+# goes through `.stream()` under the hood, and httpx's read timeout resets on
+# every chunk received. A reply that is slow but actively arriving is never
+# killed by this — only a connection producing nothing at all for this long.
+# That is exactly why `think()` (reading.py) and the deep-write calls in
+# matchmaker.py are left alone: they are deliberately slow, but they are
+# WORKING, and a stall detector does not care how long a real answer takes.
+_LIVE_REPLY_TIMEOUT = 20.0
+
 #: Substrings (lowercase) that mean the user is asking about the world right
 #: now, which his own written life can't answer. Deliberately narrow: a missed
 #: match just means he answers from his own head — which is what a person
@@ -114,6 +137,7 @@ async def generate_reply(
             system=_system_blocks(system_stable, system_variable),
             messages=messages,
             tools=tools,
+            timeout=_LIVE_REPLY_TIMEOUT,
         ) as stream:
             message = await stream.get_final_message()
         # If the server-side search loop paused, feed its progress back and
@@ -152,6 +176,7 @@ async def stream_reply(
         max_tokens=config.MAX_REPLY_TOKENS,
         system=_system_blocks(system_stable, system_variable),
         messages=list(history),
+        timeout=_LIVE_REPLY_TIMEOUT,
     ) as stream:
         async for event in stream:
             if event.type == "text":
@@ -196,6 +221,7 @@ async def generate_text(
     user_text: str,
     max_tokens: int = 1500,
     model: str | None = None,
+    timeout: float | None = None,
 ) -> str:
     """One-shot writing call (no tools, no history).
 
@@ -204,13 +230,29 @@ async def generate_text(
     nobody is waiting mid-sentence — but `model` lets a caller pick the fast
     one for work that is broad rather than deep (sketching ten strangers),
     which keeps the arriving screen short.
+
+    `timeout` is None by default, meaning the SDK's own generous read timeout
+    — so creating a friend or rewriting the diary is never cut short (see
+    _LIVE_REPLY_TIMEOUT above for why that would be wrong here). A caller in a
+    live conversation with a real ceiling to respect — intake.py is the one
+    that exists so far — passes an explicit value comfortably under it.
+
+    IMPORTANT: `None` here is only ever a Python default meaning "not passed".
+    It must never reach the SDK call as a literal `timeout=None` — to httpx
+    that means "no timeout, ever," which is a stricter promise than even the
+    SDK's own default and would quietly remove the ceiling this whole file
+    exists to add. So the kwarg is omitted entirely unless a real number was
+    given, leaving the SDK to see its own unset default and behave exactly as
+    it always has for every caller that doesn't ask for a bound.
     """
     client = _get_client()
+    extra = {"timeout": timeout} if timeout is not None else {}
     async with client.messages.stream(
         model=model or config.BRAIN_MODEL,
         max_tokens=max_tokens,
         system=system_prompt,
         messages=[{"role": "user", "content": user_text}],
+        **extra,
     ) as stream:
         message = await stream.get_final_message()
     return "".join(b.text for b in message.content if b.type == "text").strip()

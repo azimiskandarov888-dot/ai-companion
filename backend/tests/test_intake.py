@@ -54,19 +54,38 @@ def test_every_opener_is_easy_AND_obviously_about_them():
         assert any(word in opener.lower() for word in ("вы", "ваш", "вас"))
 
 
+class _Seen(list):
+    """What each call was shown (`self`, as a plain list of prompts) — plus,
+    tacked on, the `timeout` each call was made with. A subclass rather than a
+    tuple so every existing `asker[-1]` / `asker[0]` keeps working unchanged."""
+    timeouts: list[float | None]
+
+
 @pytest.fixture
 def asker(monkeypatch):
-    """Fake the question model; record what it was shown."""
-    seen: list[str] = []
+    """Fake the question model; record what it was shown and asked to bound."""
+    seen = _Seen()
+    seen.timeouts = []
 
-    async def fake_generate(system_prompt, user_text, max_tokens=1500, model=None):
+    async def fake_generate(system_prompt, user_text, max_tokens=1500, model=None, timeout=None):
         seen.append(user_text)
+        seen.timeouts.append(timeout)
         return json.dumps({"reaction": "Река — хорошо.",
                            "say": "А кто вас научил рыбачить?",
                            "kind": "short", "enough": False}, ensure_ascii=False)
 
     monkeypatch.setattr(brain, "generate_text", fake_generate)
     return seen
+
+
+def test_the_question_call_is_bounded_under_the_phones_ceiling(asker):
+    """/api/intake/next has a real client-side timeout (25s — see
+    BackendClient.intakeNext). Left unbounded, a stalled connection to Claude
+    has the backend waiting up to ten minutes while the phone has long since
+    given up — which is exactly what a frozen onboarding screen looks like,
+    because nothing has failed yet on this end to explain it."""
+    asyncio.run(intake.next_question(_talked(5)))
+    assert asker.timeouts and all(t is not None and t < 25 for t in asker.timeouts)
 
 
 def _talked(n: int) -> list[dict]:
@@ -102,7 +121,7 @@ def test_the_ladder_is_paced_by_us_not_guessed_by_the_model(asker):
 def test_the_deep_question_gets_a_bigger_box(monkeypatch):
     """`kind` is how the app knows to hand over a taller field — the size of
     the space you're given is itself an instruction about how much to say."""
-    async def deep(system_prompt, user_text, max_tokens=1500, model=None):
+    async def deep(system_prompt, user_text, max_tokens=1500, model=None, timeout=None):
         return json.dumps({"reaction": "", "say": "О чём думаете, когда не спится?",
                            "kind": "open", "enough": False}, ensure_ascii=False)
 
@@ -111,7 +130,7 @@ def test_the_deep_question_gets_a_bigger_box(monkeypatch):
 
 
 def test_an_unknown_kind_degrades_to_the_safe_one(monkeypatch):
-    async def odd(system_prompt, user_text, max_tokens=1500, model=None):
+    async def odd(system_prompt, user_text, max_tokens=1500, model=None, timeout=None):
         return json.dumps({"say": "Кем работали?", "kind": "gigantic"}, ensure_ascii=False)
 
     monkeypatch.setattr(brain, "generate_text", odd)
@@ -121,7 +140,7 @@ def test_an_unknown_kind_degrades_to_the_safe_one(monkeypatch):
 def test_ending_needs_no_question(monkeypatch):
     """A turn that ends the conversation carries no question, and that is not
     a malformed reply — refusing it would strand people at the last step."""
-    async def done(system_prompt, user_text, max_tokens=1500, model=None):
+    async def done(system_prompt, user_text, max_tokens=1500, model=None, timeout=None):
         return json.dumps({"say": "", "enough": True}, ensure_ascii=False)
 
     monkeypatch.setattr(brain, "generate_text", done)
@@ -202,7 +221,7 @@ def test_the_conversation_becomes_the_story_a_friend_is_built_from(monkeypatch):
         read.append(about)
         return {"register": "коротко", "would_reach_them": "спокойно"}
 
-    async def fake_generate(system_prompt, user_text, max_tokens=1500, model=None):
+    async def fake_generate(system_prompt, user_text, max_tokens=1500, model=None, timeout=None):
         if "ДЕСЯТЬ" in system_prompt:
             return "1. Зоя, 31, север, крановщица.\n2. Пётр, 44, село, пасечник."
         return json.dumps({
@@ -247,7 +266,7 @@ def test_free_writing_still_works(monkeypatch):
     async def fake_read(about, wishes=""):
         return {"register": "коротко", "would_reach_them": "спокойно"}
 
-    async def fake_generate(system_prompt, user_text, max_tokens=1500, model=None):
+    async def fake_generate(system_prompt, user_text, max_tokens=1500, model=None, timeout=None):
         if "ДЕСЯТЬ" in system_prompt:
             return "1. Гриша, 73, посёлок, сварщик.\n2. Нина, 52, горы, фельдшер."
         return json.dumps({

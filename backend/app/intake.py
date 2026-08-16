@@ -256,8 +256,13 @@ async def next_question(conversation: list[dict]) -> dict:
         )
 
     prompt = f"{_render(conversation)}\n\nОтветов получено: {len(answered)}. {pacing}"
+    # A real ceiling: the phone gives up on this call at 25s
+    # (BackendClient.intakeNext). Left unbounded, a degraded connection to
+    # Claude has the SDK waiting up to 600s while the app has long since ended
+    # the conversation and moved on — which looks exactly like a frozen
+    # screen, because nothing has actually failed yet on this end.
     raw = await brain.generate_text(
-        _ASK_SYSTEM, prompt, max_tokens=300, model=config.INTAKE_MODEL
+        _ASK_SYSTEM, prompt, max_tokens=300, model=config.INTAKE_MODEL, timeout=18.0
     )
     return _extract_json(raw)
 
