@@ -61,7 +61,7 @@ def pen(monkeypatch):
     prose + code fences — the messy case)."""
     calls: list[str] = []
 
-    async def fake_generate(system_prompt, user_text, max_tokens=1500, model=None):
+    async def fake_generate(system_prompt, user_text, max_tokens=1500, model=None, timeout=None):
         calls.append(user_text)
         if "ДЕСЯТЬ" in system_prompt:
             return TEN
@@ -200,7 +200,7 @@ def test_new_friend_starts_with_a_clean_slate(pen):
 
 
 def test_unparseable_reply_fails_gently(monkeypatch):
-    async def fake_generate(system_prompt, user_text, max_tokens=1500, model=None):
+    async def fake_generate(system_prompt, user_text, max_tokens=1500, model=None, timeout=None):
         return "Извини, сегодня без JSON."
 
     monkeypatch.setattr(brain, "generate_text", fake_generate)
@@ -212,7 +212,7 @@ def test_half_a_person_is_refused(monkeypatch):
     """A character missing its core isn't a person yet — and the holes must
     never again be filled from the template. Rejecting is the only honest
     option left, so it has to actually happen."""
-    async def fake_generate(system_prompt, user_text, max_tokens=1500, model=None):
+    async def fake_generate(system_prompt, user_text, max_tokens=1500, model=None, timeout=None):
         if "ДЕСЯТЬ" in system_prompt:
             return TEN
         return json.dumps({"name": "Аноним", "age": "40 лет"}, ensure_ascii=False)
@@ -254,6 +254,25 @@ def test_missing_required_fields_are_named(capsys):
     assert "Аноним" not in err.split("ответ модели")[0]  # the reason, not the dump
 
 
+def test_the_ten_strangers_and_deep_write_calls_are_both_bounded(pen, monkeypatch):
+    """The other half of the real bug: the reading was the slow one, but
+    neither of THESE two calls had a timeout either. On a stall in either one,
+    the client's own ceiling was the only thing that would ever have given
+    up — silently, after a long wait, with no clean failure in between."""
+    timeouts: list[float | None] = []
+
+    async def recording(system_prompt, user_text, max_tokens=1500, model=None, timeout=None):
+        timeouts.append(timeout)
+        if "ДЕСЯТЬ" in system_prompt:
+            return TEN
+        return json.dumps(FRIEND, ensure_ascii=False)
+
+    monkeypatch.setattr(brain, "generate_text", recording)
+    asyncio.run(matchmaker.create_companion(U, "Люблю тишину."))
+
+    assert timeouts == [matchmaker._STAGE_TIMEOUT, matchmaker._STAGE_TIMEOUT]
+
+
 def test_a_bad_first_reply_gets_one_retry_before_giving_up(monkeypatch):
     """The one stage in creation with no fallback of its own: a failed
     reading is skipped, an unparseable ten-strangers reply degrades to one
@@ -263,7 +282,7 @@ def test_a_bad_first_reply_gets_one_retry_before_giving_up(monkeypatch):
     failure mode of the model itself, and asking again routinely fixes it."""
     write_calls = 0
 
-    async def fake_generate(system_prompt, user_text, max_tokens=1500, model=None):
+    async def fake_generate(system_prompt, user_text, max_tokens=1500, model=None, timeout=None):
         nonlocal write_calls
         if "ДЕСЯТЬ" in system_prompt:
             return TEN
@@ -284,7 +303,7 @@ def test_two_bad_replies_in_a_row_still_fails_and_says_so(monkeypatch, capsys):
     keeps spending money while someone stares at an arriving screen."""
     write_calls = 0
 
-    async def fake_generate(system_prompt, user_text, max_tokens=1500, model=None):
+    async def fake_generate(system_prompt, user_text, max_tokens=1500, model=None, timeout=None):
         nonlocal write_calls
         if "ДЕСЯТЬ" in system_prompt:
             return TEN

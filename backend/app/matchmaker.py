@@ -147,6 +147,15 @@ _SPARK_WORDS = (
 #: point (four from ~230 words ≈ hundreds of millions of combinations).
 _SPARK_COUNT = 4
 
+#: Bounds the two generate_text calls below (sketching ten strangers, and each
+#: attempt at the deep write). Neither had a timeout at all until a real -1001
+#: on /api/companion/create showed why that mattered: with the reading also
+#: unbounded and the client waiting only 40s total, a slow-but-working
+#: creation had no way to reliably finish in time. This, brain._READING_TIMEOUT
+#: (90s), and the client's own ceiling (now 120s — see BackendClient.swift)
+#: were chosen together as one budget, not independently.
+_STAGE_TIMEOUT = 30.0
+
 
 def _roll_sparks(rng: random.Random | None = None) -> list[str]:
     r = rng or random
@@ -320,7 +329,8 @@ async def create_companion(
         + ", ".join(_roll_sparks(rng))
     )
     ten = await brain.generate_text(
-        _TEN_SYSTEM, sketch_prompt, max_tokens=1400, model=config.CHAT_MODEL
+        _TEN_SYSTEM, sketch_prompt, max_tokens=1400, model=config.CHAT_MODEL,
+        timeout=_STAGE_TIMEOUT,
     )
 
     # The dice choose — never the model. Asked to choose, it would pick its
@@ -342,7 +352,9 @@ async def create_companion(
     created = None
     failure: RuntimeError | None = None
     for _attempt in range(2):
-        raw = await brain.generate_text(_WRITE_SYSTEM, write_prompt, max_tokens=2500)
+        raw = await brain.generate_text(
+            _WRITE_SYSTEM, write_prompt, max_tokens=2500, timeout=_STAGE_TIMEOUT
+        )
         try:
             created = _extract_json(raw)
             break

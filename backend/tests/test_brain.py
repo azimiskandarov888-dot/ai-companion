@@ -165,12 +165,70 @@ def test_an_explicit_none_never_reaches_the_sdk_as_a_literal_timeout(monkeypatch
     assert "timeout" not in fake.messages.calls[0]
 
 
+def test_think_defaults_to_a_bound_reading_timeout(monkeypatch):
+    """The reading is deliberately the slowest call in the app, but it was
+    left with NO bound at all — and a dead connection during it could hang
+    for the SDK's own 600s while /api/companion/create's client had already
+    given up in a fraction of that. Bounding it generously turns a wasted
+    wait into a graceful degrade: matchmaker already continues without a
+    reading that fails, so a fast, clear failure here means the friend still
+    arrives instead of the whole creation hanging for nothing."""
+    fake = _FakeClient(message=_Message("текст"))
+    monkeypatch.setattr(brain, "_get_client", lambda: fake)
+
+    asyncio.run(brain.think("system", "user"))
+
+    assert fake.messages.calls[0]["timeout"] == brain._READING_TIMEOUT
+
+
+def test_think_none_never_reaches_the_sdk_as_a_literal_timeout(monkeypatch):
+    """The exact same care as generate_text, for the same reason: httpx reads
+    a literal `timeout=None` as 'never', not 'use the default'."""
+    fake = _FakeClient(message=_Message("текст"))
+    monkeypatch.setattr(brain, "_get_client", lambda: fake)
+
+    asyncio.run(brain.think("system", "user", timeout=None))
+
+    assert "timeout" not in fake.messages.calls[0]
+
+
 def test_the_live_timeout_is_a_real_bound_well_under_a_client_ceiling():
     """Below every client-side ceiling in the app (30s /api/talk, 25s
     /api/intake/next, 12s the background-voice intent) and well above normal
     Haiku latency (a couple of seconds) — it should only ever fire on a
     genuine stall."""
     assert 10.0 <= brain._LIVE_REPLY_TIMEOUT <= 22.0
+
+
+def test_the_creation_budget_actually_fits_under_the_phones_ceiling():
+    """The bug, pinned at the level it actually happened: reading (unbounded)
+    + two more calls (unbounded) vs. a 40s client timeout had no reason to
+    ever reliably fit — and didn't, on a real phone, on a real attempt.
+
+    This doesn't re-derive BackendClient.swift's 120s (Python can't read
+    Swift), but it fixes the number here and requires it stay documented and
+    consistent: matchmaker._STAGE_TIMEOUT appears twice in a normal run (ten
+    strangers, one deep-write attempt) and up to three times if the deep
+    write is retried once. If either budget grows without the other, this is
+    where that mismatch should get caught before it reaches a phone again.
+    """
+    from app import matchmaker
+
+    normal = brain._READING_TIMEOUT + 2 * matchmaker._STAGE_TIMEOUT
+    worst = brain._READING_TIMEOUT + 3 * matchmaker._STAGE_TIMEOUT
+    # The client's own ceiling — see BackendClient.swift createCompanion.
+    client_ceiling = 200.0
+
+    assert normal < client_ceiling, (
+        "a normal, non-retried creation can now exceed the phone's patience "
+        "again — raise the client timeout or shrink a stage budget"
+    )
+    # Even the absolute worst case (reading AND the retried deep write both
+    # run to their full bound) should stay under the client's ceiling — so
+    # the SERVER's own bounded, clearly-logged failure always gets a chance
+    # to be reported, rather than the client giving up first on a blind
+    # timer with no idea which stage was actually the problem.
+    assert worst < client_ceiling
 
 
 def test_persona_lives_in_the_stable_half():

@@ -133,7 +133,7 @@ def test_a_failed_reading_still_lets_a_friend_walk_in(monkeypatch, capsys):
     async def broken_reading(*a, **k):
         raise RuntimeError("модель недоступна")
 
-    async def fake_generate(system_prompt, user_text, max_tokens=1500, model=None):
+    async def fake_generate(system_prompt, user_text, max_tokens=1500, model=None, timeout=None):
         if "ДЕСЯТЬ" in system_prompt:
             return "1. Зоя, 31, северный город, крановщица.\n2. Пётр, 44, село, пасечник."
         return json.dumps(
@@ -158,7 +158,7 @@ def test_the_reading_survives_starting_over(reader, monkeypatch):
     заново» replaces who they talk to, not who they are."""
     reading.save(U, READING)
 
-    async def fake_generate(system_prompt, user_text, max_tokens=1500, model=None):
+    async def fake_generate(system_prompt, user_text, max_tokens=1500, model=None, timeout=None):
         if "ДЕСЯТЬ" in system_prompt:
             return "1. Гриша, 73, посёлок, сварщик.\n2. Нина, 52, горы, фельдшер."
         return json.dumps(

@@ -113,7 +113,7 @@ def client(monkeypatch):
     """The server with its three senses faked — and a pen that writes whichever
     friend the story asks for, so the two people get visibly different ones."""
 
-    async def fake_generate(system_prompt, user_text, max_tokens=1500, model=None):
+    async def fake_generate(system_prompt, user_text, max_tokens=1500, model=None, timeout=None):
         if "ДЕСЯТЬ" in system_prompt:
             return "1. Тамара, 39, Иркутск, проводница.\n2. Гриша, 73, посёлок, сварщик."
         who = "Анна" if "Анна" in user_text else "Борис"

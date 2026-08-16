@@ -308,11 +308,29 @@ struct BackendClient {
 
     /// Their story, plus whatever they asked for, and he walks in — with his
     /// own name. Wishes may be empty; that's arguably the best case.
+    ///
+    /// 200s, not 40. The server runs THREE calls in sequence for this — the
+    /// psychological reading, the ten strangers, the deep write (which can
+    /// itself run twice — see matchmaker's one retry on a malformed reply) —
+    /// and the first of those is deliberately the slowest thing the app ever
+    /// does (its own comment calls it "worth minutes"). 40s was tight enough
+    /// that a real, working — just unhurried — creation hit this exact
+    /// timeout on a real phone.
+    ///
+    /// The number is chosen to sit ABOVE the server's own worst case, not
+    /// just its typical one: reading bounded at 90s + two stage calls at 30s
+    /// each + one retry of the second = 180s absolute maximum (see
+    /// brain._READING_TIMEOUT / matchmaker._STAGE_TIMEOUT, and
+    /// test_the_creation_budget_actually_fits_under_the_phones_ceiling, which
+    /// fails the build if the two ever drift apart again). Below 180 and the
+    /// client can still give up first, blindly, exactly as it just did —
+    /// only now with no idea which of three stages was the slow one, when
+    /// the server would have said so clearly within its own bound.
     func createCompanion(story: String, wishes: String) async throws -> CreateCompanionResponse {
         try await postJSON(
             "api/companion/create",
             body: ["about": story, "wishes": wishes],
-            timeout: 40                       // he is being written; give him time
+            timeout: 200
         )
     }
 

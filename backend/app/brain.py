@@ -54,6 +54,26 @@ _WEB_SEARCH_TOOL = {"type": "web_search_20260209", "name": "web_search", "max_us
 # WORKING, and a stall detector does not care how long a real answer takes.
 _LIVE_REPLY_TIMEOUT = 20.0
 
+# THE READING (think(), below) IS DELIBERATELY THE SLOWEST CALL IN THE APP —
+# its own docstring calls it "worth minutes and cents" — so it does NOT get
+# the tight live-reply bound above. But it was left with NO bound at all,
+# which meant a dead connection during creation could hang for up to the
+# SDK's 600s default, silently, while the phone's own 40s ceiling on
+# /api/companion/create had already given up. That combination — one side
+# unbounded, the other too short for legitimate slowness — is exactly what
+# produced a real -1001 timeout on a person's first attempt to meet their
+# friend.
+#
+# 90s is generous relative to how long a genuinely slow-but-working reading
+# actually takes, and it means a truly dead connection now fails loudly
+# within a minute and a half instead of ten. That matters beyond speed:
+# matchmaker.py already catches a failed reading and continues without it — a
+# friend built from the story alone rather than no friend at all — so
+# bounding this call turns "the whole wait was wasted on a hung connection"
+# into "the reading is skipped and he still arrives." The exact same
+# None-must-not-reach-the-SDK-literally care from generate_text applies here.
+_READING_TIMEOUT = 90.0
+
 #: Substrings (lowercase) that mean the user is asking about the world right
 #: now, which his own written life can't answer. Deliberately narrow: a missed
 #: match just means he answers from his own head — which is what a person
@@ -191,6 +211,7 @@ async def think(
     model: str | None = None,
     effort: str = "high",
     max_tokens: int = 8000,
+    timeout: float | None = _READING_TIMEOUT,
 ) -> str:
     """One deep call, with the model actually allowed to think first.
 
@@ -202,8 +223,17 @@ async def think(
     three-line story doesn't need what a page-long one does. `effort` sets the
     ceiling on that. `max_tokens` caps thinking AND the answer together, so it
     is generous here; too tight and the reading truncates mid-sentence.
+
+    `timeout` defaults to _READING_TIMEOUT rather than to None — unlike
+    generate_text, this call has exactly one caller today and leaving it truly
+    unbounded already cost someone their entire wait on a hung connection.
+    Pass `timeout=None` explicitly for the old fully-unbounded behaviour; as
+    in generate_text, that omits the kwarg entirely rather than handing the
+    SDK a literal `None`, which httpx reads as "never time out" — stricter
+    than even its own default.
     """
     client = _get_client()
+    extra = {"timeout": timeout} if timeout is not None else {}
     async with client.messages.stream(
         model=model or config.BRAIN_MODEL,
         max_tokens=max_tokens,
@@ -211,6 +241,7 @@ async def think(
         messages=[{"role": "user", "content": user_text}],
         thinking={"type": "adaptive"},
         output_config={"effort": effort},
+        **extra,
     ) as stream:
         message = await stream.get_final_message()
     return "".join(b.text for b in message.content if b.type == "text").strip()
