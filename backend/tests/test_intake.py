@@ -222,8 +222,9 @@ def test_the_conversation_becomes_the_story_a_friend_is_built_from(monkeypatch):
         return {"register": "коротко", "would_reach_them": "спокойно"}
 
     async def fake_generate(system_prompt, user_text, max_tokens=1500, model=None, timeout=None):
-        if "ДЕСЯТЬ" in system_prompt:
-            return "1. Зоя, 31, север, крановщица.\n2. Пётр, 44, село, пасечник."
+        return "1. Зоя, 31, север, крановщица.\n2. Пётр, 44, село, пасечник."
+
+    async def fake_think(system_prompt, user_text, **kwargs):
         return json.dumps({
             "name": "Зоя", "age": "31 год", "home": "северный город",
             "backstory": "выросла у реки", "personality": "прямая",
@@ -232,6 +233,7 @@ def test_the_conversation_becomes_the_story_a_friend_is_built_from(monkeypatch):
 
     monkeypatch.setattr(reading, "read_person", fake_read)
     monkeypatch.setattr(brain, "generate_text", fake_generate)
+    monkeypatch.setattr(brain, "think", fake_think)
 
     with TestClient(main.app) as client:
         r = client.post("/api/companion/create", json={
@@ -267,8 +269,9 @@ def test_free_writing_still_works(monkeypatch):
         return {"register": "коротко", "would_reach_them": "спокойно"}
 
     async def fake_generate(system_prompt, user_text, max_tokens=1500, model=None, timeout=None):
-        if "ДЕСЯТЬ" in system_prompt:
-            return "1. Гриша, 73, посёлок, сварщик.\n2. Нина, 52, горы, фельдшер."
+        return "1. Гриша, 73, посёлок, сварщик.\n2. Нина, 52, горы, фельдшер."
+
+    async def fake_think(system_prompt, user_text, **kwargs):
         return json.dumps({
             "name": "Гриша", "age": "73 года", "home": "посёлок",
             "backstory": "варил всю жизнь", "personality": "ворчливый",
@@ -277,6 +280,7 @@ def test_free_writing_still_works(monkeypatch):
 
     monkeypatch.setattr(reading, "read_person", fake_read)
     monkeypatch.setattr(brain, "generate_text", fake_generate)
+    monkeypatch.setattr(brain, "think", fake_think)
 
     with TestClient(main.app) as client:
         r = client.post("/api/companion/create", json={"about": "Люблю рыбалку и тишину."})

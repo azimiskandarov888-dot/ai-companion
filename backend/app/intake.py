@@ -79,9 +79,10 @@ MIN_TURNS = 4
 #: stop. Someone enjoying themselves can keep going by saying more; someone
 #: tiring should never be held longer.
 #:
-#: The app's local warm-up is nine of these (four greeting, five tapped), so
-#: this leaves the backend seven or eight — enough to ask about a life, the
-#: people in it, and then one real question, without any of it feeling rushed.
+#: The app's local warm-up is ten of these (five greeting — name, day, what
+#: they do, age, whether they're a man or a woman — then five tapped), so this
+#: leaves the backend seven or eight: enough to ask about a life, the people
+#: in it, and then one real question, without any of it feeling rushed.
 MAX_TURNS = 18
 
 #: The first question is never generated, and it has TWO jobs, not one.

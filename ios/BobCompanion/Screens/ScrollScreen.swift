@@ -370,6 +370,10 @@ private struct IntakeConversation: View {
     @State private var answer = ""
     /// Tappable choices for this question. Empty = it wants writing.
     @State private var options: [String] = []
+    /// They turned down the chips and asked for the keyboard instead. Reset on
+    /// every new question — the offer is per-question, never a mode you get
+    /// stuck in for the rest of the conversation.
+    @State private var ownWords = false
     /// The last, real question — it gets a taller box, because the size of the
     /// space you're given is itself an instruction about how much to say.
     @State private var deepAnswer = false
@@ -454,7 +458,7 @@ private struct IntakeConversation: View {
                     .transition(.opacity)
                     .opacity(asking ? 0.35 : 1)
 
-                if !options.isEmpty {
+                if !options.isEmpty && !ownWords {
                     // TAP TO ANSWER. Nothing about «горы или море?» is worth a
                     // keyboard — and typing it would kill the tempo that makes
                     // the rapid-fire half enjoyable at all. No wrong answers,
@@ -468,6 +472,22 @@ private struct IntakeConversation: View {
                     .padding(.top, 30)
                     .disabled(asking || finished)
                     .transition(.opacity)
+
+                    // …BUT NEVER A CAGE. Two or three chips cannot cover a
+                    // human being: somebody drinks kefir, somebody has a
+                    // parrot, somebody's answer to «мужчина или женщина?» is
+                    // their own. Offering the keyboard costs one quiet line
+                    // and is the difference between a conversation and a
+                    // form — and a forced wrong answer is worse than useless
+                    // here, because the reading downstream will take it as
+                    // true and build a person on it.
+                    if !asking && !finished {
+                        quietly(Strings.language == .russian
+                                ? "сказать по-своему" : "say it your own way") {
+                            withAnimation(.easeInOut(duration: 0.25)) { ownWords = true }
+                        }
+                        .padding(.top, 16)
+                    }
 
                 } else {
                     // Their answer, on a quiet panel — not the parchment
@@ -502,7 +522,7 @@ private struct IntakeConversation: View {
                 HStack(spacing: 22) {
                     // Nothing to skip on a two-button question — the whole
                     // point is that answering costs nothing.
-                    if options.isEmpty && !asking {
+                    if (options.isEmpty || ownWords) && !asking {
                         quietly(Strings.language == .russian ? "пропустить" : "skip") {
                             answer = ""
                             send(skipping: true)
@@ -573,6 +593,7 @@ private struct IntakeConversation: View {
     private func choose(_ option: String) {
         turns.append(IntakeTurn(q: question, a: option))
         options = []
+        ownWords = false
         rebuildStory()
         Task { await ask() }
     }
@@ -636,6 +657,15 @@ private struct IntakeConversation: View {
         Step(say: "А чем обычно занимаетесь?"),
         Step(say: "Сколько вам лет, если не секрет?",
              reaction: "Спасибо."),
+        // Asked plainly, and asked at all — nothing downstream was being told
+        // whether it was writing for a man or a woman. Not a chip-quiz
+        // question like the ones below: it sits here, in the ordinary
+        // getting-to-know-you half, because that is what it is.
+        //
+        // «Иначе» is a real third answer, not a politeness. Tapping it opens
+        // the writing box like any other question — see `ownWords`.
+        Step(say: "А вы мужчина или женщина?",
+             options: ["Мужчина", "Женщина", "Иначе"]),
 
         // 2 · Только теперь — лёгкие, и как бы между делом. Разговор уже идёт,
         // так что смена темпа читается как оживление, а не как анкета.
@@ -666,6 +696,8 @@ private struct IntakeConversation: View {
         Step(say: "And what do you usually get up to?"),
         Step(say: "How old are you, if you don't mind me asking?",
              reaction: "Thank you."),
+        Step(say: "Are you a man or a woman?",
+             options: ["A man", "A woman", "Neither"]),
 
         Step(say: "By the way — mountains or the sea?",
              options: ["Mountains", "The sea"],
@@ -707,6 +739,7 @@ private struct IntakeConversation: View {
             question = step.say
             options = step.options
             deepAnswer = false
+            ownWords = false
             questionID += 1
             asking = false
             return
@@ -724,6 +757,7 @@ private struct IntakeConversation: View {
             question = next.say
             options = []
             deepAnswer = (next.kind == "open")
+            ownWords = false
             questionID += 1
         } catch {
             // A broken question must never strand someone mid-sentence about

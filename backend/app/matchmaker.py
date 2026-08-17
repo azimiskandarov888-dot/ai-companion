@@ -222,10 +222,21 @@ _FAIL = "Не удалось создать друга — попробуйте 
 #: inner_world, current_life…), and Cyrillic tokenizes less efficiently than
 #: English, so a rich answer routinely runs longer than a budget sized for a
 #: shorter one. 2500 was the original figure; it had not been revisited as
-#: fields were added over several past sessions. This is generous on purpose —
-#: it happens once per person, and the retry above exists for a DIFFERENT
-#: failure mode (malformed output) that this number does nothing to fix.
-_WRITE_MAX_TOKENS = 4500
+#: fields were added over several past sessions.
+#:
+#: This budget now covers THINKING AND THE ANSWER TOGETHER (the write runs
+#: through brain.think — see below), so it is much larger than the prose alone
+#: needs. Deliberately so: this happens once per person, produces someone they
+#: will talk to daily for months, and being stingy here is the one economy in
+#: this codebase with no upside at all. Running out of room mid-character is
+#: strictly worse than paying for tokens nobody reads.
+_WRITE_MAX_TOKENS = 14000
+
+#: The deep write is now the slowest single call in creation — the best model,
+#: thinking before it writes. Its own bound, separate from _STAGE_TIMEOUT
+#: (which still governs the fast ten-strangers sketch), because they are no
+#: longer remotely the same kind of call.
+_WRITE_TIMEOUT = 120.0
 
 #: A character with any of these missing isn't a person yet — reject rather
 #: than patch the holes with somebody else's life (that is how every friend
@@ -379,8 +390,18 @@ async def create_companion(
     created = None
     failure: RuntimeError | None = None
     for _attempt in range(2):
-        raw = await brain.generate_text(
-            _WRITE_SYSTEM, write_prompt, max_tokens=_WRITE_MAX_TOKENS, timeout=_STAGE_TIMEOUT
+        # think(), not generate_text(): the best model, allowed to actually
+        # think about who this person should be before it starts writing him.
+        # Everything else in creation optimises for breadth or speed; this one
+        # call is the character, and it is the only one whose output somebody
+        # lives with every day for months.
+        raw = await brain.think(
+            _WRITE_SYSTEM,
+            write_prompt,
+            model=config.WRITER_MODEL,
+            effort=config.WRITER_EFFORT,
+            max_tokens=_WRITE_MAX_TOKENS,
+            timeout=_WRITE_TIMEOUT,
         )
         try:
             created = _extract_json(raw)

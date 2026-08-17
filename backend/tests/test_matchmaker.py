@@ -55,19 +55,33 @@ TEN = "\n".join(
 )
 
 
+#: The two system prompts are told apart by their opening line, the same way
+#: production tells them apart by model and effort. brain.think() now serves
+#: BOTH the reading and the deep write, so a fake that ignores which is which
+#: hands a reading to the pen and vice versa.
+def _is_the_write(system_prompt: str) -> bool:
+    return "знакомишь людей" in system_prompt
+
+
 @pytest.fixture
 def pen(monkeypatch):
-    """Fake both AI calls: the ten sketches, then the deep write (wrapped in
-    prose + code fences — the messy case)."""
+    """Fake both AI calls: the ten sketches (generate_text) and the deep write
+    (think, wrapped in prose + code fences — the messy case)."""
     calls: list[str] = []
 
     async def fake_generate(system_prompt, user_text, max_tokens=1500, model=None, timeout=None):
         calls.append(user_text)
-        if "ДЕСЯТЬ" in system_prompt:
-            return TEN
+        return TEN
+
+    async def fake_think(system_prompt, user_text, *, model=None, effort="high",
+                         max_tokens=8000, timeout=None):
+        if not _is_the_write(system_prompt):
+            raise RuntimeError("no reading in this test")
+        calls.append(user_text)
         return "Вот его друг:\n```json\n" + json.dumps(FRIEND, ensure_ascii=False) + "\n```"
 
     monkeypatch.setattr(brain, "generate_text", fake_generate)
+    monkeypatch.setattr(brain, "think", fake_think)
     return calls
 
 
@@ -201,9 +215,15 @@ def test_new_friend_starts_with_a_clean_slate(pen):
 
 def test_unparseable_reply_fails_gently(monkeypatch):
     async def fake_generate(system_prompt, user_text, max_tokens=1500, model=None, timeout=None):
+        return TEN
+
+    async def fake_think(system_prompt, user_text, **kwargs):
+        if not _is_the_write(system_prompt):
+            raise RuntimeError("no reading in this test")
         return "Извини, сегодня без JSON."
 
     monkeypatch.setattr(brain, "generate_text", fake_generate)
+    monkeypatch.setattr(brain, "think", fake_think)
     with pytest.raises(RuntimeError):
         asyncio.run(matchmaker.create_companion(U, "про меня"))
 
@@ -213,11 +233,15 @@ def test_half_a_person_is_refused(monkeypatch):
     never again be filled from the template. Rejecting is the only honest
     option left, so it has to actually happen."""
     async def fake_generate(system_prompt, user_text, max_tokens=1500, model=None, timeout=None):
-        if "ДЕСЯТЬ" in system_prompt:
-            return TEN
+        return TEN
+
+    async def fake_think(system_prompt, user_text, **kwargs):
+        if not _is_the_write(system_prompt):
+            raise RuntimeError("no reading in this test")
         return json.dumps({"name": "Аноним", "age": "40 лет"}, ensure_ascii=False)
 
     monkeypatch.setattr(brain, "generate_text", fake_generate)
+    monkeypatch.setattr(brain, "think", fake_think)
     with pytest.raises(RuntimeError):
         asyncio.run(matchmaker.create_companion(U, "про меня"))
 
@@ -286,23 +310,65 @@ def test_missing_required_fields_are_named(capsys):
     assert "Аноним" not in err.split("ответ модели")[0]  # the reason, not the dump
 
 
-def test_the_ten_strangers_and_deep_write_calls_are_both_bounded(pen, monkeypatch):
-    """The other half of the real bug: the reading was the slow one, but
+def test_the_ten_strangers_and_deep_write_calls_are_both_bounded(monkeypatch):
+    """The other half of an earlier bug: the reading was the slow one, but
     neither of THESE two calls had a timeout either. On a stall in either one,
     the client's own ceiling was the only thing that would ever have given
-    up — silently, after a long wait, with no clean failure in between."""
-    timeouts: list[float | None] = []
+    up — silently, after a long wait, with no clean failure in between.
 
-    async def recording(system_prompt, user_text, max_tokens=1500, model=None, timeout=None):
-        timeouts.append(timeout)
-        if "ДЕСЯТЬ" in system_prompt:
-            return TEN
+    They now carry DIFFERENT bounds, because they are no longer the same kind
+    of call at all: a fast breadth sketch on the small model, and the deep
+    write on the best model with thinking time."""
+    sketch: dict = {}
+    write: dict = {}
+
+    async def fake_generate(system_prompt, user_text, max_tokens=1500, model=None, timeout=None):
+        sketch.update(timeout=timeout, model=model)
+        return TEN
+
+    async def fake_think(system_prompt, user_text, *, model=None, effort="high",
+                         max_tokens=8000, timeout=None):
+        if not _is_the_write(system_prompt):
+            raise RuntimeError("no reading in this test")
+        write.update(timeout=timeout, model=model, effort=effort, max_tokens=max_tokens)
         return json.dumps(FRIEND, ensure_ascii=False)
 
-    monkeypatch.setattr(brain, "generate_text", recording)
+    monkeypatch.setattr(brain, "generate_text", fake_generate)
+    monkeypatch.setattr(brain, "think", fake_think)
     asyncio.run(matchmaker.create_companion(U, "Люблю тишину."))
 
-    assert timeouts == [matchmaker._STAGE_TIMEOUT, matchmaker._STAGE_TIMEOUT]
+    assert sketch["timeout"] == matchmaker._STAGE_TIMEOUT
+    assert write["timeout"] == matchmaker._WRITE_TIMEOUT
+
+
+def test_the_character_is_written_by_the_best_model_with_thinking_time(monkeypatch):
+    """The character somebody talks to every day for months is one of the two
+    calls in the app where quality outranks everything (the reading is the
+    other). It used to run on the mid-tier model, in the same bucket as the
+    diary — which can be rewritten any time and which nobody depends on."""
+    write: dict = {}
+
+    async def fake_generate(system_prompt, user_text, max_tokens=1500, model=None, timeout=None):
+        return TEN
+
+    async def fake_think(system_prompt, user_text, *, model=None, effort="high",
+                         max_tokens=8000, timeout=None):
+        if not _is_the_write(system_prompt):
+            raise RuntimeError("no reading in this test")
+        write.update(model=model, effort=effort, max_tokens=max_tokens)
+        return json.dumps(FRIEND, ensure_ascii=False)
+
+    monkeypatch.setattr(brain, "generate_text", fake_generate)
+    monkeypatch.setattr(brain, "think", fake_think)
+    asyncio.run(matchmaker.create_companion(U, "Люблю тишину."))
+
+    from app import config
+
+    assert write["model"] == config.WRITER_MODEL
+    assert write["effort"] == config.WRITER_EFFORT
+    # Covers thinking AND the answer together, so it must be far larger than
+    # the prose alone — running out mid-character is the bug this replaced.
+    assert write["max_tokens"] >= 12000
 
 
 def test_a_bad_first_reply_gets_one_retry_before_giving_up(monkeypatch):
@@ -315,15 +381,19 @@ def test_a_bad_first_reply_gets_one_retry_before_giving_up(monkeypatch):
     write_calls = 0
 
     async def fake_generate(system_prompt, user_text, max_tokens=1500, model=None, timeout=None):
+        return TEN
+
+    async def fake_think(system_prompt, user_text, **kwargs):
         nonlocal write_calls
-        if "ДЕСЯТЬ" in system_prompt:
-            return TEN
+        if not _is_the_write(system_prompt):
+            raise RuntimeError("no reading in this test")
         write_calls += 1
         if write_calls == 1:
             return "Извини, не в этот раз."  # no JSON — the exact live symptom
         return json.dumps(FRIEND, ensure_ascii=False)
 
     monkeypatch.setattr(brain, "generate_text", fake_generate)
+    monkeypatch.setattr(brain, "think", fake_think)
     created = asyncio.run(matchmaker.create_companion(U, "про меня"))
 
     assert created["name"] == "Фёдор"
@@ -336,13 +406,17 @@ def test_two_bad_replies_in_a_row_still_fails_and_says_so(monkeypatch, capsys):
     write_calls = 0
 
     async def fake_generate(system_prompt, user_text, max_tokens=1500, model=None, timeout=None):
+        return TEN
+
+    async def fake_think(system_prompt, user_text, **kwargs):
         nonlocal write_calls
-        if "ДЕСЯТЬ" in system_prompt:
-            return TEN
+        if not _is_the_write(system_prompt):
+            raise RuntimeError("no reading in this test")
         write_calls += 1
         return "Извини, не в этот раз."
 
     monkeypatch.setattr(brain, "generate_text", fake_generate)
+    monkeypatch.setattr(brain, "think", fake_think)
     with pytest.raises(RuntimeError):
         asyncio.run(matchmaker.create_companion(U, "про меня"))
 

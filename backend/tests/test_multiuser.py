@@ -114,8 +114,14 @@ def client(monkeypatch):
     friend the story asks for, so the two people get visibly different ones."""
 
     async def fake_generate(system_prompt, user_text, max_tokens=1500, model=None, timeout=None):
-        if "ДЕСЯТЬ" in system_prompt:
-            return "1. Тамара, 39, Иркутск, проводница.\n2. Гриша, 73, посёлок, сварщик."
+        return "1. Тамара, 39, Иркутск, проводница.\n2. Гриша, 73, посёлок, сварщик."
+
+    async def fake_think(system_prompt, user_text, **kwargs):
+        # think() serves the reading AND the deep write. Only the write is
+        # answered here; the reading is left to fail, so these tests exercise
+        # the same no-brief path they always did.
+        if "знакомишь людей" not in system_prompt:
+            raise RuntimeError("no reading in these tests")
         who = "Анна" if "Анна" in user_text else "Борис"
         return json.dumps(FRIENDS[who], ensure_ascii=False)
 
@@ -129,6 +135,7 @@ def client(monkeypatch):
         return None
 
     monkeypatch.setattr(brain, "generate_text", fake_generate)
+    monkeypatch.setattr(brain, "think", fake_think)
     monkeypatch.setattr(brain, "generate_reply", fake_reply)
     monkeypatch.setattr(learn, "learn_from_exchange", fake_learn)
     monkeypatch.setattr(tts, "configured", lambda: False)

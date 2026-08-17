@@ -317,20 +317,24 @@ struct BackendClient {
     /// that a real, working — just unhurried — creation hit this exact
     /// timeout on a real phone.
     ///
-    /// The number is chosen to sit ABOVE the server's own worst case, not
-    /// just its typical one: reading bounded at 90s + two stage calls at 30s
-    /// each + one retry of the second = 180s absolute maximum (see
-    /// brain._READING_TIMEOUT / matchmaker._STAGE_TIMEOUT, and
-    /// test_the_creation_budget_actually_fits_under_the_phones_ceiling, which
-    /// fails the build if the two ever drift apart again). Below 180 and the
-    /// client can still give up first, blindly, exactly as it just did —
-    /// only now with no idea which of three stages was the slow one, when
-    /// the server would have said so clearly within its own bound.
+    /// The number tracks the server's own budget, which grew again when the
+    /// deep write moved to the best model with thinking time: reading 90s +
+    /// ten strangers 30s + deep write 120s = 240s for a normal run (see
+    /// brain._READING_TIMEOUT, matchmaker._STAGE_TIMEOUT / _WRITE_TIMEOUT).
+    /// 260 clears that with margin.
+    ///
+    /// These are stall ceilings, not expected durations — a real creation is
+    /// well under a minute. The absolute worst case (every stage maxing out
+    /// AND the write retried) deliberately exceeds this, because at that
+    /// point the connection is broken and "he couldn't come, try again" is
+    /// the right answer. `test_the_creation_budget_actually_fits_under_the_
+    /// phones_ceiling` fails the build if the NORMAL path ever loses that
+    /// race again.
     func createCompanion(story: String, wishes: String) async throws -> CreateCompanionResponse {
         try await postJSON(
             "api/companion/create",
             body: ["about": story, "wishes": wishes],
-            timeout: 200
+            timeout: 260
         )
     }
 

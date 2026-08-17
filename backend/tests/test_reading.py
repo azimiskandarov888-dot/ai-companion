@@ -42,7 +42,12 @@ def reader(monkeypatch):
     """Fake the deep model. Records what it was asked to read."""
     calls: list[str] = []
 
-    async def fake_think(system_prompt, user_text, *, model=None, effort="high", max_tokens=8000):
+    async def fake_think(system_prompt, user_text, *, model=None, effort="high",
+                         max_tokens=8000, timeout=None):
+        # think() serves the reading AND the deep write now. This fixture is
+        # the READER; the write is faked per-test where it's needed.
+        if "знакомишь людей" in system_prompt:
+            raise RuntimeError("this fixture only reads")
         calls.append(user_text)
         return "Вот чтение:\n```json\n" + json.dumps(READING, ensure_ascii=False) + "\n```"
 
@@ -134,8 +139,9 @@ def test_a_failed_reading_still_lets_a_friend_walk_in(monkeypatch, capsys):
         raise RuntimeError("модель недоступна")
 
     async def fake_generate(system_prompt, user_text, max_tokens=1500, model=None, timeout=None):
-        if "ДЕСЯТЬ" in system_prompt:
-            return "1. Зоя, 31, северный город, крановщица.\n2. Пётр, 44, село, пасечник."
+        return "1. Зоя, 31, северный город, крановщица.\n2. Пётр, 44, село, пасечник."
+
+    async def fake_think(system_prompt, user_text, **kwargs):
         return json.dumps(
             {
                 "name": "Зоя", "age": "31 год", "home": "северный город",
@@ -147,6 +153,7 @@ def test_a_failed_reading_still_lets_a_friend_walk_in(monkeypatch, capsys):
 
     monkeypatch.setattr(reading, "read_person", broken_reading)
     monkeypatch.setattr(brain, "generate_text", fake_generate)
+    monkeypatch.setattr(brain, "think", fake_think)
 
     created = asyncio.run(matchmaker.create_companion(U, "Люблю тишину."))
     assert created["name"] == "Зоя"
@@ -159,8 +166,15 @@ def test_the_reading_survives_starting_over(reader, monkeypatch):
     reading.save(U, READING)
 
     async def fake_generate(system_prompt, user_text, max_tokens=1500, model=None, timeout=None):
-        if "ДЕСЯТЬ" in system_prompt:
-            return "1. Гриша, 73, посёлок, сварщик.\n2. Нина, 52, горы, фельдшер."
+        return "1. Гриша, 73, посёлок, сварщик.\n2. Нина, 52, горы, фельдшер."
+
+    real_think = brain.think
+
+    async def fake_think(system_prompt, user_text, **kwargs):
+        # The reading still goes through the `reader` fixture's fake; only the
+        # write is answered here.
+        if "знакомишь людей" not in system_prompt:
+            return await real_think(system_prompt, user_text, **kwargs)
         return json.dumps(
             {
                 "name": "Гриша", "age": "73 года", "home": "посёлок",
@@ -171,6 +185,7 @@ def test_the_reading_survives_starting_over(reader, monkeypatch):
         )
 
     monkeypatch.setattr(brain, "generate_text", fake_generate)
+    monkeypatch.setattr(brain, "think", fake_think)
     asyncio.run(matchmaker.create_companion(U, "Люблю тишину."))
 
     assert persona.load_persona(U)["name"] == "Гриша"

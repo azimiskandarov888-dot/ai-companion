@@ -40,6 +40,25 @@ CHAT_MODEL: str = os.getenv("CHAT_MODEL", "claude-haiku-4-5-20251001")
 # every other stage is built on its output.
 READING_MODEL: str = os.getenv("READING_MODEL", "claude-opus-5")
 
+# WRITING him — also once, immediately after the reading, and by the same
+# argument. This used to run on BRAIN_MODEL (Sonnet) purely because it sat in
+# the "composed writing" bucket with the diary. That was wrong on the merits:
+# the diary can be rewritten any time and nobody depends on it, whereas THIS
+# call produces the person somebody will talk to every day for months. It is,
+# with the reading, one of the two calls in the app where quality outranks
+# everything, and it happens once per user.
+#
+# So: the best model, real thinking time before writing, and a token budget
+# generous enough that a rich character is never cut off (see
+# matchmaker._WRITE_MAX_TOKENS — the previous 2500 was truncating people
+# mid-backstory).
+WRITER_MODEL: str = os.getenv("WRITER_MODEL", "claude-opus-5")
+#: How long the writer may think before it starts writing him. Not the same
+#: question as the reading's: the reading is inference from evidence and wants
+#: maximum depth; this is composition, where past a point more deliberation
+#: buys tidiness rather than life.
+WRITER_EFFORT: str = os.getenv("WRITER_EFFORT", "medium")
+
 # ASKING him about himself (app/intake.py) — the conversation that replaces
 # the blank «расскажите о себе» page. Not deep work, but the quality of each
 # follow-up decides whether someone opens up or gives up, so it gets the
