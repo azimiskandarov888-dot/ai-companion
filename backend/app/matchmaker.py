@@ -216,6 +216,17 @@ name, gender ("мужской" или "женский" — обязательн�
 
 _FAIL = "Не удалось создать друга — попробуйте ещё раз."
 
+#: Live symptom that led here: a real reply was cut off mid-backstory with no
+#: closing brace anywhere — the schema below asks for roughly 19 fields, several
+#: wanting real literary Russian prose (a 3-5 sentence backstory, expertise,
+#: inner_world, current_life…), and Cyrillic tokenizes less efficiently than
+#: English, so a rich answer routinely runs longer than a budget sized for a
+#: shorter one. 2500 was the original figure; it had not been revisited as
+#: fields were added over several past sessions. This is generous on purpose —
+#: it happens once per person, and the retry above exists for a DIFFERENT
+#: failure mode (malformed output) that this number does nothing to fix.
+_WRITE_MAX_TOKENS = 4500
+
 #: A character with any of these missing isn't a person yet — reject rather
 #: than patch the holes with somebody else's life (that is how every friend
 #: ended up part Мурзик).
@@ -244,8 +255,24 @@ def _log_extract_failure(reason: str, raw: str) -> None:
 def _extract_json(raw: str) -> dict:
     """Pull the persona JSON out of the reply (tolerating code fences/prose)."""
     start, end = raw.find("{"), raw.rfind("}")
-    if start == -1 or end <= start:
-        _log_extract_failure("ответ не похож на JSON вовсе", raw)
+    if start == -1:
+        _log_extract_failure("в ответе нет вообще ни одной { — не JSON", raw)
+        raise RuntimeError(_FAIL)
+    if end <= start:
+        # There IS an opening brace but no closing one anywhere in the whole
+        # response — not "not JSON", but JSON that never got to finish. Found
+        # the hard way: a real reply ran out of room mid-backstory, well
+        # short of any `}`, because the schema below (19 fields, several
+        # asking for real literary prose in Russian, which tokenizes less
+        # efficiently than English) had outgrown max_tokens without anyone
+        # revisiting the number as fields were added over time. Naming this
+        # specifically — rather than lumping it with "not JSON at all" — is
+        # what makes THIS diagnosis instant next time instead of another
+        # round of reading a raw preview and guessing.
+        _log_extract_failure(
+            "ответ обрезался — есть { но нет ни одной } (не хватило max_tokens?)",
+            raw,
+        )
         raise RuntimeError(_FAIL)
     try:
         data = json.loads(raw[start : end + 1])
@@ -353,7 +380,7 @@ async def create_companion(
     failure: RuntimeError | None = None
     for _attempt in range(2):
         raw = await brain.generate_text(
-            _WRITE_SYSTEM, write_prompt, max_tokens=2500, timeout=_STAGE_TIMEOUT
+            _WRITE_SYSTEM, write_prompt, max_tokens=_WRITE_MAX_TOKENS, timeout=_STAGE_TIMEOUT
         )
         try:
             created = _extract_json(raw)

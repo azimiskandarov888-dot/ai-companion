@@ -240,6 +240,38 @@ def test_a_bad_reply_is_never_shown_blind():
         matchmaker._extract_json('{"name": "Аноним"}')
 
 
+def test_truncated_json_is_told_apart_from_not_json_at_all(capsys):
+    """The live bug this pins: a real reply was cut off mid-backstory by
+    max_tokens, with an opening { and NO closing } anywhere at all. That used
+    to raise the exact same "ответ не похож на JSON вовсе" as a reply with no
+    braces whatsoever — which sends a debugging session off reasoning from a
+    raw preview instead of straight to the actual cause. The two must be
+    told apart at the point of failure."""
+    with pytest.raises(RuntimeError):
+        matchmaker._extract_json(
+            '```json\n{\n  "name": "Кира",\n  "backstory": "Училась на '
+            'биофак, бросила на третьем курсе, потому что'  # cut off, no }
+        )
+    truncated_msg = capsys.readouterr().err
+    assert "не хватило max_tokens" in truncated_msg
+
+    with pytest.raises(RuntimeError):
+        matchmaker._extract_json("Извини, сегодня без JSON.")
+    not_json_msg = capsys.readouterr().err
+    assert "не хватило max_tokens" not in not_json_msg
+    assert "нет вообще ни одной" in not_json_msg
+
+
+def test_the_write_budget_is_generous_for_the_schema_it_asks_for():
+    """The actual live fix: max_tokens=2500 was truncating real replies. The
+    schema asks for ~19 fields, several wanting real literary Russian prose,
+    and Cyrillic tokenizes less efficiently than English — 2500 had not been
+    revisited as fields were added over several past sessions. This just
+    keeps the number from silently drifting back down without anyone
+    noticing until it starts truncating people again."""
+    assert matchmaker._WRITE_MAX_TOKENS >= 4000
+
+
 def test_missing_required_fields_are_named(capsys):
     with pytest.raises(RuntimeError):
         matchmaker._extract_json(
