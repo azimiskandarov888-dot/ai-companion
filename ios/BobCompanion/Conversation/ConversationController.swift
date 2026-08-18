@@ -58,6 +58,43 @@ final class ConversationController: ObservableObject {
         #endif
     }
 
+    /// Whether the PERSON wants him listening. Their choice outranks every
+    /// automatic start: leaving the screen and coming back, an interruption,
+    /// a permission alert — none of those may switch him on behind their back.
+    @Published private(set) var wantsToListen = false
+
+    /// Touch him to begin, touch him again to stop. The only control in the
+    /// app, and it is him — not a button beside him, not a microphone icon.
+    func toggle() {
+        wantsToListen ? turnOff() : turnOn()
+    }
+
+    private func turnOn() {
+        wantsToListen = true
+        start()
+    }
+
+    private func turnOff() {
+        wantsToListen = false
+        stop()
+    }
+
+    /// The screen appeared, or the app came back to the foreground. Resumes
+    /// only what was already wanted — never starts him on its own.
+    func resume() {
+        guard wantsToListen else {
+            trace("resume ignored — he was switched off")
+            return
+        }
+        start()
+    }
+
+    /// The app is leaving the foreground. The microphone goes immediately;
+    /// the intent is remembered, so coming back resumes.
+    func suspend() {
+        stop()
+    }
+
     func start() {
         guard loop == nil else {
             trace("start ignored — already running")
@@ -153,16 +190,21 @@ final class ConversationController: ObservableObject {
             // The server decides whether he answers, and it has already
             // decided. It says so in his own words — we just stop listening
             // and show it.
+            // stop() ends by setting `.idle`, so these MUST set their status
+            // after it, not before. Set first and it was immediately
+            // overwritten — which meant `.asleep` never actually stuck, the
+            // tap-to-wake gesture guarded on a state that could not occur,
+            // and dozing looked identical to being switched off.
             switch response.state {
             case "asleep":
                 lastReply = response.reply
-                status = .asleep
                 stop()
+                status = .asleep
                 return
             case "daily_limit":
                 lastReply = response.reply
-                status = .restedForToday
                 stop()
+                status = .restedForToday
                 return
             default:
                 break

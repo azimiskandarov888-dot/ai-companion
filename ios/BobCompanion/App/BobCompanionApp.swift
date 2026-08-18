@@ -39,7 +39,7 @@ struct BobCompanionApp: App {
                     // For a long time this was the ONLY half that existed, and
                     // the first permission alert — which makes the app
                     // inactive while it is up — left him permanently deaf.
-                    if phase != .active { conversation.stop() }
+                    if phase != .active { conversation.suspend() }
                 }
         }
     }

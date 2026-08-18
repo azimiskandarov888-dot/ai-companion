@@ -74,14 +74,29 @@ struct CompanionScreen: View {
                         .transition(.opacity)
                 }
 
-                // Asleep is the ONE state you can do something about, so the
-                // whole screen becomes the way to do it. No button: you touch
-                // him, the way you'd touch a shoulder.
-                if conversation.status == .asleep {
-                    Color.clear
-                        .contentShape(Rectangle())
-                        .onTapGesture { conversation.wake() }
-                }
+                // TOUCH HIM TO TALK, TOUCH HIM AGAIN TO STOP.
+                //
+                // The only control in the app, and it is him — not a button
+                // beside him, not a microphone icon. Tapping a friend to get
+                // his attention is a thing people already do; tapping a mic
+                // glyph is operating a device.
+                //
+                // The whole screen is the target, not just the orb: a small
+                // circle is a fiddly hit area for anyone whose hands aren't
+                // steady, and there is nothing else here to hit by mistake.
+                //
+                // Dozing is folded into the same gesture. It used to be its own
+                // special case, which meant the same touch meant two different
+                // things depending on a state nobody can see.
+                Color.clear
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        if conversation.status == .asleep {
+                            conversation.wake()
+                        } else {
+                            conversation.toggle()
+                        }
+                    }
 
                 VStack {
                     Spacer()
@@ -109,6 +124,13 @@ struct CompanionScreen: View {
             return Strings.cannotHear()
         case .asleep, .restedForToday:
             return conversation.lastReply.isEmpty ? nil : conversation.lastReply
+        case .idle:
+            // He is switched off, and the screen has to SAY so. Resting with
+            // no word is exactly what a hung loop looked like — twice, this
+            // session — and now that being off is a normal, deliberate state
+            // somebody chose, silence about it would be worse still: nothing
+            // on screen would tell them how to start.
+            return conversation.wantsToListen ? nil : Strings.tapToTalk()
         default:
             return nil
         }

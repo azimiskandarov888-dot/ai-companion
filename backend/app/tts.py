@@ -201,6 +201,51 @@ def voice_for(persona: dict | None) -> str | None:
     return female or None
 
 
+# --------------------------------------------------------------------------- #
+# What actually gets read out loud
+# --------------------------------------------------------------------------- #
+#
+# A voice reads EXACTLY what it is given, including things that were never
+# meant to be heard. Live: he said «ну вообще звёздочка пауза звёздочка» —
+# the model had written «*пауза*» as a stage direction and Yandex dutifully
+# pronounced the asterisks and the word inside them.
+#
+# The prompt now forbids writing them (companion.py), but a prompt is a
+# request and this is a guarantee. It is the last thing before the audio, it
+# costs nothing, and the failure it prevents is one of the worst in the app:
+# a friend reading his own script aloud is unmistakably a machine.
+
+_STAGE_DIRECTIONS = (
+    # *пауза*, _тихо_, **вздыхает** — emphasis and directions alike.
+    re.compile(r"[*_]{1,3}[^*_\n]{1,60}[*_]{1,3}"),
+    # [пауза], (смеётся) — brackets only when the WHOLE thing is a direction;
+    # ordinary parenthetical speech is left alone, since people do talk that way.
+    re.compile(r"\[[^\]\n]{1,60}\]"),
+)
+
+#: Anything a voice would either mispronounce or read as a word.
+_UNSPEAKABLE = re.compile(
+    r"[#`~|<>{}\\^]"                       # markdown and code punctuation
+    r"|[\U0001F300-\U0001FAFF☀-➿]"  # emoji and dingbats
+)
+
+#: A bullet at the start of a line — «- » read aloud is «минус».
+_BULLET = re.compile(r"(?m)^\s*[-•*]\s+")
+
+
+def spoken(text: str) -> str:
+    """The text with everything that was never meant to be heard removed."""
+    for pattern in _STAGE_DIRECTIONS:
+        text = pattern.sub(" ", text)
+    text = _BULLET.sub("", text)
+    text = _UNSPEAKABLE.sub(" ", text)
+    # Collapse the holes left behind, and tidy space before punctuation so a
+    # removed direction doesn't leave «слушай , друг».
+    text = re.sub(r"[ \t]{2,}", " ", text)
+    text = re.sub(r"\s+([,.!?…:;])", r"\1", text)
+    return text.strip()
+
+
 def configured() -> bool:
     """Is the selected voice provider set up? (Single source of truth: config.)"""
     return config.tts_configured()
@@ -218,7 +263,9 @@ async def synthesize(text: str, voice: str | None = None) -> bytes:
     `voice_for(persona)` returned, so that a companion who is a woman is
     not read aloud by a man. None means the configured default.
     """
-    if not text.strip():
+    # One choke point, so all four providers get this for free.
+    text = spoken(text)
+    if not text:
         raise ValueError("Nothing to say — empty text passed to synthesize().")
 
     if config.TTS_PROVIDER == "fish":

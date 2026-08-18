@@ -103,7 +103,7 @@ struct AppFlow: View {
         }
         // He only listens while he's the screen in front of you.
         .onChange(of: screen) { _, now in
-            now == .companion ? conversation.start() : conversation.stop()
+            now == .companion ? conversation.resume() : conversation.suspend()
         }
         // «Start over» keeps their story and clears only the friend, so the
         // app returns to screen 4 — choosing who to meet next — rather than
@@ -115,7 +115,7 @@ struct AppFlow: View {
         }
         .onChange(of: overlay) { _, now in
             guard screen == .companion else { return }
-            now == nil ? conversation.start() : conversation.stop()
+            now == nil ? conversation.resume() : conversation.suspend()
         }
         // HE HAS TO START LISTENING AGAIN AFTERWARDS. This is the other half
         // of the app-level rule that stops the loop whenever we leave the
@@ -140,7 +140,7 @@ struct AppFlow: View {
         // Centre, a phone call, switching apps and back.
         .onChange(of: scenePhase) { _, phase in
             guard screen == .companion, overlay == nil else { return }
-            phase == .active ? conversation.start() : conversation.stop()
+            phase == .active ? conversation.resume() : conversation.suspend()
         }
     }
 

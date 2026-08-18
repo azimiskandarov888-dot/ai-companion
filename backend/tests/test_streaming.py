@@ -349,3 +349,52 @@ def test_the_streamed_voice_follows_the_persona(client, monkeypatch):
 
     assert spoken_by, "nothing was spoken at all"
     assert set(spoken_by) == {"alena"}
+
+
+# --------------------------------------------------------------------------- #
+# What actually reaches the voice
+# --------------------------------------------------------------------------- #
+def test_stage_directions_are_never_spoken_aloud():
+    """Live: he said «ну вообще звёздочка пауза звёздочка». The model had
+    written «*пауза*» and the voice read the asterisks and the word between
+    them. A voice says exactly what it is given — this is the last thing
+    before the audio, and the failure it prevents (a friend reading his own
+    script out loud) is unmistakably a machine."""
+    assert tts.spoken("Ну вообще *пауза* хорошо.") == "Ну вообще хорошо."
+    assert tts.spoken("**Вздыхает** Да, друг.") == "Да, друг."
+    assert tts.spoken("[смеётся] Ну ты даёшь.") == "Ну ты даёшь."
+    assert tts.spoken("_тихо_ приходи.") == "приходи."
+
+
+def test_markup_and_emoji_never_reach_the_voice():
+    assert "•" not in tts.spoken("• Первое")
+    assert tts.spoken("- Первое") == "Первое"
+    assert tts.spoken("Привет 😊 как ты?") == "Привет как ты?"
+    assert "#" not in tts.spoken("# Заголовок")
+
+
+def test_ordinary_speech_is_left_completely_alone():
+    """The cleaner must not touch real Russian. Dashes, ellipses, quotes and
+    parenthetical asides are how people actually talk."""
+    for line in (
+        "Обычный текст — с тире, и (в скобках).",
+        "Да… не знаю даже. «Мороз и солнце», помнишь?",
+        "Ну что ты, конечно помню!",
+    ):
+        assert tts.spoken(line) == line
+
+
+def test_a_fragment_that_is_only_a_direction_is_skipped_not_spoken(client, monkeypatch):
+    """It cleans to nothing, and asking a voice to say nothing is an error —
+    which would break the whole turn over a fragment that was never meant to
+    be heard in the first place."""
+    async def stage_direction_reply(history, s, v=""):
+        for text in ("Доброе утро. ", "Доброе утро. *пауза* ", "Доброе утро. *пауза* Как спалось?"):
+            yield text
+
+    monkeypatch.setattr(brain, "stream_reply", stage_direction_reply)
+    events = _lines(_talk(client, AUTH))
+
+    assert not any(e["kind"] == "trouble" for e in events)
+    spoken_aloud = " ".join(e["text"] for e in events if e["kind"] == "say")
+    assert "пауза" not in tts.spoken(spoken_aloud)

@@ -334,6 +334,11 @@ async def _speak_as_he_thinks(
                 if not speak:
                     yield _line({"kind": "say", "text": fragment, "audio_base64": ""})
                     continue
+                # A fragment that is nothing BUT a stage direction («*пауза*»)
+                # has nothing left once it's cleaned, and asking the voice to
+                # say nothing is an error. Skip it rather than break the turn.
+                if not tts.spoken(fragment):
+                    continue
                 audio = await tts.synthesize(fragment, voice)
                 yield _line(
                     {
