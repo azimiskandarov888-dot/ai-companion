@@ -84,6 +84,7 @@ final class ConversationController: ObservableObject {
         trace("asking for the microphone")
         guard await AudioSessionManager.requestMicPermission() else {
             trace("microphone REFUSED")
+            Trouble.shared.note("Микрофон запрещён. Настройки → Боб → Микрофон.")
             status = .problem("Нужен доступ к микрофону")
             return
         }
@@ -91,6 +92,7 @@ final class ConversationController: ObservableObject {
             try AudioSessionManager.configureForConversation()
         } catch {
             trace("audio session failed: \(error)")
+            Trouble.shared.note("Аудиосессия не поднялась: \(error.localizedDescription)")
             status = .problem("Аудио недоступно")
             return
         }
@@ -107,6 +109,7 @@ final class ConversationController: ObservableObject {
 
             case .failed(let message):
                 trace("recording failed: \(message)")
+                Trouble.shared.note("Запись не идёт: \(message)")
                 status = .problem(message)
                 try? await Task.sleep(nanoseconds: 2_000_000_000)
 

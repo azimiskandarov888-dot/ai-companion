@@ -439,6 +439,19 @@ final class Trouble: ObservableObject {
         lastFailure = ConnectionCheck.describe(error, url: url)
     }
 
+    /// A failure that isn't the network's fault — the microphone, the audio
+    /// session, the recorder.
+    ///
+    /// «не слышит» on the companion screen covers ALL of them, deliberately:
+    /// a lonely person must never be shown a reason. But that means the
+    /// person BUILDING this had one sentence for a dead server, a refused
+    /// microphone and a broken audio session alike, and only the first of the
+    /// three was ever written down anywhere. Settings → Сервер is where a
+    /// tester goes first, so all three belong there.
+    func note(_ what: String) {
+        lastFailure = what
+    }
+
     func clear() { lastFailure = "" }
 }
 
