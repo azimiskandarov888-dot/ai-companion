@@ -223,3 +223,64 @@ and keeps an audio session alive**, it can keep listening in the background.
 apps, in his own warm voice.** Conditions: keep it plugged in/docked, and open
 it once. This is the **best answer yet** for "use Bob during Telegram or a
 movie" — and it leans on our own app, not Siri's limits.
+
+---
+
+## Tapping something WITHOUT opening the app — what's actually possible
+
+Asked directly, and worth writing down because the answer is a hard platform
+limit rather than a design choice.
+
+### The wall
+
+**iOS will not let an app start recording while it is in the background.** The
+system refuses it outright:
+
+> Client is in the background and doesn't have the entitlement to start
+> recording in the background.
+
+There is no entitlement a normal app can request for this. It is not about
+sideloading, provisioning, or App Store review — the OS says no.
+
+Note the asymmetry, because it decides everything below:
+
+| | in the background |
+|---|---|
+| **Speaking** | ✅ allowed (`audio` background mode) — this is what the two test intents exercise |
+| **Listening** | ❌ refused, always |
+
+So no widget, control, button or sticker can start a conversation *without*
+the app coming forward. What they CAN do is bring it forward already
+listening, so there is no hunting for an icon and no second tap.
+
+### The surfaces, best first for an old pair of hands
+
+All of them run a Shortcut, and the Shortcut runs `StartTalkingIntent`
+(BobIntents.swift), which opens the app with him already switched on.
+
+1. **Back Tap** — double-tap the BACK of the phone. Nothing to find, nothing
+   to aim at, works through a case, on any iPhone 8 or newer.
+   *Настройки → Универсальный доступ → Касание → Касание задней панели.*
+   **This is the one to set up first.**
+2. **The Action button** (iPhone 15 Pro and later) — one physical press.
+   *Настройки → Кнопка «Действие».*
+3. **An NFC sticker** on the table beside his chair — touch the phone to it.
+   Set up in the Shortcuts app under Автоматизация. Lovely for a docked
+   setup: the "button" can be a coaster.
+4. **Control Centre or the Lock Screen** — a control, added from the gallery
+   (iOS 18+). Reachable without unlocking.
+5. **A Home Screen widget** — a far bigger target than an app icon.
+
+### And with no tap at all
+
+- **Vocal Shortcut** (iOS 17+): record the single word «Боб» pointed at the
+  intent. No "Привет, Siri", works locked, runs on-device.
+- **«Привет, Siri, поговорить с Боб»**.
+
+Neither needs hands. Both still bring the app forward to listen.
+
+### Which leaves the docked kiosk as the real answer at home
+
+Everything above is for *away* from the chair. Sitting with him, the app
+stays open and pinned (Guided Access) and there is nothing to press at all —
+which is still the design this is all built around.

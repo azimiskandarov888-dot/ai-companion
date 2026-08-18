@@ -140,7 +140,20 @@ struct AppFlow: View {
         // Centre, a phone call, switching apps and back.
         .onChange(of: scenePhase) { _, phase in
             guard screen == .companion, overlay == nil else { return }
-            phase == .active ? conversation.resume() : conversation.suspend()
+            guard phase == .active else {
+                conversation.suspend()
+                return
+            }
+            // Opened BY a "start talking" Shortcut — Back Tap, the Action
+            // button, a Control Centre control, a widget, an NFC sticker.
+            // Recording cannot begin in the background at all (iOS refuses
+            // it), so the whole point of those surfaces is to arrive here
+            // already listening rather than needing a second tap.
+            if PendingWish.takeStartListening() {
+                conversation.turnOn()
+            } else {
+                conversation.resume()
+            }
         }
     }
 

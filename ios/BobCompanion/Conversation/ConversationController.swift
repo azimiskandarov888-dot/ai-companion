@@ -69,7 +69,9 @@ final class ConversationController: ObservableObject {
         wantsToListen ? turnOff() : turnOn()
     }
 
-    private func turnOn() {
+    /// Switch him on deliberately — the tap, or a Shortcut that opened the app
+    /// specifically to talk.
+    func turnOn() {
         wantsToListen = true
         start()
     }

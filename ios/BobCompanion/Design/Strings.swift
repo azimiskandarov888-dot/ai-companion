@@ -152,13 +152,13 @@ enum Strings {
     static let cannotHear = Phrase(
         ru: "Сейчас я тебя не слышу.",
         en: "I can't hear you just now.")
-    /// He is switched off and waiting to be touched. In HIS voice, like
-    /// everything else on this screen — «tap to start listening» would be an
-    /// instruction from an app, which is the one thing he must never sound
-    /// like. Ends with an invitation instead.
+    /// He is switched off and waiting. Plain instruction, not a line of his —
+    /// «тронь меня, и поговорим» was written as if he were speaking and read
+    /// as strange rather than warm. This is the one place in the app where
+    /// plainness beats voice: somebody needs to know what to do.
     static let tapToTalk = Phrase(
-        ru: "Тронь меня, и поговорим.",
-        en: "Touch me and we'll talk.")
+        ru: "Нажмите, чтобы поговорить",
+        en: "Tap to speak")
     static let needsMicrophone = Phrase(
         ru: "Мне нужно тебя слышать.",
         en: "I need to be able to hear you.")

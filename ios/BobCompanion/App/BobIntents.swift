@@ -106,8 +106,77 @@ struct TalkToBobIntent: AppIntent {
 /// For truly hands-free use — no "Привет, Siri" at all — record a **Vocal
 /// Shortcut** (Настройки → Универсальный доступ → Голосовые команды) pointing at
 /// one of these. That works with the phone locked and runs entirely on-device.
+// MARK: - 3 · Start talking, from anywhere outside the app
+
+/// Opens the app already listening.
+///
+/// ── WHY THIS ONE OPENS THE APP AND THE OTHERS DON'T ─────────────────────
+///
+/// iOS does not permit an app to START recording while it is in the
+/// background. The system refuses it outright — "Client is in the background
+/// and doesn't have the entitlement to start recording in the background" —
+/// and there is no entitlement a normal app can request. Speaking from the
+/// background is allowed (that is what the two intents above test);
+/// *listening* is not, and no widget, control, or shortcut changes that.
+///
+/// So the honest shape of "talk to him without hunting for the app" is: a
+/// tap somewhere convenient brings the app forward with him already on. The
+/// tap can be almost anywhere — see docs/ALWAYS-ON.md:
+///
+///   · Back Tap — double-tap the BACK of the phone. Nothing to aim at, works
+///     on any iPhone 8 or newer. The best of these by a distance for hands
+///     that aren't steady.
+///   · The Action button (iPhone 15 Pro and later).
+///   · Control Centre, or the Lock Screen, via a control.
+///   · A Home Screen widget — a much bigger target than an app icon.
+///   · An NFC sticker on the table beside the chair.
+///
+/// All of them run a Shortcut, and this is the intent the Shortcut runs.
+struct StartTalkingIntent: AppIntent {
+    static var title: LocalizedStringResource = "Поговорить"
+    static var description = IntentDescription(
+        "Открывает приложение и сразу начинает слушать."
+    )
+
+    /// The one intent where opening IS the point — recording cannot start any
+    /// other way.
+    static var openAppWhenRun: Bool = true
+
+    @MainActor
+    func perform() async throws -> some IntentResult {
+        PendingWish.startListening = true
+        return .result()
+    }
+}
+
+/// What a launching intent asked for, read once by AppFlow when the app comes
+/// to the foreground.
+///
+/// A plain flag rather than anything cleverer because the two sides genuinely
+/// cannot hold a reference to each other: the intent may run before any of the
+/// app's own objects exist.
+@MainActor
+enum PendingWish {
+    static var startListening = false
+
+    /// Read once and cleared, so a later ordinary launch doesn't inherit it.
+    static func takeStartListening() -> Bool {
+        defer { startListening = false }
+        return startListening
+    }
+}
+
 struct BobShortcuts: AppShortcutsProvider {
     static var appShortcuts: [AppShortcut] {
+        AppShortcut(
+            intent: StartTalkingIntent(),
+            phrases: [
+                "Начать разговор с \(.applicationName)",
+                "\(.applicationName) поговорим",
+            ],
+            shortTitle: "Поговорить",
+            systemImageName: "ear"
+        )
         AppShortcut(
             intent: SpeakInHisVoiceIntent(),
             phrases: [
