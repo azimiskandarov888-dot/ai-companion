@@ -355,7 +355,12 @@ async def _synthesize_yandex(text: str, voice: str | None = None) -> bytes:
     """
     global _yandex_drop_emotion
 
-    speaking_as = voice or config.YANDEX_VOICE
+    # Lowercased and trimmed: Yandex voice names are case-sensitive and it
+    # rejects «Jane» outright, which reads on the phone as «не слышит» and
+    # takes a round trip through the logs to find. Nobody types a voice name
+    # meaning a different one by its capitalisation, so there is nothing to
+    # lose by normalising and a whole evening to save.
+    speaking_as = (voice or config.YANDEX_VOICE).strip().lower()
 
     def form(with_emotion: bool) -> dict:
         data = {
