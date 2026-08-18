@@ -33,6 +33,7 @@ struct AppFlow: View {
     @EnvironmentObject private var app: AppState
     @ObservedObject var conversation: ConversationController
 
+    @Environment(\.scenePhase) private var scenePhase
     @State private var screen: AppScreen = .signIn
     @State private var overlay: Overlay?
     @State private var story = ""
@@ -115,6 +116,31 @@ struct AppFlow: View {
         .onChange(of: overlay) { _, now in
             guard screen == .companion else { return }
             now == nil ? conversation.start() : conversation.stop()
+        }
+        // HE HAS TO START LISTENING AGAIN AFTERWARDS. This is the other half
+        // of the app-level rule that stops the loop whenever we leave the
+        // foreground (BobCompanionApp) — which existed on its own, with no
+        // counterpart, so the FIRST interruption of any kind made him deaf
+        // permanently.
+        //
+        // And the very first interruption is guaranteed: a system permission
+        // alert — microphone, local network — makes the app `.inactive` while
+        // it is up. So the sequence that greets every new user is: he arrives,
+        // the loop starts, iOS asks for the microphone, the app goes inactive,
+        // the loop stops, you tap «Разрешить», the app comes back… and nothing
+        // ever calls start() again. `screen` hasn't changed and `overlay`
+        // hasn't changed, so neither watcher above fires.
+        //
+        // What that looks like is the whole of the bug report: he is on screen,
+        // resting, no word beneath him, not hearing anything, indefinitely.
+        // `.idle` is the one state that renders no status word at all, and
+        // stop() sets exactly that.
+        //
+        // Every later interruption did it too — a notification banner, Control
+        // Centre, a phone call, switching apps and back.
+        .onChange(of: scenePhase) { _, phase in
+            guard screen == .companion, overlay == nil else { return }
+            phase == .active ? conversation.start() : conversation.stop()
         }
     }
 

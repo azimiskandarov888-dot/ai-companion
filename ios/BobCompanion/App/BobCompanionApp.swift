@@ -27,6 +27,18 @@ struct BobCompanionApp: App {
                     // screen. The docked design keeps this screen foregrounded
                     // all day (Guided Access). Background listening is a later
                     // layer — see docs/ALWAYS-ON.md.
+                    //
+                    // STOPPING ONLY. Starting again lives in AppFlow, which is
+                    // the only place that knows whether the companion screen
+                    // is even the one in front of you. This half is kept here
+                    // anyway, deliberately: releasing the microphone the
+                    // instant we lose the foreground is a promise to the
+                    // person holding the phone, and it should not depend on
+                    // any screen's logic being right.
+                    //
+                    // For a long time this was the ONLY half that existed, and
+                    // the first permission alert — which makes the app
+                    // inactive while it is up — left him permanently deaf.
                     if phase != .active { conversation.stop() }
                 }
         }

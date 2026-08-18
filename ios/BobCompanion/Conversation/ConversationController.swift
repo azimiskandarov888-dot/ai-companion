@@ -43,12 +43,32 @@ final class ConversationController: ObservableObject {
 
     // MARK: lifecycle
 
+    /// A breadcrumb in the Xcode console. Nothing here is ever shown to the
+    /// person using the app — it is the same principle as `_unavailable` on
+    /// the server: he says «не слышит» and nothing else, forever, so the fact
+    /// needed to fix it has to exist SOMEWHERE, and there was nowhere.
+    ///
+    /// Two separate silent-hang bugs cost several rounds of guessing each,
+    /// and both would have been one glance at this: a loop that never started
+    /// prints nothing at all, and a loop stuck listening prints «listening»
+    /// and then stops.
+    private func trace(_ what: String) {
+        #if DEBUG
+        print("[bob] \(what)")
+        #endif
+    }
+
     func start() {
-        guard loop == nil else { return }
+        guard loop == nil else {
+            trace("start ignored — already running")
+            return
+        }
+        trace("start")
         loop = Task { await run() }
     }
 
     func stop() {
+        trace("stop")
         loop?.cancel()
         loop = nil
         recorder.cancel()
@@ -61,16 +81,20 @@ final class ConversationController: ObservableObject {
     // MARK: the loop
 
     private func run() async {
+        trace("asking for the microphone")
         guard await AudioSessionManager.requestMicPermission() else {
+            trace("microphone REFUSED")
             status = .problem("Нужен доступ к микрофону")
             return
         }
         do {
             try AudioSessionManager.configureForConversation()
         } catch {
+            trace("audio session failed: \(error)")
             status = .problem("Аудио недоступно")
             return
         }
+        trace("listening")
 
         while !Task.isCancelled {
             status = .listening
@@ -82,14 +106,17 @@ final class ConversationController: ObservableObject {
                 continue  // keep waiting patiently — this is fine
 
             case .failed(let message):
+                trace("recording failed: \(message)")
                 status = .problem(message)
                 try? await Task.sleep(nanoseconds: 2_000_000_000)
 
             case .utterance(let fileURL):
+                trace("heard something — sending")
                 await handle(fileURL)
             }
         }
 
+        trace("loop ended")
         status = .idle
     }
 
@@ -170,6 +197,7 @@ final class ConversationController: ObservableObject {
             // where a tester can find it: Настройки → Сервер. Without this,
             // three unrelated problems with three unrelated fixes all present
             // as the same two words.
+            trace("turn failed: \(error)")
             Trouble.shared.record(error, url: client.baseURL.appendingPathComponent("api/talk"))
             status = .problem(error.localizedDescription)
             try? await Task.sleep(nanoseconds: 2_000_000_000)
