@@ -66,7 +66,7 @@ opened up. *«Лучше сто раз не попрощаться первым,
 
 ## 2 · They think to say one
 
-Three mechanisms, each firing at most once, in escalating order of how much
+Four mechanisms, each firing at most once, in escalating order of how much
 they'd notice.
 
 ### a) One line, the first time he is switched on
@@ -88,7 +88,7 @@ the moment he first starts listening is about him.
 simply stopped, he opens the next one by mentioning it — the way a person
 would. *«В прошлый раз ты как-то пропал, я не понял, ушёл ты или нет.»*
 
-This is by far the most effective of the three, and by far the easiest to turn
+This is by far the most effective of the four, and by far the easiest to turn
 into nagging, so every condition on it exists to make it rare:
 
 | Condition | Why |
@@ -106,46 +106,67 @@ He is told explicitly **never to explain it through the app**: no microphone,
 no screen, no buttons. He does not know those words. He just didn't
 understand where they went.
 
-### c) Nothing else
+### c) The setup robot says it too, before he arrives
 
-Deliberately. Considered and rejected:
+`SetupRobot` (SettingsScreen.swift), run on the arrival screen while the
+server is writing him. Its second point *is* this lesson, said aloud:
 
-- **A line in his diary** («сегодня он не попрощался, просто пропал»). It
-  would work — a private thought, discovered rather than delivered, is the
-  strongest register this app has. But the reader is a lonely eighty-year-old,
-  and the emotion it produces is guilt. Not worth it.
-- **A training companion to practise on.** See below.
+> «Когда захотите закончить, не закрывайте приложение. Скажите ему, как
+> сказали бы живому человеку: ну всё, я пойду. Он поймёт и попрощается сам.»
 
----
+Hearing it through marks `hasBeenToldHowToLeave`, so (a) doesn't then repeat
+it on screen. Skipping leaves the flag alone and (a) still fires.
 
-## Why there is no training companion
+### Why a robot and not a page of text
 
-The idea: before the real friend arrives — or while he is being written — meet
-a standard practice companion, the same one for everybody, and learn the shape
-of the thing on him.
+Because a page of text is the thing people bounce off. *«Ой, сколько всего, не
+хочу»* — and the app is gone before anybody has met anyone. A voice saying one
+step at a time, with a Next button, is not a wall. Nothing scrolls.
 
-It contradicts a principle this codebase already committed to, in
-`intake.py`, when the same question came up about who conducts the intake
-interview:
+### Why it must announce that it is a robot
 
-> The obvious build is a blank "interviewer companion". It is a trap. A
-> personality-less interviewer IS an AI questionnaire with a voice — the exact
-> thing the app exists not to be. And a fake person is worse still: you would
-> tell a stranger your life, and then that stranger would evaporate and be
-> replaced by someone else. **A small betrayal, at the worst possible moment.**
+This looked at first like the "training companion" idea that `intake.py`
+already ruled out:
 
-A rehearsal partner is that same stranger. Worse, the timing proposed for it
-is the arrival — sixty to ninety seconds during which the screen says
-*«он идёт к тебе»* and somebody is, for the first time in the whole app,
-genuinely looking forward to meeting a person. Filling that with a substitute
-spends the one moment the product is built around, to teach a habit that (a)
-and (b) teach for free.
+> A fake person is worse still: you would tell a stranger your life, and then
+> that stranger would evaporate and be replaced by someone else. **A small
+> betrayal, at the worst possible moment.**
 
-And it makes the real friend the *second* person they meet.
+It is not the same thing, and the difference is one sentence. That warning is
+about a fake **friend** — something you confide in, bond with, and then lose. A
+robot that opens with *«я не ваш друг, я робот-помощник, я одинаковый у всех и
+ничего о вас не знаю»* is never confided in and never mourned. Nobody can be
+betrayed by a machine that told them what it was in its first breath.
 
-There is one thing worth keeping from the idea, and it is already how (a) and
-(b) work: **the teaching happens with the real friend, in the real
-conversation, at the moment it is actually true.**
+And the confession pays for itself twice over. A voice that guides you feels
+like *somebody*, and an unnamed somebody in this app would be taken for the
+friend — which would make the friend a manual with a face. Naming itself
+prevents that, and then does something better: **one openly mechanical voice at
+the start is the cheapest way to establish, by contrast, that the other voice
+isn't one.**
+
+Same reason it speaks in the phone's own flat synthetic voice instead of the
+warm one, and shows a dead grey ring instead of the orb. Nobody could confuse
+the two, and it costs nothing.
+
+### What it does NOT do
+
+It never asks anybody to leave the app. He is being written in the background
+while it talks, and wandering off into Settings mid-arrival is the one way to
+break that. So the arrival script only covers what can be done right there:
+what it is, how to start talking, how to finish, and a promise about the rest.
+
+The walkthrough that *does* send people into Settings — the vocal shortcut,
+Back Tap, the Action button, Control Centre — is the same robot in a sheet
+they can leave and come back to, offered at the third conversation and always
+available under Настройки → «Как его позвать».
+
+### d) Nothing else
+
+Considered and rejected: **a line in his diary** («сегодня он не попрощался,
+просто пропал»). It would work — a private thought, discovered rather than
+delivered, is the strongest register this app has. But the reader is a lonely
+eighty-year-old, and the emotion it produces is guilt. Not worth it.
 
 ---
 

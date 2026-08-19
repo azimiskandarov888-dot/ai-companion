@@ -38,6 +38,30 @@ struct ArrivingScreen: View {
     @State private var trouble = false
     @State private var showServer = false
 
+    /// THE ROBOT'S ONE MINUTE, AND WHY IT IS HERE.
+    ///
+    /// This is the only dead minute in the app — the server really is writing a
+    /// whole person — and it is also the only moment somebody will sit still
+    /// for being told how anything works. Afterwards there is a friend on the
+    /// screen, and nobody reads instructions with a friend waiting.
+    ///
+    /// Nothing in the arrival script asks anybody to leave the app. Wandering
+    /// off into Settings while he is being written is the one way to break
+    /// this, so the walkthrough that DOES send people to Settings lives in a
+    /// sheet they can leave and come back to (CallHimSheet), offered later.
+    ///
+    /// He arrives when he exists AND the robot has stopped talking. If the
+    /// server is quick, he waits — which is the right way round: he is worth
+    /// waiting a few seconds for, and the minute is spent either way.
+    @AppStorage("robotHasIntroduced") private var robotIntroduced = false
+    @State private var guideDone = false
+    /// Set the moment the last step is walked through, so the one-time line on
+    /// his screen doesn't repeat a lesson they have just been given aloud.
+    @AppStorage("hasBeenToldHowToLeave") private var toldHowToLeave = false
+    /// The final approach can be started by either half finishing. This makes
+    /// sure it is started exactly once.
+    @State private var arriving = false
+
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// He walks to here and no further until the server has answered. Arriving
@@ -89,9 +113,25 @@ struct ArrivingScreen: View {
             }
         }
         .statusBarHidden(true)
+        // Over the walk, because for this one minute it IS the screen. Under
+        // `couldNotCome`, because a friend who never set off outranks a robot.
+        .overlay { if !guideDone { robot } }
         .overlay { if trouble { couldNotCome } }
         .sheet(isPresented: $showServer) { ServerSheet() }
-        .task { await bringHim() }
+        .task {
+            guideDone = robotIntroduced   // it introduces itself once, ever
+            await bringHim()
+        }
+    }
+
+    private var robot: some View {
+        SetupRobot(script: [Strings.robotWhoIAm] + Strings.robotWhileHeComes) { heardItAll in
+            robotIntroduced = true
+            if heardItAll { toldHowToLeave = true }
+            guideDone = true
+            Task { await arriveIfReady() }
+        }
+        .transition(.opacity)
     }
 
     /// He hasn't set off. Said in plain words, with no error and no code —
@@ -166,6 +206,11 @@ struct ArrivingScreen: View {
             // no error code — he simply hasn't set off yet.
             Trouble.shared.record(error, url: AppConfig.shared.backendURL)
             trouble = true
+            // The robot stops mid-sentence and gets out of the way — a friend
+            // who never set off is the only thing on this screen that matters.
+            // It hasn't been marked as introduced, so a later fresh arrival
+            // still gets it; this one doesn't wait for it again.
+            guideDone = true
             return
         }
         ready = true
@@ -176,7 +221,18 @@ struct ArrivingScreen: View {
             try? await Task.sleep(nanoseconds: UInt64((floorSeconds - elapsed) * 1_000_000_000))
         }
 
-        // The last of the distance, and the light coming up as he reaches it.
+        await arriveIfReady()
+    }
+
+    /// The last of the distance — walked only when he exists AND nobody is
+    /// mid-sentence being told how the app works. Whichever of the two
+    /// finishes second calls this, and the guard makes sure the first one
+    /// through does nothing.
+    private func arriveIfReady() async {
+        guard ready, guideDone, !arriving else { return }
+        arriving = true
+
+        // The light coming up as he reaches it.
         withAnimation(.easeOut(duration: 1.5)) {
             journey = 1
             finishing = true

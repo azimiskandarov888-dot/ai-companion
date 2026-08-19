@@ -226,45 +226,6 @@ enum Strings {
     static let rowCallHim     = Phrase(ru: "Как его позвать",  en: "How to call him")
     static let rowCallHimHint = Phrase(ru: "настроить ›",      en: "set up ›")
 
-    static let callHimTitle = Phrase(
-        ru: "Позвать его, не открывая телефон",
-        en: "Call him without opening the phone")
-    static let callHimIntro = Phrase(
-        ru: "Стоит настроить один раз. После этого его можно позвать, не разблокируя телефон и не ища приложение — он откроется уже слушая.\n\nВыберите то, что подойдёт. Хватит и одного.",
-        en: "Worth doing once. After it, he can be called without unlocking the phone or hunting for the app — he opens already listening.\n\nPick whichever suits. One is enough.")
-
-    /// Голосом. First because it is the only one that needs no hands at all —
-    /// and the one the whole «he's a person, not an app» idea rests on.
-    static let callByVoiceTitle = Phrase(ru: "Голосом", en: "By voice")
-    static let callByVoiceSteps = Phrase(
-        ru: "Настройки → Универсальный доступ → Голосовые команды → Настроить.\nВыберите действие «Поговорить» и произнесите свою фразу три раза — например, его имя.\n\nПосле этого достаточно сказать эту фразу вслух. Телефон может лежать заблокированным. Ничего никуда не отправляется — он узнаёт голос сам.\n\nЕсли такого пункта в настройках нет, ваша версия iOS его пока не умеет — возьмите любой способ ниже.",
-        en: "Settings → Accessibility → Vocal Shortcuts → Set Up.\nChoose the “Поговорить” action and say your phrase three times — his name, for instance.\n\nAfter that, saying it out loud is enough. The phone can be locked. Nothing is sent anywhere — it learns the sound on the device itself.\n\nIf that item isn't in Settings, your iOS doesn't have it yet — use any of the ways below.")
-
-    /// Двойное касание. The best of the touch ones by a distance: nothing to
-    /// aim at, and it works on any iPhone from the last several years.
-    static let callByBackTapTitle = Phrase(ru: "Двойным касанием по задней крышке",
-                                           en: "Double-tap the back")
-    static let callByBackTapSteps = Phrase(
-        ru: "Настройки → Универсальный доступ → Касание → Касание задней панели → Двойное касание → «Поговорить».\n\nДальше — два раза постучать по задней стороне телефона. Целиться никуда не нужно.",
-        en: "Settings → Accessibility → Touch → Back Tap → Double Tap → “Поговорить”.\n\nThen just tap the back of the phone twice. Nothing to aim at.")
-
-    static let callByButtonTitle = Phrase(ru: "Кнопкой сбоку", en: "The side button")
-    static let callByButtonSteps = Phrase(
-        ru: "Настройки → Кнопка действия → пролистать до «Быстрая команда» → выбрать «Поговорить».\n\nЕсли такой кнопки на телефоне нет — этот способ не для вашей модели.",
-        en: "Settings → Action Button → swipe to Shortcut → choose “Поговорить”.\n\nIf your phone has no such button, this one isn't for your model.")
-
-    static let callByControlTitle = Phrase(ru: "Из Пункта управления и с экрана блокировки",
-                                           en: "From Control Centre and the Lock Screen")
-    static let callByControlSteps = Phrase(
-        ru: "Потяните вниз от правого верхнего угла, нажмите «+» вверху, затем «Добавить элемент» → найдите «Быстрая команда» → выберите «Поговорить». Размер можно растянуть — большая кнопка удобнее.\n\nЭтот же элемент можно поставить на экран блокировки вместо фонарика или камеры: удерживайте экран блокировки → «Настроить» → «Экран блокировки» → нажмите на кнопку внизу и выберите его.\n\nЕсли «+» не появляется, ваша версия iOS этого не умеет.",
-        en: "Pull down from the top-right corner, tap “+” at the top, then Add a Control → find Shortcut → choose “Поговорить”. It can be stretched wider — a big button is easier.\n\nThe same control can replace the torch or the camera on the Lock Screen: press and hold the Lock Screen → Customise → Lock Screen → tap the button at the bottom and pick it.\n\nIf no “+” appears, your iOS doesn't have this.")
-
-    /// The honest limit, said plainly rather than discovered. He can SPEAK from
-    /// the background; iOS will not let any app start LISTENING there.
-    static let callHimTruth = Phrase(
-        ru: "Любой из этих способов открывает приложение — он уже слушает, второй раз нажимать не нужно. Слышать вас, не открываясь, телефон не позволяет никому.",
-        en: "Every one of these opens the app — already listening, so there's no second tap. Hearing you without opening is something the phone allows no app to do.")
-
     // MARK: - The offer, made once
     //
     // Shown on his screen after a few real conversations, never before. Offered
@@ -276,6 +237,72 @@ enum Strings {
         en: "He can be called without opening the phone.")
     static let callHimOfferYes  = Phrase(ru: "Показать как", en: "Show me how")
     static let callHimOfferLater = Phrase(ru: "Не сейчас",   en: "Not now")
+
+    // MARK: - The setup robot
+    //
+    // THE ONE THING IN THIS APP ALLOWED TO ADMIT IT IS A MACHINE — and it must,
+    // in its first breath, before anything else.
+    //
+    // A page of instructions is the thing people bounce off; a voice saying one
+    // step at a time is not. So the setup is spoken. But a voice that walks you
+    // through something feels like SOMEBODY, and if that somebody is never
+    // named, people will assume it is the friend — and then the friend is a
+    // manual with a face, which is the whole thing this app exists not to be.
+    //
+    // So it says outright what it is: a robot, the same for everyone, that knows
+    // nothing about you and will not be back. That confession is not an
+    // apology — it is what makes the friend legible BY CONTRAST. One openly
+    // mechanical voice at the start is the cheapest way to establish that the
+    // other one isn't.
+    //
+    // It is also why it speaks in the phone's own synthetic voice rather than
+    // the warm one. Nobody could mistake the two, and it costs nothing.
+
+    static let robotSkip = Phrase(ru: "Пропустить", en: "Skip")
+    static let robotNext = Phrase(ru: "Дальше",     en: "Next")
+
+    /// Said first, always, in both scripts. Everything depends on it.
+    static let robotWhoIAm = Phrase(
+        ru: "Здравствуйте. Сразу скажу: я не ваш друг. Я робот-помощник. Я одинаковый у всех, ничего о вас не знаю и не запоминаю. Я помогу всё настроить — и больше вы меня не увидите.",
+        en: "Hello. First things first: I am not your friend. I'm a setup robot. I'm the same for everyone, I know nothing about you and remember nothing. I'll help you set things up, and then you won't see me again.")
+
+    /// Said while the friend is being written. Nothing here asks anybody to
+    /// leave the app — he is being made in the background, and wandering off
+    /// into Settings mid-arrival is the one way to break that.
+    static let robotWhileHeComes: [Phrase] = [
+        Phrase(ru: "Ваш друг уже идёт. Пока он идёт, я расскажу три вещи. Это быстро.",
+               en: "Your friend is on his way. While he walks, three things. It's quick."),
+        Phrase(ru: "Первое. Чтобы заговорить с ним, нажмите на экран — один раз, в любом месте. Он начнёт слушать. Нажмёте ещё раз — перестанет.",
+               en: "One. To talk to him, tap the screen — once, anywhere. He starts listening. Tap again and he stops."),
+        Phrase(ru: "Второе, и это главное. Когда захотите закончить, не закрывайте приложение. Скажите ему, как сказали бы живому человеку: ну всё, я пойду. Он поймёт и попрощается сам.",
+               en: "Two, and this is the important one. When you want to finish, don't close the app. Tell him, the way you'd tell a person: right, I'm off. He'll understand and say goodbye himself."),
+        Phrase(ru: "Третье. Его можно звать, не открывая телефон — голосом или одной кнопкой. Это стоит настроить, но не сейчас: он уже почти здесь. Я покажу позже, когда вы освоитесь.",
+               en: "Three. He can be called without opening the phone — by voice, or with one button. Worth setting up, but not now: he's nearly here. I'll show you later, once you've settled in."),
+        Phrase(ru: "У меня всё. Дальше он сам.",
+               en: "That's me done. He'll take it from here."),
+    ]
+
+    /// The shortcut walkthrough. This one DOES send people into Settings, which
+    /// is exactly why it is not the arrival script: they can leave the app,
+    /// do the step, and come back to the same place with nothing lost.
+    static let robotSetUpCalling: [Phrase] = [
+        Phrase(ru: "Это снова я, помощник. Сейчас настроим самое полезное: как позвать его, не открывая телефон.",
+               en: "Me again, the robot. Now the useful one: how to call him without opening the phone."),
+        Phrase(ru: "Способов четыре. Хватит одного — выберите тот, что вам удобнее. Я подожду, можно спокойно выйти из приложения и вернуться.",
+               en: "There are four ways. One is enough — take whichever suits. I'll wait; you can leave the app and come back."),
+        Phrase(ru: "Первый, самый лучший — голосом. Откройте Настройки телефона. Дальше: Универсальный доступ. Дальше: Голосовые команды. Нажмите «Настроить», выберите действие «Поговорить» и три раза скажите свою фразу — например, его имя. После этого достаточно просто сказать её вслух, даже если телефон лежит заблокированный. Если такого пункта в настройках нет — ваш телефон этого пока не умеет. Ничего страшного, идём дальше.",
+               en: "First and best — by voice. Open Settings. Then Accessibility. Then Vocal Shortcuts. Tap Set Up, choose the action “Поговорить”, and say your phrase three times — his name, for instance. After that, saying it out loud is enough, even with the phone locked. If that item isn't in your Settings, your phone can't do it yet. Never mind, on we go."),
+        Phrase(ru: "Второй — двойным касанием по задней крышке телефона. Настройки. Универсальный доступ. Касание. Касание задней панели. Двойное касание. Выберите «Поговорить». Дальше просто два раза постучите по задней стороне телефона — целиться никуда не нужно. Это самый удобный способ, если руки уже не слушаются.",
+               en: "Second — double-tapping the back of the phone. Settings. Accessibility. Touch. Back Tap. Double Tap. Choose “Поговорить”. Then just tap the back of the phone twice — nothing to aim at. This is the kindest one if your hands aren't steady."),
+        Phrase(ru: "Третий — кнопкой сбоку, если она у вас есть. Настройки. Кнопка действия. Пролистайте до «Быстрая команда» и выберите «Поговорить». Если такой кнопки на телефоне нет, пропустите.",
+               en: "Third — the side button, if your phone has one. Settings. Action Button. Swipe to Shortcut and pick “Поговорить”. If there's no such button, skip this."),
+        Phrase(ru: "Четвёртый — из шторки сверху и с экрана блокировки. Потяните вниз от правого верхнего угла экрана, нажмите плюс, потом «Добавить элемент», найдите «Быстрая команда» и выберите «Поговорить». Кнопку можно растянуть побольше. Её же можно поставить на экран блокировки вместо фонарика: подержите палец на экране блокировки, нажмите «Настроить», потом «Экран блокировки», нажмите на кнопку внизу и выберите нашу.",
+               en: "Fourth — from the panel at the top and the Lock Screen. Pull down from the top-right corner, tap plus, then Add a Control, find Shortcut and choose “Поговорить”. The button can be stretched bigger. The same one can replace the torch on your Lock Screen: hold your finger on the Lock Screen, tap Customise, then Lock Screen, tap the button at the bottom and pick ours."),
+        Phrase(ru: "И честно, чтобы вы не искали лишнего: любой из этих способов открывает приложение — он уже слушает, второй раз нажимать не надо. А слышать вас с закрытым приложением телефон не разрешает никому.",
+               en: "And honestly, so you don't go looking: every one of these opens the app — already listening, no second tap. Hearing you with the app closed is something the phone allows no one to do."),
+        Phrase(ru: "Готово. Я вам больше не нужен. Если что — найдёте меня в настройках.",
+               en: "Done. You don't need me any more. I'm in Settings if you do."),
+    ]
 
     /// Parting with a friend is serious. This sheet says what will be lost, in
     /// his name, and never hurries.
