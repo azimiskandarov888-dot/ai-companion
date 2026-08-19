@@ -125,7 +125,7 @@ struct ArrivingScreen: View {
     }
 
     private var robot: some View {
-        SetupRobot(script: [Strings.robotWhoIAm] + Strings.robotWhileHeComes) { heardItAll in
+        SetupRobot(script: Strings.robotFirstTouch + Strings.robotWhileHeComes) { heardItAll in
             robotIntroduced = true
             if heardItAll { toldHowToLeave = true }
             guideDone = true
@@ -232,12 +232,18 @@ struct ArrivingScreen: View {
         guard ready, guideDone, !arriving else { return }
         arriving = true
 
+        // A breath first. The robot's screen is opaque and covers this one
+        // entirely, so on a first run the walk has been happening where nobody
+        // could see it — and the last of the distance, taken slower than it
+        // used to be, is now the only part of the arrival anyone watches.
+        try? await Task.sleep(nanoseconds: 900_000_000)
+
         // The light coming up as he reaches it.
-        withAnimation(.easeOut(duration: 1.5)) {
+        withAnimation(.easeOut(duration: 2.6)) {
             journey = 1
             finishing = true
         }
-        try? await Task.sleep(nanoseconds: 1_500_000_000)
+        try? await Task.sleep(nanoseconds: 2_600_000_000)
         onArrived(name)
     }
 

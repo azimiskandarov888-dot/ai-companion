@@ -154,8 +154,8 @@ private struct StartOverSheet: View {
 /// The ways are ordered by how little the hands have to do.
 @MainActor
 struct SetupRobot: View {
-    /// What it says, in order. The first line is always «я не ваш друг».
-    let script: [Phrase]
+    /// What it says and asks for, in order.
+    let script: [RobotStep]
     /// Called when it has finished, or been skipped. Both count as done —
     /// nobody is made to sit through this. The flag says which, because what
     /// somebody was actually told changes what they still need telling.
@@ -164,12 +164,19 @@ struct SetupRobot: View {
     @State private var step = 0
     @State private var voice = SpeechVoice()
     @State private var speaking = false
+    /// The ring is lit the same way his orb is lit when he's listening. That
+    /// is the entire point of the two tap steps: the state somebody switches
+    /// on here is the state they'll be looking at for the next ten years.
+    @State private var lit = false
     /// Which line is the current one. Bumped on every step so a line that was
     /// cut off can tell it is no longer the one being spoken.
     @State private var generation = 0
 
-    private var line: String { script[min(step, script.count - 1)]() }
+    private var here: RobotStep { script[min(step, script.count - 1)] }
     private var isLast: Bool { step >= script.count - 1 }
+    private var awaitingTouch: Bool {
+        here.wants == .aTapOnHim || here.wants == .anotherTap
+    }
 
     var body: some View {
         ZStack {
@@ -179,18 +186,10 @@ struct SetupRobot: View {
 
             VStack(spacing: 0) {
                 Spacer()
+                ring
+                Spacer().frame(height: 44)
 
-                // A flat ring, not the orb. It does not breathe and it does not
-                // glow: whatever else somebody takes from this screen, they
-                // must not take away that they have met him.
-                Circle()
-                    .strokeBorder(Theme.lichen.opacity(speaking ? 0.9 : 0.4), lineWidth: 2)
-                    .frame(width: 54, height: 54)
-                    .animation(.easeInOut(duration: 0.35), value: speaking)
-
-                Spacer().frame(height: 40)
-
-                Text(line)
+                Text(here.line())
                     .appFont(AppType.body, leading: AppType.bodyLeading)
                     .foregroundStyle(Theme.linen)
                     .multilineTextAlignment(.center)
@@ -199,25 +198,75 @@ struct SetupRobot: View {
                     .transition(.opacity)
 
                 Spacer()
-
-                VStack(spacing: 12) {
-                    AppButton(title: isLast ? Strings.done() : Strings.robotNext(),
-                              tone: .sun) { advance() }
-                    // Always available, on every step. Somebody who wants out
-                    // of this must never have to hear the rest of it first.
-                    Button(action: { finish(heardItAll: false) }) {
-                        Text(Strings.robotSkip())
-                            .appFont(AppType.caption)
-                            .foregroundStyle(Theme.lichen)
-                            .frame(minHeight: Metrics.minTouch)
-                    }
-                }
+                controls
             }
             .padding(.horizontal, Metrics.sideMargin)
             .padding(.bottom, 34)
         }
         .task { await say() }
         .onDisappear { voice.stop() }
+    }
+
+    /// A flat ring, never the orb. It lights up and goes out exactly as he
+    /// does, because that is the lesson — but it does not breathe and it does
+    /// not glow, because whatever else somebody takes away from this screen,
+    /// it must not be that they have already met him.
+    private var ring: some View {
+        Circle()
+            .strokeBorder(ringColour, lineWidth: lit ? 3 : 2)
+            // Bigger on the steps that are asking to be touched, so the thing
+            // to do is obvious without an arrow or the word «кнопка».
+            .frame(width: awaitingTouch ? 78 : 64, height: awaitingTouch ? 78 : 64)
+            // And a far bigger target than it looks, because on those steps it
+            // is the only thing on screen that does anything — and the hands
+            // reaching for it are the reason this app exists.
+            .frame(width: 150, height: 150)
+            .contentShape(Circle())
+            .animation(.easeInOut(duration: 0.35), value: lit)
+            .animation(.easeInOut(duration: 0.35), value: speaking)
+            .animation(.easeInOut(duration: 0.35), value: step)
+            .onTapGesture {
+                guard awaitingTouch else { return }
+                // Lit after the first tap, out after the second — which is the
+                // whole lesson, performed rather than described.
+                lit = (here.wants == .aTapOnHim)
+                advance()
+            }
+    }
+
+    private var ringColour: Color {
+        if lit { return Theme.sun300.opacity(0.95) }
+        if awaitingTouch { return Theme.linen.opacity(0.8) }
+        return Theme.lichen.opacity(speaking ? 0.85 : 0.4)
+    }
+
+    @ViewBuilder
+    private var controls: some View {
+        VStack(spacing: 12) {
+            // On a tap step there is deliberately NO «Дальше». The tap is the
+            // lesson; offering a way past it teaches nothing and everybody
+            // takes it.
+            if !awaitingTouch, here.wants != .aBeat {
+                if here.wants == .tapNextOrOpenShortcuts {
+                    AppButton(title: Strings.robotOpenShortcuts(), tone: .quiet) {
+                        if let url = URL(string: "shortcuts://") {
+                            UIApplication.shared.open(url)
+                        }
+                    }
+                }
+                AppButton(title: isLast ? Strings.done() : Strings.robotNext(),
+                          tone: .sun) { advance() }
+            }
+
+            // Always available, on every step including the tap ones. Somebody
+            // who wants out of this must never have to hear the rest first.
+            Button(action: { finish(heardItAll: false) }) {
+                Text(Strings.robotSkip())
+                    .appFont(AppType.caption)
+                    .foregroundStyle(Theme.lichen)
+                    .frame(minHeight: Metrics.minTouch)
+            }
+        }
     }
 
     private func advance() {
@@ -228,12 +277,16 @@ struct SetupRobot: View {
 
     private func finish(heardItAll: Bool) {
         voice.stop()
+        // A self-advancing step may have a sleep in flight. Bumping this makes
+        // it a no-op when it wakes, so «Пропустить» can't be followed by the
+        // script carrying on underneath a screen that has already gone.
+        generation += 1
         onFinished(heardItAll)
     }
 
-    /// Read the current step aloud. Reading is never a gate: the «Дальше»
-    /// button works the whole time, so anybody who reads faster than the voice
-    /// talks — or who has the sound off entirely — is never held up.
+    /// Read the current step aloud. Reading is never a gate: «Дальше» works
+    /// the whole time, so anybody who reads faster than the voice talks — or
+    /// who has the sound off entirely — is never held up.
     private func say() async {
         // First, and before anything can suspend: cutting the previous line
         // off is what releases the previous call's continuation. Two live
@@ -241,6 +294,17 @@ struct SetupRobot: View {
         voice.stop()
         generation += 1
         let mine = generation
+
+        // A step that moves on by itself. Timed from here rather than from the
+        // voice finishing, because these steps are the silent ones.
+        if here.wants == .aBeat {
+            Task {
+                try? await Task.sleep(nanoseconds: 3_800_000_000)
+                if mine == generation { advance() }
+            }
+        }
+
+        guard !here.silent else { return }
 
         // The conversation's own session may have just been torn down, or
         // never raised at all (this runs before the friend exists). Playback
@@ -250,7 +314,7 @@ struct SetupRobot: View {
         try? session.setActive(true, options: [])
 
         speaking = true
-        await voice.speak(line)
+        await voice.speak(here.line())
         // The cut-off call resumes too, and gets here AFTER its replacement
         // has already started talking. Only the current one may put the ring
         // out.
@@ -267,9 +331,7 @@ struct CallHimSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        SetupRobot(script: [Strings.robotWhoIAm] + Strings.robotSetUpCalling) { _ in
-            dismiss()
-        }
+        SetupRobot(script: Strings.robotSetUpCalling) { _ in dismiss() }
         .presentationDetents([.large])
         .presentationCornerRadius(Metrics.sheetRadius)
     }

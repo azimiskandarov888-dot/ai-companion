@@ -191,10 +191,12 @@ struct CompanionScreen: View {
             return
         }
 
-        // Not on day one. On day one «его можно позвать откуда угодно» is a
-        // setup step standing between somebody and a person they just met; by
-        // the third conversation it is a way of reaching a friend.
-        guard !offeredCallHim, timesSwitchedOn >= 3 else { return }
+        // The second conversation, not the first: the robot promised this on
+        // the arrival screen and said «сначала познакомьтесь». Keeping that
+        // promise one conversation later is soon enough to still be a promise
+        // kept, and late enough that it is a way of reaching somebody they
+        // now know rather than a setup step in front of a stranger.
+        guard !offeredCallHim, timesSwitchedOn >= 2 else { return }
         offeredCallHim = true
         withAnimation(.easeInOut(duration: 0.5)) { showingCallOffer = true }
     }

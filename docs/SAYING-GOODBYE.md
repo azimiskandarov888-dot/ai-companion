@@ -123,6 +123,28 @@ Because a page of text is the thing people bounce off. *«Ой, сколько �
 хочу»* — and the app is gone before anybody has met anyone. A voice saying one
 step at a time, with a Next button, is not a wall. Nothing scrolls.
 
+### The first lesson is performed, not told
+
+The robot does not start talking. Two silent lines appear —
+
+> «Пока вы в приложении, всё просто. Чтобы друг вас услышал — нажмите на него
+> один раз.»
+> «Попробуйте на мне. Нажмите.»
+
+— and nothing else happens until somebody actually taps the ring. There is no
+Next button on that step, deliberately: a way past the lesson is a way past
+the lesson, and everybody takes it.
+
+The robot's first words are therefore the reward for getting it right («вот
+именно так»), which is a far better way to meet a voice than being lectured by
+one that started on its own. Later in the script it asks for the second tap,
+the one nobody discovers alone — and the ring lights and goes out exactly as
+his orb does, so the state they switch on here is the state they will be
+looking at for the next ten years.
+
+A gesture somebody has performed once, on a robot, where getting it wrong
+costs nothing, is remembered. A gesture described in a sentence is not.
+
 ### Why it must announce that it is a robot
 
 This looked at first like the "training companion" idea that `intake.py`

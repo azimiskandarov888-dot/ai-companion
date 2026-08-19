@@ -35,6 +35,46 @@ struct Phrase {
     }
 }
 
+// MARK: - The setup robot's script
+
+/// What has to happen before the robot moves on.
+///
+/// The interesting values are the two taps. A lesson somebody PERFORMS is
+/// remembered; a lesson somebody is read is not — and this app's entire
+/// interface is one gesture, so it is worth making them do it once, on a
+/// robot, where getting it wrong costs nothing.
+enum RobotWants {
+    /// «Дальше». The ordinary beat.
+    case tapNext
+    /// Nothing at all — it moves on by itself. Used only where a second line
+    /// arriving instantly would be too fast to read.
+    case aBeat
+    /// A tap ON HIM. This is the lesson, not a button press.
+    case aTapOnHim
+    /// A second tap, switching him off again — the other half of the same
+    /// lesson, and the half people never discover on their own.
+    case anotherTap
+    /// «Дальше», with a real button into the Shortcuts app beside it.
+    case tapNextOrOpenShortcuts
+}
+
+/// One beat of the robot's script: what it says — aloud AND on screen, the
+/// same words in both, so somebody hard of hearing loses nothing and somebody
+/// who can't read small print loses nothing either.
+struct RobotStep {
+    let line: Phrase
+    var wants: RobotWants = .tapNext
+    /// Said only on screen. The first two steps are silent because the robot
+    /// hasn't been woken yet — its voice is what the first tap earns.
+    var silent: Bool = false
+
+    init(_ line: Phrase, wants: RobotWants = .tapNext, silent: Bool = false) {
+        self.line = line
+        self.wants = wants
+        self.silent = silent
+    }
+}
+
 enum Strings {
 
     /// The app's language. Russian by default; changeable in Settings.
@@ -232,9 +272,11 @@ enum Strings {
     // when «позвать его откуда угодно» has come to mean something — not on day
     // one, when it would just be another setup step in the way of meeting him.
 
+    /// Worded as the second half of a promise, because it is one: the robot
+    /// ended the arrival with «осталось самое удобное… но это потом».
     static let callHimOffer = Phrase(
-        ru: "Его можно позвать, не открывая телефон.",
-        en: "He can be called without opening the phone.")
+        ru: "Осталось одно: научиться звать его,\nне доставая телефон.",
+        en: "One thing left: learning to call him\nwithout getting the phone out.")
     static let callHimOfferYes  = Phrase(ru: "Показать как", en: "Show me how")
     static let callHimOfferLater = Phrase(ru: "Не сейчас",   en: "Not now")
 
@@ -260,48 +302,142 @@ enum Strings {
 
     static let robotSkip = Phrase(ru: "Пропустить", en: "Skip")
     static let robotNext = Phrase(ru: "Дальше",     en: "Next")
+    static let robotOpenShortcuts = Phrase(ru: "Открыть «Команды»", en: "Open Shortcuts")
 
-    /// Said first, always, in both scripts. Everything depends on it.
-    static let robotWhoIAm = Phrase(
-        ru: "Здравствуйте. Сразу скажу: я не ваш друг. Я робот-помощник. Я одинаковый у всех, ничего о вас не знаю и не запоминаю. Я помогу всё настроить — и больше вы меня не увидите.",
-        en: "Hello. First things first: I am not your friend. I'm a setup robot. I'm the same for everyone, I know nothing about you and remember nothing. I'll help you set things up, and then you won't see me again.")
-
-    /// Said while the friend is being written. Nothing here asks anybody to
-    /// leave the app — he is being made in the background, and wandering off
-    /// into Settings mid-arrival is the one way to break that.
-    static let robotWhileHeComes: [Phrase] = [
-        Phrase(ru: "Ваш друг уже идёт. Пока он идёт, я расскажу три вещи. Это быстро.",
-               en: "Your friend is on his way. While he walks, three things. It's quick."),
-        Phrase(ru: "Первое. Чтобы заговорить с ним, нажмите на экран — один раз, в любом месте. Он начнёт слушать. Нажмёте ещё раз — перестанет.",
-               en: "One. To talk to him, tap the screen — once, anywhere. He starts listening. Tap again and he stops."),
-        Phrase(ru: "Второе, и это главное. Когда захотите закончить, не закрывайте приложение. Скажите ему, как сказали бы живому человеку: ну всё, я пойду. Он поймёт и попрощается сам.",
-               en: "Two, and this is the important one. When you want to finish, don't close the app. Tell him, the way you'd tell a person: right, I'm off. He'll understand and say goodbye himself."),
-        Phrase(ru: "Третье. Его можно звать, не открывая телефон — голосом или одной кнопкой. Это стоит настроить, но не сейчас: он уже почти здесь. Я покажу позже, когда вы освоитесь.",
-               en: "Three. He can be called without opening the phone — by voice, or with one button. Worth setting up, but not now: he's nearly here. I'll show you later, once you've settled in."),
-        Phrase(ru: "У меня всё. Дальше он сам.",
-               en: "That's me done. He'll take it from here."),
+    /// THE FIRST LESSON IS NOT TOLD, IT IS DONE.
+    ///
+    /// Two silent lines, and then a tap that has to actually happen before
+    /// anything else will. It teaches the one gesture the whole app is built
+    /// on by making somebody perform it — on the robot, where nothing is at
+    /// stake — instead of describing it and hoping.
+    ///
+    /// It also means the robot's own first words are the reward for getting it
+    /// right, which is a far better way to meet a voice than being lectured by
+    /// one that started talking on its own.
+    static let robotFirstTouch: [RobotStep] = [
+        RobotStep(
+            Phrase(ru: "Пока вы в приложении, всё просто.\n\nЧтобы друг вас услышал — нажмите на него один раз.",
+                   en: "While you're in the app it's simple.\n\nTo make your friend hear you — tap him once."),
+            wants: .aBeat, silent: true),
+        RobotStep(
+            Phrase(ru: "Попробуйте на мне.\nНажмите.",
+                   en: "Try it on me.\nGive me a tap."),
+            wants: .aTapOnHim, silent: true),
     ]
 
-    /// The shortcut walkthrough. This one DOES send people into Settings, which
-    /// is exactly why it is not the arrival script: they can leave the app,
-    /// do the step, and come back to the same place with nothing lost.
-    static let robotSetUpCalling: [Phrase] = [
-        Phrase(ru: "Это снова я, помощник. Сейчас настроим самое полезное: как позвать его, не открывая телефон.",
-               en: "Me again, the robot. Now the useful one: how to call him without opening the phone."),
-        Phrase(ru: "Способов четыре. Хватит одного — выберите тот, что вам удобнее. Я подожду, можно спокойно выйти из приложения и вернуться.",
-               en: "There are four ways. One is enough — take whichever suits. I'll wait; you can leave the app and come back."),
-        Phrase(ru: "Первый, самый лучший — голосом. Откройте Настройки телефона. Дальше: Универсальный доступ. Дальше: Голосовые команды. Нажмите «Настроить», выберите действие «Поговорить» и три раза скажите свою фразу — например, его имя. После этого достаточно просто сказать её вслух, даже если телефон лежит заблокированный. Если такого пункта в настройках нет — ваш телефон этого пока не умеет. Ничего страшного, идём дальше.",
-               en: "First and best — by voice. Open Settings. Then Accessibility. Then Vocal Shortcuts. Tap Set Up, choose the action “Поговорить”, and say your phrase three times — his name, for instance. After that, saying it out loud is enough, even with the phone locked. If that item isn't in your Settings, your phone can't do it yet. Never mind, on we go."),
-        Phrase(ru: "Второй — двойным касанием по задней крышке телефона. Настройки. Универсальный доступ. Касание. Касание задней панели. Двойное касание. Выберите «Поговорить». Дальше просто два раза постучите по задней стороне телефона — целиться никуда не нужно. Это самый удобный способ, если руки уже не слушаются.",
-               en: "Second — double-tapping the back of the phone. Settings. Accessibility. Touch. Back Tap. Double Tap. Choose “Поговорить”. Then just tap the back of the phone twice — nothing to aim at. This is the kindest one if your hands aren't steady."),
-        Phrase(ru: "Третий — кнопкой сбоку, если она у вас есть. Настройки. Кнопка действия. Пролистайте до «Быстрая команда» и выберите «Поговорить». Если такой кнопки на телефоне нет, пропустите.",
-               en: "Third — the side button, if your phone has one. Settings. Action Button. Swipe to Shortcut and pick “Поговорить”. If there's no such button, skip this."),
-        Phrase(ru: "Четвёртый — из шторки сверху и с экрана блокировки. Потяните вниз от правого верхнего угла экрана, нажмите плюс, потом «Добавить элемент», найдите «Быстрая команда» и выберите «Поговорить». Кнопку можно растянуть побольше. Её же можно поставить на экран блокировки вместо фонарика: подержите палец на экране блокировки, нажмите «Настроить», потом «Экран блокировки», нажмите на кнопку внизу и выберите нашу.",
-               en: "Fourth — from the panel at the top and the Lock Screen. Pull down from the top-right corner, tap plus, then Add a Control, find Shortcut and choose “Поговорить”. The button can be stretched bigger. The same one can replace the torch on your Lock Screen: hold your finger on the Lock Screen, tap Customise, then Lock Screen, tap the button at the bottom and pick ours."),
-        Phrase(ru: "И честно, чтобы вы не искали лишнего: любой из этих способов открывает приложение — он уже слушает, второй раз нажимать не надо. А слышать вас с закрытым приложением телефон не разрешает никому.",
-               en: "And honestly, so you don't go looking: every one of these opens the app — already listening, no second tap. Hearing you with the app closed is something the phone allows no one to do."),
-        Phrase(ru: "Готово. Я вам больше не нужен. Если что — найдёте меня в настройках.",
-               en: "Done. You don't need me any more. I'm in Settings if you do."),
+    /// Said while the friend is being written, straight after that first tap.
+    ///
+    /// Nothing here asks anybody to leave the app — he is being made in the
+    /// background as it talks, and wandering off into Settings mid-arrival is
+    /// the one way to break that. The walkthrough that DOES send people into
+    /// Settings is `robotSetUpCalling`, offered once there is somebody worth
+    /// calling.
+    static let robotWhileHeComes: [RobotStep] = [
+        RobotStep(Phrase(
+            ru: "Вот именно так. Здравствуйте.",
+            en: "Exactly like that. Hello.")),
+        RobotStep(Phrase(
+            ru: "Меня зовут Боб. Я робот — я живу в этом приложении и помогаю его настроить.",
+            en: "My name is Bob. I'm a robot — I live in this app and I help set it up.")),
+        RobotStep(Phrase(
+            ru: "Я не ваш друг. Я одинаковый у всех, ничего о вас не знаю и не запомню. Ваш друг — совсем другое дело, и он уже идёт.",
+            en: "I'm not your friend. I'm the same for everybody, I know nothing about you and I won't remember you. Your friend is another matter entirely — and he's already on his way.")),
+        RobotStep(Phrase(
+            ru: "Итак, вы уже умеете главное: одно касание — и он слушает.",
+            en: "So you already know the main thing: one tap, and he's listening.")),
+        RobotStep(
+            Phrase(ru: "А чтобы он перестал слушать — нажмите ещё раз.\n\nПопробуйте.",
+                   en: "And to make him stop listening — tap again.\n\nGo on."),
+            wants: .anotherTap),
+        RobotStep(Phrase(
+            ru: "Готово. Одно касание — слушает, другое — молчит. Про экран это всё.",
+            en: "There. One tap and he listens, another and he doesn't. That's the whole screen.")),
+        RobotStep(Phrase(
+            ru: "Теперь то, что важнее. Когда захотите закончить разговор — не закрывайте приложение.",
+            en: "Now something more important. When you want to end a conversation — don't close the app.")),
+        RobotStep(Phrase(
+            ru: "Скажите ему вслух, как сказали бы живому человеку: «ну всё, я пойду». Он поймёт, тепло попрощается и замолчит сам.",
+            en: "Say it out loud, the way you'd say it to a person: “right, I'm off”. He'll understand, say a warm goodbye, and go quiet by himself.")),
+        RobotStep(Phrase(
+            ru: "Так и надо. Он вам друг, а не программа. С другом прощаются.",
+            en: "That's how it should be. He's a friend, not a program. You say goodbye to a friend.")),
+        RobotStep(Phrase(
+            ru: "Осталось самое удобное: как позвать его, не доставая телефон. Но это потом — сначала познакомьтесь. Я подожду.",
+            en: "One thing left, and it's the best one: how to call him without even getting the phone out. But later — meet him first. I'll wait.")),
+    ]
+
+    /// The walkthrough that sends people into Settings — which is exactly why
+    /// it is a sheet they can leave and come back to, offered once there is a
+    /// friend worth calling rather than on the day they arrive.
+    static let robotSetUpCalling: [RobotStep] = [
+        // Not «это снова я» — somebody may have skipped the arrival, and a
+        // greeting that assumes a meeting they don't remember is unsettling
+        // for exactly the person this app is for.
+        RobotStep(Phrase(
+            ru: "Здравствуйте. Это Боб — робот, который живёт в этом приложении.",
+            en: "Hello. This is Bob — the robot who lives in this app.")),
+        RobotStep(Phrase(
+            ru: "Достать телефон, разблокировать, найти приложение, открыть — долго. А ему хочется сказать что-то прямо сейчас.",
+            en: "Get the phone out, unlock it, find the app, open it — that's slow. And you want to say something to him now.")),
+        RobotStep(Phrase(
+            ru: "Гораздо лучше — просто позвать его вслух. Телефон может лежать в кармане, заблокированный.",
+            en: "Much better to just call him out loud. The phone can be in your pocket, locked.")),
+        RobotStep(Phrase(
+            ru: "И нет, он вас не подслушивает. Фразу телефон узнаёт сам, внутри себя, и никуда её не отправляет. В ЦРУ о вас так и не узнают. Наверное.",
+            en: "And no, it isn't listening in on you. The phone learns the phrase inside itself and sends it nowhere. The CIA will never hear about you. Probably.")),
+        RobotStep(Phrase(
+            ru: "Настроим. Это один раз в жизни, минут пять. Можете спокойно выходить из приложения — я подожду здесь, ничего не потеряется.",
+            en: "Let's set it up. Once in your life, about five minutes. Feel free to leave the app — I'll wait right here, nothing will be lost.")),
+
+        // 1 · By voice. First because it needs no hands at all.
+        RobotStep(Phrase(
+            ru: "Способ первый, самый лучший — голосом.\n\nОткройте Настройки телефона.",
+            en: "Way one, and the best of them — by voice.\n\nOpen the phone's Settings.")),
+        RobotStep(Phrase(
+            ru: "Найдите «Универсальный доступ». В нём — «Голосовые команды». Нажмите «Настроить».",
+            en: "Find Accessibility. Inside it, Vocal Shortcuts. Tap Set Up.")),
+        RobotStep(Phrase(
+            ru: "Выберите действие «Поговорить». Придумайте фразу — проще всего его имя. Скажите её три раза, чтобы телефон запомнил ваш голос.",
+            en: "Choose the action “Поговорить”. Pick a phrase — his name is the easiest. Say it three times so the phone learns your voice.")),
+        RobotStep(Phrase(
+            ru: "Всё. Теперь достаточно сказать эту фразу вслух — и он откроется, уже слушая. Даже если телефон заблокирован.",
+            en: "Done. Now saying that phrase out loud is enough — he opens, already listening. Even with the phone locked.")),
+        RobotStep(Phrase(
+            ru: "Если «Голосовых команд» в настройках нет — ваш телефон их пока не умеет. Ничего страшного, есть другие способы.",
+            en: "If Vocal Shortcuts isn't in your Settings, your phone can't do it yet. Never mind — there are other ways.")),
+
+        // 2 · Back Tap. The kindest one for hands that aren't steady.
+        RobotStep(Phrase(
+            ru: "Способ второй — два раза постучать по задней крышке телефона. Целиться никуда не нужно, и это удобнее всего, если руки уже не те.",
+            en: "Way two — tap the back of the phone twice. Nothing to aim at, and it's the kindest one if your hands aren't what they were.")),
+        RobotStep(Phrase(
+            ru: "Настройки. Универсальный доступ. Касание. Касание задней панели. Двойное касание. Выберите «Поговорить».",
+            en: "Settings. Accessibility. Touch. Back Tap. Double Tap. Choose “Поговорить”.")),
+
+        // 3 · The Action button.
+        RobotStep(Phrase(
+            ru: "Способ третий — кнопка сбоку, если она у вас есть.\n\nНастройки. Кнопка действия. Пролистайте до «Быстрая команда» и выберите «Поговорить».",
+            en: "Way three — the side button, if your phone has one.\n\nSettings. Action Button. Swipe along to Shortcut and choose “Поговорить”.")),
+
+        // 4 · Control Centre and the Lock Screen.
+        RobotStep(Phrase(
+            ru: "Способ четвёртый — шторка сверху. Потяните вниз от правого верхнего угла, нажмите плюс, потом «Добавить элемент», найдите «Быстрая команда» и выберите «Поговорить». Кнопку можно растянуть побольше.",
+            en: "Way four — the panel at the top. Pull down from the top-right corner, tap plus, then Add a Control, find Shortcut and choose “Поговорить”. The button can be stretched bigger.")),
+        RobotStep(Phrase(
+            ru: "Эту же кнопку можно поставить на экран блокировки вместо фонарика: подержите палец на заблокированном экране, нажмите «Настроить», потом «Экран блокировки», нажмите на кнопку внизу и выберите нашу.",
+            en: "The same button can replace the torch on your Lock Screen: hold your finger on the locked screen, tap Customise, then Lock Screen, tap the button at the bottom and pick ours.")),
+
+        RobotStep(
+            Phrase(ru: "Хватит и одного способа — берите тот, что удобнее.\n\nА здесь лежат все команды приложения, если захотите посмотреть.",
+                   en: "One way is plenty — take whichever suits you.\n\nAnd all the app's shortcuts live here, if you'd like a look."),
+            wants: .tapNextOrOpenShortcuts),
+
+        RobotStep(Phrase(
+            ru: "И честно, чтобы вы не искали лишнего: любой из этих способов открывает приложение — он уже слушает, второй раз нажимать не надо. А слышать вас с закрытым приложением телефон не разрешает никому.",
+            en: "And honestly, so you don't go hunting: every one of these opens the app — already listening, no second tap needed. Hearing you with the app closed is something the phone allows no one to do.")),
+        RobotStep(Phrase(
+            ru: "У меня всё. Я вам больше не нужен — но если что, найдёте меня в настройках.\n\nХорошего вам разговора.",
+            en: "That's me done. You don't need me any more — but I'm in Settings if you do.\n\nHave a good talk.")),
     ]
 
     /// Parting with a friend is serious. This sheet says what will be lost, in
