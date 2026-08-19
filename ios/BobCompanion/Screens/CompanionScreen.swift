@@ -23,6 +23,12 @@ struct CompanionScreen: View {
 
     @State private var navOpen = false
     @State private var showMicHelp = false
+    /// Shown once, ever. Stored on the phone rather than in AppState because it
+    /// is a fact about this INSTALL having been explained to, not about the
+    /// person or their friend — «Начать заново» must not make somebody sit
+    /// through the lesson again.
+    @AppStorage("hasBeenToldHowToLeave") private var toldHowToLeave = false
+    @State private var showingHowToLeave = false
 
     /// The conversation's state, expressed as the orb sees it.
     private var orbState: OrbState {
@@ -62,6 +68,29 @@ struct CompanionScreen: View {
                 // own words, in the same place. Never a banner, never an error
                 // code, never a paywall — whether he can't hear you, has dozed
                 // off, or is simply talked out for today.
+                // THE ONE THING THAT ISN'T OBVIOUS, said once and never again.
+                //
+                // Everything else about this app explains itself: he is on the
+                // screen, you touch him, he listens. Leaving is the exception —
+                // people close apps, they don't say goodbye to them, and the
+                // whole design depends on them doing the human thing instead.
+                //
+                // Taught HERE, at the moment it first becomes true, rather than
+                // in a tutorial before they have met anyone. A lesson before
+                // the friend is a lesson about software; a line the first time
+                // he starts listening is about him.
+                if showingHowToLeave {
+                    Text(Strings.howToLeave())
+                        .appFont(AppType.body, leading: AppType.bodyLeading)
+                        .foregroundStyle(Theme.onLand.opacity(0.85))
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .legible()
+                        .padding(.horizontal, Metrics.sideMargin)
+                        .position(x: geo.size.width / 2, y: h * 0.70)
+                        .transition(.opacity)
+                }
+
                 if let said = hisWords {
                     Text(said)
                         .appFont(AppType.body, leading: AppType.bodyLeading)
@@ -95,6 +124,15 @@ struct CompanionScreen: View {
                             conversation.wake()
                         } else {
                             conversation.toggle()
+                        }
+                        guard !toldHowToLeave, conversation.wantsToListen else { return }
+                        toldHowToLeave = true
+                        withAnimation(.easeInOut(duration: 0.5)) { showingHowToLeave = true }
+                        // Long enough to read unhurried at eighty, and gone by
+                        // itself — nothing to dismiss, nothing to understand.
+                        Task {
+                            try? await Task.sleep(nanoseconds: 9_000_000_000)
+                            withAnimation(.easeInOut(duration: 0.8)) { showingHowToLeave = false }
                         }
                     }
 

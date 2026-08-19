@@ -23,9 +23,13 @@ struct TalkResponse: Decodable {
     /// there is nothing left for the caller to play. Never sent by the server —
     /// it is how the streaming path reports itself back through the same type.
     var spokenAsHeThought: Bool = false
+    /// He was saying goodbye. The server decided this — not by matching «пока»,
+    /// which fires on «пока не знаю», but by the model judging that the person
+    /// is actually leaving. Once he has finished the sentence, stop listening.
+    let farewell: Bool?
 
     enum CodingKeys: String, CodingKey {
-        case transcript, reply, note, state
+        case transcript, reply, note, state, farewell
         case audioBase64 = "audio_base64"
         case audioMime = "audio_mime"
         case secondsLeft = "seconds_left"
@@ -42,9 +46,10 @@ private struct TalkEvent: Decodable {
     let reply: String?
     let detail: String?
     let secondsLeft: Int?
+    let farewell: Bool?
 
     enum CodingKeys: String, CodingKey {
-        case kind, transcript, text, reply, detail
+        case kind, transcript, text, reply, detail, farewell
         case audioBase64 = "audio_base64"
         case secondsLeft = "seconds_left"
     }
@@ -231,6 +236,7 @@ struct BackendClient {
         var secondsLeft: Int?
         var trouble: String?
         var spoke = false
+        var saidGoodbye = false
 
         for try await line in stream.lines {
             guard
@@ -253,6 +259,7 @@ struct BackendClient {
             case "done":
                 finalReply = event.reply ?? ""
                 secondsLeft = event.secondsLeft
+                saidGoodbye = event.farewell ?? false
             default:
                 break
             }
@@ -273,7 +280,8 @@ struct BackendClient {
             note: nil,
             state: nil,
             secondsLeft: secondsLeft,
-            spokenAsHeThought: spoke
+            spokenAsHeThought: spoke,
+            farewell: saidGoodbye
         )
     }
 

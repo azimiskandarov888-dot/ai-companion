@@ -398,3 +398,57 @@ def test_a_fragment_that_is_only_a_direction_is_skipped_not_spoken(client, monke
     assert not any(e["kind"] == "trouble" for e in events)
     spoken_aloud = " ".join(e["text"] for e in events if e["kind"] == "say")
     assert "пауза" not in tts.spoken(spoken_aloud)
+
+
+# --------------------------------------------------------------------------- #
+# Saying goodbye
+# --------------------------------------------------------------------------- #
+def test_the_farewell_marker_is_never_spoken_aloud():
+    """It is an instruction to the phone, not a word. If any rule got to it
+    before the stripper did, he would announce «конец» out loud at the end of
+    every goodbye."""
+    from app import companion
+
+    assert tts.spoken(f"Ну хорошо, до завтра. {companion.FAREWELL_MARKER}") == (
+        "Ну хорошо, до завтра."
+    )
+    assert "КОНЕЦ" not in tts.spoken(f"Спокойной ночи.\n{companion.FAREWELL_MARKER}")
+
+
+def test_a_goodbye_stops_the_listening_and_is_never_remembered(client, monkeypatch):
+    """The marker exists for exactly one instruction and then is gone: not into
+    the audio, not into the conversation log, not into his diary."""
+    from app import companion
+
+    goodbye = f"Ну ладно, иди завтракай. До завтра! {companion.FAREWELL_MARKER}"
+
+    async def says_goodbye(history, s, v=""):
+        for i in range(1, len(goodbye) + 1, 9):
+            yield goodbye[:i]
+        yield goodbye
+
+    monkeypatch.setattr(brain, "stream_reply", says_goodbye)
+    events = _lines(_talk(client, AUTH))
+
+    done = events[-1]
+    assert done["kind"] == "done"
+    assert done["farewell"] is True
+    assert companion.FAREWELL_MARKER not in done["reply"]
+
+    # Nothing spoken carries it either.
+    for event in events:
+        if event["kind"] == "say":
+            assert companion.FAREWELL_MARKER not in tts.spoken(event["text"])
+
+    # …and what he is remembered as having said is the clean sentence.
+    remembered = [t["content"] for t in memory.recent_turns(UID)]
+    assert companion.FAREWELL_MARKER not in remembered[-1]
+    assert remembered[-1].endswith("До завтра!")
+
+
+def test_an_ordinary_turn_never_says_goodbye(client):
+    """The expensive mistake is the false positive: cutting somebody off
+    mid-conversation is far worse than missing a goodbye, so an ordinary reply
+    must never carry the flag."""
+    done = _lines(_talk(client, AUTH))[-1]
+    assert done["farewell"] is False

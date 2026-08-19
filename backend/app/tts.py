@@ -47,7 +47,7 @@ import sys
 
 import httpx
 
-from . import config
+from . import companion, config
 
 _FISH_API_URL = "https://api.fish.audio/v1/tts"
 _ELEVENLABS_API_BASE = "https://api.elevenlabs.io/v1/text-to-speech"
@@ -235,6 +235,11 @@ _BULLET = re.compile(r"(?m)^\s*[-•*]\s+")
 
 def spoken(text: str) -> str:
     """The text with everything that was never meant to be heard removed."""
+    # FIRST, before anything else: the farewell marker. It is not punctuation
+    # and not a stage direction, and if any later rule got to it first it
+    # would leave «КОНЕЦ» behind as a word and he would announce the end of
+    # the conversation out loud.
+    text = text.replace(companion.FAREWELL_MARKER, " ")
     for pattern in _STAGE_DIRECTIONS:
         text = pattern.sub(" ", text)
     text = _BULLET.sub("", text)

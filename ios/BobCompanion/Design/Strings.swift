@@ -159,6 +159,15 @@ enum Strings {
     static let tapToTalk = Phrase(
         ru: "Нажмите, чтобы поговорить",
         en: "Tap to speak")
+    /// Shown ONCE, the first time somebody switches him on, and never again.
+    ///
+    /// The one thing about this app that isn't obvious: you leave him the way
+    /// you'd leave a person — by saying so — not by closing anything. Said
+    /// plainly rather than in his voice, because it is an instruction, and an
+    /// instruction dressed up as dialogue is worse than an honest one.
+    static let howToLeave = Phrase(
+        ru: "Когда захотите закончить — просто скажите ему,\nкак сказали бы человеку.",
+        en: "When you want to finish, just tell him —\nthe way you'd tell a person.")
     static let needsMicrophone = Phrase(
         ru: "Мне нужно тебя слышать.",
         en: "I need to be able to hear you.")

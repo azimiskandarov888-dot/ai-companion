@@ -195,6 +195,18 @@ async def _assemble(user_id: str, user_text: str) -> tuple[str, str, list, str |
     return system_stable, system_variable, memory.recent_turns(user_id), tts.voice_for(who)
 
 
+def _farewell(reply: str) -> tuple[str, bool]:
+    """Split a reply into what he actually said and whether he was saying goodbye.
+
+    The marker never survives past this point: not into the audio, not into
+    the conversation log, not into his diary. It exists for exactly one
+    instruction — stop listening — and then it is gone.
+    """
+    if companion.FAREWELL_MARKER not in reply:
+        return reply, False
+    return reply.replace(companion.FAREWELL_MARKER, "").strip(), True
+
+
 def _remember(
     user_id: str, user_text: str, reply: str, background_tasks: BackgroundTasks
 ) -> None:
@@ -222,6 +234,7 @@ async def _think_and_speak(
         fresh_info=brain.wants_fresh_info(user_text),
     )
 
+    reply, leaving = _farewell(reply)
     _remember(user_id, user_text, reply, background_tasks)
 
     # The mouth is optional. With a voice provider configured we return warm
@@ -235,8 +248,15 @@ async def _think_and_speak(
             "audio_base64": base64.b64encode(audio_bytes).decode("ascii"),
             "audio_mime": "audio/mpeg",
             "voice": "server",
+            "farewell": leaving,
         }
-    return {"reply": reply, "audio_base64": "", "audio_mime": "", "voice": "client"}
+    return {
+        "reply": reply,
+        "audio_base64": "",
+        "audio_mime": "",
+        "voice": "client",
+        "farewell": leaving,
+    }
 
 
 # --------------------------------------------------------------------------- #
@@ -282,6 +302,7 @@ async def _speak_as_he_thinks(
     yield _line({"kind": "heard", "transcript": transcript})
 
     reply = ""
+    leaving = False
     try:
         system_stable, system_variable, history, voice = await _assemble(user_id, transcript)
         speak = tts.configured()
@@ -352,7 +373,7 @@ async def _speak_as_he_thinks(
         finally:
             writer.cancel()
 
-        reply = reply.strip()
+        reply, leaving = _farewell(reply.strip())
         if reply:
             _remember(user_id, transcript, reply, background_tasks)
 
@@ -365,6 +386,9 @@ async def _speak_as_he_thinks(
         {
             "kind": "done",
             "reply": reply,
+            # He said goodbye — the phone stops listening once he has finished
+            # speaking. A friend is left by saying so, not by closing an app.
+            "farewell": leaving,
             "voice": "server" if tts.configured() else "client",
             "seconds_left": allowance.seconds_left(user_id),
         }

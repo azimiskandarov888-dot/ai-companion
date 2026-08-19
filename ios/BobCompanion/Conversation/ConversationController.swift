@@ -238,6 +238,20 @@ final class ConversationController: ObservableObject {
                 status = .speaking
                 await voice.speak(response.reply)
             }
+
+            // He said goodbye back, and the person is going. Stop listening —
+            // AFTER he has finished the sentence, never during it, or he cuts
+            // himself off mid-goodbye.
+            //
+            // The server decided this, by judgement rather than by matching
+            // «пока» (which would fire on «пока не знаю»). Leaving a friend
+            // means telling him so; the microphone following that is what
+            // makes it feel like he understood rather than like an app that
+            // happened to close.
+            if response.farewell == true {
+                trace("he said goodbye — switching off")
+                turnOff()
+            }
         } catch {
             // He still only ever says «не слышит» — the screen shows nothing
             // else and never will. But the real reason is written down, once,
