@@ -266,24 +266,37 @@ struct SetupRobot: View {
             // On a tap step there is deliberately NO «Дальше». The tap is the
             // lesson; offering a way past it teaches nothing and everybody
             // takes it.
-            if !awaitingTouch, here.wants != .aBeat {
-                if here.wants == .tapNextOrOpenShortcuts {
-                    AppButton(title: Strings.robotOpenShortcuts(), tone: .quiet) {
-                        open("shortcuts://")
-                    }
+            switch here.wants {
+            // He is mid-flow and carries on by himself. Nothing to press —
+            // which is the whole point: being told something should not be
+            // twenty small decisions.
+            case .nothing, .aTapOnHim, .anotherTap:
+                EmptyView()
+
+            // The one real choice in the script.
+            case .nowOrLater:
+                AppButton(title: Strings.robotNow(), tone: .sun) { advance() }
+                AppButton(title: Strings.robotLater(), tone: .quiet) { skipTheOptionalPart() }
+
+            case .tapNextOrOpenShortcuts:
+                AppButton(title: Strings.robotOpenShortcuts(), tone: .quiet) {
+                    open("shortcuts://")
                 }
-                // Apple has no way to send anybody to a particular page of
-                // Settings — only to this app's own — and the private URLs
-                // that do get apps rejected. So this lands one tap away from
-                // the top of Settings, which is still one whole problem
-                // fewer: finding a grey cog on a crowded home screen.
-                if here.wants == .tapNextOrOpenSettings {
-                    AppButton(title: Strings.robotOpenSettings(), tone: .quiet) {
-                        open(UIApplication.openSettingsURLString)
-                    }
+                nextButton
+
+            // Apple has no way to send anybody to a particular page of
+            // Settings — only to this app's own — and the private URLs that
+            // do get apps rejected. So this lands one tap away from the top
+            // of Settings, which is still one whole problem fewer: finding a
+            // grey cog on a crowded home screen.
+            case .tapNextOrOpenSettings:
+                AppButton(title: Strings.robotOpenSettings(), tone: .quiet) {
+                    open(UIApplication.openSettingsURLString)
                 }
-                AppButton(title: isLast ? Strings.done() : Strings.robotNext(),
-                          tone: .sun) { advance() }
+                nextButton
+
+            case .tapNext:
+                nextButton
             }
 
             // Always available, on every step including the tap ones. Somebody
@@ -297,6 +310,11 @@ struct SetupRobot: View {
         }
     }
 
+    private var nextButton: some View {
+        AppButton(title: isLast ? Strings.done() : Strings.robotNext(),
+                  tone: .sun) { advance() }
+    }
+
     private func open(_ address: String) {
         guard let url = URL(string: address) else { return }
         UIApplication.shared.open(url)
@@ -304,7 +322,21 @@ struct SetupRobot: View {
 
     private func advance() {
         guard !isLast else { return finish(heardItAll: true) }
-        withAnimation(.easeInOut(duration: 0.35)) { step += 1 }
+        go(to: step + 1)
+    }
+
+    /// «Потом» — past the whole setup section, to whatever he says afterwards.
+    /// Never straight out: he still has a last word, and being dropped back
+    /// onto a screen mid-sentence reads as something having gone wrong.
+    private func skipTheOptionalPart() {
+        var next = step + 1
+        while next < script.count, script[next].optional { next += 1 }
+        guard next < script.count else { return finish(heardItAll: true) }
+        go(to: next)
+    }
+
+    private func go(to next: Int) {
+        withAnimation(.easeInOut(duration: 0.35)) { step = next }
         Task { await say() }
     }
 
@@ -317,9 +349,8 @@ struct SetupRobot: View {
         onFinished(heardItAll)
     }
 
-    /// Read the current step aloud. Reading is never a gate: «Дальше» works
-    /// the whole time, so anybody who reads faster than the voice talks — or
-    /// who has the sound off entirely — is never held up.
+    /// Say the current step, then — unless it is waiting for something — carry
+    /// straight on to the next one.
     private func say() async {
         // First, and before anything can suspend: cutting the previous line
         // off is what releases the previous call's continuation. Two live
@@ -328,30 +359,43 @@ struct SetupRobot: View {
         generation += 1
         let mine = generation
 
-        // A step that moves on by itself. Timed from here rather than from the
-        // voice finishing, because these steps are the silent ones.
-        if here.wants == .aBeat {
-            Task {
-                try? await Task.sleep(nanoseconds: 3_800_000_000)
-                if mine == generation { advance() }
-            }
+        let words = here.line()
+        let began = Date()
+
+        if !here.silent {
+            // The conversation's own session may have just been torn down, or
+            // never raised at all (this runs before the friend exists).
+            // Playback is all this needs.
+            let session = AVAudioSession.sharedInstance()
+            try? session.setCategory(.playback, mode: .spokenAudio, options: [.duckOthers])
+            try? session.setActive(true, options: [])
+
+            speaking = true
+            await voice.speak(words, as: .machine)
+            // The cut-off call resumes too, and gets here AFTER its
+            // replacement has already started talking. Only the current one
+            // may put the ring out.
+            if mine == generation { speaking = false }
         }
 
-        guard !here.silent else { return }
+        guard mine == generation, here.wants == .nothing else { return }
 
-        // The conversation's own session may have just been torn down, or
-        // never raised at all (this runs before the friend exists). Playback
-        // is all this needs.
-        let session = AVAudioSession.sharedInstance()
-        try? session.setCategory(.playback, mode: .spokenAudio, options: [.duckOthers])
-        try? session.setActive(true, options: [])
+        // HOLD IT LONG ENOUGH TO BE READ, whatever happened to the sound.
+        //
+        // Speech usually takes longer than this, so usually nothing is added.
+        // But if the voice never sounded — no Russian voice installed, a
+        // simulator, an audio session that wouldn't come up — `speak` returns
+        // in milliseconds, and without a floor the entire script would flick
+        // past in a second and a half with nobody able to read a word of it.
+        let floor = 2.0 + Double(words.count) / 16.0
+        let left = floor - Date().timeIntervalSince(began)
+        if left > 0 {
+            try? await Task.sleep(nanoseconds: UInt64(left * 1_000_000_000))
+        }
+        // And a breath, so one sentence doesn't tread on the next.
+        try? await Task.sleep(nanoseconds: 550_000_000)
 
-        speaking = true
-        await voice.speak(here.line())
-        // The cut-off call resumes too, and gets here AFTER its replacement
-        // has already started talking. Only the current one may put the ring
-        // out.
-        if mine == generation { speaking = false }
+        if mine == generation { advance() }
     }
 }
 
@@ -364,7 +408,13 @@ struct CallHimSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        SetupRobot(script: Strings.robotSetUpCalling) { _ in dismiss() }
+        // The vocal shortcut FIRST, because whoever opens this either skipped
+        // it on the arrival screen («потом») or wants to redo it — and it is
+        // the one worth having. The other three come after, for anybody who
+        // would rather press something than speak.
+        SetupRobot(script: Strings.robotHelloAgain
+                         + Strings.robotVocalShortcut
+                         + Strings.robotSetUpCalling) { _ in dismiss() }
         .presentationDetents([.large])
         .presentationCornerRadius(Metrics.sheetRadius)
     }

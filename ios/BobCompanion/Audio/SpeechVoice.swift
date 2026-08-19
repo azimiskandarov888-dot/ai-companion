@@ -17,19 +17,52 @@ final class SpeechVoice: NSObject, AVSpeechSynthesizerDelegate {
         synthesizer.delegate = self
     }
 
+    /// How something sounds. Two of them, and the difference is the point.
+    enum Character {
+        /// Standing in for HIM when the server sent no audio. As human as this
+        /// synthesiser gets: the best voice installed, ordinary pitch.
+        case standingInForHim
+        /// The setup robot, and it must never be mistaken for him. Lower than
+        /// a person speaks, and deliberately the COMPACT voice rather than the
+        /// enhanced one — the compact voices are the older, flatter, more
+        /// obviously synthesised ones, which everywhere else would be a defect
+        /// and here is the entire brief.
+        case machine
+
+        var pitch: Float { self == .machine ? 0.72 : 1.0 }
+        var rate: Float { self == .machine ? 0.43 : 0.45 }
+    }
+
     /// Speak the text aloud (Russian) and return only when it finishes.
-    func speak(_ text: String) async {
+    func speak(_ text: String, as character: Character = .standingInForHim) async {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
 
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
             self.continuation = continuation
             let utterance = AVSpeechUtterance(string: trimmed)
-            utterance.voice = AVSpeechSynthesisVoice(language: "ru-RU")
-            // A touch slower than default (0.5) — kinder for an elderly listener.
-            utterance.rate = 0.45
+            utterance.voice = Self.voice(for: character)
+            // Both are slower than default (0.5) — kinder for an elderly
+            // listener, and on the robot it also reads as unbothered.
+            utterance.rate = character.rate
+            utterance.pitchMultiplier = character.pitch
             synthesizer.speak(utterance)
         }
+    }
+
+    /// Pick a Russian voice of the right kind, falling back the moment the
+    /// wanted one isn't installed — which happens often, because the enhanced
+    /// voices are a download most people never make.
+    private static func voice(for character: Character) -> AVSpeechSynthesisVoice? {
+        let russian = AVSpeechSynthesisVoice.speechVoices()
+            .filter { $0.language.hasPrefix("ru") }
+        guard !russian.isEmpty else { return AVSpeechSynthesisVoice(language: "ru-RU") }
+
+        let wanted: AVSpeechSynthesisVoiceQuality =
+            character == .machine ? .default : .enhanced
+        return russian.first { $0.quality == wanted }
+            ?? russian.first
+            ?? AVSpeechSynthesisVoice(language: "ru-RU")
     }
 
     /// Stop immediately (e.g. the app leaving the screen).

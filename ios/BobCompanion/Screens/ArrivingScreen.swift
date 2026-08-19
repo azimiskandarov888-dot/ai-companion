@@ -125,7 +125,10 @@ struct ArrivingScreen: View {
     }
 
     private var robot: some View {
-        SetupRobot(script: Strings.robotFirstTouch + Strings.robotWhileHeComes) { heardItAll in
+        SetupRobot(script: Strings.robotFirstTouch
+                         + Strings.robotWhileHeComes
+                         + Strings.robotVocalShortcut   // «Потом» jumps this
+                         + Strings.robotFarewell) { heardItAll in
             robotIntroduced = true
             if heardItAll { toldHowToLeave = true }
             guideDone = true
@@ -188,30 +191,49 @@ struct ArrivingScreen: View {
 
         // Meanwhile, he is written.
         let client = BackendClient(baseURL: AppConfig.shared.backendURL)
-        do {
-            name = try await client.createCompanion(story: story, wishes: wishes).name
-        } catch {
-            // HE MUST NOT ARRIVE IF HE WAS NEVER WRITTEN.
-            //
-            // This used to swallow the failure and walk on, on the reasoning
-            // that a dead screen is worse than a silent one. It is not. The
-            // server still holds the PREVIOUS companion and the previous
-            // conversation, so carrying on doesn't produce a stranger — it
-            // produces the last person, mid-sentence, greeting someone who
-            // just spent ten minutes telling their life story to nobody. A
-            // second phone met its owner's old friend and picked up a
-            // conversation it had never had.
-            //
-            // So the walk stops here and the retry is offered instead. Still
-            // no error code — he simply hasn't set off yet.
-            Trouble.shared.record(error, url: AppConfig.shared.backendURL)
-            trouble = true
-            // The robot stops mid-sentence and gets out of the way — a friend
-            // who never set off is the only thing on this screen that matters.
-            // It hasn't been marked as introduced, so a later fresh arrival
-            // still gets it; this one doesn't wait for it again.
-            guideDone = true
-            return
+        while true {
+            do {
+                name = try await client.createCompanion(story: story, wishes: wishes).name
+                break
+            } catch {
+                Trouble.shared.record(error, url: AppConfig.shared.backendURL)
+
+                // THE ROBOT SENDS PEOPLE OUT OF THE APP, AND THIS IS WHERE
+                // THAT COSTS SOMETHING.
+                //
+                // Its middle section is «откройте настройки телефона», and
+                // somebody who follows it properly is gone for a minute or
+                // two. iOS gives a backgrounded app about thirty seconds, so
+                // the request writing him is quite likely to be killed —
+                // through no fault of theirs, while they were doing exactly
+                // as they were told.
+                //
+                // So while the robot is still talking, a failure isn't one.
+                // Wait, and ask again. If the server finished writing him
+                // before the connection died, this simply writes him again;
+                // one wasted call is nothing beside «он пока не смог прийти»
+                // landing on somebody who did everything right.
+                if !guideDone {
+                    try? await Task.sleep(nanoseconds: 3_000_000_000)
+                    continue
+                }
+
+                // HE MUST NOT ARRIVE IF HE WAS NEVER WRITTEN.
+                //
+                // This used to swallow the failure and walk on, on the
+                // reasoning that a dead screen is worse than a silent one. It
+                // is not. The server still holds the PREVIOUS companion and
+                // the previous conversation, so carrying on doesn't produce a
+                // stranger — it produces the last person, mid-sentence,
+                // greeting someone who just spent ten minutes telling their
+                // life story to nobody. A second phone met its owner's old
+                // friend and picked up a conversation it had never had.
+                //
+                // So the walk stops here and the retry is offered instead.
+                // Still no error code — he simply hasn't set off yet.
+                trouble = true
+                return
+            }
         }
         ready = true
 

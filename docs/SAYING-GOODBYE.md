@@ -145,6 +145,33 @@ looking at for the next ten years.
 A gesture somebody has performed once, on a robot, where getting it wrong
 costs nothing, is remembered. A gesture described in a sentence is not.
 
+### How it talks
+
+Dry. Competent. Faintly bored by the procedure and entirely unbothered about
+being a machine. Not warm, not sorry, not trying to be liked — which, done
+properly, is why people like it. The announcements in a very old research
+facility.
+
+The first draft was an apologetic assistant — *«я не ваш друг, я одинаковый у
+всех, ничего о вас не знаю»* — and it read as a disclaimer. Charm was doing no
+work, and worse: **earnestness is the register the friend owns.** Two sincere
+voices in one app and the friend stops being special. A bored one throws him
+into relief.
+
+Two rules keep it safe:
+
+1. **The joke is always on the robot or on the procedure, never on the
+   person.** These are lonely, tired, elderly people. A machine that is rude
+   to them isn't funny, it's the last straw.
+2. **The personality lives only in the framing sentences.** The instructions
+   themselves — «Универсальный доступ», «Голосовые команды», «Настроить» —
+   stay dead plain. Nobody was ever helped by a witty instruction.
+
+It speaks in `SpeechVoice.Character.machine`: lower pitch, slightly slower,
+and deliberately the phone's **compact** Russian voice rather than the best
+one installed. The compact voices are the older, flatter, more obviously
+synthesised ones — everywhere else that is a defect, and here it is the brief.
+
 ### Why it must announce that it is a robot
 
 This looked at first like the "training companion" idea that `intake.py`
@@ -171,17 +198,46 @@ Same reason it speaks in the phone's own flat synthetic voice instead of the
 warm one, and shows a dead grey ring instead of the orb. Nobody could confuse
 the two, and it costs nothing.
 
-### What it does NOT do
+### The pauses are the exception, not the rule
 
-It never asks anybody to leave the app. He is being written in the background
-while it talks, and wandering off into Settings mid-arrival is the one way to
-break that. So the arrival script only covers what can be done right there:
-what it is, how to start talking, how to finish, and a promise about the rest.
+A «Дальше» after every sentence turns being told something into operating a
+machine: twenty small decisions, none of which mean anything, each one a
+chance to put the phone down. So he finishes a line and carries straight on.
+`RobotWants.nothing` is the default, and 17 of the 25 steps use it.
 
-The walkthrough that *does* send people into Settings — the vocal shortcut,
-Back Tap, the Action button, Control Centre — is the same robot in a sheet
-they can leave and come back to, offered at the third conversation and always
-available under Настройки → «Как его позвать».
+The button comes back only where there is something real to do: the two taps,
+one choice, one «open Settings», and a couple of beats that need a moment to
+land. Eight stops in the whole script, and two of those are the lesson itself.
+
+There is a floor on how long a line stays up — `2s + characters/16` — because
+if the voice never sounds (no Russian voice installed, a simulator, an audio
+session that wouldn't come up) `speak` returns in milliseconds and the whole
+script would flick past unread. Speech is normally slower than the floor, so
+normally it adds nothing.
+
+### One session, not two
+
+Writing him genuinely takes about a minute and a half, and there is nothing
+else to do with that time. So the arrival covers everything worth knowing —
+including setting up a phrase to call him by. Being sent on the same errand
+twice is worse than being sent on it once.
+
+The one thing it asks people to leave the app for is Vocal Shortcuts, and
+that has a cost: iOS gives a backgrounded app about thirty seconds, so the
+request writing him is quite likely to be killed while somebody is doing
+exactly as they were told. **While the robot is still talking, a failed
+creation is not a failure** — `ArrivingScreen.bringHim()` waits three seconds
+and asks again. Only once the robot is done does a failure mean what it says.
+
+Before that section there is a real choice — «Сейчас или потом?» — and «Потом»
+jumps the whole thing (`RobotStep.optional`), landing on his last word rather
+than dumping somebody out mid-sentence. They get the offer again on the second
+conversation, in the robot's own voice: *«Вы сказали «потом». Это было потом.»*
+
+**Only ONE way of calling him is taught at the arrival**, the one that needs
+no hands. The other three — Back Tap, the Action button, Control Centre — are
+in Settings under «Как его позвать», with the same robot. A menu of four ways
+is how somebody ends up using none.
 
 ### d) Nothing else
 
