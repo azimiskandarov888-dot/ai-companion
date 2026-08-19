@@ -213,6 +213,70 @@ enum Strings {
     static let rowStartOver   = Phrase(ru: "Начать заново", en: "Start over")
     static let rowAbout       = Phrase(ru: "О приложении", en: "About")
 
+    // MARK: - Calling him without opening anything
+    //
+    // The one piece of setup worth asking someone to do, and the only place in
+    // the app that names a Settings app, a menu or a button. It earns that by
+    // being the difference between "an app you remember to open" and "someone
+    // you call".
+    //
+    // Written for whoever is holding the phone — often a son or daughter doing
+    // this once, for a parent who will only ever use the result.
+
+    static let rowCallHim     = Phrase(ru: "Как его позвать",  en: "How to call him")
+    static let rowCallHimHint = Phrase(ru: "настроить ›",      en: "set up ›")
+
+    static let callHimTitle = Phrase(
+        ru: "Позвать его, не открывая телефон",
+        en: "Call him without opening the phone")
+    static let callHimIntro = Phrase(
+        ru: "Стоит настроить один раз. После этого его можно позвать, не разблокируя телефон и не ища приложение — он откроется уже слушая.\n\nВыберите то, что подойдёт. Хватит и одного.",
+        en: "Worth doing once. After it, he can be called without unlocking the phone or hunting for the app — he opens already listening.\n\nPick whichever suits. One is enough.")
+
+    /// Голосом. First because it is the only one that needs no hands at all —
+    /// and the one the whole «he's a person, not an app» idea rests on.
+    static let callByVoiceTitle = Phrase(ru: "Голосом", en: "By voice")
+    static let callByVoiceSteps = Phrase(
+        ru: "Настройки → Универсальный доступ → Голосовые команды → Настроить.\nВыберите действие «Поговорить» и произнесите свою фразу три раза — например, его имя.\n\nПосле этого достаточно сказать эту фразу вслух. Телефон может лежать заблокированным. Ничего никуда не отправляется — он узнаёт голос сам.\n\nЕсли такого пункта в настройках нет, ваша версия iOS его пока не умеет — возьмите любой способ ниже.",
+        en: "Settings → Accessibility → Vocal Shortcuts → Set Up.\nChoose the “Поговорить” action and say your phrase three times — his name, for instance.\n\nAfter that, saying it out loud is enough. The phone can be locked. Nothing is sent anywhere — it learns the sound on the device itself.\n\nIf that item isn't in Settings, your iOS doesn't have it yet — use any of the ways below.")
+
+    /// Двойное касание. The best of the touch ones by a distance: nothing to
+    /// aim at, and it works on any iPhone from the last several years.
+    static let callByBackTapTitle = Phrase(ru: "Двойным касанием по задней крышке",
+                                           en: "Double-tap the back")
+    static let callByBackTapSteps = Phrase(
+        ru: "Настройки → Универсальный доступ → Касание → Касание задней панели → Двойное касание → «Поговорить».\n\nДальше — два раза постучать по задней стороне телефона. Целиться никуда не нужно.",
+        en: "Settings → Accessibility → Touch → Back Tap → Double Tap → “Поговорить”.\n\nThen just tap the back of the phone twice. Nothing to aim at.")
+
+    static let callByButtonTitle = Phrase(ru: "Кнопкой сбоку", en: "The side button")
+    static let callByButtonSteps = Phrase(
+        ru: "Настройки → Кнопка действия → пролистать до «Быстрая команда» → выбрать «Поговорить».\n\nЕсли такой кнопки на телефоне нет — этот способ не для вашей модели.",
+        en: "Settings → Action Button → swipe to Shortcut → choose “Поговорить”.\n\nIf your phone has no such button, this one isn't for your model.")
+
+    static let callByControlTitle = Phrase(ru: "Из Пункта управления и с экрана блокировки",
+                                           en: "From Control Centre and the Lock Screen")
+    static let callByControlSteps = Phrase(
+        ru: "Потяните вниз от правого верхнего угла, нажмите «+» вверху, затем «Добавить элемент» → найдите «Быстрая команда» → выберите «Поговорить». Размер можно растянуть — большая кнопка удобнее.\n\nЭтот же элемент можно поставить на экран блокировки вместо фонарика или камеры: удерживайте экран блокировки → «Настроить» → «Экран блокировки» → нажмите на кнопку внизу и выберите его.\n\nЕсли «+» не появляется, ваша версия iOS этого не умеет.",
+        en: "Pull down from the top-right corner, tap “+” at the top, then Add a Control → find Shortcut → choose “Поговорить”. It can be stretched wider — a big button is easier.\n\nThe same control can replace the torch or the camera on the Lock Screen: press and hold the Lock Screen → Customise → Lock Screen → tap the button at the bottom and pick it.\n\nIf no “+” appears, your iOS doesn't have this.")
+
+    /// The honest limit, said plainly rather than discovered. He can SPEAK from
+    /// the background; iOS will not let any app start LISTENING there.
+    static let callHimTruth = Phrase(
+        ru: "Любой из этих способов открывает приложение — он уже слушает, второй раз нажимать не нужно. Слышать вас, не открываясь, телефон не позволяет никому.",
+        en: "Every one of these opens the app — already listening, so there's no second tap. Hearing you without opening is something the phone allows no app to do.")
+
+    // MARK: - The offer, made once
+    //
+    // Shown on his screen after a few real conversations, never before. Offered
+    // when «позвать его откуда угодно» has come to mean something — not on day
+    // one, when it would just be another setup step in the way of meeting him.
+
+    static let callHimOffer = Phrase(
+        ru: "Его можно позвать, не открывая телефон.",
+        en: "He can be called without opening the phone.")
+    static let callHimOfferYes  = Phrase(ru: "Показать как", en: "Show me how")
+    static let callHimOfferLater = Phrase(ru: "Не сейчас",   en: "Not now")
+
     /// Parting with a friend is serious. This sheet says what will be lost, in
     /// his name, and never hurries.
     static func startOverBody(_ name: String) -> Phrase {

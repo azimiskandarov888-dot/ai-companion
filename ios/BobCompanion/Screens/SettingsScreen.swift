@@ -15,6 +15,7 @@ struct SettingsScreen: View {
 
     @State private var showStartOver = false
     @State private var showServer = false
+    @State private var showCallHim = false
     @State private var language = Strings.language
 
     var body: some View {
@@ -38,6 +39,11 @@ struct SettingsScreen: View {
                         // worse than not offering them. They come back when
                         // they work.
                         ListGroup {
+                            // First, and on purpose. It is the only setting
+                            // here that changes what he IS: a friend you call,
+                            // rather than an app you remember to open.
+                            ListRow(label: Strings.rowCallHim(),
+                                    value: Strings.rowCallHimHint()) { showCallHim = true }
                             ListRow(label: Strings.rowLanguage(),
                                     value: language.displayName) { toggleLanguage() }
                             ListRow(label: Strings.rowServer(),
@@ -65,6 +71,7 @@ struct SettingsScreen: View {
                 .onEnded { if $0.translation.height > 80 { onClose() } }
         )
         .sheet(isPresented: $showServer) { ServerSheet() }
+        .sheet(isPresented: $showCallHim) { CallHimSheet() }
         .sheet(isPresented: $showStartOver) {
             StartOverSheet(name: app.displayName) {
                 app.startOver()
@@ -114,6 +121,84 @@ private struct StartOverSheet: View {
         }
         .presentationDetents([.medium])
         .presentationCornerRadius(Metrics.sheetRadius)
+    }
+}
+
+// MARK: - How to call him
+
+/// The one setup step worth asking somebody to do.
+///
+/// WHY IT EXISTS AT ALL. Everything else in this app hides its machinery; this
+/// sheet names menus and buttons, which everywhere else would be a failure. It
+/// earns the exception because of what it buys: without it he is an app you
+/// have to remember to open, and remembering to open an app is exactly the
+/// effort a very old, very tired person does not have. With it, he is someone
+/// you call — by saying a word, or by tapping the back of the phone.
+///
+/// WHO IS READING IT. Usually a son or a daughter, once, setting up a parent's
+/// phone. Hence full paths through Settings rather than gentle hints, and hence
+/// the plain admissions when a way isn't available on that phone — a step that
+/// silently isn't there is how people conclude they've done it wrong.
+///
+/// The ways are ordered by how little the hands have to do. Voice needs none;
+/// the back of the phone needs no aim; the rest need a target.
+struct CallHimSheet: View {
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        ZStack {
+            PhotoBackground(place: .settings, treatment: .blurred(radius: 20, dim: 0.5))
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 26) {
+                    Text(Strings.callHimTitle())
+                        .appFont(AppType.title)
+                        .foregroundStyle(Theme.linen)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.top, 34)
+
+                    Text(Strings.callHimIntro())
+                        .appFont(AppType.body, leading: AppType.bodyLeading)
+                        .foregroundStyle(Theme.sage)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    way(Strings.callByVoiceTitle(),   Strings.callByVoiceSteps())
+                    way(Strings.callByBackTapTitle(), Strings.callByBackTapSteps())
+                    way(Strings.callByButtonTitle(),  Strings.callByButtonSteps())
+                    way(Strings.callByControlTitle(), Strings.callByControlSteps())
+
+                    Text(Strings.callHimTruth())
+                        .appFont(AppType.caption, leading: AppType.bodyLeading)
+                        .foregroundStyle(Theme.lichen)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    AppButton(title: Strings.done(), tone: .leaf) { dismiss() }
+                        .padding(.top, 6)
+                        .padding(.bottom, 30)
+                }
+                .padding(.horizontal, Metrics.sideMargin)
+            }
+        }
+        .presentationDetents([.large])
+        .presentationCornerRadius(Metrics.sheetRadius)
+    }
+
+    /// One way of calling him: what it's called, and exactly where to tap.
+    @ViewBuilder
+    private func way(_ title: String, _ steps: String) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(title)
+                .appFont(AppType.body)
+                .foregroundStyle(Theme.sun300)
+                .fixedSize(horizontal: false, vertical: true)
+            Text(steps)
+                .appFont(AppType.caption, leading: AppType.bodyLeading)
+                .foregroundStyle(Theme.linen)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(18)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .panel()
     }
 }
 

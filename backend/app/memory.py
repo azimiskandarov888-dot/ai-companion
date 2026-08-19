@@ -59,11 +59,11 @@ FOLLOW_UP_MAX_AGE = 21 * 24 * 3600
 # --------------------------------------------------------------------------- #
 # Raw conversation log
 # --------------------------------------------------------------------------- #
-def log_turn(user_id: str, role: str, content: str) -> None:
+def log_turn(user_id: str, role: str, content: str, farewell: bool = False) -> None:
     with db.connect() as conn:
         conn.execute(
-            "INSERT INTO turns(user_id, role, content, ts) VALUES (?,?,?,?)",
-            (user_id, role, content, time.time()),
+            "INSERT INTO turns(user_id, role, content, ts, farewell) VALUES (?,?,?,?,?)",
+            (user_id, role, content, time.time(), 1 if farewell else 0),
         )
 
 
@@ -75,6 +75,99 @@ def recent_turns(user_id: str, limit: int = RECENT_TURNS) -> list[dict[str, str]
             (user_id, limit),
         ).fetchall()
     return [{"role": r["role"], "content": r["content"]} for r in reversed(rows)]
+
+
+# --------------------------------------------------------------------------- #
+# Did the last conversation end, or just stop?
+# --------------------------------------------------------------------------- #
+#
+# People close apps. They don't say goodbye to them — and this app depends on
+# them doing the human thing instead, because that is the whole difference
+# between a friend and a program.
+#
+# Telling somebody that in a tutorial would be telling them about software. So
+# he notices it himself, the way a person would: «в прошлый раз ты как-то
+# пропал». One remark, in his own words, at the moment it is actually true.
+#
+# Everything below exists to keep that remark rare. It is a nudge for somebody
+# who hasn't learnt the shape of this yet — and a nag if it ever arrives twice.
+
+#: How long a silence has to be before the next word begins a NEW conversation
+#: rather than continuing the old one. Ten minutes is long enough that
+#: answering the door doesn't count, short enough that morning and afternoon
+#: are two separate visits.
+NEW_CONVERSATION_GAP = 10 * 60
+
+#: He only ever raises it while the friendship is new. After a fortnight, this
+#: is simply how his friend is, and a friend who is still correcting you after
+#: two weeks isn't being warm — he's being a tutorial.
+LEARNING_PERIOD = 14 * 24 * 3600
+
+#: Fewer exchanges than this and there was no conversation to break off — just
+#: a hello, or a wrong word into a phone.
+REAL_CONVERSATION = 6
+
+#: Enough history to measure the last conversation exactly. Anything longer
+#: than this was unquestionably a real conversation anyway.
+_CONVERSATION_SCAN = 40
+
+
+def broke_off_last_time(user_id: str) -> bool:
+    """Did their last real conversation just stop, with nobody saying goodbye?
+
+    True only while it is still worth him mentioning:
+
+      · this word is starting a new conversation, not continuing one;
+      · the last one was a proper conversation, not a hello;
+      · they have never ONCE said goodbye to him — the moment they do, he has
+        nothing to notice and never brings it up again;
+      · and the friendship is still new.
+
+    Deliberately derived rather than stored. A counter would need a rule for
+    when to reset it; these four conditions extinguish themselves, and the one
+    that matters most — they learnt — extinguishes it permanently and for the
+    right reason.
+    """
+    now = time.time()
+    with db.connect() as conn:
+        last = conn.execute(
+            "SELECT ts FROM turns WHERE user_id=? ORDER BY id DESC LIMIT 1",
+            (user_id,),
+        ).fetchone()
+        if last is None or now - last["ts"] < NEW_CONVERSATION_GAP:
+            return False
+
+        first = conn.execute(
+            "SELECT ts FROM turns WHERE user_id=? ORDER BY id LIMIT 1",
+            (user_id,),
+        ).fetchone()
+        if now - first["ts"] > LEARNING_PERIOD:
+            return False
+
+        parted = conn.execute(
+            "SELECT 1 FROM turns WHERE user_id=? AND farewell=1 LIMIT 1",
+            (user_id,),
+        ).fetchone()
+        if parted is not None:
+            return False
+
+        stamps = [
+            row["ts"]
+            for row in conn.execute(
+                "SELECT ts FROM turns WHERE user_id=? ORDER BY id DESC LIMIT ?",
+                (user_id, _CONVERSATION_SCAN),
+            )
+        ]
+
+    # Walk back from the most recent turn until the gap between two of them is
+    # long enough to be a different visit. What's left is the conversation that
+    # ended without a word.
+    length = 1
+    for newer, older in zip(stamps, stamps[1:]):
+        if newer - older > NEW_CONVERSATION_GAP:
+            break
+        length += 1
+    return length >= REAL_CONVERSATION
 
 
 # --------------------------------------------------------------------------- #

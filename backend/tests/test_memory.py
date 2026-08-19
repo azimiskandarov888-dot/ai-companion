@@ -195,3 +195,108 @@ def test_starting_over_touches_only_that_person():
     # …and V never noticed a thing.
     assert "вагоновожатый" in memory.bob_self_context(V)
     assert [t["content"] for t in memory.recent_turns(V)] == ["привет"]
+
+
+# --------------------------------------------------------------------------- #
+# Noticing that a conversation was abandoned rather than ended
+# --------------------------------------------------------------------------- #
+#
+# Every condition here exists to keep him from nagging. The remark is worth
+# making once to somebody who hasn't learnt yet; a second time it is a machine
+# complaining, to a lonely eighty-year-old, about how they use an app.
+
+HOUR = 3600
+DAY = 24 * HOUR
+
+
+def _conversation(user_id: str, *, turns: int, ended: float, farewell: bool = False):
+    """Write a conversation straight into the log with chosen timestamps.
+
+    `ended` is seconds ago. Turns are a minute apart, alternating who spoke,
+    which is what a real conversation looks like to every query involved.
+    """
+    now = time.time()
+    with db.connect() as conn:
+        for i in range(turns):
+            last = i == turns - 1
+            conn.execute(
+                "INSERT INTO turns(user_id, role, content, ts, farewell) "
+                "VALUES (?,?,?,?,?)",
+                (
+                    user_id,
+                    "user" if i % 2 == 0 else "assistant",
+                    f"строка {i}",
+                    now - ended - (turns - 1 - i) * 60,
+                    1 if (last and farewell) else 0,
+                ),
+            )
+
+
+def test_he_notices_a_conversation_that_simply_stopped():
+    _conversation(U, turns=8, ended=2 * HOUR)
+    assert memory.broke_off_last_time(U) is True
+
+
+def test_nothing_to_notice_before_anyone_has_spoken():
+    assert memory.broke_off_last_time(U) is False
+
+
+def test_not_while_the_conversation_is_still_going():
+    """A pause to answer the door is not somebody leaving."""
+    _conversation(U, turns=8, ended=90)
+    assert memory.broke_off_last_time(U) is False
+
+
+def test_a_hello_is_not_a_conversation_to_break_off():
+    """Two lines and a wrong number. There is nothing here to have left."""
+    _conversation(U, turns=2, ended=2 * HOUR)
+    assert memory.broke_off_last_time(U) is False
+
+
+def test_once_they_have_ever_said_goodbye_he_never_raises_it():
+    """The condition that matters most, and the one that ends this for good:
+    they know how. Even if the NEXT conversation is abandoned."""
+    _conversation(U, turns=8, ended=2 * DAY, farewell=True)
+    _conversation(U, turns=8, ended=2 * HOUR)
+    assert memory.broke_off_last_time(U) is False
+
+
+def test_he_lets_it_go_once_the_friendship_is_no_longer_new():
+    """After a fortnight this is simply how his friend is. A friend still
+    correcting you after two weeks is a tutorial, not a friend."""
+    _conversation(U, turns=8, ended=20 * DAY)
+    _conversation(U, turns=8, ended=2 * HOUR)
+    assert memory.broke_off_last_time(U) is False
+
+
+def test_an_old_abandoned_conversation_is_not_dug_up():
+    """They vanished once, days ago, and have since learnt to say goodbye.
+    Bringing up the old one would be keeping score."""
+    _conversation(U, turns=8, ended=3 * DAY)
+    _conversation(U, turns=8, ended=DAY, farewell=True)
+    assert memory.broke_off_last_time(U) is False
+
+
+def test_it_is_the_last_conversations_length_that_is_measured():
+    """A long conversation days ago doesn't make last night's single word
+    into a conversation worth noticing."""
+    _conversation(U, turns=20, ended=3 * DAY)
+    _conversation(U, turns=2, ended=2 * HOUR)
+    assert memory.broke_off_last_time(U) is False
+
+
+def test_one_person_breaking_off_says_nothing_about_another():
+    _conversation(U, turns=8, ended=2 * HOUR)
+    assert memory.broke_off_last_time(V) is False
+
+
+def test_the_goodbye_flag_is_written_and_the_words_stay_clean():
+    memory.log_turn(U, "assistant", "ну, до завтра", farewell=True)
+    with db.connect() as conn:
+        row = conn.execute(
+            "SELECT content, farewell FROM turns WHERE user_id=?", (U,)
+        ).fetchone()
+    assert row["farewell"] == 1
+    assert row["content"] == "ну, до завтра"
+    # And it never reaches him as anything but the words he said.
+    assert memory.recent_turns(U) == [{"role": "assistant", "content": "ну, до завтра"}]

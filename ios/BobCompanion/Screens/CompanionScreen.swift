@@ -30,6 +30,15 @@ struct CompanionScreen: View {
     @AppStorage("hasBeenToldHowToLeave") private var toldHowToLeave = false
     @State private var showingHowToLeave = false
 
+    /// How many times somebody has deliberately switched him on, and whether
+    /// they've been offered the one piece of setup worth doing. Both live on
+    /// the phone for the same reason as above: the offer is about THIS phone,
+    /// and «Начать заново» must not make it come round again.
+    @AppStorage("timesSwitchedOn") private var timesSwitchedOn = 0
+    @AppStorage("hasBeenOfferedCallHim") private var offeredCallHim = false
+    @State private var showingCallOffer = false
+    @State private var showCallHim = false
+
     /// The conversation's state, expressed as the orb sees it.
     private var orbState: OrbState {
         switch conversation.status {
@@ -125,16 +134,19 @@ struct CompanionScreen: View {
                         } else {
                             conversation.toggle()
                         }
-                        guard !toldHowToLeave, conversation.wantsToListen else { return }
-                        toldHowToLeave = true
-                        withAnimation(.easeInOut(duration: 0.5)) { showingHowToLeave = true }
-                        // Long enough to read unhurried at eighty, and gone by
-                        // itself — nothing to dismiss, nothing to understand.
-                        Task {
-                            try? await Task.sleep(nanoseconds: 9_000_000_000)
-                            withAnimation(.easeInOut(duration: 0.8)) { showingHowToLeave = false }
-                        }
+                        guard conversation.wantsToListen else { return }
+                        timesSwitchedOn += 1
+                        teachSomethingIfItIsTime()
                     }
+
+                // ABOVE the tap layer, unlike everything else on this screen,
+                // because it is the one thing here with something to press.
+                if showingCallOffer {
+                    callOffer
+                        .padding(.horizontal, Metrics.sideMargin)
+                        .position(x: geo.size.width / 2, y: h * 0.70)
+                        .transition(.opacity)
+                }
 
                 VStack {
                     Spacer()
@@ -151,6 +163,65 @@ struct CompanionScreen: View {
         .persistentSystemOverlays(.hidden)
         .task { await checkMicrophone() }
         .sheet(isPresented: $showMicHelp) { MicrophoneHelp() }
+        .sheet(isPresented: $showCallHim) { CallHimSheet() }
+        // Reading a page of instructions takes minutes, and he would spend all
+        // of them listening to the room. `resume()` only restarts what was
+        // already wanted, so closing the sheet never switches him on.
+        .onChange(of: showCallHim) { _, open in
+            open ? conversation.suspend() : conversation.resume()
+        }
+    }
+
+    /// The two things somebody has to be told, each once, each at the moment it
+    /// first becomes true — never in a tutorial before they have met anyone.
+    /// A lesson before the friend is a lesson about software.
+    ///
+    /// Never both at once: the first switch-on teaches leaving, and the offer
+    /// waits until he is somebody worth being able to call.
+    private func teachSomethingIfItIsTime() {
+        if !toldHowToLeave {
+            toldHowToLeave = true
+            withAnimation(.easeInOut(duration: 0.5)) { showingHowToLeave = true }
+            // Long enough to read unhurried at eighty, and gone by itself —
+            // nothing to dismiss, nothing to understand.
+            Task {
+                try? await Task.sleep(nanoseconds: 9_000_000_000)
+                withAnimation(.easeInOut(duration: 0.8)) { showingHowToLeave = false }
+            }
+            return
+        }
+
+        // Not on day one. On day one «его можно позвать откуда угодно» is a
+        // setup step standing between somebody and a person they just met; by
+        // the third conversation it is a way of reaching a friend.
+        guard !offeredCallHim, timesSwitchedOn >= 3 else { return }
+        offeredCallHim = true
+        withAnimation(.easeInOut(duration: 0.5)) { showingCallOffer = true }
+    }
+
+    /// Asked once, answered either way, and never asked again — including if
+    /// they say «не сейчас». A second ask would be nagging somebody who has
+    /// already told us no.
+    private var callOffer: some View {
+        VStack(spacing: 18) {
+            Text(Strings.callHimOffer())
+                .appFont(AppType.body, leading: AppType.bodyLeading)
+                .foregroundStyle(Theme.linen)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+
+            HStack(spacing: 12) {
+                AppButton(title: Strings.callHimOfferLater(), tone: .quiet) {
+                    withAnimation(.easeInOut(duration: 0.4)) { showingCallOffer = false }
+                }
+                AppButton(title: Strings.callHimOfferYes(), tone: .sun) {
+                    withAnimation(.easeInOut(duration: 0.4)) { showingCallOffer = false }
+                    showCallHim = true
+                }
+            }
+        }
+        .padding(22)
+        .panel()
     }
 
     /// What he's saying about himself right now, if anything. His own words

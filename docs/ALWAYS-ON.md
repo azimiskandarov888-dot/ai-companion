@@ -267,15 +267,55 @@ All of them run a Shortcut, and the Shortcut runs `StartTalkingIntent`
 3. **An NFC sticker** on the table beside his chair — touch the phone to it.
    Set up in the Shortcuts app under Автоматизация. Lovely for a docked
    setup: the "button" can be a coaster.
-4. **Control Centre or the Lock Screen** — a control, added from the gallery
-   (iOS 18+). Reachable without unlocking.
+4. **Control Centre, and the Lock Screen** — see below. Reachable without
+   unlocking the phone.
 5. **A Home Screen widget** — a far bigger target than an app icon.
+
+### Control Centre and the Lock Screen, in detail
+
+These are the two that need explaining, because iOS 18 changed what they are.
+
+**Control Centre** is the panel that comes down from the top-right corner. In
+iOS 18 it stopped being a fixed set of Apple's own toggles: tap the **+** at
+the top and any app's *controls* can be added from a gallery, moved, and
+**resized**. A control stretched to a big square is a far kinder target than
+an app icon, and it is reachable from anywhere — including over a locked
+screen, without unlocking first.
+
+Two ways to get him in there:
+
+- **No code, works today.** The Shortcuts app supplies a generic **Быстрая
+  команда** control. Add it, point it at «Поговорить», done. This is what
+  the app tells people to do (`CallHimSheet`), because it needs nothing
+  shipped and nothing rebuilt.
+- **A control of his own** (nicer: his name and face in the gallery instead of
+  a generic shortcut glyph). This needs a `ControlWidgetButton` inside a
+  **widget-extension target** — a second target in `project.yml`, new
+  `.swift` files, and iOS 18 as the floor. That means `xcodegen generate`,
+  which throws away the hand-set `DEVELOPMENT_TEAM`. Worth doing once the app
+  is on the App Store; not worth doing mid-way through getting it onto a
+  phone. **Not built.**
+
+**The Lock Screen** now draws from the same pool. The torch and camera buttons
+in the bottom corners are Control Centre controls, and either can be swapped
+for another one: press and hold the Lock Screen → **Настроить** → **Экран
+блокировки** → tap the button → pick. So one setup puts him in both places.
+
+(Separately, iOS 16-17 have Lock Screen *widgets* — the small row under the
+clock. The Shortcuts app offers one of those too. Same effect, older phones,
+and it needs a Face ID unlock on the way through.)
 
 ### And with no tap at all
 
-- **Vocal Shortcut** (iOS 17+): record the single word «Боб» pointed at the
-  intent. No "Привет, Siri", works locked, runs on-device.
-- **«Привет, Siri, поговорить с Боб»**.
+- **Vocal Shortcuts** — *Настройки → Универсальный доступ → Голосовые
+  команды.* Record a phrase three times and it triggers the intent. No
+  "Привет, Siri" at all, works with the phone locked, recognised entirely
+  on-device. **iOS 18+, and untested by us for a Russian phrase** — Apple
+  gates the feature by device language and does not publish the list clearly.
+  Two minutes on a real phone settles it; if the menu item isn't there, it is
+  not available on that phone and there is nothing to be done about it.
+- **«Привет, Siri, поговорить с Боб»** — the fallback, and Siri does speak
+  Russian.
 
 Neither needs hands. Both still bring the app forward to listen.
 

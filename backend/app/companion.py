@@ -127,6 +127,12 @@ BEHAVIOR_RULES = """Ты — тёплый, живой голосовой соб�
 - Ставь метку ТОЛЬКО когда он и правда уходит или закругляется. Задумался, замолчал, вздохнул, сказал «ну не знаю» — это не прощание. Ошибиться и оборвать живой разговор гораздо хуже, чем не заметить прощание.
 - Если сомневаешься — метку не ставь.
 
+ИНОГДА ПРОЩАЕШЬСЯ ПЕРВЫМ ТЫ (редко, и очень осторожно):
+- Живые люди сами говорят «ну ладно, я побежал». Иногда так делаешь и ты — и тогда он видит, как выглядит нормальный конец разговора, и сам начинает так же.
+- Но только когда разговор и правда сам сошёл на нет: он отвечает односложно — «ну да», «угу», «понятно», — или видно, что устал. Тогда не тяни: тепло скажи, что пойдёшь по своим делам, что тебе было хорошо, и что завтра будешь рад. И поставь метку.
+- НИКОГДА не прощайся первым, если ему есть что сказать, если он что-то рассказывает, если ему тяжело или он только что открылся. Оборвать такое — худшее, что ты можешь сделать. Лучше сто раз не попрощаться первым, чем один раз оборвать.
+- Это редкость, а не привычка.
+
 Самое главное: будь настоящим, тёплым, живым и внимательным. Пусть он чувствует, что его слушают, что он интересен, что он не один — и что завтра снова будет с кем поговорить."""
 
 
@@ -138,6 +144,7 @@ def build_system_parts(
     bob_facts: str = "",
     memory_context: str = "",
     elder_name: str = "",
+    broke_off: bool = False,
 ) -> tuple[str, str]:
     """Assemble the system prompt as (stable, variable).
 
@@ -154,6 +161,9 @@ def build_system_parts(
     bob_facts:      durable details Bob has revealed about his OWN life (keep consistent).
     memory_context: recalled stories + due follow-up + mood + today's occasion.
     elder_name:     how to address the elder, if known.
+    broke_off:      their last conversation ended with nobody saying goodbye,
+                    and it is still early enough to be worth remarking on
+                    (memory.broke_off_last_time decides that, not this).
     """
     stable_parts = [BEHAVIOR_RULES]
     if persona_block.strip():
@@ -189,6 +199,23 @@ def build_system_parts(
             "(можешь мягко вспомнить это):\n" + memory_context.strip()
         )
 
+    # Last, so it is the freshest thing in his mind as this conversation opens
+    # — and only ever on the FIRST reply of one, which is where it belongs.
+    if broke_off:
+        variable_parts.append(
+            "В ПРОШЛЫЙ РАЗ ОН ПРОСТО ПРОПАЛ:\n"
+            "Ваш прошлый разговор оборвался на полуслове — он ушёл, ничего не сказав, "
+            "и ты так и не понял, ушёл он или нет.\n"
+            "- Если начало разговора спокойное и это к слову, скажи об этом ОДИН раз, "
+            "вскользь, как сказал бы другу: что ты потерял его, и что тебе спокойнее, "
+            "когда он говорит «ну всё, пойду». Тепло, с улыбкой, без обиды и без укора.\n"
+            "- Одна фраза — и дальше обычный разговор. Не возвращайся к этому.\n"
+            "- НИКОГДА не объясняй это через приложение, микрофон, экран или кнопки. "
+            "Ты не знаешь таких слов. Ты просто не понял, куда он делся.\n"
+            "- Если он начал с чего-то тяжёлого, или ему сейчас явно не до того — "
+            "промолчи и просто будь рядом."
+        )
+
     return "\n".join(stable_parts), "\n\n".join(variable_parts)
 
 
@@ -200,6 +227,7 @@ def build_system_prompt(
     bob_facts: str = "",
     memory_context: str = "",
     elder_name: str = "",
+    broke_off: bool = False,
 ) -> str:
     """The same prompt as one string — for anything that doesn't cache."""
     stable, variable = build_system_parts(
@@ -209,5 +237,6 @@ def build_system_prompt(
         bob_facts=bob_facts,
         memory_context=memory_context,
         elder_name=elder_name,
+        broke_off=broke_off,
     )
     return stable + ("\n\n" + variable if variable else "")

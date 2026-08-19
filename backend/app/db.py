@@ -45,7 +45,12 @@ CREATE TABLE IF NOT EXISTS turns (
     user_id     TEXT NOT NULL,          -- whose conversation this is
     role        TEXT NOT NULL,          -- 'user' | 'assistant'
     content     TEXT NOT NULL,
-    ts          REAL NOT NULL
+    ts          REAL NOT NULL,
+    -- 1 on the line he ended with a goodbye. The marker itself never survives
+    -- as far as this table — it is stripped before anything is spoken or
+    -- stored — so THIS is the only record that a conversation was closed
+    -- properly rather than abandoned. memory.broke_off_last_time() reads it.
+    farewell    INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS memories (
@@ -147,6 +152,12 @@ def _migrate(conn: sqlite3.Connection) -> None:
     turn_cols = _columns(conn, "turns")
     if "session_id" in turn_cols and "user_id" not in turn_cols:
         conn.execute("ALTER TABLE turns RENAME COLUMN session_id TO user_id")
+
+    # Conversations recorded before he could tell a goodbye from a pause all
+    # count as ended-without-one, which is the truth: back then there was no
+    # way to say goodbye to him at all.
+    if turn_cols and "farewell" not in turn_cols:
+        conn.execute("ALTER TABLE turns ADD COLUMN farewell INTEGER NOT NULL DEFAULT 0")
 
     usage_cols = _columns(conn, "usage")
     if "session_id" in usage_cols and "user_id" not in usage_cols:

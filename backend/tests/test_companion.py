@@ -102,3 +102,34 @@ def test_build_system_prompt_minimal():
     # With nothing injected it still returns the behavior rules cleanly.
     prompt = companion.build_system_prompt()
     assert prompt.strip() == companion.BEHAVIOR_RULES.strip()
+
+
+def test_the_vanishing_note_only_appears_when_it_happened():
+    """It is a remark he makes at most once in a friendship. Off by default,
+    and the caller that turns it on (memory.broke_off_last_time) is the only
+    thing standing between a friend noticing and a machine nagging."""
+    _, quiet = companion.build_system_parts()
+    assert "ПРОПАЛ" not in quiet
+
+    _, noticed = companion.build_system_parts(broke_off=True)
+    assert "ПРОПАЛ" in noticed
+    # He does not know the app exists, and must never explain itself with it.
+    assert "приложение" in noticed and "НИКОГДА не объясняй" in noticed
+
+
+def test_the_vanishing_note_rides_in_the_uncached_half():
+    """It changes from turn to turn. In the stable half it would poison the
+    cache for every later turn and quietly cost money for nothing."""
+    stable, variable = companion.build_system_parts(broke_off=True)
+    assert "ПРОПАЛ" in variable
+    assert "ПРОПАЛ" not in stable
+    # The stable half is byte-identical whether or not it happened.
+    assert stable == companion.build_system_parts()[0]
+
+
+def test_he_may_end_a_conversation_himself_but_only_a_spent_one():
+    rules = companion.BEHAVIOR_RULES
+    assert "ИНОГДА ПРОЩАЕШЬСЯ ПЕРВЫМ ТЫ" in rules
+    assert "Это редкость, а не привычка." in rules
+    # The guardrail matters more than the permission.
+    assert "НИКОГДА не прощайся первым, если ему есть что сказать" in rules

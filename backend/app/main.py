@@ -162,6 +162,9 @@ async def _assemble(user_id: str, user_text: str) -> tuple[str, str, list, str |
     Shared by both reply paths — the whole-reply one and the streaming one —
     so there is exactly one place where what he knows is decided.
     """
+    # BEFORE the log, not after: this asks how long it has been since anybody
+    # last said anything, and logging first makes that answer zero — forever.
+    broke_off = memory.broke_off_last_time(user_id)
     memory.log_turn(user_id, "user", user_text)
 
     # All of it this person's — including WHICH VOICE he or she speaks in.
@@ -190,6 +193,7 @@ async def _assemble(user_id: str, user_text: str) -> tuple[str, str, list, str |
         bob_facts=bob_facts,
         memory_context=mem_ctx,
         elder_name=config.ELDER_NAME,
+        broke_off=broke_off,
     )
 
     return system_stable, system_variable, memory.recent_turns(user_id), tts.voice_for(who)
@@ -208,10 +212,22 @@ def _farewell(reply: str) -> tuple[str, bool]:
 
 
 def _remember(
-    user_id: str, user_text: str, reply: str, background_tasks: BackgroundTasks
+    user_id: str,
+    user_text: str,
+    reply: str,
+    background_tasks: BackgroundTasks,
+    farewell: bool = False,
 ) -> None:
-    """Log what he said back, and learn from the exchange once nobody's waiting."""
-    memory.log_turn(user_id, "assistant", reply)
+    """Log what he said back, and learn from the exchange once nobody's waiting.
+
+    `farewell` is the ONLY trace the marker leaves anywhere. The words it was
+    attached to are stored clean, exactly as they were spoken; the fact that
+    this line closed a conversation is kept beside them as a flag, because
+    otherwise there is no way to tell a conversation that ended from one that
+    was abandoned — and that difference is the whole of what he notices next
+    time (memory.broke_off_last_time).
+    """
+    memory.log_turn(user_id, "assistant", reply, farewell=farewell)
     background_tasks.add_task(learn.learn_from_exchange, user_id, user_text, reply)
 
 
@@ -235,7 +251,7 @@ async def _think_and_speak(
     )
 
     reply, leaving = _farewell(reply)
-    _remember(user_id, user_text, reply, background_tasks)
+    _remember(user_id, user_text, reply, background_tasks, farewell=leaving)
 
     # The mouth is optional. With a voice provider configured we return warm
     # spoken audio. Without one (MVP / browser testing), we return no audio and
@@ -375,7 +391,7 @@ async def _speak_as_he_thinks(
 
         reply, leaving = _farewell(reply.strip())
         if reply:
-            _remember(user_id, transcript, reply, background_tasks)
+            _remember(user_id, transcript, reply, background_tasks, farewell=leaving)
 
     except Exception as e:  # noqa: BLE001 — a stream cannot raise a status code
         _log_failure("🧠 the brain (Claude) / 🗣️ the voice", e)
