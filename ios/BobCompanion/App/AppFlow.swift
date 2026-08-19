@@ -139,7 +139,14 @@ struct AppFlow: View {
         // Every later interruption did it too — a notification banner, Control
         // Centre, a phone call, switching apps and back.
         .onChange(of: scenePhase) { _, phase in
-            guard screen == .companion, overlay == nil else { return }
+            // The robot is the one thing in this app that deliberately sends
+            // people OUT of it — «нажмите кнопку, потом Настройки» — and
+            // coming back is precisely what this watcher acts on. Without the
+            // last condition, following its instructions correctly would
+            // switch the microphone on underneath it, mid-sentence, every
+            // time. It is a sheet, not an `overlay`, so nothing else here
+            // knows about it.
+            guard screen == .companion, overlay == nil, !SetupRobotIsUp.yes else { return }
             guard phase == .active else {
                 conversation.suspend()
                 return

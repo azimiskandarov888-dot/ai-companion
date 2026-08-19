@@ -127,6 +127,22 @@ private struct StartOverSheet: View {
 
 // MARK: - The setup robot
 
+/// Whether the robot is on screen right now.
+///
+/// It exists because the robot's whole job is to send people OUT of the app —
+/// into Settings — and bring them back. Coming back to the foreground is
+/// exactly what AppFlow watches for to start him listening again, and without
+/// this the microphone would come on underneath the robot, mid-sentence,
+/// every single time somebody followed an instruction correctly.
+///
+/// A plain static rather than anything cleverer because the two sides can't
+/// hold a reference to each other: the sheet belongs to the companion screen,
+/// and the rule about the foreground belongs to the flow above it.
+@MainActor
+enum SetupRobotIsUp {
+    static var yes = false
+}
+
 /// A page of instructions is the thing people bounce off. «Ой, сколько всего,
 /// не хочу» — and the app is deleted before anybody has met anyone.
 ///
@@ -204,7 +220,11 @@ struct SetupRobot: View {
             .padding(.bottom, 34)
         }
         .task { await say() }
-        .onDisappear { voice.stop() }
+        .onAppear { SetupRobotIsUp.yes = true }
+        .onDisappear {
+            SetupRobotIsUp.yes = false
+            voice.stop()
+        }
     }
 
     /// A flat ring, never the orb. It lights up and goes out exactly as he
@@ -249,9 +269,17 @@ struct SetupRobot: View {
             if !awaitingTouch, here.wants != .aBeat {
                 if here.wants == .tapNextOrOpenShortcuts {
                     AppButton(title: Strings.robotOpenShortcuts(), tone: .quiet) {
-                        if let url = URL(string: "shortcuts://") {
-                            UIApplication.shared.open(url)
-                        }
+                        open("shortcuts://")
+                    }
+                }
+                // Apple has no way to send anybody to a particular page of
+                // Settings — only to this app's own — and the private URLs
+                // that do get apps rejected. So this lands one tap away from
+                // the top of Settings, which is still one whole problem
+                // fewer: finding a grey cog on a crowded home screen.
+                if here.wants == .tapNextOrOpenSettings {
+                    AppButton(title: Strings.robotOpenSettings(), tone: .quiet) {
+                        open(UIApplication.openSettingsURLString)
                     }
                 }
                 AppButton(title: isLast ? Strings.done() : Strings.robotNext(),
@@ -267,6 +295,11 @@ struct SetupRobot: View {
                     .frame(minHeight: Metrics.minTouch)
             }
         }
+    }
+
+    private func open(_ address: String) {
+        guard let url = URL(string: address) else { return }
+        UIApplication.shared.open(url)
     }
 
     private func advance() {

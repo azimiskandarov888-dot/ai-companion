@@ -72,7 +72,12 @@ struct SpeakInHisVoiceIntent: AppIntent {
 /// The shape the product actually needs: they speak, the backend thinks, he
 /// replies in his own voice — with the app never appearing.
 struct TalkToBobIntent: AppIntent {
-    static var title: LocalizedStringResource = "Поговорить"
+    // NOT «Поговорить» — that name belongs to StartTalkingIntent, the one
+    // everybody actually wants. Two actions with the same name is a bug you
+    // only see from outside the code: the setup robot says «выберите действие
+    // Поговорить», and the list somebody is looking at in Vocal Shortcuts has
+    // two of them, one of which quietly does something else.
+    static var title: LocalizedStringResource = "Передать ему сообщение"
     static var description = IntentDescription(
         "Скажи что-нибудь — он ответит своим голосом, не открывая приложение."
     )
@@ -168,11 +173,21 @@ enum PendingWish {
 
 struct BobShortcuts: AppShortcutsProvider {
     static var appShortcuts: [AppShortcut] {
+        // FIRST, AND IT OWNS THE OBVIOUS PHRASES. This is the one the setup
+        // robot teaches, the one every tap surface runs, and the one somebody
+        // has to be able to find in a list by the name «Поговорить».
+        //
+        // These phrases need nothing set up. The moment the app is installed,
+        // «Привет, Siri, Боб, поговорим» works — which matters more than it
+        // looks, because the alternative that needs no "Привет, Siri" (Vocal
+        // Shortcuts) can only be switched on by hand in Settings, and some
+        // people will never get there.
         AppShortcut(
             intent: StartTalkingIntent(),
             phrases: [
+                "Поговорить с \(.applicationName)",
+                "\(.applicationName), поговорим",
                 "Начать разговор с \(.applicationName)",
-                "\(.applicationName) поговорим",
             ],
             shortTitle: "Поговорить",
             systemImageName: "ear"
@@ -189,10 +204,10 @@ struct BobShortcuts: AppShortcutsProvider {
         AppShortcut(
             intent: TalkToBobIntent(),
             phrases: [
-                "Поговорить с \(.applicationName)",
+                "Передать \(.applicationName)",
                 "Сказать \(.applicationName)",
             ],
-            shortTitle: "Поговорить",
+            shortTitle: "Передать сообщение",
             systemImageName: "bubble.left.and.bubble.right"
         )
     }

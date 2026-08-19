@@ -307,17 +307,54 @@ and it needs a Face ID unlock on the way through.)
 
 ### And with no tap at all
 
+- **«Привет, Siri, поговорить с Боб»** — **needs nothing set up at all.** The
+  phrases live in `BobShortcuts` (BobIntents.swift) and work from the moment
+  the app is installed. Siri speaks Russian. This is why the setup robot
+  teaches it FIRST: for a lot of people it will be the only one that ever
+  gets used, because everything else on this page requires somebody to go
+  into Settings and stay there.
 - **Vocal Shortcuts** — *Настройки → Универсальный доступ → Голосовые
-  команды.* Record a phrase three times and it triggers the intent. No
-  "Привет, Siri" at all, works with the phone locked, recognised entirely
+  команды.* Record a phrase three times and it triggers the intent. The only
+  way to drop "Привет, Siri" entirely: works with the phone locked, recognised
   on-device. **iOS 18+, and untested by us for a Russian phrase** — Apple
   gates the feature by device language and does not publish the list clearly.
-  Two minutes on a real phone settles it; if the menu item isn't there, it is
-  not available on that phone and there is nothing to be done about it.
-- **«Привет, Siri, поговорить с Боб»** — the fallback, and Siri does speak
-  Russian.
+  Two minutes on a real phone settles it.
 
 Neither needs hands. Both still bring the app forward to listen.
+
+### Why none of this can be a pop-up, and what we do instead
+
+The obvious wish is the one the local-network prompt grants: a sheet appears,
+they tap «Разрешить», done. It is not available here, and the reason is a
+category difference rather than a missing feature.
+
+**A permission prompt is the system interrupting the user on the app's
+behalf**, because the app just tried to do something — reach the local
+network, open the microphone. The app never draws it, and never chooses when
+it appears.
+
+**Vocal Shortcuts and Back Tap are not permissions.** They are the user
+configuring their own phone, in an Accessibility pane the app has no part in.
+There is no API to create one, no API to prompt for one, and no public URL
+that opens that pane — the `App-Prefs:` URLs that do are private, and using
+them gets apps rejected. `UIApplication.openSettingsURLString` opens **this
+app's own** Settings page and nothing else.
+
+Two things that ARE in-app, and why neither is the answer:
+
+- **`INUIAddVoiceShortcutViewController`** ("Add to Siri") — a real sheet,
+  inside the app, no Settings. But since iOS 14 it asks the user to **type** a
+  phrase rather than record one, it only ever sets a *Siri* phrase (so
+  "Привет, Siri" is still required), and SiriKit was formally deprecated at
+  WWDC 2026 in favour of App Intents. It would be work spent on a retiring
+  framework to reach a worse result than the App Shortcuts we already ship.
+- **`ShortcutsLink`** — opens the Shortcuts app at ours. A link, not a prompt.
+
+So the honest shape is: **make the zero-setup path the headline** («Привет,
+Siri, Боб, поговорим» — nothing to configure, works today), and for the ones
+that genuinely need Settings, have the robot read the path out one step at a
+time, with a button that at least launches the Settings app so nobody has to
+find the grey cog. That is as close to a pop-up as iOS allows.
 
 ### Which leaves the docked kiosk as the real answer at home
 

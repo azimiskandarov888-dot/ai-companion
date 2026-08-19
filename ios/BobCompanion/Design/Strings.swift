@@ -56,6 +56,13 @@ enum RobotWants {
     case anotherTap
     /// «Дальше», with a real button into the Shortcuts app beside it.
     case tapNextOrOpenShortcuts
+    /// «Дальше», with a button that opens the Settings app beside it.
+    ///
+    /// It lands on THIS APP's page, not the top of Settings — that is the only
+    /// destination Apple allows, and it is still worth it: finding the grey
+    /// cog on a home screen full of icons is real work for the person this
+    /// app is for. One tap on «‹ Настройки» from there gets to the top.
+    case tapNextOrOpenSettings
 }
 
 /// One beat of the robot's script: what it says — aloud AND on screen, the
@@ -303,6 +310,7 @@ enum Strings {
     static let robotSkip = Phrase(ru: "Пропустить", en: "Skip")
     static let robotNext = Phrase(ru: "Дальше",     en: "Next")
     static let robotOpenShortcuts = Phrase(ru: "Открыть «Команды»", en: "Open Shortcuts")
+    static let robotOpenSettings  = Phrase(ru: "Открыть настройки",  en: "Open Settings")
 
     /// THE FIRST LESSON IS NOT TOLD, IT IS DONE.
     ///
@@ -382,17 +390,35 @@ enum Strings {
         RobotStep(Phrase(
             ru: "Гораздо лучше — просто позвать его вслух. Телефон может лежать в кармане, заблокированный.",
             en: "Much better to just call him out loud. The phone can be in your pocket, locked.")),
+
+        // 0 · THE ONE THAT NEEDS NOTHING. Deliberately first.
+        //
+        // It costs zero setup — it has worked since the moment the app was
+        // installed — and for a great many people it will be the only one
+        // that ever actually gets used, because everything below this line
+        // requires somebody to go into Settings and stay there.
+        RobotStep(Phrase(
+            ru: "И самое приятное: одно уже работает. Настраивать ничего не надо.",
+            en: "And here's the nice part: one of them already works. Nothing to set up.")),
+        RobotStep(Phrase(
+            ru: "Скажите вслух: «Привет, Siri. Боб, поговорим».\n\nВот и всё. Он откроется и сразу начнёт слушать. Попробуйте, когда мы закончим.",
+            en: "Just say out loud: “Hey Siri, talk to Bob”.\n\nThat's it. He opens and starts listening straight away. Try it when we're done.")),
+        RobotStep(Phrase(
+            ru: "Если вам этого хватит — можно на этом и остановиться. Дальше я расскажу, как обойтись даже без «Привет, Siri». Но это придётся настроить руками.",
+            en: "If that's enough for you, you can stop right here. Next I'll show you how to manage without even saying “Hey Siri”. But that one has to be set up by hand.")),
         RobotStep(Phrase(
             ru: "И нет, он вас не подслушивает. Фразу телефон узнаёт сам, внутри себя, и никуда её не отправляет. В ЦРУ о вас так и не узнают. Наверное.",
             en: "And no, it isn't listening in on you. The phone learns the phrase inside itself and sends it nowhere. The CIA will never hear about you. Probably.")),
-        RobotStep(Phrase(
-            ru: "Настроим. Это один раз в жизни, минут пять. Можете спокойно выходить из приложения — я подожду здесь, ничего не потеряется.",
-            en: "Let's set it up. Once in your life, about five minutes. Feel free to leave the app — I'll wait right here, nothing will be lost.")),
 
-        // 1 · By voice. First because it needs no hands at all.
+        // 1 · Vocal Shortcuts. The only way to drop «Привет, Siri» entirely —
+        // and Settings-only, because Apple provides no API for it at all.
         RobotStep(Phrase(
-            ru: "Способ первый, самый лучший — голосом.\n\nОткройте Настройки телефона.",
-            en: "Way one, and the best of them — by voice.\n\nOpen the phone's Settings.")),
+            ru: "Способ первый, самый удобный — своя фраза, без «Привет, Siri». Просто имя вашего друга, сказанное вслух.",
+            en: "Way one, and the best — your own phrase, with no “Hey Siri”. Just your friend's name, said out loud.")),
+        RobotStep(
+            Phrase(ru: "Включается это только в настройках телефона — сам я, к сожалению, не могу. Зато могу проводить и подождать: выходите спокойно, я никуда не денусь.\n\nНажмите кнопку, а потом вверху слева — «Настройки».",
+                   en: "This one can only be switched on in the phone's Settings — I can't do it myself, I'm afraid. But I can walk you there and wait: go ahead and leave, I'm not going anywhere.\n\nTap the button, then tap “Settings” at the top left."),
+            wants: .tapNextOrOpenSettings),
         RobotStep(Phrase(
             ru: "Найдите «Универсальный доступ». В нём — «Голосовые команды». Нажмите «Настроить».",
             en: "Find Accessibility. Inside it, Vocal Shortcuts. Tap Set Up.")),
@@ -403,21 +429,23 @@ enum Strings {
             ru: "Всё. Теперь достаточно сказать эту фразу вслух — и он откроется, уже слушая. Даже если телефон заблокирован.",
             en: "Done. Now saying that phrase out loud is enough — he opens, already listening. Even with the phone locked.")),
         RobotStep(Phrase(
-            ru: "Если «Голосовых команд» в настройках нет — ваш телефон их пока не умеет. Ничего страшного, есть другие способы.",
-            en: "If Vocal Shortcuts isn't in your Settings, your phone can't do it yet. Never mind — there are other ways.")),
+            ru: "Если «Голосовых команд» в настройках нет — ваш телефон их пока не умеет. Ничего страшного: «Привет, Siri» работает и так.",
+            en: "If Vocal Shortcuts isn't in your Settings, your phone can't do it yet. Never mind — “Hey Siri” works anyway.")),
 
         // 2 · Back Tap. The kindest one for hands that aren't steady.
         RobotStep(Phrase(
             ru: "Способ второй — два раза постучать по задней крышке телефона. Целиться никуда не нужно, и это удобнее всего, если руки уже не те.",
             en: "Way two — tap the back of the phone twice. Nothing to aim at, and it's the kindest one if your hands aren't what they were.")),
-        RobotStep(Phrase(
-            ru: "Настройки. Универсальный доступ. Касание. Касание задней панели. Двойное касание. Выберите «Поговорить».",
-            en: "Settings. Accessibility. Touch. Back Tap. Double Tap. Choose “Поговорить”.")),
+        RobotStep(
+            Phrase(ru: "Настройки. Универсальный доступ. Касание. Касание задней панели. Двойное касание. Выберите «Поговорить».",
+                   en: "Settings. Accessibility. Touch. Back Tap. Double Tap. Choose “Поговорить”."),
+            wants: .tapNextOrOpenSettings),
 
         // 3 · The Action button.
-        RobotStep(Phrase(
-            ru: "Способ третий — кнопка сбоку, если она у вас есть.\n\nНастройки. Кнопка действия. Пролистайте до «Быстрая команда» и выберите «Поговорить».",
-            en: "Way three — the side button, if your phone has one.\n\nSettings. Action Button. Swipe along to Shortcut and choose “Поговорить”.")),
+        RobotStep(
+            Phrase(ru: "Способ третий — кнопка сбоку, если она у вас есть.\n\nНастройки. Кнопка действия. Пролистайте до «Быстрая команда» и выберите «Поговорить».",
+                   en: "Way three — the side button, if your phone has one.\n\nSettings. Action Button. Swipe along to Shortcut and choose “Поговорить”."),
+            wants: .tapNextOrOpenSettings),
 
         // 4 · Control Centre and the Lock Screen.
         RobotStep(Phrase(
