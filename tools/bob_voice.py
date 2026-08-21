@@ -225,7 +225,7 @@ ROBOT_DIRECTION = (
 # directed voice comes out wrong, suspect the direction first.
 
 
-def say_openai(text: str, voice: str, lang: str) -> bytes:
+def say_openai(text: str, voice: str, lang: str, speed: float = 1.0) -> bytes:
     """Best English by a distance, and the only one you can DIRECT.
 
     `onyx` is the deep one. The `instructions` field is the reason this is
@@ -246,6 +246,9 @@ def say_openai(text: str, voice: str, lang: str) -> bytes:
             "voice": voice or "onyx",
             "input": text,
             "instructions": ROBOT_DIRECTION,
+            # NATIVE speed, not atempo. Stretching finished speech smears the
+            # consonants; asking the model to talk faster does not.
+            "speed": max(0.25, min(4.0, speed)),
             "response_format": "mp3",
         },
         timeout=120,
@@ -255,7 +258,7 @@ def say_openai(text: str, voice: str, lang: str) -> bytes:
     return resp.content
 
 
-def say_fish(text: str, voice: str, lang: str) -> bytes:
+def say_fish(text: str, voice: str, lang: str, speed: float = 1.0) -> bytes:
     """The one the Minecraft mod uses — and it is worth the fuss.
 
     Fish bills by BYTE, and Cyrillic is two bytes a letter, which is why it is
@@ -289,7 +292,7 @@ def say_fish(text: str, voice: str, lang: str) -> bytes:
     return resp.content
 
 
-def say_yandex(text: str, voice: str, lang: str) -> bytes:
+def say_yandex(text: str, voice: str, lang: str, speed: float = 1.0) -> bytes:
     import httpx
     from app import config
 
@@ -308,7 +311,7 @@ def say_yandex(text: str, voice: str, lang: str) -> bytes:
             "sampleRateHertz": "48000",
             # Flat on purpose. Whatever expression survives the chain is
             # noise; the character is in the words and the processing.
-            "speed": "0.95",
+            "speed": f"{max(0.1, min(3.0, speed)):.2f}",
         },
         timeout=60,
     )
@@ -317,7 +320,7 @@ def say_yandex(text: str, voice: str, lang: str) -> bytes:
     return resp.content
 
 
-def say_elevenlabs(text: str, voice: str, lang: str) -> bytes:
+def say_elevenlabs(text: str, voice: str, lang: str, speed: float = 1.0) -> bytes:
     import httpx
     from app import config
 
@@ -343,6 +346,11 @@ def say_elevenlabs(text: str, voice: str, lang: str) -> bytes:
     return resp.content
 
 
+#: Providers that change tempo THEMSELVES, natively and without artefacts.
+#: For these, atempo is left at 1.0 — applying speed twice would be both
+#: wrong and audible.
+SPEED_AT_SOURCE = {"openai", "yandex"}
+
 PROVIDERS = {
     "openai": say_openai,          # best English, and the only one you can direct
     "fish": say_fish,              # what the Minecraft mod uses
@@ -356,6 +364,15 @@ DEFAULT_VOICE = {"openai": "onyx", "yandex": "zahar", "fish": "", "elevenlabs": 
 #: first and works the second out for itself.
 RAW_PCM = {"yandex": ["-f", "s16le", "-ar", "48000", "-ac", "1"]}
 #: openai / fish / elevenlabs all return a container ffmpeg reads by itself.
+
+
+def tuned(preset: dict, depth: float | None) -> dict:
+    """A preset with the pitch drop overridden, if one was asked for."""
+    if depth is None:
+        return preset
+    out = dict(preset)
+    out["depth"] = depth
+    return out
 
 
 def play(files) -> bool:
@@ -428,7 +445,11 @@ def main() -> None:
     if args.provider == "elevenlabs" and not voice:
         sys.exit("--voice is required for elevenlabs (a voice id)")
 
-    speak = lambda text: PROVIDERS[args.provider](text, voice, args.lang)
+    def speak(text: str) -> bytes:
+        return PROVIDERS[args.provider](text, voice, args.lang, args.speed)
+
+    # Whoever already handled the tempo must not have it applied again.
+    stretch = 1.0 if args.provider in SPEED_AT_SOURCE else args.speed
     out_dir = Path(args.out)
     out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -441,30 +462,55 @@ def main() -> None:
                    "this trouble for — that one is being put together as we "
                    "speak. I'm the one who explains where to press."),
         }[args.lang]
-        print(f"one sentence · {args.provider}/{voice or 'default'} · "
-              f"{args.lang} · every strength…\n")
-        audio = speak(line)
-        made = []
-        for name, preset in sorted(PRESETS.items(),
-                                   key=lambda kv: -kv[1]["depth"]):
-            target = out_dir / f"audition-{name}.m4a"
-            robotise(audio, args.provider, preset, target, args.speed)
-            made.append((name, target))
-            print(f"  {name:9} {target}")
 
-        # PLAY THEM. This script writes files and plays nothing, which read as
-        # "it did nothing" the first time somebody ran it — they were waiting
-        # for a sound and looking at their phone. Auditioning is the one mode
-        # whose entire purpose is to be heard, so it plays.
+        # SAY EXACTLY WHAT IS ABOUT TO HAPPEN. «Am I even listening to the
+        # right voice?» is a fair question to have to ask, and it should never
+        # have been possible to ask it — the tool knew, and didn't say.
+        print("═" * 66)
+        print(f"  provider   {args.provider}")
+        print(f"  voice      {voice or '(provider default)'}")
+        print(f"  language   {args.lang}")
+        print(f"  speed      {args.speed}"
+              + ("  (asked of the provider itself)"
+                 if args.provider in SPEED_AT_SOURCE else "  (stretched after)"))
+        print(f"  depth      {args.depth if args.depth is not None else 'per preset'}")
+        if args.provider == "openai":
+            print(f"  directed   {ROBOT_DIRECTION[:58]}…")
+        print("═" * 66 + "\n")
+
+        audio = speak(line)
+
+        # THE CONTROL. Untouched provider output, no chain at all — and it is
+        # played FIRST, because it is the only thing that answers the question
+        # that matters: is the raw voice good and am I ruining it, or was it
+        # never good to begin with?
+        raw = out_dir / "audition-0-RAW-no-effects.m4a"
+        subprocess.run(
+            ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+             *RAW_PCM.get(args.provider, []), "-i", "pipe:0",
+             "-c:a", "aac", "-b:a", "128k", str(raw)],
+            input=audio, check=True,
+        )
+        made = [("RAW (no effects at all)", raw)]
+
+        for name, preset in sorted(PRESETS.items(), key=lambda kv: -kv[1]["depth"]):
+            target = out_dir / f"audition-{name}.m4a"
+            robotise(audio, args.provider, tuned(preset, args.depth), target,
+                     stretch)
+            made.append((name, target))
+
+        for name, target in made:
+            print(f"  {name:26} {target.name}")
+
         if not play(t for _, t in made):
             print("\n  (couldn't play them here — open them yourself)")
 
         print("\n" + "─" * 66)
-        print("Now listen again on a PHONE SPEAKER, at arm's length, with a "
-              "kettle on.\nThe one that survives THAT is the one to ship:\n")
-        print(f"    python3 tools/{Path(__file__).name} --lang {args.lang} "
-              f"--provider {args.provider} --preset subtle\n")
-        print("Too slow?  add  --speed 1.15      Too low?  add  --depth 0.98")
+        print("THE FIRST ONE IS THE CONTROL — raw voice, nothing done to it.")
+        print("  · RAW is fine, the rest are worse  → my chain is the problem")
+        print("  · RAW is ALSO bad                  → the voice or the")
+        print("    direction is the problem, and no filter will save it\n")
+        print("Then say WHICH of the five, and what was still wrong with it.\n")
         print("Nothing has reached the app yet. These are files on this Mac.")
         return
 
@@ -472,16 +518,14 @@ def main() -> None:
     if not script:
         sys.exit(f"No voiceover slugs found in {STRINGS}")
 
-    preset = dict(PRESETS[args.preset])
-    if args.depth is not None:
-        preset["depth"] = args.depth
+    preset = tuned(PRESETS[args.preset], args.depth)
     print(f"{len(script)} lines · {args.provider}/{voice or 'default'} · "
           f"{args.lang} · {args.preset} · depth {preset['depth']} · "
           f"speed {args.speed}\n")
     for n, (slug, words) in enumerate(script, 1):
         target = out_dir / f"{slug}.m4a"
         print(f"  [{n:2}/{len(script)}] {slug:18} {words[:52]}…")
-        robotise(speak(words), args.provider, preset, target, args.speed)
+        robotise(speak(words), args.provider, preset, target, stretch)
 
     print("\n" + "─" * 66)
     print(f"{len(script)} files written to\n    {out_dir}\n")
