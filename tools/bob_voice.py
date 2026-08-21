@@ -226,8 +226,9 @@ def steps(lang: str = "ru") -> list[tuple[str, str]]:
 ROBOT_DIRECTION = (
     "You are the public-address system of an old research facility, read by a "
     "man who has held this job for thirty years and is not impressed by any "
-    "of it. Think of the announcer in Portal 2, or a very tired corporate "
-    "training tape. "
+    "of it. Think of Cave Johnson in Portal 2 with the enthusiasm drained "
+    "out: the same rolling, confident, unstoppable delivery, the same habit "
+    "of interrupting himself and carrying on, but tired. "
     "DRY AND DEADPAN — BUT NOT MONOTONE. Deadpan is a performance, not a flat "
     "line. You still lean on the important word in a sentence. You still let "
     "a sentence fall at the end, like a man who has finished making his "
