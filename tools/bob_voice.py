@@ -505,12 +505,20 @@ def main() -> None:
     ap.add_argument("--title", default="Bob the setup robot",
                     help="what to call the cloned voice in your Fish library")
     ap.add_argument("--transcript", default=None,
-                    help="exactly what is said in --clone's audio. Optional, "
-                         "and it measurably improves the clone.")
+                    help="exactly what is said in --clone's audio — NOT the "
+                         "whole script, just those few sentences. A FILE PATH "
+                         "works too, which is easier than quoting a paragraph "
+                         "in a shell: tools/clone-script-ru.txt is written to "
+                         "be read aloud and passed straight back here.")
     args = ap.parse_args()
 
     if args.clone:
-        ref = clone_with_fish(Path(args.clone), args.title, args.transcript)
+        # A path or the words themselves. Pasting a paragraph full of dashes
+        # and quotes into zsh is its own small disaster, so the file wins.
+        said = args.transcript
+        if said and Path(said).is_file():
+            said = Path(said).read_text(encoding="utf-8").strip()
+        ref = clone_with_fish(Path(args.clone), args.title, said)
         print("\n" + "═" * 66)
         print(f"  cloned.  reference_id = {ref}")
         print("═" * 66 + "\n")
