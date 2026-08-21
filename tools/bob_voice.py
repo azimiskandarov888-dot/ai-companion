@@ -6,8 +6,30 @@
 
 Two knobs when it's close but not right:
 
-    --speed 1.15    brisker. Tempo only; the pitch does not move.
+    --speed 1.15    brisker
     --depth 0.98    less deep. 1.0 leaves the pitch alone entirely.
+
+── CLONING, WHICH IS PROBABLY THE ANSWER ───────────────────────────────────
+
+    python3 tools/bob_voice.py --clone me.m4a --transcript "what I said"
+
+Every text-to-speech voice is an average of thousands of readings, and an
+average has no attitude. That is why no amount of directing gets a deadpan
+out of one: deadpan is a CHOICE a performer makes, and an average makes no
+choices. It is the same reason Portal's announcer works — a real man read it.
+
+So record fifteen to sixty seconds of the performance you want, clone it, and
+every one of the forty-five lines comes back in it. What matters is not the
+length of the sample but that it IS the performance: read two or three of
+Bob's real lines, in character, bored out of your mind.
+
+Record it once. There is nothing to maintain afterwards.
+
+ONE THING THIS WILL NOT DO: clone an actor out of a game. That is a real,
+identifiable person's voice, and putting it in a shipped app is a problem no
+matter how the audio was obtained. Your own voice is both legal and better —
+and if you don't want yours, forty-five lines is an hour of a voice actor's
+day, which is not expensive.
 
 ── WHY THIS EXISTS ─────────────────────────────────────────────────────────
 
@@ -258,6 +280,46 @@ def say_openai(text: str, voice: str, lang: str, speed: float = 1.0) -> bytes:
     return resp.content
 
 
+def clone_with_fish(sample: Path, title: str, transcript: str | None) -> str:
+    """Teach Fish a voice from a recording, and hand back its reference_id.
+
+    Fifteen seconds is enough. Sixty is better. What matters far more than
+    length is that the sample is the PERFORMANCE you want: record yourself
+    reading two or three of Bob's actual lines, in character, and every one of
+    the forty-five will come back sounding like that.
+
+    A transcript is optional and worth supplying — it measurably improves the
+    clone, and you already have the text.
+    """
+    import httpx
+    from app import config
+
+    if not config.FISH_API_KEY:
+        sys.exit("FISH_API_KEY missing from backend/.env")
+    if not sample.exists():
+        sys.exit(f"No such file: {sample}")
+
+    files = [("voices", (sample.name, sample.read_bytes(), "application/octet-stream"))]
+    data = {"title": title, "type": "tts", "train_mode": "fast",
+            "visibility": "private"}
+    if transcript:
+        files.append(("texts", (None, transcript)))
+
+    resp = httpx.post(
+        "https://api.fish.audio/model",
+        headers={"Authorization": f"Bearer {config.FISH_API_KEY}"},
+        data=data, files=files, timeout=300,
+    )
+    if resp.status_code not in (200, 201):
+        sys.exit(f"Fish said {resp.status_code}:\n{resp.text[:600]}")
+
+    body = resp.json()
+    ref = body.get("_id") or body.get("id")
+    if not ref:
+        sys.exit(f"Fish accepted it but returned no id:\n{resp.text[:600]}")
+    return ref
+
+
 def say_fish(text: str, voice: str, lang: str, speed: float = 1.0) -> bytes:
     """The one the Minecraft mod uses — and it is worth the fuss.
 
@@ -436,7 +498,27 @@ def main() -> None:
     ap.add_argument("--audition", action="store_true",
                     help="render one sentence through EVERY strength, play them, and stop")
     ap.add_argument("--out", default=str(OUT))
+    ap.add_argument("--clone", metavar="AUDIO",
+                    help="teach Fish a voice from a recording and print its "
+                         "id. 15 seconds is enough; what matters is that the "
+                         "sample IS the performance you want.")
+    ap.add_argument("--title", default="Bob the setup robot",
+                    help="what to call the cloned voice in your Fish library")
+    ap.add_argument("--transcript", default=None,
+                    help="exactly what is said in --clone's audio. Optional, "
+                         "and it measurably improves the clone.")
     args = ap.parse_args()
+
+    if args.clone:
+        ref = clone_with_fish(Path(args.clone), args.title, args.transcript)
+        print("\n" + "═" * 66)
+        print(f"  cloned.  reference_id = {ref}")
+        print("═" * 66 + "\n")
+        print("Hear it on the real script:\n")
+        print(f"    python3 tools/bob_voice.py --audition --lang en \\")
+        print(f"        --provider fish --voice {ref}\n")
+        print("Keep that id — it is how you render the other 44 lines later.")
+        return
 
     if not shutil.which("ffmpeg"):
         sys.exit("ffmpeg not found.  macOS: brew install ffmpeg")
