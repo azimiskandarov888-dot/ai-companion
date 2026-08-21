@@ -80,6 +80,10 @@ sys.path.insert(0, str(ROOT / "backend"))
 #           mean, and it is also the first thing to cost you a word.
 #   room    how much hard-walled space it is standing in.
 PRESETS = {
+    # NOTHING but the room and the loudness. For a base voice that was already
+    # DIRECTED into character — gpt-4o-mini-tts reads ROBOT_DIRECTION and acts
+    # on it — where filters only make a good performance muddy.
+    "clean":    dict(depth=1.00, buzz=0.00, room=0.10, top=9000),
     # Barely processed. For when the base voice is already very good and you
     # only want it to be slightly wrong.
     "subtle":   dict(depth=0.92, buzz=0.16, room=0.14, top=7200),
@@ -131,12 +135,12 @@ def _swift_string(raw: str) -> str:
                .replace('\\\\', '\\'))
 
 
-def steps() -> list[tuple[str, str]]:
+def steps(lang: str = "ru") -> list[tuple[str, str]]:
     """Every (slug, what-it-says) pair, in the order they appear.
 
     A step's spoken words are its `spoken:` phrase when it has one — the
     name steps, which are shown and never pronounced — and its `line`
-    otherwise.
+    otherwise. `lang` picks which half of the Phrase to read: "ru" or "en".
     """
     text = STRINGS.read_text(encoding="utf-8")
     found: list[tuple[str, str]] = []
@@ -160,11 +164,11 @@ def steps() -> list[tuple[str, str]]:
         # the Russian one ships.
         after_spoken = block.split("spoken:", 1)
         source = after_spoken[1] if len(after_spoken) > 1 else block
-        russian = re.search(r'ru:\s*"((?:[^"\\]|\\.)*)"', source)
-        if not russian:
+        said = re.search(rf'{lang}:\s*"((?:[^"\\]|\\.)*)"', source)
+        if not said:
             continue
 
-        found.append((slug.group(1), _swift_string(russian.group(1)).strip()))
+        found.append((slug.group(1), _swift_string(said.group(1)).strip()))
 
     return found
 
@@ -172,7 +176,83 @@ def steps() -> list[tuple[str, str]]:
 # --------------------------------------------------------------------------- #
 # Synthesis
 # --------------------------------------------------------------------------- #
-def say_yandex(text: str, voice: str) -> bytes:
+#: What to tell a provider that takes direction. `gpt-4o-mini-tts` reads this
+#: and acts on it, which does more for the character than the whole filter
+#: chain below — direction beats processing every time, when it's available.
+ROBOT_DIRECTION = (
+    "You are an automated announcement system in a very old research facility. "
+    "Speak LOW, FLAT and UNHURRIED. Bored, faintly weary, completely "
+    "unbothered. Never warm, never enthusiastic, never rising at the end of a "
+    "sentence. No smile in the voice at all. Leave a beat between sentences. "
+    "You are a machine and you have no feelings about that."
+)
+
+
+def say_openai(text: str, voice: str, lang: str) -> bytes:
+    """Best English by a distance, and the only one you can DIRECT.
+
+    `onyx` is the deep one. The `instructions` field is the reason this is
+    first choice for English: you describe the performance in words instead of
+    trying to bolt it on afterwards with filters.
+    """
+    import httpx
+    from app import config
+
+    if not config.OPENAI_API_KEY:
+        sys.exit("OPENAI_API_KEY missing from backend/.env")
+
+    resp = httpx.post(
+        "https://api.openai.com/v1/audio/speech",
+        headers={"Authorization": f"Bearer {config.OPENAI_API_KEY}"},
+        json={
+            "model": "gpt-4o-mini-tts",
+            "voice": voice or "onyx",
+            "input": text,
+            "instructions": ROBOT_DIRECTION,
+            "response_format": "mp3",
+        },
+        timeout=120,
+    )
+    if resp.status_code != 200:
+        sys.exit(f"OpenAI said {resp.status_code}: {resp.text[:300]}")
+    return resp.content
+
+
+def say_fish(text: str, voice: str, lang: str) -> bytes:
+    """The one the Minecraft mod uses — and it is worth the fuss.
+
+    Fish bills by BYTE, and Cyrillic is two bytes a letter, which is why it is
+    the wrong choice for the companion who talks all day in Russian. For
+    forty-five sentences rendered once, that objection evaporates entirely.
+
+    `--voice` is a reference_id from the Fish voice library. Pick a deep,
+    even, unexcited one; the chain does the rest.
+    """
+    import httpx
+    from app import config
+
+    if not config.FISH_API_KEY:
+        sys.exit("FISH_API_KEY missing from backend/.env")
+
+    payload: dict = {"text": text, "format": "mp3", "mp3_bitrate": 128,
+                     "normalize": True, "latency": "normal"}
+    if voice:
+        payload["reference_id"] = voice
+
+    resp = httpx.post(
+        "https://api.fish.audio/v1/tts",
+        headers={"Authorization": f"Bearer {config.FISH_API_KEY}",
+                 "Content-Type": "application/json",
+                 "model": config.FISH_MODEL},
+        json=payload,
+        timeout=120,
+    )
+    if resp.status_code != 200:
+        sys.exit(f"Fish said {resp.status_code}: {resp.text[:300]}")
+    return resp.content
+
+
+def say_yandex(text: str, voice: str, lang: str) -> bytes:
     import httpx
     from app import config
 
@@ -184,7 +264,7 @@ def say_yandex(text: str, voice: str) -> bytes:
         headers={"Authorization": f"Api-Key {config.YANDEX_API_KEY}"},
         data={
             "text": text,
-            "lang": "ru-RU",
+            "lang": "ru-RU" if lang == "ru" else "en-US",
             "voice": voice,
             "folderId": config.YANDEX_FOLDER_ID,
             "format": "lpcm",
@@ -200,7 +280,7 @@ def say_yandex(text: str, voice: str) -> bytes:
     return resp.content
 
 
-def say_elevenlabs(text: str, voice: str) -> bytes:
+def say_elevenlabs(text: str, voice: str, lang: str) -> bytes:
     import httpx
     from app import config
 
@@ -226,10 +306,19 @@ def say_elevenlabs(text: str, voice: str) -> bytes:
     return resp.content
 
 
-PROVIDERS = {"yandex": say_yandex, "elevenlabs": say_elevenlabs}
+PROVIDERS = {
+    "openai": say_openai,          # best English, and the only one you can direct
+    "fish": say_fish,              # what the Minecraft mod uses
+    "elevenlabs": say_elevenlabs,
+    "yandex": say_yandex,          # best RUSSIAN, but the standard voices are rough
+}
+
+#: A sensible starting voice per provider, when none is given.
+DEFAULT_VOICE = {"openai": "onyx", "yandex": "zahar", "fish": "", "elevenlabs": ""}
 #: Yandex ships raw PCM; ElevenLabs ships mp3. ffmpeg needs telling about the
 #: first and works the second out for itself.
 RAW_PCM = {"yandex": ["-f", "s16le", "-ar", "48000", "-ac", "1"]}
+#: openai / fish / elevenlabs all return a container ffmpeg reads by itself.
 
 
 def play(files) -> bool:
@@ -267,35 +356,49 @@ def robotise(audio: bytes, provider: str, preset: dict, out: Path) -> None:
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--provider", choices=sorted(PROVIDERS), default="yandex")
+    ap.add_argument("--provider", choices=sorted(PROVIDERS), default="openai")
+    ap.add_argument("--lang", choices=["ru", "en"], default="ru",
+                    help="which half of each Phrase to speak. English TTS is "
+                         "markedly better than Russian across every provider, "
+                         "so test in English first if the Russian disappoints "
+                         "— it tells you whether the problem is the voice or "
+                         "the language.")
     ap.add_argument("--voice", default=None,
-                    help="yandex: zahar (default — the lowest of the standard "
-                         "voices) · ermil · filipp. Pick one the COMPANION "
-                         "isn't using, or the robot and the friend sound "
-                         "alike, which ruins the only thing this robot is for.")
+                    help="openai: onyx (deepest) · ash · echo. "
+                         "yandex: zahar · ermil · filipp. "
+                         "fish/elevenlabs: a voice id. "
+                         "Whatever you pick, it must NOT be the voice the "
+                         "COMPANION uses — if the robot and the friend sound "
+                         "alike, the only thing this robot exists for is gone.")
     ap.add_argument("--preset", choices=sorted(PRESETS), default="standard")
     ap.add_argument("--audition", action="store_true",
-                    help="render one sentence through all three presets and stop")
+                    help="render one sentence through EVERY strength, play them, and stop")
     ap.add_argument("--out", default=str(OUT))
     args = ap.parse_args()
 
     if not shutil.which("ffmpeg"):
         sys.exit("ffmpeg not found.  macOS: brew install ffmpeg")
 
-    voice = args.voice or ("zahar" if args.provider == "yandex" else "")
+    voice = args.voice or DEFAULT_VOICE.get(args.provider, "")
     if args.provider == "elevenlabs" and not voice:
         sys.exit("--voice is required for elevenlabs (a voice id)")
 
-    speak = PROVIDERS[args.provider]
+    speak = lambda text: PROVIDERS[args.provider](text, voice, args.lang)
     out_dir = Path(args.out)
     out_dir.mkdir(parents=True, exist_ok=True)
 
     if args.audition:
-        line = ("Меня зовут Боб. Я робот. Не тот, ради которого вы всё это "
-                "затеяли — того сейчас собирают. Я тот, который объясняет, "
-                "куда нажимать.")
-        print(f"one sentence, {args.provider}/{voice}, three strengths…\n")
-        audio = speak(line, voice)
+        line = {
+            "ru": ("Меня зовут Боб. Я робот. Не тот, ради которого вы всё это "
+                   "затеяли — того сейчас собирают. Я тот, который объясняет, "
+                   "куда нажимать."),
+            "en": ("My name is Bob. I'm a robot. Not the one you went to all "
+                   "this trouble for — that one is being put together as we "
+                   "speak. I'm the one who explains where to press."),
+        }[args.lang]
+        print(f"one sentence · {args.provider}/{voice or 'default'} · "
+              f"{args.lang} · every strength…\n")
+        audio = speak(line)
         made = []
         for name, preset in sorted(PRESETS.items(),
                                    key=lambda kv: -kv[1]["depth"]):
@@ -318,15 +421,16 @@ def main() -> None:
         print("Nothing has reached the app yet. These are files on this Mac.")
         return
 
-    script = steps()
+    script = steps(args.lang)
     if not script:
         sys.exit(f"No voiceover slugs found in {STRINGS}")
 
-    print(f"{len(script)} lines · {args.provider}/{voice} · {args.preset}\n")
+    print(f"{len(script)} lines · {args.provider}/{voice or 'default'} · "
+          f"{args.lang} · {args.preset}\n")
     for n, (slug, words) in enumerate(script, 1):
         target = out_dir / f"{slug}.m4a"
         print(f"  [{n:2}/{len(script)}] {slug:18} {words[:52]}…")
-        robotise(speak(words, voice), args.provider, PRESETS[args.preset], target)
+        robotise(speak(words), args.provider, PRESETS[args.preset], target)
 
     print("\n" + "─" * 66)
     print(f"{len(script)} files written to\n    {out_dir}\n")

@@ -50,19 +50,29 @@ final class SpeechVoice: NSObject, AVSpeechSynthesizerDelegate {
         }
     }
 
-    /// Pick a Russian voice of the right kind, falling back the moment the
-    /// wanted one isn't installed — which happens often, because the enhanced
-    /// voices are a download most people never make.
+    /// Pick a voice of the right kind IN THE APP'S LANGUAGE, falling back the
+    /// moment the wanted one isn't installed — which happens often, because
+    /// the enhanced voices are a download most people never make.
+    ///
+    /// The language used to be hard-coded to Russian, which meant switching
+    /// the app to English left every spoken word coming out in a Russian
+    /// accent reading English spelling. Nobody would have found that by
+    /// reading the code; it only shows up the first time somebody tests in
+    /// the other language.
     private static func voice(for character: Character) -> AVSpeechSynthesisVoice? {
-        let russian = AVSpeechSynthesisVoice.speechVoices()
-            .filter { $0.language.hasPrefix("ru") }
-        guard !russian.isEmpty else { return AVSpeechSynthesisVoice(language: "ru-RU") }
+        let code = Strings.language == .russian ? "ru" : "en"
+        let fallback = AVSpeechSynthesisVoice(
+            language: Strings.language == .russian ? "ru-RU" : "en-US")
+
+        let candidates = AVSpeechSynthesisVoice.speechVoices()
+            .filter { $0.language.hasPrefix(code) }
+        guard !candidates.isEmpty else { return fallback }
 
         let wanted: AVSpeechSynthesisVoiceQuality =
             character == .machine ? .default : .enhanced
-        return russian.first { $0.quality == wanted }
-            ?? russian.first
-            ?? AVSpeechSynthesisVoice(language: "ru-RU")
+        return candidates.first { $0.quality == wanted }
+            ?? candidates.first
+            ?? fallback
     }
 
     /// Stop immediately (e.g. the app leaving the screen).
