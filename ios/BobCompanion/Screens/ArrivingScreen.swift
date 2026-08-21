@@ -125,9 +125,13 @@ struct ArrivingScreen: View {
     }
 
     private var robot: some View {
+        // «Боб» rather than the friend's name, which the app already knows and
+        // the robot deliberately won't say — see Strings.robotWontSayHisName.
+        // It offers to swap it for the real one after they've met.
         SetupRobot(script: Strings.robotFirstTouch
                          + Strings.robotWhileHeComes
-                         + Strings.robotVocalShortcut   // «Потом» jumps this
+                         + Strings.robotWontSayHisName             // «Потом»
+                         + Strings.robotVocalShortcut(phrase: "Боб") // jumps
                          + Strings.robotFarewell) { heardItAll in
             robotIntroduced = true
             if heardItAll { toldHowToLeave = true }

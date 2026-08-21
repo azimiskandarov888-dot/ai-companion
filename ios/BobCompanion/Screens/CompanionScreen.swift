@@ -30,14 +30,13 @@ struct CompanionScreen: View {
     @AppStorage("hasBeenToldHowToLeave") private var toldHowToLeave = false
     @State private var showingHowToLeave = false
 
-    /// How many times somebody has deliberately switched him on, and whether
-    /// they've been offered the one piece of setup worth doing. Both live on
-    /// the phone for the same reason as above: the offer is about THIS phone,
-    /// and «Начать заново» must not make it come round again.
-    @AppStorage("timesSwitchedOn") private var timesSwitchedOn = 0
+    /// Whether the robot has already come back about the name. On the phone
+    /// for the same reason as above: it is a fact about THIS install having
+    /// been offered, and «Начать заново» must not make it come round again.
     @AppStorage("hasBeenOfferedCallHim") private var offeredCallHim = false
     @State private var showingCallOffer = false
     @State private var showCallHim = false
+    @State private var showNameTalk = false
 
     /// The conversation's state, expressed as the orb sees it.
     private var orbState: OrbState {
@@ -135,7 +134,6 @@ struct CompanionScreen: View {
                             conversation.toggle()
                         }
                         guard conversation.wantsToListen else { return }
-                        timesSwitchedOn += 1
                         teachSomethingIfItIsTime()
                     }
 
@@ -163,42 +161,50 @@ struct CompanionScreen: View {
         .persistentSystemOverlays(.hidden)
         .task { await checkMicrophone() }
         .sheet(isPresented: $showMicHelp) { MicrophoneHelp() }
-        .sheet(isPresented: $showCallHim) { CallHimSheet() }
+        .sheet(isPresented: $showCallHim) { CallHimSheet().environmentObject(app) }
+        .sheet(isPresented: $showNameTalk) { HisNameSheet(name: app.displayName) }
+        .onChange(of: showNameTalk) { _, open in
+            open ? conversation.suspend() : conversation.resume()
+        }
         // Reading a page of instructions takes minutes, and he would spend all
         // of them listening to the room. `resume()` only restarts what was
         // already wanted, so closing the sheet never switches him on.
         .onChange(of: showCallHim) { _, open in
             open ? conversation.suspend() : conversation.resume()
         }
+        // THE ROBOT COMES BACK, ONCE, AND THIS IS WHEN.
+        //
+        // The whole vocal shortcut was set up before anybody knew the friend's
+        // name — it had to be, he was still being written — so it answers to
+        // «Боб», which the robot suggested precisely because it refused to
+        // give the real name away and spoil his entrance.
+        //
+        // Now they've met. The obvious moment to say so is the instant he
+        // introduces himself, and that is exactly the moment it must NOT
+        // happen: nothing in this app is worth interrupting somebody's first
+        // conversation with him. The microphone going quiet at the end of it
+        // is just as pointed and costs nothing.
+        .onChange(of: conversation.wantsToListen) { was, now in
+            guard was, !now else { return }        // a conversation just ended
+            guard !offeredCallHim, !app.companionName.isEmpty else { return }
+            offeredCallHim = true
+            withAnimation(.easeInOut(duration: 0.5)) { showingCallOffer = true }
+        }
     }
 
-    /// The two things somebody has to be told, each once, each at the moment it
-    /// first becomes true — never in a tutorial before they have met anyone.
-    /// A lesson before the friend is a lesson about software.
-    ///
-    /// Never both at once: the first switch-on teaches leaving, and the offer
-    /// waits until he is somebody worth being able to call.
+    /// The one thing somebody has to be told, at the moment it first becomes
+    /// true — never in a tutorial before they have met anyone. A lesson before
+    /// the friend is a lesson about software.
     private func teachSomethingIfItIsTime() {
-        if !toldHowToLeave {
-            toldHowToLeave = true
-            withAnimation(.easeInOut(duration: 0.5)) { showingHowToLeave = true }
-            // Long enough to read unhurried at eighty, and gone by itself —
-            // nothing to dismiss, nothing to understand.
-            Task {
-                try? await Task.sleep(nanoseconds: 9_000_000_000)
-                withAnimation(.easeInOut(duration: 0.8)) { showingHowToLeave = false }
-            }
-            return
+        guard !toldHowToLeave else { return }
+        toldHowToLeave = true
+        withAnimation(.easeInOut(duration: 0.5)) { showingHowToLeave = true }
+        // Long enough to read unhurried at eighty, and gone by itself —
+        // nothing to dismiss, nothing to understand.
+        Task {
+            try? await Task.sleep(nanoseconds: 9_000_000_000)
+            withAnimation(.easeInOut(duration: 0.8)) { showingHowToLeave = false }
         }
-
-        // The second conversation, not the first: the robot promised this on
-        // the arrival screen and said «сначала познакомьтесь». Keeping that
-        // promise one conversation later is soon enough to still be a promise
-        // kept, and late enough that it is a way of reaching somebody they
-        // now know rather than a setup step in front of a stranger.
-        guard !offeredCallHim, timesSwitchedOn >= 2 else { return }
-        offeredCallHim = true
-        withAnimation(.easeInOut(duration: 0.5)) { showingCallOffer = true }
     }
 
     /// Asked once, answered either way, and never asked again — including if
@@ -206,7 +212,7 @@ struct CompanionScreen: View {
     /// already told us no.
     private var callOffer: some View {
         VStack(spacing: 18) {
-            Text(Strings.callHimOffer())
+            Text(Strings.callHimOffer(app.displayName)())
                 .appFont(AppType.body, leading: AppType.bodyLeading)
                 .foregroundStyle(Theme.linen)
                 .multilineTextAlignment(.center)
@@ -218,7 +224,7 @@ struct CompanionScreen: View {
                 }
                 AppButton(title: Strings.callHimOfferYes(), tone: .sun) {
                     withAnimation(.easeInOut(duration: 0.4)) { showingCallOffer = false }
-                    showCallHim = true
+                    showNameTalk = true
                 }
             }
         }

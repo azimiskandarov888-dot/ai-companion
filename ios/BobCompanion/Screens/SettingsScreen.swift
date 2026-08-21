@@ -72,7 +72,10 @@ struct SettingsScreen: View {
                 .onEnded { if $0.translation.height > 80 { onClose() } }
         )
         .sheet(isPresented: $showServer) { ServerSheet() }
-        .sheet(isPresented: $showCallHim) { CallHimSheet() }
+        // Passed explicitly rather than relying on a sheet inheriting it —
+        // which is how every other cover in this app is written, and the
+        // reason it opens at all instead of trapping on a missing object.
+        .sheet(isPresented: $showCallHim) { CallHimSheet().environmentObject(app) }
         .sheet(isPresented: $showStartOver) {
             StartOverSheet(name: app.displayName) {
                 app.startOver()
@@ -179,6 +182,7 @@ struct SetupRobot: View {
 
     @State private var step = 0
     @State private var voice = SpeechVoice()
+    @State private var player = AudioPlayer()
     @State private var speaking = false
     /// The ring is lit the same way his orb is lit when he's listening. That
     /// is the entire point of the two tap steps: the state somebody switches
@@ -224,6 +228,7 @@ struct SetupRobot: View {
         .onDisappear {
             SetupRobotIsUp.yes = false
             voice.stop()
+            player.stop()
         }
     }
 
@@ -315,6 +320,20 @@ struct SetupRobot: View {
                   tone: .sun) { advance() }
     }
 
+    /// A bundled recording of this line, if one has been added. Several
+    /// extensions are tried so nobody has to convert anything: record it
+    /// however is easiest, drop it in, name it after the slug.
+    private func recording(named slug: String?) -> Data? {
+        guard let slug else { return nil }
+        for ext in ["m4a", "mp3", "caf", "wav", "aiff"] {
+            if let url = Bundle.main.url(forResource: slug, withExtension: ext),
+               let data = try? Data(contentsOf: url), !data.isEmpty {
+                return data
+            }
+        }
+        return nil
+    }
+
     private func open(_ address: String) {
         guard let url = URL(string: address) else { return }
         UIApplication.shared.open(url)
@@ -356,6 +375,7 @@ struct SetupRobot: View {
         // off is what releases the previous call's continuation. Two live
         // `speak`s would strand one of them for good.
         voice.stop()
+        player.stop()
         generation += 1
         let mine = generation
 
@@ -371,7 +391,16 @@ struct SetupRobot: View {
             try? session.setActive(true, options: [])
 
             speaking = true
-            await voice.speak(words, as: .machine)
+            // A REAL VOICE IF THERE IS ONE. A person doing a robot beats a
+            // robot doing a robot by a mile, and the character is most of
+            // what this screen is for. Missing recordings are not a failure —
+            // the synthesiser simply takes the line, exactly as before — so
+            // they can be added one at a time, in any order, whenever.
+            if let recorded = recording(named: here.voiceover) {
+                await player.play(data: recorded)
+            } else {
+                await voice.speak(words, as: .machine)
+            }
             // The cut-off call resumes too, and gets here AFTER its
             // replacement has already started talking. Only the current one
             // may put the ring out.
@@ -405,7 +434,15 @@ struct SetupRobot: View {
 /// is exactly why it is a sheet they can leave and come back to, rather than
 /// part of the arrival.
 struct CallHimSheet: View {
+    @EnvironmentObject private var app: AppState
     @Environment(\.dismiss) private var dismiss
+
+    /// His real name once they've met, and the robot's own until then — the
+    /// same placeholder the arrival screen used, so anybody redoing this
+    /// before meeting him isn't quietly handed a different word.
+    private var phrase: String {
+        app.companionName.isEmpty ? "Боб" : app.companionName
+    }
 
     var body: some View {
         // The vocal shortcut FIRST, because whoever opens this either skipped
@@ -413,8 +450,24 @@ struct CallHimSheet: View {
         // the one worth having. The other three come after, for anybody who
         // would rather press something than speak.
         SetupRobot(script: Strings.robotHelloAgain
-                         + Strings.robotVocalShortcut
+                         + Strings.robotVocalShortcut(phrase: phrase)
                          + Strings.robotSetUpCalling) { _ in dismiss() }
+        .presentationDetents([.large])
+        .presentationCornerRadius(Metrics.sheetRadius)
+    }
+}
+
+/// The robot coming back after the first conversation to swap its own name
+/// out for the friend's. Shorter than the full walkthrough — they have done
+/// this once already, and being talked through it twice is how a helpful
+/// thing turns into a tiresome one.
+struct HisNameSheet: View {
+    let name: String
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        SetupRobot(script: Strings.robotAboutHisName(name)
+                         + Strings.robotVocalShortcut(phrase: name)) { _ in dismiss() }
         .presentationDetents([.large])
         .presentationCornerRadius(Metrics.sheetRadius)
     }

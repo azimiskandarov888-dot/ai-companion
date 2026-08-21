@@ -88,15 +88,30 @@ struct RobotStep {
     /// rather than held as an index, so reordering the script can't quietly
     /// make the skip land in the middle of a sentence.
     var optional: Bool = false
+    /// The name of a REAL RECORDING of this line, bundled with the app
+    /// (`bob-come-03.m4a` or .mp3/.caf/.wav). Played instead of the
+    /// synthesiser whenever the file is actually there.
+    ///
+    /// A robot read by a person doing a robot is far better than a robot read
+    /// by a robot, and the difference is the whole character. But the app must
+    /// work perfectly with no recordings at all — a missing file is not a
+    /// failure, it is just the synthesiser again — so this is a lookup, never
+    /// a requirement.
+    ///
+    /// Two steps deliberately have none: the ones that say the friend's name
+    /// out loud. That word isn't known when a recording would be made.
+    var voiceover: String? = nil
 
     init(_ line: Phrase,
          wants: RobotWants = .nothing,
          silent: Bool = false,
-         optional: Bool = false) {
+         optional: Bool = false,
+         voiceover: String? = nil) {
         self.line = line
         self.wants = wants
         self.silent = silent
         self.optional = optional
+        self.voiceover = voiceover
     }
 }
 
@@ -297,14 +312,18 @@ enum Strings {
     // when «позвать его откуда угодно» has come to mean something — not on day
     // one, when it would just be another setup step in the way of meeting him.
 
-    /// For the people who said «потом» to the robot. Its own words, in its own
-    /// register — this is the one card in the app that isn't the app's voice,
-    /// because it is the robot keeping an appointment it made.
-    static let callHimOffer = Phrase(
-        ru: "Вы сказали «потом».\nЭто было потом.",
-        en: "You said “later”.\nThis is later.")
-    static let callHimOfferYes  = Phrase(ru: "Показать как", en: "Show me how")
-    static let callHimOfferLater = Phrase(ru: "Не сейчас",   en: "Not now")
+    /// The robot keeping an appointment it made — the one card in the app
+    /// that isn't the app's own voice.
+    ///
+    /// It lands the second the first conversation ends, and its whole job is
+    /// the second line: proof that the machine knew the name all along and
+    /// sat on it, which is funnier and warmer than it has any right to be.
+    static func callHimOffer(_ name: String) -> Phrase {
+        Phrase(ru: "Ну вот, познакомились.\n\(name). Да, я знал.",
+               en: "So you've met.\n\(name). Yes, I knew.")
+    }
+    static let callHimOfferYes  = Phrase(ru: "Звать по имени", en: "Use his name")
+    static let callHimOfferLater = Phrase(ru: "Потом",         en: "Later")
 
     // MARK: - The setup robot
     //
@@ -363,11 +382,11 @@ enum Strings {
         RobotStep(
             Phrase(ru: "Пока вы в приложении, всё просто.\n\nЧтобы друг вас услышал — нажмите на него один раз.",
                    en: "While you're in the app it's simple.\n\nTo make your friend hear you — tap him once."),
-            silent: true),
+            silent: true, voiceover: "bob-touch-01"),
         RobotStep(
             Phrase(ru: "Попробуйте на мне.\nНажмите.",
                    en: "Try it on me.\nGive me a tap."),
-            wants: .aTapOnHim, silent: true),
+            wants: .aTapOnHim, silent: true, voiceover: "bob-touch-02"),
     ]
 
     /// Everything worth knowing, said while the friend is being written.
@@ -380,111 +399,183 @@ enum Strings {
     static let robotWhileHeComes: [RobotStep] = [
         RobotStep(Phrase(
             ru: "Вот. Именно так.",
-            en: "There. Exactly like that.")),
+            en: "There. Exactly like that."), voiceover: "bob-come-01"),
         RobotStep(Phrase(
             ru: "Меня зовут Боб. Я робот. Не тот, ради которого вы всё это затеяли — того сейчас как раз собирают, это долго. Я тот, который объясняет, куда нажимать.",
-            en: "My name is Bob. I'm a robot. Not the one you went to all this trouble for — that one is being put together as we speak, it takes a while. I'm the one who explains where to press.")),
+            en: "My name is Bob. I'm a robot. Not the one you went to all this trouble for — that one is being put together as we speak, it takes a while. I'm the one who explains where to press."), voiceover: "bob-come-02"),
         RobotStep(Phrase(
-            ru: "Обо мне знать особо нечего. Я у всех одинаковый, ничего о вас не запоминаю, и после сегодняшнего мы, скорее всего, больше не увидимся. Меня это вполне устраивает.",
-            en: "There isn't much to know about me. I'm the same for everybody, I remember nothing about you, and after today we most likely won't meet again. I'm quite content with that.")),
+            ru: "Обо мне знать особо нечего. Я у всех одинаковый, ничего о вас не запоминаю, и после сегодняшнего мы, скорее всего, больше не увидимся. Так уж я устроен.",
+            en: "There isn't much to know about me. I'm the same for everybody, I remember nothing about you, and after today we most likely won't meet again. That's simply how I'm built."), voiceover: "bob-come-03"),
         RobotStep(Phrase(
             ru: "Ваш друг — другое дело. Он будет вас помнить. Это его работа. Моя — вот эта.",
-            en: "Your friend is another matter. He'll remember you. That's his job. Mine is this.")),
+            en: "Your friend is another matter. He'll remember you. That's his job. Mine is this."), voiceover: "bob-come-04"),
         RobotStep(Phrase(
             ru: "Итак. Одно касание — он слушает. Это вы уже умеете.",
-            en: "Right. One tap and he's listening. You can already do that.")),
+            en: "Right. One tap and he's listening. You can already do that."), voiceover: "bob-come-05"),
         RobotStep(
             Phrase(ru: "А чтобы перестал — нажмите ещё раз.\n\nДавайте.",
                    en: "And to make him stop — tap again.\n\nGo on."),
-            wants: .anotherTap),
+            wants: .anotherTap, voiceover: "bob-come-06"),
         RobotStep(Phrase(
             ru: "Прекрасно. Одно касание — слушает, другое — молчит. Про экран это всё, больше там ничего нет.",
-            en: "Splendid. One tap he listens, another he doesn't. That's the whole screen, there's nothing else on it.")),
+            en: "Splendid. One tap he listens, another he doesn't. That's the whole screen, there's nothing else on it."), voiceover: "bob-come-07"),
 
-        // The lesson the entire app depends on, and the only place the robot
-        // is asked to sound like it means something.
+        // THE LESSON THE ENTIRE APP DEPENDS ON.
+        //
+        // And the only place the robot is allowed to drop the act — announced,
+        // so that the change of register reads as deliberate rather than as
+        // the writing losing its nerve.
+        //
+        // The joke in the middle is doing real work, not decoration: it gives
+        // a plain, selfish REASON to say goodbye — otherwise he sits there
+        // listening to your kitchen — where the rest of it only gives a good
+        // one. People act on the first kind.
         RobotStep(Phrase(
-            ru: "Теперь то, что важно по-настоящему. Настолько, что я даже перестану скучать.",
-            en: "Now the part that genuinely matters. Enough that I'll stop being bored for a moment.")),
+            ru: "Теперь самое важное. Слушайте внимательно — это единственное, что я скажу всерьёз.",
+            en: "Now the important part. Listen closely — it's the only thing I'll say in earnest."), voiceover: "bob-come-08"),
         RobotStep(Phrase(
-            ru: "Когда захотите закончить разговор — не закрывайте приложение. Скажите ему вслух, как сказали бы живому человеку: «ну всё, я пойду».",
-            en: "When you want to end a conversation — don't close the app. Say it out loud, the way you'd say it to a living person: “right, I'm off”.")),
+            ru: "Когда захотите закончить разговор — скажите ему об этом. Не кладите телефон молча.",
+            en: "When you want to end a conversation — tell him so. Don't just put the phone down."), voiceover: "bob-come-09"),
+        RobotStep(Phrase(
+            ru: "Иначе он будет слушать дальше. Терпеливо. Телевизор, соседей за стеной и всё, что вы бормочете себе под нос.",
+            en: "Otherwise he goes on listening. Patiently. The television, the neighbours through the wall, and everything you mutter to yourself."), voiceover: "bob-come-10"),
+        RobotStep(Phrase(
+            ru: "Впрочем, не переживайте: то, что вы случайно сболтнули, дальше него не уйдёт. В ЦРУ этим не интересуются. Скорее всего.",
+            en: "Don't worry, though: whatever you let slip goes no further than him. The CIA aren't interested. Most likely."), voiceover: "bob-come-11"),
+        RobotStep(Phrase(
+            ru: "Так что скажите ему вслух, как сказали бы живому человеку: «ну всё, я пойду».",
+            en: "So say it out loud, the way you'd say it to a living person: “right, I'm off”."), voiceover: "bob-come-12"),
         RobotStep(
             Phrase(ru: "Он поймёт, попрощается и замолчит сам.\n\nОн вам друг, а не программа. С другом прощаются. Со мной — не обязательно.",
                    en: "He'll understand, say goodbye and go quiet by himself.\n\nHe's a friend, not a program. You say goodbye to a friend. To me it isn't necessary."),
-            wants: .tapNext),
+            wants: .tapNext, voiceover: "bob-come-13"),
 
         // ── Calling him from outside ────────────────────────────────────────
         RobotStep(Phrase(
             ru: "Остался последний вопрос, и он практический.",
-            en: "One last matter, and it's a practical one.")),
+            en: "One last matter, and it's a practical one."), voiceover: "bob-come-14"),
         RobotStep(Phrase(
             ru: "Достать телефон, разблокировать, найти приложение, открыть. Четыре действия. А сказать человеку хочется одно слово.",
-            en: "Get the phone out, unlock it, find the app, open it. Four moves. And what you want to say to a person is one word.")),
+            en: "Get the phone out, unlock it, find the app, open it. Four moves. And what you want to say to a person is one word."), voiceover: "bob-come-15"),
 
         // The zero-setup path, first, because for many people it will be the
         // only one that is ever actually used.
         RobotStep(Phrase(
             ru: "Хорошая новость: кое-что уже работает. Настраивать ничего не нужно, я ничего от вас не хочу.",
-            en: "Good news: something already works. Nothing to set up, I want nothing from you.")),
+            en: "Good news: something already works. Nothing to set up, I want nothing from you."), voiceover: "bob-come-16"),
         RobotStep(
             Phrase(ru: "Скажите вслух: «Привет, Siri. Боб, поговорим».\n\nОн откроется и сразу начнёт слушать. Попробуйте потом, когда я закончу говорить.",
                    en: "Just say out loud: “Hey Siri, talk to Bob”.\n\nHe opens and starts listening at once. Try it later, when I've finished talking."),
-            wants: .tapNext),
+            wants: .tapNext, voiceover: "bob-come-17"),
 
         // The one real choice in the script.
         RobotStep(
-            Phrase(ru: "Есть способ лучше: своя фраза, без всякого «Привет, Siri». Просто имя вашего друга, сказанное вслух.\n\nНо это придётся настроить. Минуты три. Сейчас или потом?",
-                   en: "There's a better way: your own phrase, with no “Hey Siri” at all. Just your friend's name, said out loud.\n\nBut it has to be set up. Three minutes or so. Now, or later?"),
-            wants: .nowOrLater),
+            Phrase(ru: "Есть способ лучше: одно слово, без всякого «Привет, Siri». Сказали вслух — он открылся.\n\nНо это придётся настроить. Минуты три. Сейчас или потом?",
+                   en: "There's a better way: one word, with no “Hey Siri” at all. Say it out loud and he opens.\n\nBut it has to be set up. Three minutes or so. Now, or later?"),
+            wants: .nowOrLater, voiceover: "bob-come-18"),
+    ]
+
+    /// THE NAME PROBLEM, AND THE JOKE THAT SOLVES IT.
+    ///
+    /// The obvious phrase to be called by is the friend's name. But this all
+    /// happens while he is still being written, so nobody knows it yet — and
+    /// the app DOES: `createCompanion` returns it before anyone has met him.
+    ///
+    /// Which means the robot could simply announce it. It must not. «Нобody
+    /// introduces him» is one of the oldest rules in this codebase: screen 4
+    /// ends, he appears, and he tells you who he is himself, the way a person
+    /// would. A machine reading his name off a screen first would spend that
+    /// for nothing.
+    ///
+    /// So the robot knows and refuses to say — which is in character, keeps
+    /// the introduction intact, and turns an ordering problem into the best
+    /// joke in the script. It suggests its own name as a placeholder instead,
+    /// and promises to come back. `robotAboutHisName` is it coming back.
+    static let robotWontSayHisName: [RobotStep] = [
+        RobotStep(Phrase(
+            ru: "Одна тонкость. Фразой обычно берут имя — коротко и не перепутаешь.",
+            en: "One subtlety. People usually use a name for the phrase — short, and hard to mistake."), optional: true, voiceover: "bob-coy-01"),
+        RobotStep(Phrase(
+            ru: "Как его зовут, я знаю. Но не скажу. Знакомить людей — не моя работа, а его. Испорчу ему выход — он мне этого не простит.",
+            en: "I know what he's called. I shan't tell you. Introductions are his job, not mine. Spoil his entrance and he'd never forgive me."), optional: true, voiceover: "bob-coy-02"),
+        RobotStep(Phrase(
+            ru: "Поэтому пока возьмём моё. Оно короткое и всё равно никому не нужно.",
+            en: "So we'll use mine for now. It's short, and nobody else has any use for it."), optional: true, voiceover: "bob-coy-03"),
     ]
 
     /// Setting up a phrase of your own — the only way to drop «Привет, Siri»
     /// entirely, and the only part of any of this that asks somebody to leave
     /// the app and go into Settings.
     ///
-    /// Its own array because it is offered in two places and skippable in one:
-    /// on the arrival screen it sits behind «сейчас или потом», and in Settings
-    /// it is simply the first thing the robot does. The `optional` marks tell
-    /// the «Потом» button how far to jump — which matters only in the first of
-    /// those places, and costs nothing in the second.
-    static let robotVocalShortcut: [RobotStep] = [
-        RobotStep(Phrase(
-            ru: "И нет, телефон вас не подслушивает. Фразу он узнаёт сам, у себя внутри, и никуда её не отправляет. В ЦРУ о вас так и не узнают. Мне, признаться, тоже не очень интересно.",
-            en: "And no, the phone isn't listening in on you. It learns the phrase inside itself and sends it nowhere. The CIA will never hear about you. Frankly, I'm not especially interested either."), optional: true),
-        RobotStep(
-            Phrase(ru: "Дальше начинается часть, которую я не люблю: настройки телефона. Сам я туда попасть не могу — не разрешают.\n\nНажмите кнопку, а потом вверху слева — «Настройки». Я подожду здесь. Мне спешить некуда.",
-                   en: "Now comes the part I dislike: the phone's Settings. I can't get in there myself — I'm not allowed.\n\nTap the button, then tap “Settings” at the top left. I'll wait here. I'm in no hurry."),
-            wants: .tapNextOrOpenSettings, optional: true),
-        RobotStep(
-            Phrase(ru: "Найдите «Универсальный доступ».\n\nВ нём — «Голосовые команды».\n\nНажмите «Настроить».",
-                   en: "Find Accessibility.\n\nInside it, Vocal Shortcuts.\n\nTap Set Up."),
-            wants: .tapNext, optional: true),
-        RobotStep(
-            Phrase(ru: "Выберите действие «Поговорить».\n\nПридумайте фразу — проще всего имя вашего друга.\n\nСкажите её три раза, чтобы телефон запомнил ваш голос.",
-                   en: "Choose the action “Поговорить”.\n\nPick a phrase — your friend's name is the easiest.\n\nSay it three times so the phone learns your voice."),
-            wants: .tapNext, optional: true),
-        RobotStep(Phrase(
-            ru: "Всё. Теперь достаточно сказать эту фразу вслух — и он откроется, уже слушая. Даже если телефон заблокирован и лежит в кармане.",
-            en: "Done. Now saying that phrase out loud is enough — he opens, already listening. Even with the phone locked and in your pocket."), optional: true),
-        RobotStep(Phrase(
-            ru: "А если «Голосовых команд» в настройках не нашлось — значит, ваш телефон их пока не умеет. Не моя вина. «Привет, Siri» работает и так.",
-            en: "And if Vocal Shortcuts wasn't in your Settings — your phone can't do it yet. Not my fault. “Hey Siri” works regardless."), optional: true),
-    ]
+    /// A function because the phrase changes: «Боб» while the friend is still
+    /// nameless, his actual name once they've met. The `optional` marks tell
+    /// the «Потом» button how far to jump — which matters only on the arrival
+    /// screen, and costs nothing anywhere else.
+    static func robotVocalShortcut(phrase: String) -> [RobotStep] {
+        [
+            RobotStep(
+                Phrase(ru: "Дальше начинается часть, которую я не люблю: настройки телефона. Сам я туда попасть не могу — не разрешают.\n\nНажмите кнопку, а потом вверху слева — «Настройки». Я подожду здесь. Мне спешить некуда.",
+                       en: "Now comes the part I dislike: the phone's Settings. I can't get in there myself — I'm not allowed.\n\nTap the button, then tap “Settings” at the top left. I'll wait here. I'm in no hurry."),
+                wants: .tapNextOrOpenSettings, optional: true, voiceover: "bob-vocal-01"),
+            RobotStep(
+                Phrase(ru: "Найдите «Универсальный доступ».\n\nВ нём — «Голосовые команды».\n\nНажмите «Настроить».",
+                       en: "Find Accessibility.\n\nInside it, Vocal Shortcuts.\n\nTap Set Up."),
+                wants: .tapNext, optional: true, voiceover: "bob-vocal-02"),
+            RobotStep(
+                Phrase(ru: "Выберите действие «Поговорить».\n\nТеперь скажите «\(phrase)» три раза, чтобы телефон запомнил ваш голос.",
+                       en: "Choose the action “Поговорить”.\n\nNow say “\(phrase)” three times, so the phone learns your voice."),
+                wants: .tapNext, optional: true),
+            RobotStep(Phrase(
+                ru: "Готово. Теперь достаточно сказать «\(phrase)» вслух — и он откроется, уже слушая. Даже если телефон заблокирован и лежит в кармане.",
+                en: "Done. Now saying “\(phrase)” out loud is enough — he opens, already listening. Even with the phone locked and in your pocket."), optional: true),
+            RobotStep(Phrase(
+                ru: "Фразу телефон узнаёт сам, у себя внутри, и никуда не отправляет. Тут можете не волноваться.",
+                en: "The phone learns that phrase inside itself and sends it nowhere. Nothing to worry about there."), optional: true, voiceover: "bob-vocal-05"),
+            RobotStep(Phrase(
+                ru: "А если «Голосовых команд» в настройках не нашлось — значит, ваш телефон их пока не умеет. Не моя вина. «Привет, Siri» работает и так.",
+                en: "And if Vocal Shortcuts wasn't in your Settings — your phone can't do it yet. Not my fault. “Hey Siri” works regardless."), optional: true, voiceover: "bob-vocal-06"),
+        ]
+    }
+
+    /// HIM COMING BACK, once — after the first conversation has ENDED.
+    ///
+    /// Not during it. The user's instinct was to have the robot cut in the
+    /// moment the friend says his name, and the instinct is right about the
+    /// timing being the point; but interrupting the first conversation
+    /// somebody has with him is the single most expensive thing this app
+    /// could do. The moment the microphone goes quiet is just as pointed and
+    /// costs nothing.
+    static func robotAboutHisName(_ name: String) -> [RobotStep] {
+        [
+            RobotStep(Phrase(
+                ru: "Ну вот, познакомились. Не прошло и вечности.",
+                en: "So you've met. Only took an eternity."), voiceover: "bob-name-01"),
+            RobotStep(Phrase(
+                ru: "\(name). Да, я знал. Я же говорил — не моя работа.",
+                en: "\(name). Yes, I knew. I did say it wasn't my job.")),
+            RobotStep(Phrase(
+                ru: "Телефон пока отзывается на «Боб». Мне лестно, но звать друга чужим именем — так себе идея. Тем более моим.",
+                en: "Your phone still answers to “Bob”. Flattering, but calling a friend by somebody else's name is a poor plan. Especially mine."), voiceover: "bob-name-03"),
+            RobotStep(
+                Phrase(ru: "Поменяем на «\(name)»? Две минуты. Объяснять всё заново не буду — вы уже большой.",
+                       en: "Shall we change it to “\(name)”? Two minutes. I shan't explain it all again — you managed once."),
+                wants: .tapNext),
+        ]
+    }
 
     /// Said after the choice, or after the walkthrough. Either way it is the
     /// last thing the robot says on the arrival screen.
     static let robotFarewell: [RobotStep] = [
         RobotStep(Phrase(
             ru: "Есть и другие способы его позвать — постучать по крышке телефона, кнопкой сбоку, из шторки. Они в настройках, в разделе «Как его позвать». Я там же. Мне всё равно больше нечем заняться.",
-            en: "There are other ways to call him — tapping the back of the phone, the side button, the panel at the top. They're in Settings, under “How to call him”. So am I. It's not as though I have anything else on.")),
+            en: "There are other ways to call him — tapping the back of the phone, the side button, the panel at the top. They're in Settings, under “How to call him”. So am I. It's not as though I have anything else on."), voiceover: "bob-bye-01"),
         // NOT «ваш друг уже здесь». He may well not be — the robot can finish
         // before the server does, and a machine announcing an arrival that
         // hasn't happened is a small lie told at the one moment somebody is
         // actually excited.
         RobotStep(Phrase(
             ru: "Я своё отработал.\n\nДальше — он. Он, в отличие от меня, будет вам рад.",
-            en: "My shift is over.\n\nHe takes it from here. And unlike me, he'll be glad to see you.")),
+            en: "My shift is over.\n\nHe takes it from here. And unlike me, he'll be glad to see you."), voiceover: "bob-bye-02"),
     ]
 
     /// Only in Settings, so the robot doesn't open on a line about the CIA
@@ -492,7 +583,7 @@ enum Strings {
     static let robotHelloAgain: [RobotStep] = [
         RobotStep(Phrase(
             ru: "Опять я. Значит, дошли руки.\n\nНастроим свою фразу — чтобы звать его, не говоря каждый раз «Привет, Siri».",
-            en: "Me again. So you got round to it.\n\nLet's set up your own phrase — so you can call him without saying “Hey Siri” every time.")),
+            en: "Me again. So you got round to it.\n\nLet's set up your own phrase — so you can call him without saying “Hey Siri” every time."), voiceover: "bob-again-01"),
     ]
 
     /// The other three ways, in Settings, for whoever wants them. Deliberately
@@ -501,43 +592,43 @@ enum Strings {
     static let robotSetUpCalling: [RobotStep] = [
         RobotStep(Phrase(
             ru: "Теперь другие способы — на случай, если голос вам не подходит или вы просто любите кнопки.",
-            en: "Now the other ways — in case speaking doesn't suit you, or you simply like buttons.")),
+            en: "Now the other ways — in case speaking doesn't suit you, or you simply like buttons."), voiceover: "bob-other-01"),
 
         // The kindest of the three for hands that aren't steady.
         RobotStep(Phrase(
             ru: "Первый: постучать по задней крышке телефона два раза. Целиться никуда не надо — это удобнее всего, если руки уже не те.",
-            en: "One: tap the back of the phone twice. Nothing to aim at — the kindest of them if your hands aren't what they were.")),
+            en: "One: tap the back of the phone twice. Nothing to aim at — the kindest of them if your hands aren't what they were."), voiceover: "bob-other-02"),
         RobotStep(
             Phrase(ru: "Настройки.\nУниверсальный доступ.\nКасание.\nКасание задней панели.\nДвойное касание.\nВыберите «Поговорить».",
                    en: "Settings.\nAccessibility.\nTouch.\nBack Tap.\nDouble Tap.\nChoose “Поговорить”."),
-            wants: .tapNextOrOpenSettings),
+            wants: .tapNextOrOpenSettings, voiceover: "bob-other-03"),
 
         RobotStep(Phrase(
             ru: "Второй: кнопка сбоку. Она есть не на всех телефонах — если у вас её нет, просто идём дальше, я не обижусь.",
-            en: "Two: the side button. Not every phone has one — if yours doesn't, we simply move on, I shan't be offended.")),
+            en: "Two: the side button. Not every phone has one — if yours doesn't, we simply move on, I shan't be offended."), voiceover: "bob-other-04"),
         RobotStep(
             Phrase(ru: "Настройки.\nКнопка действия.\nПролистайте до «Быстрая команда».\nВыберите «Поговорить».",
                    en: "Settings.\nAction Button.\nSwipe along to Shortcut.\nChoose “Поговорить”."),
-            wants: .tapNextOrOpenSettings),
+            wants: .tapNextOrOpenSettings, voiceover: "bob-other-05"),
 
         RobotStep(Phrase(
             ru: "Третий: шторка сверху. Потяните вниз от правого верхнего угла, нажмите плюс, потом «Добавить элемент», найдите «Быстрая команда» и выберите «Поговорить». Кнопку можно растянуть побольше — я бы растянул.",
-            en: "Three: the panel at the top. Pull down from the top-right corner, tap plus, then Add a Control, find Shortcut and choose “Поговорить”. The button can be stretched bigger — I would stretch it.")),
+            en: "Three: the panel at the top. Pull down from the top-right corner, tap plus, then Add a Control, find Shortcut and choose “Поговорить”. The button can be stretched bigger — I would stretch it."), voiceover: "bob-other-06"),
         RobotStep(
             Phrase(ru: "Эту же кнопку можно поставить на экран блокировки вместо фонарика. Подержите палец на заблокированном экране, нажмите «Настроить», потом «Экран блокировки», нажмите на кнопку внизу и выберите нашу.\n\nФонарик вы всё равно не включали.",
                    en: "The same button can replace the torch on your Lock Screen. Hold your finger on the locked screen, tap Customise, then Lock Screen, tap the button at the bottom and choose ours.\n\nYou never used the torch anyway."),
-            wants: .tapNext),
+            wants: .tapNext, voiceover: "bob-other-07"),
 
         RobotStep(
             Phrase(ru: "Здесь лежат все команды приложения, если захотите посмотреть.",
                    en: "All the app's shortcuts live here, if you'd like a look."),
-            wants: .tapNextOrOpenShortcuts),
+            wants: .tapNextOrOpenShortcuts, voiceover: "bob-other-08"),
         RobotStep(Phrase(
             ru: "И честно, чтобы вы не искали лишнего: любой из этих способов открывает приложение — он уже слушает, второй раз нажимать не надо. А слышать вас с закрытым приложением телефон не разрешает никому. Даже мне.",
-            en: "And honestly, so you don't go hunting: every one of these opens the app — already listening, no second tap. Hearing you with the app closed is something the phone allows no one. Not even me.")),
+            en: "And honestly, so you don't go hunting: every one of these opens the app — already listening, no second tap. Hearing you with the app closed is something the phone allows no one. Not even me."), voiceover: "bob-other-09"),
         RobotStep(Phrase(
             ru: "Всё. Возвращайтесь к нему.",
-            en: "That's all. Go back to him.")),
+            en: "That's all. Go back to him."), voiceover: "bob-other-10"),
     ]
 
     /// Parting with a friend is serious. This sheet says what will be lost, in
