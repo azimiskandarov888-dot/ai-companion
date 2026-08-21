@@ -1,9 +1,13 @@
 #!/usr/bin/env python3
 """Give the setup robot a voice — once, and then never again.
 
-    python3 tools/bob_voice.py --audition      # hear three strengths, pick one
-    python3 tools/bob_voice.py                 # render every line
-    python3 tools/bob_voice.py --preset heavy  # …with a different strength
+    python3 tools/bob_voice.py --audition --lang en    # hear them, pick one
+    python3 tools/bob_voice.py --lang en               # render every line
+
+Two knobs when it's close but not right:
+
+    --speed 1.15    brisker. Tempo only; the pitch does not move.
+    --depth 0.98    less deep. 1.0 leaves the pitch alone entirely.
 
 ── WHY THIS EXISTS ─────────────────────────────────────────────────────────
 
@@ -37,8 +41,9 @@ So: take the deepest, calmest voice available, then
 
 INTELLIGIBILITY IS THE CONSTRAINT, not the effect. The listener is eighty and
 being told where to tap. A heavier chain sounds better in a demo and loses
-words in a kitchen. `standard` is the one to ship unless you have listened to
-`heavy` on a phone speaker, at arm's length, with a kettle on.
+words in a kitchen. `subtle` is the default and the one to ship unless you
+have listened to something heavier on a phone speaker, at arm's length, with
+a kettle on.
 
 ── WHAT IT MAKES ───────────────────────────────────────────────────────────
 
@@ -71,11 +76,12 @@ sys.path.insert(0, str(ROOT / "backend"))
 # The chain
 # --------------------------------------------------------------------------- #
 #
-# Three strengths of the same idea. `--audition` renders one sentence through
-# all three so the choice is made with ears rather than with adjectives.
+# Four strengths of the same idea. `--audition` renders one sentence through
+# all of them and plays them, so the choice is made with ears rather than
+# with adjectives.
 #
 #   depth   how far the pitch and formants come down. Lower = bigger machine,
-#           and past about 0.80 Russian consonants start to smear.
+#           and past about 0.85 consonants start to smear. 1.0 = untouched.
 #   buzz    the amplitude-modulation depth. This is the "robot" most people
 #           mean, and it is also the first thing to cost you a word.
 #   room    how much hard-walled space it is standing in.
@@ -84,18 +90,21 @@ PRESETS = {
     # DIRECTED into character — gpt-4o-mini-tts reads ROBOT_DIRECTION and acts
     # on it — where filters only make a good performance muddy.
     "clean":    dict(depth=1.00, buzz=0.00, room=0.10, top=9000),
-    # Barely processed. For when the base voice is already very good and you
-    # only want it to be slightly wrong.
-    "subtle":   dict(depth=0.92, buzz=0.16, room=0.14, top=7200),
-    # The one to ship.
-    "standard": dict(depth=0.86, buzz=0.28, room=0.22, top=6500),
-    # Unmistakably a machine. Listen to it on a phone speaker before choosing.
-    "heavy":    dict(depth=0.80, buzz=0.42, room=0.30, top=5600),
+    # THE DEFAULT, and the one that survived a listen. Just enough to be
+    # wrong; not enough to be a special effect.
+    "subtle":   dict(depth=0.96, buzz=0.14, room=0.14, top=7600),
+    "standard": dict(depth=0.92, buzz=0.24, room=0.20, top=6800),
+    # Unmistakably a machine. Listen on a phone speaker before choosing it.
+    "heavy":    dict(depth=0.86, buzz=0.38, room=0.28, top=6000),
 }
 
 
-def chain(p: dict) -> str:
-    """The ffmpeg filter graph, as one string."""
+def chain(p: dict, speed: float = 1.0) -> str:
+    """The ffmpeg filter graph, as one string.
+
+    `speed` rides on top of the tempo correction: 1.0 keeps the voice exactly
+    as fast as it arrived, 1.15 is fifteen per cent brisker.
+    """
     return ",".join([
         "aresample=48000",
         # Nothing below a voice — rumble only muddies everything after it.
@@ -107,7 +116,7 @@ def chain(p: dict) -> str:
         # a person with a cold.
         f"asetrate=48000*{p['depth']}",
         "aresample=48000",
-        f"atempo={1 / p['depth']:.5f}",
+        f"atempo={speed / p['depth']:.5f}",
         # Two of it, slightly detuned and delayed. This is the one that says
         # "not a throat" without costing a single consonant.
         "chorus=0.6:0.9:50|60:0.4|0.32:0.25|0.4:2|1.3",
@@ -180,12 +189,19 @@ def steps(lang: str = "ru") -> list[tuple[str, str]]:
 #: and acts on it, which does more for the character than the whole filter
 #: chain below — direction beats processing every time, when it's available.
 ROBOT_DIRECTION = (
-    "You are an automated announcement system in a very old research facility. "
-    "Speak LOW, FLAT and UNHURRIED. Bored, faintly weary, completely "
-    "unbothered. Never warm, never enthusiastic, never rising at the end of a "
-    "sentence. No smile in the voice at all. Leave a beat between sentences. "
+    "You are an automated announcement system in an old research facility. "
+    "Speak FLAT and EVEN. Never warm, never enthusiastic, never rising at the "
+    "end of a sentence, no smile in the voice at all. "
+    "BRISK AND MATTER-OF-FACT: normal conversational pace, do not drag, do "
+    "not linger on words, do not leave long pauses between sentences. Get "
+    "through it. "
     "You are a machine and you have no feelings about that."
 )
+# The first version of that said "UNHURRIED" and "leave a beat between
+# sentences", and the result was unbearably slow — which read as a problem
+# with the filter chain and was nothing of the kind. `atempo` restores the
+# duration `asetrate` took exactly; it cannot make anything slow. When a
+# directed voice comes out wrong, suspect the direction first.
 
 
 def say_openai(text: str, voice: str, lang: str) -> bytes:
@@ -336,7 +352,8 @@ def play(files) -> bool:
     return True
 
 
-def robotise(audio: bytes, provider: str, preset: dict, out: Path) -> None:
+def robotise(audio: bytes, provider: str, preset: dict, out: Path,
+             speed: float = 1.0) -> None:
     with tempfile.NamedTemporaryFile(suffix=".bin", delete=False) as f:
         f.write(audio)
         raw = f.name
@@ -344,7 +361,7 @@ def robotise(audio: bytes, provider: str, preset: dict, out: Path) -> None:
         subprocess.run(
             ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
              *RAW_PCM.get(provider, []), "-i", raw,
-             "-af", chain(preset), "-ar", "48000", "-ac", "1",
+             "-af", chain(preset, speed), "-ar", "48000", "-ac", "1",
              "-c:a", "aac", "-b:a", "96k", str(out)],
             check=True,
         )
@@ -370,7 +387,14 @@ def main() -> None:
                          "Whatever you pick, it must NOT be the voice the "
                          "COMPANION uses — if the robot and the friend sound "
                          "alike, the only thing this robot exists for is gone.")
-    ap.add_argument("--preset", choices=sorted(PRESETS), default="standard")
+    ap.add_argument("--preset", choices=sorted(PRESETS), default="subtle")
+    ap.add_argument("--speed", type=float, default=1.0,
+                    help="1.0 leaves the pace alone; 1.15 is brisker; 0.9 "
+                         "slower. Tempo only — the pitch does not move.")
+    ap.add_argument("--depth", type=float, default=None,
+                    help="override the preset's pitch drop. 1.0 = untouched, "
+                         "0.96 = a little lower, 0.86 = a lot. Below about "
+                         "0.85 consonants start to smear.")
     ap.add_argument("--audition", action="store_true",
                     help="render one sentence through EVERY strength, play them, and stop")
     ap.add_argument("--out", default=str(OUT))
@@ -403,7 +427,7 @@ def main() -> None:
         for name, preset in sorted(PRESETS.items(),
                                    key=lambda kv: -kv[1]["depth"]):
             target = out_dir / f"audition-{name}.m4a"
-            robotise(audio, args.provider, preset, target)
+            robotise(audio, args.provider, preset, target, args.speed)
             made.append((name, target))
             print(f"  {name:9} {target}")
 
@@ -417,7 +441,9 @@ def main() -> None:
         print("\n" + "─" * 66)
         print("Now listen again on a PHONE SPEAKER, at arm's length, with a "
               "kettle on.\nThe one that survives THAT is the one to ship:\n")
-        print(f"    python3 {Path(__file__).name} --preset standard\n")
+        print(f"    python3 tools/{Path(__file__).name} --lang {args.lang} "
+              f"--provider {args.provider} --preset subtle\n")
+        print("Too slow?  add  --speed 1.15      Too low?  add  --depth 0.98")
         print("Nothing has reached the app yet. These are files on this Mac.")
         return
 
@@ -425,12 +451,16 @@ def main() -> None:
     if not script:
         sys.exit(f"No voiceover slugs found in {STRINGS}")
 
+    preset = dict(PRESETS[args.preset])
+    if args.depth is not None:
+        preset["depth"] = args.depth
     print(f"{len(script)} lines · {args.provider}/{voice or 'default'} · "
-          f"{args.lang} · {args.preset}\n")
+          f"{args.lang} · {args.preset} · depth {preset['depth']} · "
+          f"speed {args.speed}\n")
     for n, (slug, words) in enumerate(script, 1):
         target = out_dir / f"{slug}.m4a"
         print(f"  [{n:2}/{len(script)}] {slug:18} {words[:52]}…")
-        robotise(speak(words), args.provider, PRESETS[args.preset], target)
+        robotise(speak(words), args.provider, preset, target, args.speed)
 
     print("\n" + "─" * 66)
     print(f"{len(script)} files written to\n    {out_dir}\n")
