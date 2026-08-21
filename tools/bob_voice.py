@@ -85,17 +85,20 @@ sys.path.insert(0, str(ROOT / "backend"))
 #   buzz    the amplitude-modulation depth. This is the "robot" most people
 #           mean, and it is also the first thing to cost you a word.
 #   room    how much hard-walled space it is standing in.
+#   squash  compression ratio. THE ONE THAT KILLS EXPRESSION — a compressor's
+#           entire job is to remove dynamic range, which is most of what
+#           "expression" means. 1.0 turns it off.
 PRESETS = {
     # NOTHING but the room and the loudness. For a base voice that was already
     # DIRECTED into character — gpt-4o-mini-tts reads ROBOT_DIRECTION and acts
     # on it — where filters only make a good performance muddy.
-    "clean":    dict(depth=1.00, buzz=0.00, room=0.10, top=9000),
+    "clean":    dict(depth=1.00, buzz=0.00, room=0.10, top=9000, squash=1.0),
     # THE DEFAULT, and the one that survived a listen. Just enough to be
     # wrong; not enough to be a special effect.
-    "subtle":   dict(depth=0.96, buzz=0.14, room=0.14, top=7600),
-    "standard": dict(depth=0.92, buzz=0.24, room=0.20, top=6800),
+    "subtle":   dict(depth=0.96, buzz=0.10, room=0.14, top=7600, squash=1.6),
+    "standard": dict(depth=0.92, buzz=0.20, room=0.20, top=6800, squash=2.5),
     # Unmistakably a machine. Listen on a phone speaker before choosing it.
-    "heavy":    dict(depth=0.86, buzz=0.38, room=0.28, top=6000),
+    "heavy":    dict(depth=0.86, buzz=0.34, room=0.28, top=6000, squash=4.0),
 }
 
 
@@ -125,12 +128,22 @@ def chain(p: dict, speed: float = 1.0) -> str:
         f"tremolo=f=26:d={p['buzz']}",
         # Out of a speaker set into a wall, not out of a mouth.
         f"lowpass=f={p['top']}",
-        # Flat and unbothered. A robot does not get louder when it cares.
-        "acompressor=threshold=-20dB:ratio=4:attack=5:release=120",
+        # WAS THE MAIN REASON HE SOUNDED MONOTONE, and it was hiding in
+        # plain sight: a compressor exists to reduce dynamic range, and
+        # dynamic range is most of what "expression" is. Squashing the
+        # performance flat and then wondering why it had no life in it.
+        # Off entirely on `clean`, barely there on `subtle`.
+        *([] if p["squash"] <= 1.0 else
+          [f"acompressor=threshold=-14dB:ratio={p['squash']}:attack=8:release=180"]),
         f"aecho=0.85:0.75:38:{p['room']}",
         # Every line at the same loudness, because they play one after another
         # and nothing gives away a stitched-together script faster.
-        "loudnorm=I=-16:TP=-1.5:LRA=11",
+        #
+        # LRA is the loudness-RANGE target, and it is the second place
+        # expression quietly died: at 11 it flattens the difference between a
+        # leant-on word and an ordinary one. 20 lets the performance through
+        # while still matching the overall level line to line.
+        "loudnorm=I=-16:TP=-1.5:LRA=20",
     ])
 
 
@@ -189,13 +202,21 @@ def steps(lang: str = "ru") -> list[tuple[str, str]]:
 #: and acts on it, which does more for the character than the whole filter
 #: chain below — direction beats processing every time, when it's available.
 ROBOT_DIRECTION = (
-    "You are an automated announcement system in an old research facility. "
-    "Speak FLAT and EVEN. Never warm, never enthusiastic, never rising at the "
-    "end of a sentence, no smile in the voice at all. "
-    "BRISK AND MATTER-OF-FACT: normal conversational pace, do not drag, do "
-    "not linger on words, do not leave long pauses between sentences. Get "
-    "through it. "
-    "You are a machine and you have no feelings about that."
+    "You are the public-address system of an old research facility, read by a "
+    "man who has held this job for thirty years and is not impressed by any "
+    "of it. Think of the announcer in Portal 2, or a very tired corporate "
+    "training tape. "
+    "DRY AND DEADPAN — BUT NOT MONOTONE. Deadpan is a performance, not a flat "
+    "line. You still lean on the important word in a sentence. You still let "
+    "a sentence fall at the end, like a man who has finished making his "
+    "point. You still take the small breath a person takes. "
+    "What you never do is sound pleased, eager, warm, or surprised. No smile "
+    "in the voice. Nothing is being sold here. "
+    "SOME OF THESE LINES ARE JOKES. Play them completely straight — the "
+    "flatter the delivery, the better the joke works. Never signal that "
+    "something was funny. "
+    "Pace: a man reading a notice he has read a thousand times. Brisk, clear, "
+    "faintly bored. Not slow, not dragging, no long pauses."
 )
 # The first version of that said "UNHURRIED" and "leave a beat between
 # sentences", and the result was unbearably slow — which read as a problem
