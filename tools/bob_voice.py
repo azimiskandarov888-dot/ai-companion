@@ -8,7 +8,7 @@
 ── WHY THIS EXISTS ─────────────────────────────────────────────────────────
 
 The robot's lines are fixed. Every person who installs this app hears exactly
-the same twenty-five sentences, so there is no reason to synthesise them on a
+the same forty-five sentences, so there is no reason to synthesise them on a
 phone, at runtime, forever. Render them once, put the files in the app, and
 the robot sounds the same to everybody and costs nothing after today.
 
@@ -232,6 +232,21 @@ PROVIDERS = {"yandex": say_yandex, "elevenlabs": say_elevenlabs}
 RAW_PCM = {"yandex": ["-f", "s16le", "-ar", "48000", "-ac", "1"]}
 
 
+def play(files) -> bool:
+    """Play files one after another, if this machine can. macOS always can."""
+    player = shutil.which("afplay") or shutil.which("ffplay")
+    if not player:
+        return False
+    for f in files:
+        print(f"\n  ▶ {Path(f).stem}")
+        if player.endswith("ffplay"):
+            subprocess.run([player, "-nodisp", "-autoexit", "-loglevel",
+                            "error", str(f)], check=False)
+        else:
+            subprocess.run([player, str(f)], check=False)
+    return True
+
+
 def robotise(audio: bytes, provider: str, preset: dict, out: Path) -> None:
     with tempfile.NamedTemporaryFile(suffix=".bin", delete=False) as f:
         f.write(audio)
@@ -279,14 +294,28 @@ def main() -> None:
         line = ("Меня зовут Боб. Я робот. Не тот, ради которого вы всё это "
                 "затеяли — того сейчас собирают. Я тот, который объясняет, "
                 "куда нажимать.")
-        print(f"one sentence, {args.provider}/{voice}, three strengths…")
+        print(f"one sentence, {args.provider}/{voice}, three strengths…\n")
         audio = speak(line, voice)
-        for name, preset in PRESETS.items():
+        made = []
+        for name, preset in sorted(PRESETS.items(),
+                                   key=lambda kv: -kv[1]["depth"]):
             target = out_dir / f"audition-{name}.m4a"
             robotise(audio, args.provider, preset, target)
-            print(f"  {target}")
-        print("\nListen on a PHONE SPEAKER, at arm's length, with something "
-              "else making noise.\nThen: --preset <the one that survived that>")
+            made.append((name, target))
+            print(f"  {name:9} {target}")
+
+        # PLAY THEM. This script writes files and plays nothing, which read as
+        # "it did nothing" the first time somebody ran it — they were waiting
+        # for a sound and looking at their phone. Auditioning is the one mode
+        # whose entire purpose is to be heard, so it plays.
+        if not play(t for _, t in made):
+            print("\n  (couldn't play them here — open them yourself)")
+
+        print("\n" + "─" * 66)
+        print("Now listen again on a PHONE SPEAKER, at arm's length, with a "
+              "kettle on.\nThe one that survives THAT is the one to ship:\n")
+        print(f"    python3 {Path(__file__).name} --preset standard\n")
+        print("Nothing has reached the app yet. These are files on this Mac.")
         return
 
     script = steps()
@@ -299,9 +328,13 @@ def main() -> None:
         print(f"  [{n:2}/{len(script)}] {slug:18} {words[:52]}…")
         robotise(speak(words, voice), args.provider, PRESETS[args.preset], target)
 
-    print(f"\nDone — {out_dir}")
-    print("Now: xcodegen generate, then set your Development Team in Xcode "
-          "again (regenerating clears it).")
+    print("\n" + "─" * 66)
+    print(f"{len(script)} files written to\n    {out_dir}\n")
+    print("NOTHING HAS REACHED THE APP YET. These are files on this Mac.")
+    print("To hear one:      afplay " + str(out_dir / f"{script[0][0]}.m4a"))
+    print("To get them in:   cd ios && xcodegen generate")
+    print("                  …then set your Development Team in Xcode again —")
+    print("                  regenerating clears it. Then build.")
 
 
 if __name__ == "__main__":
