@@ -98,20 +98,35 @@ struct RobotStep {
     /// failure, it is just the synthesiser again — so this is a lookup, never
     /// a requirement.
     ///
-    /// Two steps deliberately have none: the ones that say the friend's name
-    /// out loud. That word isn't known when a recording would be made.
     var voiceover: String? = nil
+    /// What to SAY, when that differs from what is shown. Normally nil and
+    /// the two are the same — deliberately, so nobody hard of hearing and
+    /// nobody who can't read small print is missing half of it.
+    ///
+    /// It exists for exactly one thing: the friend's NAME. The steps that
+    /// involve it show it, large and spelled correctly, and speak around it
+    /// («три раза скажите то, что написано ниже»). Two reasons, and the
+    /// second is the one that matters.
+    ///
+    /// A synthesiser mispronouncing somebody's name is not a small error —
+    /// it is the machine getting the one word wrong that a person minds most,
+    /// and Russian stress is exactly where it will be wrong. And because
+    /// nothing spoken now contains a name, every line can be a real recording
+    /// made once, months before anybody's friend exists.
+    var spoken: Phrase? = nil
 
     init(_ line: Phrase,
          wants: RobotWants = .nothing,
          silent: Bool = false,
          optional: Bool = false,
-         voiceover: String? = nil) {
+         voiceover: String? = nil,
+         spoken: Phrase? = nil) {
         self.line = line
         self.wants = wants
         self.silent = silent
         self.optional = optional
         self.voiceover = voiceover
+        self.spoken = spoken
     }
 }
 
@@ -382,11 +397,11 @@ enum Strings {
         RobotStep(
             Phrase(ru: "Пока вы в приложении, всё просто.\n\nЧтобы друг вас услышал — нажмите на него один раз.",
                    en: "While you're in the app it's simple.\n\nTo make your friend hear you — tap him once."),
-            silent: true, voiceover: "bob-touch-01"),
+            silent: true),
         RobotStep(
             Phrase(ru: "Попробуйте на мне.\nНажмите.",
                    en: "Try it on me.\nGive me a tap."),
-            wants: .aTapOnHim, silent: true, voiceover: "bob-touch-02"),
+            wants: .aTapOnHim, silent: true),
     ]
 
     /// Everything worth knowing, said while the friend is being written.
@@ -521,13 +536,18 @@ enum Strings {
                 Phrase(ru: "Найдите «Универсальный доступ».\n\nВ нём — «Голосовые команды».\n\nНажмите «Настроить».",
                        en: "Find Accessibility.\n\nInside it, Vocal Shortcuts.\n\nTap Set Up."),
                 wants: .tapNext, optional: true, voiceover: "bob-vocal-02"),
+            // SHOWN, not pronounced. See RobotStep.spoken.
             RobotStep(
-                Phrase(ru: "Выберите действие «Поговорить».\n\nТеперь скажите «\(phrase)» три раза, чтобы телефон запомнил ваш голос.",
-                       en: "Choose the action “Поговорить”.\n\nNow say “\(phrase)” three times, so the phone learns your voice."),
-                wants: .tapNext, optional: true),
-            RobotStep(Phrase(
-                ru: "Готово. Теперь достаточно сказать «\(phrase)» вслух — и он откроется, уже слушая. Даже если телефон заблокирован и лежит в кармане.",
-                en: "Done. Now saying “\(phrase)” out loud is enough — he opens, already listening. Even with the phone locked and in your pocket."), optional: true),
+                Phrase(ru: "Выберите действие «Поговорить».\n\nТеперь три раза скажите вот это слово, чтобы телефон запомнил ваш голос:\n\n\(phrase)",
+                       en: "Choose the action “Поговорить”.\n\nNow say this word three times, so the phone learns your voice:\n\n\(phrase)"),
+                wants: .tapNext, optional: true, voiceover: "bob-vocal-03",
+                spoken: Phrase(
+                    ru: "Выберите действие «Поговорить». Теперь три раза скажите слово, которое написано ниже — чтобы телефон запомнил ваш голос.",
+                    en: "Choose the action “Поговорить”. Now say the word written below three times, so the phone learns your voice.")),
+            RobotStep(
+                Phrase(ru: "Готово. Теперь достаточно сказать это слово вслух — и он откроется, уже слушая. Даже если телефон заблокирован и лежит в кармане.",
+                       en: "Done. Now saying that word out loud is enough — he opens, already listening. Even with the phone locked and in your pocket."),
+                optional: true, voiceover: "bob-vocal-04"),
             RobotStep(Phrase(
                 ru: "Фразу телефон узнаёт сам, у себя внутри, и никуда не отправляет. Тут можете не волноваться.",
                 en: "The phone learns that phrase inside itself and sends it nowhere. Nothing to worry about there."), optional: true, voiceover: "bob-vocal-05"),
@@ -550,16 +570,26 @@ enum Strings {
             RobotStep(Phrase(
                 ru: "Ну вот, познакомились. Не прошло и вечности.",
                 en: "So you've met. Only took an eternity."), voiceover: "bob-name-01"),
+            // SHOWN, not pronounced — and the line after it is the joke that
+            // pays for every «смотрите на экран» in the whole script.
+            RobotStep(
+                Phrase(ru: "Его зовут так:\n\n\(name)\n\nДа, я знал.",
+                       en: "His name is:\n\n\(name)\n\nYes, I knew."),
+                voiceover: "bob-name-02",
+                spoken: Phrase(
+                    ru: "Вот как его зовут. Да, я знал заранее. Я же говорил — знакомить не моя работа.",
+                    en: "There's his name. Yes, I knew all along. I did say introductions aren't my job.")),
             RobotStep(Phrase(
-                ru: "\(name). Да, я знал. Я же говорил — не моя работа.",
-                en: "\(name). Yes, I knew. I did say it wasn't my job.")),
+                ru: "И да — имена я вслух не читаю. Поставлю ударение не туда, а потом окажется, что для кого-то это было принципиально. Смотрите на экран.",
+                en: "And no, I don't read names aloud. I'd put the stress in the wrong place, and then it would turn out to have mattered enormously to somebody. Read it off the screen."),
+                voiceover: "bob-name-03"),
             RobotStep(Phrase(
                 ru: "Телефон пока отзывается на «Боб». Мне лестно, но звать друга чужим именем — так себе идея. Тем более моим.",
-                en: "Your phone still answers to “Bob”. Flattering, but calling a friend by somebody else's name is a poor plan. Especially mine."), voiceover: "bob-name-03"),
+                en: "Your phone still answers to “Bob”. Flattering, but calling a friend by somebody else's name is a poor plan. Especially mine."), voiceover: "bob-name-04"),
             RobotStep(
-                Phrase(ru: "Поменяем на «\(name)»? Две минуты. Объяснять всё заново не буду — вы уже большой.",
-                       en: "Shall we change it to “\(name)”? Two minutes. I shan't explain it all again — you managed once."),
-                wants: .tapNext),
+                Phrase(ru: "Поменяем на его имя? Две минуты. Объяснять всё заново не буду — вы уже большой.",
+                       en: "Shall we change it to his? Two minutes. I shan't explain it all again — you managed once."),
+                wants: .tapNext, voiceover: "bob-name-05"),
         ]
     }
 

@@ -379,7 +379,9 @@ struct SetupRobot: View {
         generation += 1
         let mine = generation
 
-        let words = here.line()
+        // What is SAID may differ from what is shown — on the steps that
+        // involve the friend's name, which is shown and never pronounced.
+        let words = (here.spoken ?? here.line)()
         let began = Date()
 
         if !here.silent {
@@ -416,7 +418,9 @@ struct SetupRobot: View {
         // simulator, an audio session that wouldn't come up — `speak` returns
         // in milliseconds, and without a floor the entire script would flick
         // past in a second and a half with nobody able to read a word of it.
-        let floor = 2.0 + Double(words.count) / 16.0
+        // Measured on what is READ, not on what is said — they differ on the
+        // name steps, and the screen is the thing somebody is looking at.
+        let floor = 2.0 + Double(here.line().count) / 16.0
         let left = floor - Date().timeIntervalSince(began)
         if left > 0 {
             try? await Task.sleep(nanoseconds: UInt64(left * 1_000_000_000))
