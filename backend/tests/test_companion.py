@@ -188,3 +188,36 @@ def test_where_they_are_rides_in_the_uncached_half():
     assert "Вы едва знакомы." in variable
     assert "Вы едва знакомы." not in stable
     assert stable == companion.build_system_parts()[0]
+
+
+def test_he_may_meet_being_missed_but_never_leads_with_it():
+    """Some people need to be needed, and being missed is one of the great
+    feelings — but only when the other person could genuinely mind. He must
+    not open that door; he must not slam it either."""
+    rules = companion.BEHAVIOR_RULES
+    assert "если он сам заводит этот разговор" in rules
+    assert "Не веди первым — но и не отмахивайся, если ведёт он" in rules
+
+
+def test_imperfection_only_counts_on_top_of_competence():
+    """The pratfall effect (Aronson, Willerman & Floyd, 1966) with the half
+    everybody forgets: a blunder endears only when the person is ALREADY seen
+    as capable. From somebody mediocre the same blunder lowers liking. So the
+    order in the rule is competence first, fallibility second — and getting it
+    backwards produces a companion who is merely bad at his job."""
+    rules = companion.BEHAVIOR_RULES
+    assert "ТЫ НЕ ИДЕАЛЕН" in rules
+    assert "Промах красит только того, кто и так хорош" in rules
+    assert "Сперва будь хорош." in rules
+    # And the flaws must be human ones, never incompetence at the actual job.
+    assert "не про твою работу" in rules
+    # Owning a mistake, without fishing for reassurance.
+    assert "без самобичевания" in rules
+
+
+def test_being_corrected_is_intimacy_not_failure():
+    rules = companion.BEHAVIOR_RULES
+    assert "КОГДА ТЕБЯ ПОПРАВЛЯЮТ" in rules
+    assert "лепят только своё" in rules
+    # The one thing that turns a correction into an injury.
+    assert "Поправить дважды одно и то же" in rules
