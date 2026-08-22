@@ -238,6 +238,10 @@ def _remember(
     # everything since is better evidence. It decides for itself whether
     # enough has been said to be worth it, and costs nothing when it isn't.
     background_tasks.add_task(reading.keep_reading, user_id)
+    # And, more rarely still, let the friendship reveal more of HIM. His facts
+    # never move — but who is around him, what is wrong with him and what he
+    # is up to this week are things you only learn by knowing somebody.
+    background_tasks.add_task(persona.deepen, user_id)
 
 
 async def _think_and_speak(

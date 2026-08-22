@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 
+import asyncio
+
 from app import config, identity, persona
 
 #: These tests write straight to config.PERSONA_PATH, which is the anonymous
@@ -127,3 +129,92 @@ def test_even_the_fallback_companion_has_faults():
     assert persona.DEFAULT_PERSONA["contradiction"]
     block = persona.build_persona_block(persona.DEFAULT_PERSONA)
     assert "Твои недостатки" in block
+
+
+# --------------------------------------------------------------------------- #
+# He goes on becoming himself — but his facts never move
+# --------------------------------------------------------------------------- #
+#
+# The split is the whole safety model. WHO HE IS is fixed; WHAT YOU HAVE COME
+# TO KNOW OF HIM grows. A friend whose biography drifts is not deepening, he
+# is a different man — and self-contradiction is the most fiction-breaking
+# thing this app can do.
+
+def test_identity_cannot_be_rewritten_by_a_deepening():
+    """The one that matters. A model asked politely for additions will
+    sometimes helpfully improve the backstory, and accepting that once is how
+    somebody's friend quietly becomes another person."""
+    him = {"name": "Фёдор", "age": "70 лет", "home": "Ростов",
+           "backstory": "работал в литейном", "personality": "ворчливый",
+           "speech_style": "коротко", "wound": "брат", "flaws": ["перебивает"]}
+
+    grown = persona.merge_growth(him, {
+        "name": "Николай",                 # ← all of this
+        "age": "45 лет",                   # ← must be
+        "home": "Пермь",                   # ← ignored
+        "backstory": "был лётчиком",
+        "personality": "весёлый",
+        "speech_style": "длинно",
+        "wound": "ещё одна рана",
+        "flaws": ["упрям в мелочах"],      # ← only this gets in
+    })
+
+    assert grown["name"] == "Фёдор"
+    assert grown["age"] == "70 лет"
+    assert grown["home"] == "Ростов"
+    assert grown["backstory"] == "работал в литейном"
+    assert grown["personality"] == "ворчливый"
+    assert grown["speech_style"] == "коротко"
+    assert grown["wound"] == "брат"        # no accumulating wounds, ever
+    assert grown["flaws"] == ["перебивает", "упрям в мелочах"]
+
+
+def test_what_a_friendship_reveals_accumulates():
+    him = {"name": "Фёдор", "cast": [{"name": "Витя", "who": "сосед"}],
+           "likes": ["уха"], "opinions": [], "habits": []}
+    grown = persona.merge_growth(him, {
+        "cast": [{"name": "Люся", "who": "сестра"}],
+        "likes": ["старые песни"],
+        "opinions": ["в городе жить нельзя"],
+        "habits": ["курит на балконе"],
+    })
+    assert [c["name"] for c in grown["cast"]] == ["Витя", "Люся"]
+    assert grown["likes"] == ["уха", "старые песни"]
+    assert grown["opinions"] == ["в городе жить нельзя"]
+    assert grown["habits"] == ["курит на балконе"]
+
+
+def test_the_same_detail_twice_is_not_two_details():
+    him = {"likes": ["уха"], "cast": [{"name": "Витя", "who": "сосед"}]}
+    grown = persona.merge_growth(him, {
+        "likes": ["Уха", "  уха  "],
+        "cast": [{"name": "Витя", "who": "сосед"}],
+    })
+    assert grown["likes"] == ["уха"]
+    assert len(grown["cast"]) == 1
+
+
+def test_his_week_is_replaced_not_piled_up():
+    """current_life is what is happening NOW, and last month's news is not."""
+    him = {"current_life": "чинил крышу"}
+    grown = persona.merge_growth(him, {"current_life": "приехала сестра"})
+    assert grown["current_life"] == "приехала сестра"
+
+
+def test_nothing_offered_changes_nothing():
+    him = {"name": "Фёдор", "likes": ["уха"]}
+    assert persona.merge_growth(him, {}) == him
+    assert persona.merge_growth(him, {"likes": []}) == him
+
+
+def test_the_deepening_waits_for_a_real_friendship(monkeypatch):
+    called = False
+
+    async def fake_think(*a, **kw):
+        nonlocal called
+        called = True
+        return "{}"
+
+    monkeypatch.setattr(persona.config, "WRITER_MODEL", "x", raising=False)
+    asyncio.run(persona.deepen("nobody-has-a-companion"))
+    assert not called

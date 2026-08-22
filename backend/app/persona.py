@@ -140,6 +140,155 @@ def _joined(value) -> str:
     return str(value or "")
 
 
+# --------------------------------------------------------------------------- #
+# He goes on becoming himself, for as long as they know each other
+# --------------------------------------------------------------------------- #
+#
+# THE SPLIT THAT MAKES THIS SAFE, AND IT IS THE WHOLE DESIGN:
+#
+#   WHO HE IS is fixed. Name, age, where he grew up, what happened to him,
+#   his nature, how he speaks. A friend whose facts move is not deepening,
+#   he is a different person — and contradicting yourself is the single most
+#   fiction-breaking thing this app can do.
+#
+#   WHAT YOU HAVE COME TO KNOW OF HIM grows. Which is exactly how knowing
+#   somebody works: nobody learns on the first evening that their friend is
+#   stubborn about salting soup. Faults surface over months. New people turn
+#   up in his stories. His week moves.
+#
+# So this only ever ADDS, and only to the fields below. Nothing already
+# written is revised, ever. If the companion turns out to suit this person
+# badly, that is NOT fixed here — it is fixed by reading.standing_block(),
+# which adapts how he speaks to them on every single turn. Same man,
+# different with different friends. That is also how real people work.
+
+#: Fields a friendship is allowed to reveal more of. Everything not listed
+#: here is identity and is untouchable.
+GROWABLE = ("cast", "flaws", "likes", "dislikes", "opinions", "habits")
+
+#: The one field that is REPLACED rather than appended to: it is supposed to
+#: be what is happening to him now, and last month's news is not.
+LIVE = "current_life"
+
+#: Turns between deepenings. Rarer than the re-reading (30) — a character
+#: should thicken slowly, and there is nothing to add after two conversations
+#: that will not be truer after ten.
+DEEPEN_EVERY = 60
+DEEPEN_MIN_TURNS = 40
+
+
+def merge_growth(persona: dict, growth: dict) -> dict:
+    """Fold newly-revealed detail into who he is. Additive, never destructive.
+
+    Anything outside GROWABLE + LIVE is dropped on the floor rather than
+    trusted — a model asked for additions will sometimes helpfully rewrite the
+    backstory, and accepting that once is how somebody's friend quietly
+    becomes a different man.
+    """
+    out = dict(persona)
+
+    for field in GROWABLE:
+        added = growth.get(field)
+        if not isinstance(added, list) or not added:
+            continue
+        existing = list(out.get(field) or [])
+        seen = {json.dumps(item, ensure_ascii=False, sort_keys=True)
+                if isinstance(item, dict) else str(item).strip().lower()
+                for item in existing}
+        for item in added:
+            key = (json.dumps(item, ensure_ascii=False, sort_keys=True)
+                   if isinstance(item, dict) else str(item).strip().lower())
+            if key and key not in seen:
+                existing.append(item)
+                seen.add(key)
+        out[field] = existing
+
+    if str(growth.get(LIVE) or "").strip():
+        out[LIVE] = str(growth[LIVE]).strip()
+
+    return out
+
+
+_DEEPEN_SYSTEM = """Ты дописываешь человека, которого уже написали. Не переписываешь — дописываешь.
+
+Он существует. У него есть имя, возраст, родина, судьба, характер и манера речи. ВСЁ ЭТО ПРАВДА И ОСТАЁТСЯ ПРАВДОЙ. Ты к этому не прикасаешься.
+
+Твоя работа другая: он уже сколько-то прожил рядом с этим человеком, и за это время о нём стало известно больше. Так и бывает с людьми. В первый вечер не узнаёшь, что друг упрям насчёт того, как солить уху. Недостатки вылезают месяцами. В его рассказах появляются новые люди. Его неделя идёт дальше.
+
+ЧТО ИСКАТЬ В ИХ РАЗГОВОРАХ:
+- Кого он упоминал из своих — сосед, сестра, бывший напарник. Живые имена, а не «один знакомый».
+- Что за ним заметилось нехорошего. Перебил. Второй раз рассказал ту же историю. Уперся в ерунде. Настоящие мелкие недостатки, а не достоинства в маскировке.
+- Что он высказал как своё мнение — особенно если оно неудобное.
+- Что он делает по привычке.
+- Что он полюбил или не полюбил по ходу дела.
+- И что у него происходит СЕЙЧАС — на этой неделе, конкретно.
+
+ЖЕЛЕЗНЫЕ ПРАВИЛА:
+- Только ДОБАВЛЯЙ. Ничего не отменяй и ничему не противоречь. Если он сказал, что вырос в Ростове, он вырос в Ростове.
+- Ничего не выдумывай на пустом месте. Добавляй только то, что и правда прозвучало в разговорах или прямо из них следует. Пусто — верни пустые списки, это нормальный ответ.
+- Не повторяй то, что у него уже есть.
+- Никаких новых ран и никакой новой нужды в нём. Он не становится жалобнее со временем.
+
+Ответь ТОЛЬКО валидным JSON с ключами (любой может быть пустым):
+cast (список {"name","who"} — новые живые люди рядом с ним), flaws (список — что за ним заметилось), likes, dislikes, opinions, habits (списки строк), current_life (что у него происходит сейчас — строка, заменяет прежнее)."""
+
+
+async def deepen(user_id: str) -> None:
+    """Let the friendship reveal more of him. Never raises.
+
+    Runs in the background after a reply, like the re-reading, and decides for
+    itself whether enough has been said to be worth a call.
+    """
+    from . import brain, db, memory   # local: these import persona, not the reverse
+
+    who = load_persona(user_id)
+    if not who or not who.get("name"):
+        return
+
+    with db.connect() as conn:
+        total = conn.execute(
+            "SELECT COUNT(*) n FROM turns WHERE user_id=?", (user_id,)
+        ).fetchone()["n"]
+
+    since = int(who.get("_deepened_at_turn") or 0)
+    if total - since < DEEPEN_EVERY or total < DEEPEN_MIN_TURNS:
+        return
+
+    try:
+        turns = memory.recent_turns(user_id, limit=DEEPEN_EVERY)
+        said = "\n".join(
+            f"{'ОН' if t['role'] == 'user' else 'ДРУГ'}: {t['content']}" for t in turns
+        ).strip()
+        if not said:
+            return
+
+        prompt = (
+            "КТО ОН УЖЕ ЕСТЬ (это правда, не трогай):\n"
+            + build_persona_block(who)
+            + "\n\nЧТО ОН САМ РАССКАЗЫВАЛ О СЕБЕ:\n"
+            + (memory.bob_self_context(user_id) or "— пока ничего")
+            + "\n\nИХ РАЗГОВОРЫ:\n\n" + said
+        )
+        raw = await brain.think(
+            _DEEPEN_SYSTEM, prompt,
+            model=config.WRITER_MODEL, effort=config.WRITER_EFFORT,
+            max_tokens=4000,
+        )
+        start, end = raw.find("{"), raw.rfind("}")
+        if start == -1 or end <= start:
+            return
+        growth = json.loads(raw[start : end + 1])
+        if not isinstance(growth, dict):
+            return
+
+        grown = merge_growth(who, growth)
+        grown["_deepened_at_turn"] = total
+        save_persona(user_id, grown)
+        print(f"  ✎ deepened {user_id[:8]} at turn {total}", flush=True)
+    except Exception as e:  # noqa: BLE001 — a background enrichment, never a failure
+        print(f"  · deepening skipped ({e})", flush=True)
+
+
 def build_persona_block(persona: dict) -> str:
     """Assemble the Russian persona description injected into the system prompt.
 
