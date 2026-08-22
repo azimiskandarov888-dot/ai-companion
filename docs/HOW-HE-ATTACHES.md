@@ -162,6 +162,36 @@ fishes for reassurance with it.
 
 Perfection earns respect. It does not earn attachment.
 
+### And until now the persona had nowhere to put any of it
+
+`matchmaker.py` wrote his character, his history, what is on his mind, what he
+is expert in, what he likes, dislikes, believes, does out of habit, and who is
+around him — nineteen fields, the best model, high effort, once per person.
+
+**Not one of them said what was wrong with him.** The behaviour rules told a
+flawless persona to be fallible, which produces fallibility in general, which
+is none.
+
+Three fields now, and the write is told what makes each of them real:
+
+- **`flaws`** — two or three, specific, the kind that would genuinely irritate
+  somebody a little. The prompt names the trap outright: «слишком добрый» and
+  «слишком много работает» are virtues in disguise and give an invented person
+  away instantly. Real ones: he interrupts; he tells the same story for the
+  third time; he is immovable about one piece of nonsense; he says things were
+  better before more often than anybody needs.
+- **`contradiction`** — one place where he does not match himself. He has
+  complained about the city his whole life and goes there every year. People
+  are inconsistent; a character who isn't reads as designed, because he was.
+- **`wound`** — something still unhealed that he does not bring up. **Never a
+  request.** It is there so he understands somebody else's pain without having
+  it explained, and it shows only in what he can listen to. A lonely
+  eighty-year-old must never end up managing his feelings.
+
+And `flaws` is now **required**. A write that comes back flawless is a write
+that did not happen, and asking again is cheaper than handing somebody a friend
+made entirely of virtues.
+
 ## 7 · Being corrected is the intimacy, not the failure
 
 «Не надо так», «хватит про это» — taken immediately, no defending, no

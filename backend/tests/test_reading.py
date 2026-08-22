@@ -145,7 +145,7 @@ def test_a_failed_reading_still_lets_a_friend_walk_in(monkeypatch, capsys):
         return json.dumps(
             {
                 "name": "Зоя", "age": "31 год", "home": "северный город",
-                "backstory": "выросла у реки", "personality": "прямая",
+                "backstory": "выросла у реки", "personality": "прямая", "flaws": ["перебивает"],
                 "speech_style": "коротко, по делу",
             },
             ensure_ascii=False,
@@ -178,7 +178,7 @@ def test_the_reading_survives_starting_over(reader, monkeypatch):
         return json.dumps(
             {
                 "name": "Гриша", "age": "73 года", "home": "посёлок",
-                "backstory": "варил всю жизнь", "personality": "ворчливый",
+                "backstory": "варил всю жизнь", "personality": "ворчливый", "flaws": ["перебивает"],
                 "speech_style": "короткие фразы",
             },
             ensure_ascii=False,

@@ -91,3 +91,39 @@ def test_save_never_borrows_from_the_template():
     block = persona.build_persona_block(persona.load_persona(U))
     assert "Зоя" in block
     assert "Мурзик" not in block
+
+
+# --------------------------------------------------------------------------- #
+# What is wrong with him — and why it is not decoration
+# --------------------------------------------------------------------------- #
+
+def test_his_faults_reach_the_conversation():
+    """The gap this closes: the persona described his character, his history,
+    what's on his mind, what he's expert in, what he likes and dislikes — and
+    had NOWHERE to say what is wrong with him. The behaviour rules said «be
+    imperfect» to a persona holding no imperfections, which produces generic
+    fallibility, i.e. none."""
+    block = persona.build_persona_block({
+        "name": "Фёдор",
+        "flaws": ["перебивает", "занудствует про давление"],
+        "contradiction": "ругает город и ездит туда каждый год",
+        "wound": "не помирился с братом",
+    })
+    assert "перебивает" in block and "занудствует про давление" in block
+    assert "ругает город и ездит туда каждый год" in block
+    assert "не помирился с братом" in block
+
+
+def test_the_wound_is_never_a_request():
+    """A lonely eighty-year-old must never end up managing his feelings. The
+    wound exists so he understands somebody else's pain without needing it
+    explained — not so it can be brought to them."""
+    block = persona.build_persona_block({"wound": "что-то"})
+    assert "помощи не просишь" in block
+
+
+def test_even_the_fallback_companion_has_faults():
+    assert persona.DEFAULT_PERSONA["flaws"]
+    assert persona.DEFAULT_PERSONA["contradiction"]
+    block = persona.build_persona_block(persona.DEFAULT_PERSONA)
+    assert "Твои недостатки" in block

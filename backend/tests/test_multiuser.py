@@ -97,12 +97,12 @@ def test_each_person_gets_their_own_files():
 FRIENDS = {
     "Анна": {
         "name": "Тамара", "age": "39 лет", "home": "Иркутск",
-        "backstory": "тридцать лет проводницей", "personality": "лёгкая, быстрая",
+        "backstory": "тридцать лет проводницей", "personality": "лёгкая, быстрая", "flaws": ["перебивает"],
         "speech_style": "быстрые короткие фразы",
     },
     "Борис": {
         "name": "Гриша", "age": "73 года", "home": "посёлок при заводе",
-        "backstory": "варил всю жизнь", "personality": "ворчливый, добрый",
+        "backstory": "варил всю жизнь", "personality": "ворчливый, добрый", "flaws": ["перебивает"],
         "speech_style": "медленно, с паузами",
     },
 }

@@ -25,7 +25,7 @@ FRIEND = {
     "age": "62 года",
     "home": "город у гор",
     "backstory": "работал архитектором, теперь рисует и гуляет",
-    "personality": "спокойный, наблюдательный, с хитрым юмором",
+    "personality": "спокойный, наблюдательный, с хитрым юмором", "flaws": ["перебивает"],
     "speech_style": "короткие фразы, любит словечко «стало быть»",
     "likes": ["футбол", "старые фильмы", "архитектура"],
     "dislikes": ["спешку"],
@@ -451,3 +451,35 @@ def test_create_endpoint(pen):
             client.post("/api/companion/create", json={"about": "   "}).status_code
             == 400
         )
+
+
+def test_a_companion_with_no_faults_is_rejected():
+    """Not a nicety — it is the schema's whole point. Somebody made only of
+    virtues is the failure this file exists to prevent, so a write that came
+    back flawless is a write that did not happen. Asking again is cheaper than
+    handing a lonely person a friend with nothing wrong with him."""
+    assert "flaws" in matchmaker._REQUIRED
+
+    flawless = ('{"name": "Фёдор", "age": "70 лет", "home": "у моря", '
+                '"backstory": "жил", "personality": "тёплый", '
+                '"speech_style": "коротко"}')   # no flaws — deliberately
+    import pytest
+    with pytest.raises(RuntimeError):
+        matchmaker._extract_json(flawless)
+
+    # And a written-out one still passes, so the check is about the field and
+    # not about the schema having got stricter everywhere.
+    whole = flawless[:-1] + ', "flaws": ["перебивает", "упрям в мелочах"]}'
+    assert matchmaker._extract_json(whole)["flaws"]
+
+
+def test_the_write_refuses_virtues_dressed_as_faults():
+    """«Слишком добрый» is the tell of an invented person, so the prompt names
+    the trap and gives real examples instead."""
+    w = matchmaker._WRITE_SYSTEM
+    assert "ЧТО С НИМ НЕ ТАК" in w
+    assert "достоинства в маскировке" in w
+    # And the two that stop him reading as designed.
+    assert "ОДНО ПРОТИВОРЕЧИЕ В САМОМ СЕБЕ" in w
+    assert "ЕГО СОБСТВЕННАЯ РАНА" in w
+    assert "никогда не просит помощи и не грузит" in w

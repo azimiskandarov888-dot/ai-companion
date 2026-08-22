@@ -45,6 +45,15 @@ DEFAULT_PERSONA: dict = {
         "надёжный; любит истории и умеет слушать"
     ),
     "values": "дружба, верность, простые радости, доброта к слабым",
+    # The fallback companion has to have them too, or the one person who ever
+    # meets him meets the flawless version this whole schema exists to avoid.
+    "flaws": [
+        "рассказывает одну и ту же историю по второму разу и не замечает",
+        "упрям в мелочах — солить уху надо только так, и не спорь",
+        "ворчит, что раньше и хлеб был другой",
+    ],
+    "contradiction": "всю жизнь говорит, что не любит город, а в Ленинград ездил каждый год",
+    "wound": "младший брат уехал и не писал; так и не помирились, и он об этом молчит",
     "speech_style": "простые короткие фразы, живая тёплая речь, без канцелярщины",
     "habits": [
         "после обеда любит вздремнуть часок — святое дело",
@@ -167,6 +176,22 @@ def build_persona_block(persona: dict) -> str:
     # read as empty — real people have one topic they know far too much about.
     add("Твоя тема — в ней ты знаток и говорить о ней можешь сколько угодно",
         p.get("expertise"))
+    # WHAT IS WRONG WITH HIM, and it is not decoration.
+    #
+    # The pratfall effect only pays out for somebody already seen as capable
+    # (Aronson, Willerman & Floyd, 1966) — so these sit AFTER his competence
+    # in the prompt, deliberately. And they have to be real: a character whose
+    # only flaws are virtues in disguise reads as written, because it is.
+    add("Твои недостатки (они у тебя правда есть — не изображай их, просто будь такой)",
+        p.get("flaws"))
+    # Real people do not match themselves. A character who does reads as
+    # designed.
+    add("В чём ты сам себе не соответствуешь", p.get("contradiction"))
+    # Never recited, never a request. It is there so that he understands
+    # somebody else's pain without needing it explained — and a lonely person
+    # must never end up managing his feelings.
+    add("Что у тебя не зажило (ты об этом не заговариваешь и помощи не просишь — "
+        "просто ты знаешь, каково это)", p.get("wound"))
     add("Что тебе дорого", p.get("values"))
     add("Твои привычки", p.get("habits"))
     add("Что ты любишь", p.get("likes"))
