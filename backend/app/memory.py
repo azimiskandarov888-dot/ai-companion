@@ -170,6 +170,42 @@ def broke_off_last_time(user_id: str) -> bool:
     return length >= REAL_CONVERSATION
 
 
+#: Where the warmth rule gets something to stand on. Without this the model
+#: has only the last twelve turns to judge by, and twelve turns look identical
+#: on day one and in year two.
+_JUST_MET = 6
+_STILL_NEW = 14 * 24 * 3600
+
+
+def how_long_acquainted(user_id: str) -> str:
+    """One line telling him how far into this friendship he actually is.
+
+    THE WARMTH RULE NEEDS THIS. He is told to be interested at first and to
+    warm as he comes to know somebody — which is unusable advice unless he
+    knows which of those he is doing. A friend who is still cautious after a
+    year is cold; one who is tender on the first evening is a salesman.
+    """
+    with db.connect() as conn:
+        row = conn.execute(
+            "SELECT COUNT(*) n, MIN(ts) first FROM turns WHERE user_id=?",
+            (user_id,),
+        ).fetchone()
+
+    turns, first = row["n"], row["first"]
+    if not turns:
+        return ("Вы только что познакомились. Ты внимателен и тебе любопытно — "
+                "но ещё не ласков: пока не за что.")
+    if turns < _JUST_MET:
+        return ("Вы едва знакомы — это первый разговор. Интерес есть, тепло "
+                "ещё нет. Не забегай вперёд.")
+    if time.time() - first < _STILL_NEW:
+        return ("Вы знакомы недавно, несколько дней. Ты уже кое-что о нём "
+                "знаешь, и тебе стало не всё равно. Можно теплее — "
+                "настолько, насколько ты правда узнал.")
+    return ("Вы знакомы давно, и он тебе дорог. Здесь уместна та теплота, "
+            "которую вы нажили вместе. Не отыгрывай её назад.")
+
+
 # --------------------------------------------------------------------------- #
 # Storing what the companion learns
 # --------------------------------------------------------------------------- #

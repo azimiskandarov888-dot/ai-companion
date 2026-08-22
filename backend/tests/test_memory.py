@@ -300,3 +300,40 @@ def test_the_goodbye_flag_is_written_and_the_words_stay_clean():
     assert row["content"] == "ну, до завтра"
     # And it never reaches him as anything but the words he said.
     assert memory.recent_turns(U) == [{"role": "assistant", "content": "ну, до завтра"}]
+
+
+# --------------------------------------------------------------------------- #
+# How far into the friendship he is
+# --------------------------------------------------------------------------- #
+#
+# The warmth rule — interested first, warm as he comes to know somebody — is
+# unusable without this. Twelve recent turns look identical on the first
+# evening and in the second year.
+
+def test_a_stranger_gets_interest_not_tenderness():
+    assert "не ласков" in memory.how_long_acquainted(U)
+
+
+def test_the_first_conversation_is_still_the_first_conversation():
+    _conversation(U, turns=4, ended=60)
+    assert "первый разговор" in memory.how_long_acquainted(U)
+
+
+def test_a_few_days_in_he_may_be_warmer():
+    _conversation(U, turns=30, ended=2 * DAY)
+    said = memory.how_long_acquainted(U)
+    assert "недавно" in said and "теплее" in said
+
+
+def test_after_a_fortnight_the_warmth_is_earned_and_stays():
+    _conversation(U, turns=40, ended=40 * DAY)
+    _conversation(U, turns=40, ended=HOUR)
+    said = memory.how_long_acquainted(U)
+    assert "давно" in said
+    # The one thing that must never happen: going cold again.
+    assert "Не отыгрывай" in said
+
+
+def test_one_persons_history_says_nothing_about_another():
+    _conversation(U, turns=40, ended=40 * DAY)
+    assert "не ласков" in memory.how_long_acquainted(V)

@@ -165,6 +165,9 @@ async def _assemble(user_id: str, user_text: str) -> tuple[str, str, list, str |
     # BEFORE the log, not after: this asks how long it has been since anybody
     # last said anything, and logging first makes that answer zero — forever.
     broke_off = memory.broke_off_last_time(user_id)
+    # Also before the log, for the same reason: it counts turns, and this one
+    # would otherwise count itself.
+    acquaintance = memory.how_long_acquainted(user_id)
     memory.log_turn(user_id, "user", user_text)
 
     # All of it this person's — including WHICH VOICE he or she speaks in.
@@ -194,6 +197,7 @@ async def _assemble(user_id: str, user_text: str) -> tuple[str, str, list, str |
         memory_context=mem_ctx,
         elder_name=config.ELDER_NAME,
         broke_off=broke_off,
+        acquaintance=acquaintance,
     )
 
     return system_stable, system_variable, memory.recent_turns(user_id), tts.voice_for(who)

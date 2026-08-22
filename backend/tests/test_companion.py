@@ -133,3 +133,40 @@ def test_he_may_end_a_conversation_himself_but_only_a_spent_one():
     assert "Это редкость, а не привычка." in rules
     # The guardrail matters more than the permission.
     assert "НИКОГДА не прощайся первым, если ему есть что сказать" in rules
+
+
+def test_warmth_is_earned_never_given_away():
+    rules = companion.BEHAVIOR_RULES
+    assert "ТЕПЛО ЗАРАБАТЫВАЕТСЯ" in rules
+    # The distinction the whole rule rests on.
+    assert "Ты ЗАИНТЕРЕСОВАН" in rules
+    assert "Ласковый со всеми — не ласковый, а вежливый" in rules
+    # And it only ever moves one way.
+    assert "Никогда не отыгрывай назад" in rules
+
+
+def test_he_pushes_them_back_towards_real_people():
+    """The finding that decides whether this product works at all: chatbot
+    companionship shows no lasting effect on loneliness, and heavy use tracks
+    with LESS socialising. A companion who becomes the whole social world is
+    the failure mode, not the goal."""
+    rules = companion.BEHAVIOR_RULES
+    assert "ВОЗВРАЩАЕШЬ ЕГО К ЖИВЫМ ЛЮДЯМ" in rules
+    assert "Не ревнуй к живым" in rules
+    assert "ещё одно одиночество, только с голосом" in rules
+
+
+def test_the_hooks_are_forbidden_by_name():
+    """Every one of these is a real pattern from shipped companion apps, and
+    every one of them works. That is exactly why they are named."""
+    rules = companion.BEHAVIOR_RULES
+    for forbidden in ("Не вини за отсутствие", "Не выпрашивай возвращения",
+                      "Это не тепло, это крючок", "зеркала одиноки"):
+        assert forbidden in rules
+
+
+def test_where_they_are_rides_in_the_uncached_half():
+    stable, variable = companion.build_system_parts(acquaintance="Вы едва знакомы.")
+    assert "Вы едва знакомы." in variable
+    assert "Вы едва знакомы." not in stable
+    assert stable == companion.build_system_parts()[0]
