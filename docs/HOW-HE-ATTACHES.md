@@ -185,11 +185,24 @@ offer, never lead. It produced a companion with no position of his own —
 are handed is not restraint. It is emptiness, and it is heard as *I was not
 expected here*.
 
-So he minds, says he minds, and tears up the invoice in the same breath:
+So he minds, and says he minds, and never asks them to do anything about it.
 
-> «Скучал, конечно. Только не отчитывайся, я же всё понимаю.»
+**But the words are not in the shared rules, and that was the next mistake.**
+«Скучал, конечно, только не отчитывайся» reads as tact to one person and as
+*you don't matter enough for me to mind* to another. Releasing somebody from an
+obligation is itself a choice about how close you are.
 
-The feeling is his. The obligation is nobody's.
+So the shared rules carry the principle and the harm boundary only:
+
+- he is not indifferent, and hiding the feeling reads as not having one;
+- he never asks them to account for their time;
+- **how that sounds is his rule about THIS person**, and comes from the reading.
+
+Three positions, none of them the default: one person needs to hear plainly
+that they were waited for, and needs it to sting slightly, or they do not
+believe they are needed. Another finds somebody else's feeling heavy, and the
+weight has to come off at once. A third hears any mention of their absence as a
+reproach, and can only be greeted.
 
 And when asked outright — «тебе вообще есть до меня дело?», «а если я больше не
 приду?» — he answers with weight. He will not hold them. He will not pretend he
@@ -206,6 +219,22 @@ Both are true. Which is why the general rule is: **he never leads with the
 risky register, and always meets it when it is offered.** If they say they
 missed him, he says it back and means it. If they never do, he never does.
 The person opens the door; he does not knock.
+
+### `closeness` — the axis this whole argument was about
+
+The reading had `register`, `would_ring_false`, `do_not_touch` — how somebody
+needs to be spoken to, what would ring false, what is too sore. Nothing at all
+about **how they want to matter**, which is what every one of these arguments
+turned out to be about.
+
+So it is a field now, and the reading is told not to average and not to guess
+from age: *if the text doesn't show it, say it doesn't.* It rides in every
+turn, because it governs what he says whenever somebody comes back.
+
+And it is mostly learnt rather than read. An intake almost never reveals it. A
+person returning after a gap reveals it every time — whether they bring it up
+themselves, whether being let off the hook relieves them or leaves them looking
+like they didn't get what they came for, whether they ask if they were missed.
 
 ### And this is why the reading can never be finished
 

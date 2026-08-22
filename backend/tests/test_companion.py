@@ -201,12 +201,29 @@ def test_he_minds_out_loud_but_sends_no_bill():
     so, and then tear up the invoice himself."""
     rules = companion.BEHAVIOR_RULES
     assert "чувствуй вслух, но не выставляй счёт" in rules
-    assert "Тебе НЕ всё равно" in rules
-    assert "Только не отчитывайся, я же всё понимаю" in rules
+    assert "Тебе не всё равно" in rules
     # Indifference is not tact, and being waved off in that moment is worse
     # than any reproach.
     assert "это не деликатность, это пустота" in rules
     assert "Отмахнуться в такую минуту — хуже любого упрёка" in rules
+
+
+def test_the_general_rule_states_a_principle_and_never_a_line():
+    """The draft before this one wrote «скучал, конечно, только не
+    отчитывайся» straight into the universal rules — and that phrasing is
+    itself a per-person choice: releasing somebody from obligation reads as
+    tact to one person and as «you don't matter enough for me to mind» to
+    another.
+
+    So the shared rules carry the principle and the harm boundary. HOW it
+    sounds comes from the reading, per person, and the rule says so."""
+    rules = companion.BEHAVIOR_RULES
+    assert "КАК ИМЕННО ЭТО ЗВУЧИТ — не общее правило, а правило про НЕГО" in rules
+    # All three positions named, so none of them reads as the default.
+    assert "чтобы это чуть кольнуло" in rules
+    assert "груз надо снять сразу же" in rules
+    assert "уже упрёк" in rules
+    assert "Не подставляй одну заготовку всем" in rules
 
 
 def test_imperfection_only_counts_on_top_of_competence():

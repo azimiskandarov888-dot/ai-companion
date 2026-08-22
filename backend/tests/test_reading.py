@@ -255,3 +255,29 @@ def test_it_waits_for_enough_conversation(monkeypatch):
     monkeypatch.setattr(reading, "reread", fake_reread)
     asyncio.run(reading.keep_reading("nobody-has-a-reading"))
     assert not called
+
+
+def test_how_they_want_to_matter_is_its_own_axis():
+    """The one the whole «тебя давно не было» argument turned on, and the one
+    the reading had no room for. It cannot be inferred from age or averaged
+    across people: to one person being missed out loud is the proof they are
+    needed, to another it is a weight, to a third it is a reproach."""
+    assert "closeness" in reading._READING_SYSTEM
+    assert "КАК ЭТОТ ЧЕЛОВЕК ХОЧЕТ БЫТЬ НУЖНЫМ" in reading._READING_SYSTEM
+    # It must refuse to guess rather than pick a middle.
+    assert "если из текста не видно — так и напиши, что не видно" in reading._READING_SYSTEM
+
+
+def test_closeness_reaches_every_single_turn():
+    """It governs what he says whenever somebody comes back, so it cannot
+    live only in the write — it has to ride in the standing block."""
+    block = reading.standing_block({"closeness": "ему нужно слышать, что его ждали"})
+    assert "ему нужно слышать, что его ждали" in block
+    assert "«я тебя ждал»" in block
+
+
+def test_the_reread_watches_for_it_where_it_actually_shows():
+    """An intake almost never reveals this. Coming back after a gap reveals it
+    every time."""
+    assert "closeness" in reading._REREAD_SYSTEM
+    assert "когда он возвращается после перерыва" in reading._REREAD_SYSTEM
