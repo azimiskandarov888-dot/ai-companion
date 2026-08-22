@@ -233,6 +233,11 @@ def _remember(
     """
     memory.log_turn(user_id, "assistant", reply, farewell=farewell)
     background_tasks.add_task(learn.learn_from_exchange, user_id, user_text, reply)
+    # AND, every so often, read the person again. The first reading was made
+    # from a few minutes of somebody talking to a machine they had never met;
+    # everything since is better evidence. It decides for itself whether
+    # enough has been said to be worth it, and costs nothing when it isn't.
+    background_tasks.add_task(reading.keep_reading, user_id)
 
 
 async def _think_and_speak(

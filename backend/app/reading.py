@@ -60,7 +60,7 @@ from __future__ import annotations
 
 import json
 
-from . import brain, config, identity
+from . import brain, config, db, identity
 
 # ── The method ──────────────────────────────────────────────────────────────
 
@@ -136,7 +136,16 @@ class ReadingFailed(RuntimeError):
     """The reading didn't come back usable. Never fatal — see matchmaker."""
 
 
-def _extract_json(raw: str) -> dict:
+def _extract_json(raw: str, require: tuple[str, ...] | None = None) -> dict:
+    """Pull the JSON object out of a reading.
+
+    `require` is the first reading's bar: a read that came back without a
+    register or without a way to reach somebody is not a read, and taking it
+    would build a companion on nothing. A RE-read is held to no such bar —
+    it is a refinement, and a model that returns only the fields it changed
+    is behaving correctly, not failing. Rejecting that would throw away every
+    revision that was properly conservative.
+    """
     start, end = raw.find("{"), raw.rfind("}")
     if start == -1 or end <= start:
         raise ReadingFailed("Чтение вернулось не JSON-ом.")
@@ -146,7 +155,7 @@ def _extract_json(raw: str) -> dict:
         raise ReadingFailed(f"Чтение вернулось битым JSON-ом: {e}")
     if not isinstance(data, dict):
         raise ReadingFailed("Чтение вернулось не объектом.")
-    missing = [k for k in _REQUIRED if not str(data.get(k, "")).strip()]
+    missing = [k for k in (require or ()) if not str(data.get(k, "")).strip()]
     if missing:
         raise ReadingFailed(f"В чтении нет обязательных полей: {', '.join(missing)}")
     return data
@@ -177,7 +186,7 @@ async def read_person(about: str, wishes: str = "") -> dict:
         effort=config.READING_EFFORT,
         max_tokens=8000,
     )
-    return _extract_json(raw)
+    return _extract_json(raw, require=_REQUIRED)
 
 
 def save(user_id: str, data: dict) -> dict:
@@ -207,6 +216,120 @@ def load(user_id: str) -> dict | None:
     return None
 
 
+# --------------------------------------------------------------------------- #
+# Reading him again, and again, for as long as they know each other
+# --------------------------------------------------------------------------- #
+#
+# THE FIRST READING IS THE WORST ONE HE WILL EVER HAVE.
+#
+# It is made from a few minutes of somebody talking to a machine they have
+# never met, on the day they installed it, while their son stands over them.
+# Everything after it is better evidence and there is no reason to throw it
+# away: what they laugh at, what they answer around, what they come back to
+# unprompted, whether warmth made them open or made them retreat.
+#
+# So the reading is not a birth certificate. It is a working note, revised as
+# long as the friendship lasts — which is also the only honest answer to «how
+# should he talk to people», because there is no people. There is this one.
+#
+# TWO THINGS KEEP IT FROM CHURNING. It runs rarely, on a stretch of real
+# conversation rather than a turn or two; and it is told, firmly, to keep what
+# still holds and change only what the conversation actually contradicted. A
+# reading that swings on one odd evening is worse than one that never moves.
+
+#: Turns of conversation between re-readings. Roughly a few conversations —
+#: often enough to follow somebody, rare enough that one bad evening cannot
+#: rewrite who they are, and cheap enough to be invisible (once per ~30 turns
+#: against a full brain call every turn).
+REREAD_EVERY = 30
+
+#: Never re-read on a scrap. Below this there is nothing to learn from that
+#: the intake did not already say better.
+REREAD_MIN_TURNS = 20
+
+_REREAD_SYSTEM = """Ты уже читал этого человека однажды — по тому, что он рассказал о себе в самом начале, чужому и незнакомому, в первый день.
+
+Теперь у тебя есть то, чего тогда не было: как он говорит на самом деле, изо дня в день, с тем, кому уже доверяет. Это лучший материал. Прочти его заново.
+
+ЧТО ТЫ ИЩЕШЬ В РАЗГОВОРАХ (а не в анкете):
+- На что он отзывается — оживает, продолжает, рассказывает дальше. И на что отвечает односложно и уходит.
+- К чему он возвращается сам, без спроса. Это и есть важное, что бы он ни говорил.
+- Что он обходит. Не «больное» в лоб, а то, вокруг чего он ходит кругами.
+- Как он принимает тепло: раскрывается или отшатывается. Некоторым от ласкового слова неловко.
+- Над чем он смеётся. Юмор — самый быстрый способ понять человека и самый частый способ промахнуться.
+- Поправлял ли он собеседника: «не надо так», «хватит про это», «я не об этом». Это дороже всего остального вместе взятого — человек сказал прямо.
+
+КАК ПЕРЕСМАТРИВАТЬ (осторожно — это важнее, чем найти новое):
+- То, что подтвердилось, оставь КАК БЫЛО, слово в слово. Не переписывай ради красоты.
+- Меняй только то, чему разговоры прямо противоречат. Один странный вечер — не повод. Человек имеет право на плохой день.
+- Если сомневаешься — не меняй.
+- Никогда не смягчай «чего не трогать». Список больного может только расти.
+
+Верни ТОЛЬКО JSON, теми же полями, что были, плюс поле "learned" — короткий список того, что выяснилось в живом разговоре и чего не было видно в начале. Если человек что-то прямо просил не делать, это в "learned" в первую очередь, дословно."""
+
+
+async def keep_reading(user_id: str) -> None:
+    """Re-read him if enough has been said since last time. Never raises.
+
+    Runs in the background after a reply, so nobody ever waits for it. A
+    failure here costs nothing: the previous reading stays, and the next
+    conversation triggers another attempt.
+    """
+    from . import memory   # local: memory imports nothing from here, keep it that way
+
+    existing = load(user_id)
+    if not existing:
+        return
+
+    with db.connect() as conn:
+        total = conn.execute(
+            "SELECT COUNT(*) n FROM turns WHERE user_id=?", (user_id,)
+        ).fetchone()["n"]
+
+    since = int(existing.get("_read_at_turn") or 0)
+    if total - since < REREAD_EVERY or total < REREAD_MIN_TURNS:
+        return
+
+    try:
+        turns = memory.recent_turns(user_id, limit=REREAD_EVERY * 2)
+        fresh = await reread(user_id, existing, turns)
+        fresh["_read_at_turn"] = total
+        save(user_id, fresh)
+        print(f"  ✎ re-read {user_id[:8]} at turn {total}", flush=True)
+    except Exception as e:  # noqa: BLE001 — a background refinement, never a failure
+        print(f"  · re-reading skipped ({e})", flush=True)
+
+
+async def reread(user_id: str, existing: dict, turns: list[dict]) -> dict:
+    """Read him again from how he actually talks. Never raises."""
+    said = "\n".join(
+        f"{'ОН' if t['role'] == 'user' else 'ДРУГ'}: {t['content']}" for t in turns
+    ).strip()
+    if not said:
+        return existing
+
+    prompt = (
+        "ЧТО ТЫ ПРОЧЁЛ В ПРОШЛЫЙ РАЗ:\n"
+        + json.dumps(existing, ensure_ascii=False, indent=2)
+        + "\n\nИХ РАЗГОВОРЫ С ТЕХ ПОР:\n\n" + said
+    )
+
+    raw = await brain.think(
+        _REREAD_SYSTEM,
+        prompt,
+        model=config.READING_MODEL,
+        effort=config.READING_EFFORT,
+        max_tokens=8000,
+    )
+    fresh = _extract_json(raw)
+
+    # A re-reading may refine, never demolish. Anything the model dropped is
+    # kept from the old reading — a field that goes missing is a model slip,
+    # not a discovery that the person no longer has a register.
+    merged = {**existing, **{k: v for k, v in fresh.items() if str(v).strip()}}
+    return merged
+
+
 def standing_block(reading: dict | None) -> str:
     """The slice of the reading that belongs in EVERY turn, not just creation.
 
@@ -234,6 +357,12 @@ def standing_block(reading: dict | None) -> str:
         parts.append(
             "Больное — не спорь об этом и не подтрунивай, только бережно: "
             + str(r["do_not_touch"]).strip()
+        )
+    if str(r.get("learned") or "").strip():
+        parts.append(
+            "Что ты понял про него за время знакомства (это дороже всего "
+            "остального — до этого дошли вместе):\n"
+            + str(r["learned"]).strip()
         )
     if not parts:
         return ""

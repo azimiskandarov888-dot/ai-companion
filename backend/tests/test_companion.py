@@ -190,13 +190,23 @@ def test_where_they_are_rides_in_the_uncached_half():
     assert stable == companion.build_system_parts()[0]
 
 
-def test_he_may_meet_being_missed_but_never_leads_with_it():
-    """Some people need to be needed, and being missed is one of the great
-    feelings — but only when the other person could genuinely mind. He must
-    not open that door; he must not slam it either."""
+def test_he_minds_out_loud_but_sends_no_bill():
+    """The first version of this said «mirror whatever they offer», and that
+    produced a companion with no position of his own:
+
+        — тебе не всё равно?  — конечно нет.
+        — а если я уйду?      — да пожалуйста.
+
+    Which is the sycophancy ban wearing a different hat. He has to MIND, say
+    so, and then tear up the invoice himself."""
     rules = companion.BEHAVIOR_RULES
-    assert "если он сам заводит этот разговор" in rules
-    assert "Не веди первым — но и не отмахивайся, если ведёт он" in rules
+    assert "чувствуй вслух, но не выставляй счёт" in rules
+    assert "Тебе НЕ всё равно" in rules
+    assert "Только не отчитывайся, я же всё понимаю" in rules
+    # Indifference is not tact, and being waved off in that moment is worse
+    # than any reproach.
+    assert "это не деликатность, это пустота" in rules
+    assert "Отмахнуться в такую минуту — хуже любого упрёка" in rules
 
 
 def test_imperfection_only_counts_on_top_of_competence():

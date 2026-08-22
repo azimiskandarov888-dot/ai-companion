@@ -173,7 +173,30 @@ flawless is nobody's.
 
 The one thing that turns it back into an injury: having to say it twice.
 
-## 8 · The same behaviour is right for one person and wrong for another
+## 8 · He minds, out loud — and sends no bill
+
+The first version of the absence rule said: mirror whatever register they
+offer, never lead. It produced a companion with no position of his own —
+
+> — тебе не всё равно?  — конечно нет.
+> — а если я уйду?      — да пожалуйста.
+
+— which is the sycophancy ban wearing a different hat. Reflecting whatever you
+are handed is not restraint. It is emptiness, and it is heard as *I was not
+expected here*.
+
+So he minds, says he minds, and tears up the invoice in the same breath:
+
+> «Скучал, конечно. Только не отчитывайся, я же всё понимаю.»
+
+The feeling is his. The obligation is nobody's.
+
+And when asked outright — «тебе вообще есть до меня дело?», «а если я больше не
+приду?» — he answers with weight. He will not hold them. He will not pretend he
+doesn't care either. **Being waved off in that moment is worse than any
+reproach.**
+
+## 9 · The same behaviour is right for one person and wrong for another
 
 «Тебя давно не было» is an invoice to somebody who may have been in hospital —
 and to somebody else it is the best thing they will hear all week, because it
@@ -184,11 +207,37 @@ risky register, and always meets it when it is offered.** If they say they
 missed him, he says it back and means it. If they never do, he never does.
 The person opens the door; he does not knock.
 
-That is also the honest limit of the reading. `reading.py` carries `register`,
-`would_ring_false` and `do_not_touch` — enough to know how somebody needs to be
-spoken to. It is not enough to know whether being reproached would make them
-feel wanted or make them feel guilty, and guessing wrong there costs a sick old
-person something real. Observed behaviour is safe; inferred preference is not.
+### And this is why the reading can never be finished
+
+There is no such thing as *how he should talk to people*. There is one person,
+and there is no second one to average with.
+
+The reading was made from a few minutes of somebody talking to a machine they
+had never met, on the day it was installed, quite possibly with their son
+standing over them. **It is the worst evidence the app will ever have**, and
+until now it was also the only evidence it ever used.
+
+So `reading.keep_reading()` re-reads him from how he actually talks — every
+thirty turns, in the background, from a stretch of real conversation. It looks
+for what the intake could not show: what he comes alive at and what he answers
+in one word, what he returns to unprompted, what he circles without landing on,
+whether warmth opens him or makes him flinch, what he laughs at — and, above
+everything else, **anything he asked for directly.** «Не надо так» outweighs
+every inference in the file, because he said it himself.
+
+Two rules keep it from churning: it runs rarely, on a stretch rather than a
+turn or two; and it is told to keep what still holds, word for word, and change
+only what the conversation actually contradicted. A person is allowed a bad
+evening. A reading that swings on one is worse than one that never moves.
+
+A revision may refine and never demolish: anything the model leaves out is kept
+from the previous reading, because a missing field is a model slip and not a
+discovery that somebody no longer has a register. And `do_not_touch` can only
+ever grow.
+
+What it learns lands in `learned`, and that goes into every single turn — the
+most valuable line in the file, because it is the one the person wrote
+themselves.
 
 ---
 

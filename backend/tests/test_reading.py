@@ -191,3 +191,67 @@ def test_the_reading_survives_starting_over(reader, monkeypatch):
     assert persona.load_persona(U)["name"] == "Гриша"
     assert reading.load(U) is not None          # the person is still known
     assert config.READING_PATH.exists()
+
+
+# --------------------------------------------------------------------------- #
+# Reading him again, for as long as they know each other
+# --------------------------------------------------------------------------- #
+#
+# The first reading is the worst one he will ever have: a few minutes of
+# somebody talking to a machine they have never met, on the day it was
+# installed. Everything since is better evidence.
+
+W = "u-reread"
+
+
+def test_a_reread_refines_and_never_demolishes(monkeypatch):
+    """A field the model forgets to return must survive. A dropped key is a
+    model slip, not a discovery that the person no longer has a register."""
+    async def fake_think(system, prompt, **kw):
+        return '{"register": "теплее, чем казалось", "learned": "не любит, когда его жалеют"}'
+
+    monkeypatch.setattr(reading.brain, "think", fake_think)
+    before = {"register": "сухо", "do_not_touch": "смерть жены",
+              "would_ring_false": "бодрячок"}
+    after = asyncio.run(reading.reread(W, before, [{"role": "user", "content": "ну"}]))
+
+    assert after["register"] == "теплее, чем казалось"      # revised
+    assert after["do_not_touch"] == "смерть жены"           # kept, untouched
+    assert after["would_ring_false"] == "бодрячок"          # kept, untouched
+    assert after["learned"] == "не любит, когда его жалеют"  # new
+
+
+def test_an_empty_stretch_of_talk_changes_nothing(monkeypatch):
+    called = False
+
+    async def fake_think(system, prompt, **kw):
+        nonlocal called
+        called = True
+        return "{}"
+
+    monkeypatch.setattr(reading.brain, "think", fake_think)
+    before = {"register": "сухо"}
+    assert asyncio.run(reading.reread(W, before, [])) == before
+    assert not called
+
+
+def test_what_was_learned_live_reaches_every_turn():
+    """The most valuable line in the whole reading, because the person said it
+    themselves rather than being inferred."""
+    block = reading.standing_block({"learned": "просил не звать его по отчеству"})
+    assert "просил не звать его по отчеству" in block
+    assert "дороже всего" in block
+
+
+def test_it_waits_for_enough_conversation(monkeypatch):
+    """Cheap when it isn't worth doing: no reading, no brain call."""
+    called = False
+
+    async def fake_reread(*a, **kw):
+        nonlocal called
+        called = True
+        return {}
+
+    monkeypatch.setattr(reading, "reread", fake_reread)
+    asyncio.run(reading.keep_reading("nobody-has-a-reading"))
+    assert not called
