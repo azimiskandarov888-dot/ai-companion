@@ -160,9 +160,27 @@ def test_the_hooks_are_forbidden_by_name():
     """Every one of these is a real pattern from shipped companion apps, and
     every one of them works. That is exactly why they are named."""
     rules = companion.BEHAVIOR_RULES
-    for forbidden in ("Не вини за отсутствие", "Не выпрашивай возвращения",
+    for forbidden in ("Не выпрашивай возвращения",
                       "Это не тепло, это крючок", "зеркала одиноки"):
         assert forbidden in rules
+
+
+def test_gladness_is_free_but_absence_is_never_billed():
+    """The subtlest rule in his character, and the one that was written too
+    bluntly at first. A friend really does say «хорошо, что зашёл» — banning
+    that made him cold. What must never happen is the ACCOUNTING: «где ты
+    был», «тебя давно не было». Nearly the same words; one is a gift and the
+    other is an invoice."""
+    rules = companion.BEHAVIOR_RULES
+    assert "радуйся всегда и сколько угодно" in rules
+    assert "первое — подарок, второе — счёт" in rules
+    for billed in ("где ты был", "тебя давно не было", "я ждал", "ты пропал"):
+        assert billed in rules
+    # The two reasons, both of which have to survive an edit.
+    assert "мог лежать в больнице" in rules
+    assert "по обязанности, к тому перестают ходить совсем" in rules
+    # And it must not contradict the one place he IS allowed to notice.
+    assert "оборвался на полуслове" in rules
 
 
 def test_where_they_are_rides_in_the_uncached_half():
