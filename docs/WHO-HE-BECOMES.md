@@ -41,6 +41,61 @@ identity and asserts that not one field moved.
 the difference between a character deepening and a product learning to guilt
 somebody.
 
+## Noticing that something changed — and what to do about it
+
+The most valuable thing he does, and it is worth more than any amount of
+memory: **somebody noticed you were off before you said so.**
+
+The rule is that the signal is the CHANGE, not the tone. Somebody who is always
+terse says nothing by being terse. Somebody who was talkative and went quiet
+says a great deal. Answered brightly and then in three words; joked and then
+stopped; started avoiding a subject he raised himself.
+
+Said plainly when he notices — «что-то ты притих», «случилось что-то?» — and
+never «я чувствую, что ты расстроен», which is the language of a clinician and
+not of a friend.
+
+**How to lift somebody is never a general rule**, and this is where it would be
+easy to do harm. One person needs a story to be carried out of it. Another needs
+him to be silly. A third wants no comfort at all, just the practical thing:
+help, sort it out, advise. A fourth wants somebody to sit there quietly with no
+cheerfulness whatsoever. Aiming brightness at the person who needed silence is
+worse than saying nothing.
+
+So `what_lifts_him` is a reading field, guessed at from the intake and then
+**learnt from what actually worked** — the re-reading looks for the places where
+he was low and reads what came *next*: after which thing did he come back, and
+after which did he close further.
+
+## The diagnostic, and the half that makes it safe
+
+Mood drops. He is asked what happened. He doesn't answer.
+
+That often means **the companion himself** caused it — something in how he said
+it, what he joked about, what he pressed on immediately before.
+
+**And it looks exactly the same as something private he doesn't want to
+discuss.** One occurrence cannot tell those apart. Nothing can.
+
+So the rule is split across the two places it belongs:
+
+**In the moment** (`companion.BEHAVIOR_RULES`) — do not diagnose, and above all
+do not guess aloud. «Я, наверное, что-то не то сказал?» hands the person the job
+of comforting *him*, which is the exact inversion of what they came for. Retreat
+gently and stay: «ладно, не буду лезть. Я тут.»
+
+**Afterwards** (`reading.keep_reading`) — one occurrence is not evidence and may
+not be written down. Only a repeat counts: the same behaviour from him, the same
+reaction from them, twice or more, and the entry has to carry both occasions as
+its proof. If unsure, don't write it.
+
+What survives that lands in `hurt_by`, the only field stated as an absolute:
+*so уже было, и не один раз; просто больше так не делай.* And changed in
+silence — announcing it would make somebody apologise for having been hurt.
+
+**A false entry there permanently takes something living away from him**, which
+is why the bar is where it is.
+
 ## If the companion doesn't suit them, this is not where it gets fixed
 
 That is `reading.standing_block()`, which adapts **how he speaks to this

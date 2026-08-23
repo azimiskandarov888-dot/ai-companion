@@ -281,3 +281,42 @@ def test_the_reread_watches_for_it_where_it_actually_shows():
     every time."""
     assert "closeness" in reading._REREAD_SYSTEM
     assert "когда он возвращается после перерыва" in reading._REREAD_SYSTEM
+
+
+def test_what_lifts_him_is_read_and_reaches_every_turn():
+    """Getting this wrong is expensive: cheerfulness aimed at somebody who
+    needed silence is worse than saying nothing at all."""
+    assert "what_lifts_him" in reading._READING_SYSTEM
+    assert "ЧЕМ ЕГО ПОДНИМАТЬ" in reading._READING_SYSTEM
+    block = reading.standing_block({"what_lifts_him": "молчать рядом, без бодрости"})
+    assert "молчать рядом, без бодрости" in block
+    assert "не угадывай" in block
+
+
+def test_the_reread_learns_it_from_what_actually_worked():
+    """Not from the intake — from what happened AFTER he was low."""
+    assert "посмотри, что было ДАЛЬШЕ" in reading._REREAD_SYSTEM
+    assert "А после чего замыкался сильнее?" in reading._REREAD_SYSTEM
+
+
+def test_one_bad_evening_is_never_evidence():
+    """The diagnostic he described, with the half that makes it safe. Mood
+    drops, he's asked, he doesn't answer — that looks EXACTLY the same whether
+    the companion caused it or whether it's something private. One occurrence
+    cannot tell them apart, so one occurrence may not be written down."""
+    r = reading._REREAD_SYSTEM
+    assert "ОДИН СЛУЧАЙ — НЕ ДОКАЗАТЕЛЬСТВО" in r
+    assert "РОВНО ТАК ЖЕ ВЫГЛЯДИТ ПРОСТО ЛИЧНОЕ" in r
+    # Only a repeat counts, and it has to carry its evidence.
+    assert "дважды или больше" in r
+    assert "приводи оба случая как доказательство" in r
+    # And the cost of a false entry is named, because it is permanent.
+    assert "навсегда отнимает у друга что-то живое" in r
+
+
+def test_what_is_proven_to_hurt_is_stated_as_an_absolute():
+    block = reading.standing_block({"hurt_by": "подтрунивать над его памятью"})
+    assert "подтрунивать над его памятью" in block
+    assert "ТОЧНО НЕ РАБОТАЕТ" in block
+    # Changed silently. Announcing it would make him apologise for it.
+    assert "не объявляй об этом" in block

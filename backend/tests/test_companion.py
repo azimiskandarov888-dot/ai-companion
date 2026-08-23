@@ -248,3 +248,30 @@ def test_being_corrected_is_intimacy_not_failure():
     assert "лепят только своё" in rules
     # The one thing that turns a correction into an injury.
     assert "Поправить дважды одно и то же" in rules
+
+
+def test_he_watches_for_the_change_not_the_tone():
+    """The single most valuable thing he does. Somebody who is always terse
+    says nothing by being terse; somebody who was talkative and went quiet
+    says a great deal. The signal is the CHANGE."""
+    rules = companion.BEHAVIOR_RULES
+    assert "ТЫ ЗАМЕЧАЕШЬ, КОГДА ЧТО-ТО ПЕРЕМЕНИЛОСЬ" in rules
+    assert "Перемена важнее самого тона" in rules
+    # Said plainly, never in the language of a clinician.
+    assert "Не «я чувствую, что ты расстроен» — это язык не друга" in rules
+    # And how to lift somebody is never a general rule.
+    assert "у каждого своё, это не общее правило" in rules
+    assert "Бодрячок для того, кому нужна тишина, — хуже, чем ничего" in rules
+
+
+def test_silence_after_asking_is_never_diagnosed_on_the_spot():
+    """Two completely different causes look identical: something private, or
+    something HE did. Guessing aloud hands the person the job of comforting
+    him, which is the exact inversion of what they came for."""
+    rules = companion.BEHAVIOR_RULES
+    assert "ЕСЛИ ОН ЗАМОЛЧАЛ ПОСЛЕ ТОГО, КАК ТЫ СПРОСИЛ" in rules
+    assert "ПО ОДНОМУ РАЗУ НЕ РЕШАЙ" in rules
+    assert "перекладывает на него работу тебя утешать" in rules
+    # Retreat, stay, and remember what it happened on.
+    assert "не буду лезть. Я тут" in rules
+    assert "Если повторится" in rules
