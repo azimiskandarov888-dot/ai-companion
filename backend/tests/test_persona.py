@@ -218,3 +218,23 @@ def test_the_deepening_waits_for_a_real_friendship(monkeypatch):
     monkeypatch.setattr(persona.config, "WRITER_MODEL", "x", raising=False)
     asyncio.run(persona.deepen("nobody-has-a-companion"))
     assert not called
+
+
+def test_nothing_that_makes_him_himself_can_ever_be_grown():
+    """Walked as a whole set rather than spot-checked. If somebody later adds
+    a field to GROWABLE without thinking, this is what catches it."""
+    for field in ("name", "age", "gender", "home", "roots", "backstory",
+                  "personality", "speech_style", "values", "wound",
+                  "contradiction", "one_liner", "address", "expertise",
+                  "inner_world"):
+        assert field not in persona.GROWABLE, field
+        assert field != persona.LIVE, field
+
+
+def test_what_is_wrong_with_him_reaches_the_conversation_and_the_write():
+    from app import matchmaker
+    for field in ("flaws", "contradiction", "wound"):
+        value = [f"ЗНАЧ-{field}"] if field == "flaws" else f"ЗНАЧ-{field}"
+        assert f"ЗНАЧ-{field}" in persona.build_persona_block({field: value}), field
+        assert field in matchmaker._WRITE_SYSTEM, field
+        assert persona.DEFAULT_PERSONA.get(field), field

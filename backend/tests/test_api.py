@@ -100,3 +100,26 @@ def test_memory_endpoint_shape(client):
     client.post("/api/say", json={"text": "привет"}, headers=AUTH)
     data = client.get("/api/memory", headers=AUTH).json()
     assert "elder" in data and "bob" in data and "memories" in data
+
+
+def test_all_three_passes_run_on_every_reply(monkeypatch):
+    """learn / keep_reading / deepen do three different jobs at three
+    different rates, and each decides for itself whether it is worth doing.
+    But they only ever get the chance if they are queued — and they are queued
+    in ONE place, `_remember`, which both reply paths go through. A future
+    edit that adds a third path and forgets them would silently freeze the
+    companion forever, with nothing failing."""
+    from app import main
+
+    queued = []
+
+    class Fake:
+        def add_task(self, fn, *a, **kw):
+            queued.append(fn.__module__.rsplit(".", 1)[-1] + "." + fn.__name__)
+
+    monkeypatch.setattr(main.memory, "log_turn", lambda *a, **kw: None)
+    main._remember("u", "сказал", "ответил", Fake())
+
+    assert "learn.learn_from_exchange" in queued   # what he knows about them
+    assert "reading.keep_reading" in queued        # how to be with them
+    assert "persona.deepen" in queued              # who he is

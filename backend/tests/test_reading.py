@@ -320,3 +320,32 @@ def test_what_is_proven_to_hurt_is_stated_as_an_absolute():
     assert "ТОЧНО НЕ РАБОТАЕТ" in block
     # Changed silently. Announcing it would make him apologise for it.
     assert "не объявляй об этом" in block
+
+
+def test_the_first_read_is_forbidden_to_invent_what_hurts_him():
+    """`hurt_by` is the one field stated as an absolute in every turn, so an
+    invented entry costs the companion something living, permanently. It can
+    only ever come from a repeated pattern in real conversation — and the
+    intake contains no conversations at all."""
+    assert "hurt_by — ОСТАВЬ ПУСТЫМ" in reading._READING_SYSTEM
+    assert "угадать, что человека заденет, нельзя" in reading._READING_SYSTEM
+    # And it must not be confused with the field that IS guessable.
+    assert "это would_ring_false, а это другое поле" in reading._READING_SYSTEM
+
+
+def test_every_reading_field_reaches_both_places_it_is_needed(tmp_path):
+    """A field the model fills in and nobody ever reads is worse than no
+    field: it costs tokens on every write and silently does nothing. This
+    walks the whole set rather than spot-checking, because the ones that go
+    missing are always the ones added last."""
+    every_turn = ("register", "would_ring_false", "do_not_touch", "closeness",
+                  "what_lifts_him", "hurt_by", "learned")
+    the_write = ("register", "carrying", "longing", "absent", "self_image",
+                 "would_ring_false", "would_reach_them", "needs_pushback_on",
+                 "closeness", "what_lifts_him", "hurt_by", "do_not_touch",
+                 "common_ground_seeds")
+
+    for field in every_turn:
+        assert f"ЗНАЧ-{field}" in reading.standing_block({field: f"ЗНАЧ-{field}"}), field
+    for field in the_write:
+        assert f"ЗНАЧ-{field}" in reading.as_brief({field: f"ЗНАЧ-{field}"}), field
