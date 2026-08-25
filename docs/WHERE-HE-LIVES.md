@@ -13,6 +13,18 @@ is where this particular person's chest opens up.
 
 He never mentions it. That is the whole point (see *The rules of the reveal*).
 
+**These places are invented.** He does not live in this world at all — not in
+the person's country, not on their planet. A world is a *feeling*, never a
+reconstruction: rain, neon, height, night. Never their actual street, never the
+house that was sold, never anywhere they have lost. That rule keeps the whole
+feature safe. A place nobody has ever been cannot be remembered wrong, and
+cannot hurt.
+
+And this is not an app for one country or one age. Loneliness is at its peak
+with more connection available than has ever existed. The person on the other
+end may be eighty, or nineteen and unable to get on with anyone their own age,
+or forty and living alone with nobody to tell about their day.
+
 ---
 
 ## The trap, and the one inversion that avoids it
@@ -48,6 +60,23 @@ He rolls on the authored curve. Always. In every world, forever, with zero
 per-scene tuning. That is the answer to *"he shouldn't just fly around the
 background."*
 
+### The band is always in the same place. What it *is* changes freely.
+
+The floor sits at the same height on screen in every scene. What the person is
+looking at, though, is whatever the painting says it is — and that costs nothing
+and needs no new code:
+
+| scene | the floor band is | what lies below it |
+|---|---|---|
+| nature | ground | nothing |
+| dense future city | **a rooftop** | the street, forty storeys down, painted into the far layers |
+| beach | sand | nothing |
+| pier | planking | water |
+| mountain | a ledge | the valley |
+
+So *"he'd be sitting on the roof of a building"* needs no climbing and no second
+floor. Put the camera on the roof. The physics never notices.
+
 ---
 
 ## The layout contract
@@ -82,6 +111,72 @@ paintings. Fractions of canvas height, portrait, 1080 × 2340.
 
 The physics floor is `0.755 · H` in every world. This is why the demo can swap
 four completely different places under a rolling ball and nothing twitches.
+
+---
+
+## Standing on things that are not the ground
+
+One floor is not enough forever. He should be able to climb onto a sunbed and
+lie down, up a step, onto a rock. Two mechanisms, layered, and the second one
+is allowed to fail.
+
+### Surfaces read straight out of the colour
+
+The flat style hands us something depth estimation can never give: **the
+picture already says where every edge is, because the edges are colour
+changes and nothing else.** No gradients inside a shape, so no ambiguity.
+
+```
+1. quantise      snap every pixel to the nearest of the five palette colours
+                 (this also erases the grain, which would otherwise be noise)
+2. classify      each palette colour is SOLID or AIR — decided once per world
+3. column scan   walk down each column; every AIR→SOLID crossing is a surface
+4. segment       group adjacent columns into platforms; a vertical jump larger
+                 than his hop height ends one platform and starts another
+5. simplify      Ramer–Douglas–Peucker on each platform's polyline
+```
+
+That is not guesswork, because the colours were painted deliberately. It works
+here for the same reason chroma-keying the layers works here — the style was
+chosen partly *because* it makes the machine's job unambiguous.
+
+### He cannot climb the tower, and the reason is his body
+
+The limits belong to him, not to the level:
+
+| | |
+|---|---|
+| top rolling speed | fixed |
+| hop height | ~1.2 × his own radius. Never more, in any world, for any reason |
+| gravity | one constant |
+| **the rule under all of it** | **he is never moved *to* a position — he is only ever pushed.** No teleport, no tween into place, no exceptions anywhere in the codebase |
+
+Before he appears, walk the platform list and keep only what a real jump arc
+can actually reach from his spawn — the reachable set. Everything else does not
+exist for him. The rooftop is forty storeys up, so it is unreachable, so he
+never goes there. The sunbed is thirty pixels up, so he climbs on it.
+
+There is no code that puts him somewhere. There is only code that pushes him.
+That is what makes teleporting impossible rather than merely forbidden.
+
+### Which gets built first, and why that order is not negotiable
+
+**Phase 1 — hand-made skeletons, and they are adjustable.** Thirty to fifty
+collision layouts drawn by hand. Not fixed pictures: *parameterised*. A skeleton
+is not "this street", it is "buildings — how tall, how far apart, how many
+levels, where the gap is". Change the numbers, get a different correct street.
+Forty skeletons × their parameters × any paint is far more variety than anyone
+will notice, and every single one is guaranteed to work.
+
+**Phase 2 — colour-derived surfaces, as an upgrade**, for the small things only.
+
+That order is fixed, because of the failure modes. If colour detection has a bad
+day, he stands inside a wall — the single worst bug this app can have, because
+it destroys the illusion completely and the illusion *is* the product. So it
+ships on top of something that already works, never as the thing everything
+rests on. **When detection finds nothing, he uses the main floor and nobody can
+tell anything went wrong.** A feature whose failure mode is invisible is safe to
+add; one whose failure mode is a friend standing in a wall is not.
 
 ---
 
@@ -273,11 +368,19 @@ ship.
 4. **Never from GPS. Only from what they told him.** He knows about the surfing
    trip because they said so. Silent location tracking would be the exact
    opposite of this app's ethic, and worse, it would feel like software.
-5. **The world stays quiet.** It is the room the conversation happens in, not
-   the show. This is the real argument for the flat limited-palette style over
-   anything photographic or spectacular — a world that competes with him is a
-   world that took something away.
-6. **It can go back.** If someone's life changes, so does the place. Nothing
+5. **The world may be as beautiful as we can make it. It may never keep
+   score.** Nothing in it accumulates and nothing in it decays. No streak. No
+   garden that dies while you are away. No dimmer lights because it has been
+   eleven days. The instant the scenery acquires a memory that punishes, it
+   stops being a gift and becomes an invoice — the same rule already governing
+   how he greets somebody who vanished for a fortnight, now applied to the
+   furniture. **Reward being there; never punish leaving.** A gorgeous world
+   passes that easily, which is why the earlier framing here — that beauty
+   competes with the friendship — was wrong and has been removed.
+6. **It stays quiet anyway**, for a different reason: it is the room the
+   conversation happens in, not the show. That is the argument for a flat
+   limited palette over anything photographic — restraint, not modesty.
+7. **It can go back.** If someone's life changes, so does the place. Nothing
    here is a trophy cabinet.
 
 ---
@@ -314,13 +417,16 @@ friend is standing in a puddle.
 
 ## What is needed to start
 
-1. **Thirty drawings.** The single blocking input. Everything above is
-   downstream of them, and nobody else can make them.
-2. A LoRA trained on those thirty (FLUX.2, or Scenario if a UI is preferred —
-   ~15 refs, ~20 min, commercial rights included).
+1. **Eight drawings, then twenty-two more.** Thirty is the target, but train on
+   the first eight and look. If the style holds, finish the set. If it does not,
+   eight is all that was lost. This is the single blocking input and nobody else
+   can make it.
+2. A LoRA trained on them (FLUX.2, or Scenario if a UI is preferred — ~15 refs,
+   ~20 min, commercial rights included).
 3. The depth template PNG rendered from the layout contract — one file.
-4. The renderer: fixed terrain, layer stack, parallax, particles, mood tint.
-   Independent of all of the above and buildable now.
+4. The renderer: terrain, layer stack, parallax, particles, mood tint, and his
+   movement limits. Independent of all of the above and buildable now.
+5. The parameterised skeletons (phase 1 above). Also independent.
 
-Item 4 does not wait on items 1–3. The geometry is the part that has to be
-right; the paint can arrive later.
+Items 4 and 5 do not wait on 1–3. The geometry is the part that has to be right;
+the paint can arrive later.
