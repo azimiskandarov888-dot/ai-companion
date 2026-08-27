@@ -85,26 +85,52 @@ style has to carry light. Detail is optional.
 
 ---
 
-## The rules every generated asset obeys
+## Two kinds of image, and they get opposite prompts
 
-Non-negotiable, and they are what make separate images behave as one world:
+Confusing these is the easiest mistake to make, because one of them is supposed
+to look bad.
+
+**Parts** — a tree, a rock, a chair. Nobody ever sees this image. It is a
+component, like a Lego brick: dead centre, whole, evenly lit, on nothing. It
+should look posed and boring, and if it doesn't, it can't be placed.
+
+**Scenes** — the panorama, the sky, the ground. This is what a person actually
+looks at. It must feel cut out of somewhere real: off-centre, things running out
+of frame, nothing arranged.
+
+**The life comes from the assembly, not from the parts.** Code scatters trees at
+irregular positions, some so close only an edge shows, some half off the screen,
+overlapping at different sizes. Boring parts make a living world. The reverse
+does not work: a tree already cropped inside its own file can never be placed in
+the middle of the screen.
+
+### Prompt for parts
 
 ```
-side view, orthographic, camera level with the middle of the object,
-no perspective distortion, whole object visible, base of the object
-exactly at the bottom edge of the frame, centred horizontally,
-transparent background, lit by ONE warm light from the upper right at
-about 30 degrees, cool shadow side, no cast shadow, no ground, no
-grass, nothing else in frame, no text, no watermark, no border
+[object], side view, no perspective, centred, standing on the bottom
+edge of the frame, transparent background, light from the upper right,
+no shadow, no ground, nothing else
 ```
 
 | rule | what breaks without it |
 |---|---|
-| orthographic, no perspective | the sprite is only correct at the distance it was drawn for |
-| base exactly at the bottom edge | placement on the ground is eyeballed instead of exact |
-| no cast shadow | code cannot match the shadow to the scene's sun, and everything looks glued on |
-| **one light direction, for the whole app, forever** | the single biggest thing separating a set of pictures from a world |
+| side view, no perspective | the sprite is only correct at the distance it was drawn for |
+| standing on the bottom edge | placement on the ground is eyeballed instead of exact |
+| no shadow | code cannot match the shadow to the scene's sun, and everything looks glued on |
+| **light from the upper right — for the whole app, forever** | the single biggest thing separating a set of pictures from a world |
 | transparent (or flat pure magenta, keyed out) | halos on every edge |
+
+### Prompt for scenes
+
+```
+[place], wide view, eye level, natural off-centre composition, things
+running out of the frame at the edges, nothing posed, coloured light and
+haze, empty ground across the bottom of the image, [STYLE]
+```
+
+The last clause is the layout contract from `WHERE-HE-LIVES.md` surviving into
+the generated art: whatever the picture is, the bottom band stays clear, because
+that is where he walks.
 
 ### Manifest
 
@@ -136,6 +162,32 @@ The panorama and the ground texture are the two that are *not* transparent
 cut-outs, and they are where generation is strongest and code was weakest.
 
 ---
+
+## Which generator
+
+Two tools, one for each phase. Nothing does both well.
+
+**Finding the look — Midjourney v7.** Nothing beats it on raw beauty for
+painterly work, and that is the entire job of step 1. Once an image is chosen,
+`--sref` carries its mood — colour, texture, lighting, medium — onto every later
+prompt without dragging its composition along; v7 made that transfer markedly
+more stable. `--sw` (0–1000, default 100) sets how hard the style is pushed.
+Note the June 2025 rewrite: `--sref` codes from older libraries need `--sv 4` to
+behave as they used to. ~$10/mo.
+
+**Producing the assets — Scenario.** Once ~15 images are approved, train them
+into a private model (about 20 minutes) and generate the rest from it. Purpose-
+built for holding one style across hundreds of game assets, exports transparent
+PNG, commercial rights included, ~$15/mo. Style then lives in the weights rather
+than in a reference image, which is what holds it over hundreds of files.
+
+**Not Nano Banana Pro for either** — its strength is surgical editing ("same
+tree, shorter, move the branch"), so it is the right tool for repairing one
+asset and the wrong one for establishing a style.
+
+Midjourney has no clean alpha channel. Generate parts on flat pure magenta and
+key them out — trivial in this style, since there are no soft photographic
+edges. Panoramas and ground textures need no alpha at all.
 
 ## Sequence
 
