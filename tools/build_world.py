@@ -28,16 +28,19 @@ TPL = Path(
     "1e77023f-6584-560d-819b-b5ce172c6c2e/scratchpad/world.tpl.html"
 )
 
-# Bands stretch the full width of the screen and tile, so they keep more pixels
-# than an object that is never drawn larger than a third of the frame.
-MAX_OBJECT = 620
+# A tree two metres from the camera fills the frame and then some, so it is the
+# one thing that has to survive being looked at closely; everything else is
+# small on screen for its whole life and spends pixels nobody sees.
+MAX_TREE = 1100
+MAX_OBJECT = 640
 MAX_BAND = 1400
-QUALITY = 86
+QUALITY = 88
 
 
 def encode(path: Path, kind: str) -> tuple[str, int, int]:
     im = Image.open(path).convert("RGBA")
-    cap = MAX_BAND if kind in ("band", "frame") else MAX_OBJECT
+    cap = (MAX_BAND if kind in ("band", "frame")
+           else MAX_TREE if kind == "tree" else MAX_OBJECT)
     if max(im.size) > cap:
         k = cap / max(im.size)
         im = im.resize((max(1, round(im.width * k)), max(1, round(im.height * k))),
