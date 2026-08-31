@@ -30,10 +30,11 @@ CUT = Path("assets/cut")
 
 # Magenta sits at ~300-330°. Everything we draw is green through blue, 80-260°.
 # A generous window still leaves a wide empty gap on either side.
-BG_HUE = 315.0
-HUE_WINDOW = 62.0      # degrees either side of BG_HUE counted as background
-MIN_SAT = 0.16         # near-grey pixels are never background, whatever the hue
-SOFT = 14.0            # degrees of feathering at the edge of the window
+BG_HUE = 318.0
+HUE_WINDOW = 78.0      # degrees either side of BG_HUE counted as background
+MIN_SAT = 0.13         # near-grey pixels are never background, whatever the hue
+SOFT = 9.0             # degrees of feathering at the edge of the window
+ERODE = 1              # pixels of alpha pulled back, to eat the last of the fringe
 
 
 def _hsv(rgb: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -55,6 +56,23 @@ def _hsv(rgb: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     return h, s, mx
 
 
+def _erode(a: np.ndarray, n: int) -> np.ndarray:
+    """Pull the alpha edge back by n pixels.
+
+    Anti-aliasing leaves a one-pixel ring that is half object and half ground.
+    Despilling fixes its colour but not its coverage, and on something like
+    foliage — which is nearly all edge — that ring is a large fraction of the
+    silhouette and still reads as a halo. Taking the minimum over the immediate
+    neighbourhood spends one pixel of the outline to be rid of it.
+    """
+    for _ in range(n):
+        p = np.pad(a, 1, mode="edge")
+        a = np.minimum.reduce([
+            p[1:-1, 1:-1], p[:-2, 1:-1], p[2:, 1:-1], p[1:-1, :-2], p[1:-1, 2:],
+        ])
+    return a
+
+
 def _alpha(rgb: np.ndarray) -> np.ndarray:
     """1 where the object is, 0 where the magenta is, feathered between."""
     h, s, _ = _hsv(rgb)
@@ -62,27 +80,35 @@ def _alpha(rgb: np.ndarray) -> np.ndarray:
     # 0 at the centre of the window, 1 once we are SOFT degrees outside it
     a = np.clip((dist - HUE_WINDOW) / SOFT, 0.0, 1.0)
     a[s < MIN_SAT] = 1.0                                   # greys are never the ground
-    return a
+    a = _erode(a, ERODE)
+    # Push what is left of the feather to one end or the other: a half-covered
+    # pixel is the halo, and there is nothing in this style that needs one.
+    return np.clip(a * 1.45 - 0.30, 0.0, 1.0)
 
 
 def _despill(rgb: np.ndarray, a: np.ndarray) -> np.ndarray:
-    """Take the magenta back out of the edge pixels it bled into.
+    """Take the magenta back out of every pixel it bled into.
 
     An anti-aliased edge is part object, part ground, so every boundary pixel
     carries some magenta. Left alone it shows up as a pink halo the moment the
     sprite is composited over anything that is not magenta. Magenta is red and
-    blue with no green, so clamping red and blue toward green removes it without
-    touching colours that were meant to be there.
+    blue with no green, so clamping red and blue toward green removes it.
+
+    The clamp runs on a band a few pixels wide rather than only on partly
+    transparent pixels: the bleed reaches further in than the alpha edge does,
+    and a fully opaque pixel one step inside the outline is still pink. Blue is
+    given more room than red, because rock and trunk are legitimately blue and
+    nothing in this art is legitimately magenta.
     """
     out = rgb.copy()
-    edge = (a > 0.02) & (a < 0.985)
-    if not edge.any():
+    near = _erode(a, 3) < 0.999                            # within ~3px of the edge
+    if not near.any():
         return out
     g = out[..., 1]
-    cap = g + 0.06
-    for c in (0, 2):
+    for c, room in ((0, 0.02), (2, 0.12)):
         ch = out[..., c]
-        over = edge & (ch > cap)
+        cap = g + room
+        over = near & (ch > cap)
         ch[over] = cap[over]
     return out
 

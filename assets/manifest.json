@@ -3,124 +3,139 @@
     "id": "frame-left",
     "file": "frame-left.png",
     "kind": "frame",
-    "w": 800,
-    "h": 533,
+    "w": 799,
+    "h": 531,
     "sway": 0.5
   },
   {
     "id": "tree-broad-6",
     "file": "tree-broad-6.png",
     "kind": "tree",
-    "w": 952,
-    "h": 549,
+    "w": 950,
+    "h": 548,
     "sway": 0.8,
-    "height_m": 6.0
+    "height_m": 6.0,
+    "solid_m": 0.4
   },
   {
     "id": "log-3",
     "file": "log-3.png",
     "kind": "seat",
-    "w": 971,
-    "h": 324,
+    "w": 965,
+    "h": 322,
     "sway": 0.0,
-    "height_m": 1.0
+    "height_m": 1.0,
+    "solid_m": 0.95,
+    "hue_bias": 34
   },
   {
     "id": "tree-leafy-11",
     "file": "tree-leafy-11.png",
     "kind": "tree",
-    "w": 939,
-    "h": 1007,
+    "w": 937,
+    "h": 1006,
     "sway": 1.0,
-    "height_m": 11.0
+    "height_m": 11.0,
+    "solid_m": 0.45
   },
   {
     "id": "rock-12",
     "file": "rock-12.png",
     "kind": "rock",
-    "w": 1137,
-    "h": 397,
+    "w": 1135,
+    "h": 395,
     "sway": 0.0,
-    "height_m": 1.2
+    "height_m": 1.2,
+    "solid_m": 1.1,
+    "hue_bias": -8
   },
   {
     "id": "bush-flowering-06",
     "file": "bush-flowering-06.png",
     "kind": "bush",
-    "w": 952,
-    "h": 407,
+    "w": 950,
+    "h": 403,
     "sway": 1.6,
-    "height_m": 0.6
+    "height_m": 0.6,
+    "solid_m": 0.0
   },
   {
     "id": "tree-crooked-7",
     "file": "tree-crooked-7.png",
     "kind": "tree",
-    "w": 723,
-    "h": 984,
+    "w": 720,
+    "h": 981,
     "sway": 1.2,
-    "height_m": 7.0
+    "height_m": 7.0,
+    "solid_m": 0.35
   },
   {
     "id": "tree-leafy-6",
     "file": "tree-leafy-6.png",
     "kind": "tree",
-    "w": 1153,
-    "h": 1474,
+    "w": 1151,
+    "h": 1472,
     "sway": 1.0,
-    "height_m": 6.0
+    "height_m": 6.0,
+    "solid_m": 0.35
   },
   {
     "id": "tree-leafy-8",
     "file": "tree-leafy-8.png",
     "kind": "tree",
-    "w": 1505,
-    "h": 1745,
+    "w": 1503,
+    "h": 1743,
     "sway": 1.0,
-    "height_m": 8.0
+    "height_m": 8.0,
+    "solid_m": 0.4
   },
   {
     "id": "bush-wide-10",
     "file": "bush-wide-10.png",
     "kind": "bush",
-    "w": 932,
-    "h": 525,
+    "w": 930,
+    "h": 523,
     "sway": 1.5,
-    "height_m": 1.0
+    "height_m": 1.0,
+    "solid_m": 0.0
   },
   {
     "id": "rock-04",
     "file": "rock-04.png",
     "kind": "rock",
-    "w": 823,
-    "h": 334,
+    "w": 821,
+    "h": 332,
     "sway": 0.0,
-    "height_m": 0.4
+    "height_m": 0.4,
+    "solid_m": 0.55,
+    "hue_bias": -8
   },
   {
     "id": "tree-pine-13",
     "file": "tree-pine-13.png",
     "kind": "tree",
-    "w": 671,
-    "h": 1007,
+    "w": 669,
+    "h": 1004,
     "sway": 0.6,
-    "height_m": 13.0
+    "height_m": 13.0,
+    "solid_m": 0.4
   },
   {
     "id": "grass-04",
     "file": "grass-04.png",
     "kind": "grass",
-    "w": 764,
-    "h": 1709,
+    "w": 737,
+    "h": 1639,
     "sway": 2.2,
-    "height_m": 0.5
+    "height_m": 0.5,
+    "solid_m": 0.0
   },
   {
     "id": "ridge-near",
     "file": "ridge-near.png",
     "kind": "band",
     "w": 1536,
-    "h": 440,
+    "h": 437,
     "sway": 0.0
   },
   {
@@ -128,7 +143,7 @@
     "file": "ridge-mid.png",
     "kind": "band",
     "w": 1024,
-    "h": 377,
+    "h": 375,
     "sway": 0.0
   },
   {
@@ -136,7 +151,7 @@
     "file": "ridge-far.png",
     "kind": "band",
     "w": 1536,
-    "h": 203,
+    "h": 202,
     "sway": 0.0
   },
   {
@@ -144,25 +159,28 @@
     "file": "ground-near.png",
     "kind": "band",
     "w": 1536,
-    "h": 262,
+    "h": 260,
     "sway": 0.0
   },
   {
     "id": "rock-15",
     "file": "rock-15.png",
     "kind": "rock",
-    "w": 922,
-    "h": 434,
+    "w": 919,
+    "h": 432,
     "sway": 0.0,
-    "height_m": 1.5
+    "height_m": 1.5,
+    "solid_m": 1.3,
+    "hue_bias": -8
   },
   {
     "id": "tree-leafy-9",
     "file": "tree-leafy-9.png",
     "kind": "tree",
-    "w": 940,
-    "h": 1009,
+    "w": 937,
+    "h": 1008,
     "sway": 1.0,
-    "height_m": 9.0
+    "height_m": 9.0,
+    "solid_m": 0.42
   }
 ]
