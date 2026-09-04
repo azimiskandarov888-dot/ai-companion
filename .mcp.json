@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "browser": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@playwright/mcp@latest",
+        "--user-data-dir=${HOME}/.claude-browser-profile",
+        "--output-dir=${CLAUDE_PROJECT_DIR}/.browser"
+      ]
+    }
+  }
+}

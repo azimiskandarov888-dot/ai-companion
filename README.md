@@ -11,6 +11,7 @@ remembers his stories and can start a conversation on its own.
 > **How a friend is made** (the soul): **[docs/SOUL.md](./docs/SOUL.md)**
 > **Many people, one server** (identity & privacy): **[docs/MANY-PEOPLE.md](./docs/MANY-PEOPLE.md)**
 > **His voice** (which one, what Russian really costs, why he answers faster): **[docs/HIS-VOICE.md](./docs/HIS-VOICE.md)**
+> **Claude drives the browser** (ending the copy-paste art loop): **[docs/JARVIS-SETUP.md](./docs/JARVIS-SETUP.md)**
 > **The family's original plan:** **[PLAN.md](./PLAN.md)**
 
 ## The parts (like a person)

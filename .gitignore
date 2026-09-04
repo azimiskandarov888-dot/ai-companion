@@ -48,3 +48,10 @@ ios/*.xcodeproj
 
 # Logs
 *.log
+
+# Browser automation scratch (screenshots, traces, downloads from Playwright MCP).
+# Generated art belongs in assets/raw/ under its exact name — never here.
+.browser/
+
+# Claude Code per-machine settings. The shared .claude/settings.json IS tracked.
+.claude/settings.local.json
