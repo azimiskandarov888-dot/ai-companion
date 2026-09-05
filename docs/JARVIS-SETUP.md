@@ -131,67 +131,106 @@ Chrome's own password store and nowhere near a transcript.
 
 ---
 
-## Midjourney: the one you named, and the one to avoid
+## Talking to it, and doing it from the phone
 
-Midjourney has no public API — deliberately, not as a missing feature — and
-their terms say plainly: *you may not use automated tools to access, interact
-with, or generate Assets.* Accounts get banned for it, including people whose
-only crime was wiring it into an automation tool.
+Two things that are not browser automation and are worth having first.
 
-A browser being driven by an agent is exactly what that rule is about. So this
-is not a "be careful" — driving Midjourney with the setup on this page is a good
-way to lose the Midjourney account.
+**Voice, at the desk.** Claude Code has built-in dictation. Hold **spacebar**,
+talk, release. `/voice tap` switches to tap-to-start if holding gets old. It
+wants a local microphone, so it works where you are sitting and not over SSH.
 
-The good news is that this costs the project almost nothing, because of what
-`HOW-THE-ART-IS-MADE.md` already decided:
+**The phone.** This is the one that changes how the day goes:
 
-> **Finding the look — Midjourney v7.** … **Producing the assets — Scenario.**
+```bash
+cd ~/ai-companion
+claude remote-control        # prints a session URL; press SPACE for a QR code
+```
 
-Midjourney's job here is *step 1 only*: twenty style plates, and **you** pick
-one. That is a single human judgement call, made once, that no automation should
-be making anyway. Run it by hand, in the normal way, like a person. It is the
-one blocking step in the whole build and it stays blocking.
+Scan the QR. The Claude app on the phone — or claude.ai/code in a browser — is
+now a window into the session **running on this machine**. Not a copy in the
+cloud: the same process, the same filesystem, the same `assets/` folder, the
+same MCP servers as the section above. Terminal, browser and phone stay in sync,
+so you can start something at the desk and finish it from the sofa.
 
-**Scenario — the tool this project already picked for the other twenty assets —
-has a REST API.** So does every other production-side generator worth using
-(Ideogram, Recraft, Flux via fal.ai or Replicate). Those need no browser at all,
-break no rules, and are faster than clicking.
+Then run `/config` and turn on **Push when actions required**. The `ask` list in
+`.claude/settings.json` becomes a notification on the phone: it buzzes, you
+approve the click, it carries on. Sleep and dropped wifi are survivable — the
+prompts queue and arrive when the machine is back. What is not survivable is the
+machine being *off*: nothing here runs in the cloud.
+
+### The consequence for choosing art
+
+A browser window only works if you are in front of it. So the choosing step is
+not a screen — it is **a picture Claude sends**, which renders the same in the
+terminal, in the browser and on the phone.
+
+That is what `tools/generate_variants.py` builds: one contact sheet, every
+candidate labelled A B C D with its measurements printed underneath, on a
+checkerboard so a background that never came off is obvious. You say *"B and
+D"*. The browser stays useful for watching, and stops being required.
 
 ---
 
-## What this project's loop should actually be
+## The loop, as built
 
-Here is the thing worth noticing: **the pipeline is already automated except for
-one step.**
+The pipeline was already automated except for one step — getting a correctly
+named PNG into `assets/raw/`. `cut_assets.py` keys the magenta, measures the
+base row and writes the cut-out; `build_world.py` bakes the sprites into a page;
+`assets/raw/README.md` fixes the exact filename for every asset. All of that was
+done. Only the middle was hand work.
 
-```
-prompt  →  generator  →  assets/raw/<exact-name>.png  →  cut_assets.py  →  build_world.py
-   ^           ^                    ^                        already          already
-   |           |                    |                        automated        automated
-   |           |                    └── this is the only manual step
-   |           └── needs an API key, not a browser
-   └── already written, in HOW-THE-ART-IS-MADE.md
-```
+Four scripts close it:
 
-`tools/cut_assets.py` already keys the magenta, feathers the edge and measures
-the base row. `tools/build_world.py` already bakes the sprites into the page.
-`assets/raw/README.md` already fixes the exact filename for every asset. Nobody
-needs to automate any of that — it's done.
+| | |
+|---|---|
+| `tools/recraft.py` | the API client — generate, remove background, create a style |
+| `tools/generate_variants.py` | prompt → n candidates → cut → measure → **reject** → contact sheet |
+| `tools/accept_variant.py` | the chosen letter → `raw/`, `cut/`, and the manifest |
+| `tools/inspect_assets.py` | the same checks over the whole finished set |
 
-What's missing is one script, roughly eighty lines: take an asset name from
-`assets/raw/README.md`, build the prompt from the template in
-`HOW-THE-ART-IS-MADE.md`, POST it, poll, save the PNG under the correct name,
-then run the two tools that already exist. After that:
+```bash
+pip install -r tools/requirements.txt
+# put RECRAFT_API_TOKEN=... in backend/.env (already gitignored)
 
-```
-you:     "regenerate tree-pine-13, the crown is too dense"
-claude:  [generates, cuts, rebuilds, opens the world, screenshots it]
-you:     [look at it]
+python3 tools/generate_variants.py tree-leafy-11 --note "lighter crown"
+python3 tools/accept_variant.py tree-leafy-11 B --build
 ```
 
-Zero copy-paste. Zero renaming. Zero attaching pictures to chats. That is the
-Jarvis version of this repo, and it is a `SCENARIO_API_KEY` and an afternoon
-away — not a browser-automation problem at all.
+Two things about this are worth more than the automation itself.
+
+**Recraft returns real alpha.** `removeBackground` gives a transparent PNG
+directly, so the magenta ground and the whole de-spilling half of
+`cut_assets.py` stop being necessary for anything generated this way. That file
+stays exactly as it is for the nineteen plates already made the old way.
+
+**Bad candidates never reach you.** Every variant is measured against the grain
+band for its kind before the contact sheet is built, so a canopy that came out
+as one undifferentiated mass is dropped silently. Four shown is four worth
+looking at. `--keep-all` overrides it when you want to see the rejects.
+
+The anchor style from `HOW-THE-ART-IS-MADE.md` lives in `assets/style.json` as a
+Recraft `style_id`. That document budgeted fifteen approved images and a
+twenty-minute training run for it; this takes up to five and returns
+immediately:
+
+```bash
+python3 tools/recraft.py assets/cut/tree-leafy-8.png assets/cut/tree-leafy-9.png
+```
+
+### What it costs
+
+A V4.1 raster image is about 35 API units and a thousand units is a dollar, so
+four variants runs to roughly fifteen cents. Check Recraft's own pricing before
+a large batch.
+
+### The one honest gap
+
+Midjourney is not in any of this, on purpose. It has no public API by design and
+its terms forbid automated access outright — accounts get banned for exactly the
+setup on this page. That costs the project almost nothing, because
+`HOW-THE-ART-IS-MADE.md` gave Midjourney *step 1 only*: twenty style plates
+where a human picks one. Run that by hand, like a person. It is the one blocking
+step in the build and it stays blocking.
 
 ---
 

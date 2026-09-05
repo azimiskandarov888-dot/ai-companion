@@ -12,7 +12,10 @@
       "mcp__browser__browser_resize",
       "mcp__browser__browser_tabs",
       "Bash(python3 tools/cut_assets.py:*)",
-      "Bash(python3 tools/build_world.py:*)"
+      "Bash(python3 tools/build_world.py:*)",
+      "Bash(python3 tools/inspect_assets.py:*)",
+      "Bash(python3 tools/generate_variants.py:*)",
+      "Bash(python3 tools/accept_variant.py:*)"
     ],
     "ask": [
       "mcp__browser__browser_click",

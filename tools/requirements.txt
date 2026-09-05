@@ -1,0 +1,5 @@
+# The art pipeline. Separate from backend/requirements.txt: these run on the
+# build machine to make assets, not on the server that talks to him.
+numpy>=1.26
+Pillow>=10.2
+httpx>=0.27        # Recraft REST API (same client the backend uses for TTS)

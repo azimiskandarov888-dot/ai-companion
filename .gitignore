@@ -53,5 +53,11 @@ ios/*.xcodeproj
 # Generated art belongs in assets/raw/ under its exact name — never here.
 .browser/
 
+# Candidate plates waiting to be chosen. A variant that gets picked is copied
+# into assets/raw/ and assets/cut/ by accept_variant.py; the rest are rejects
+# and there is no reason to carry four of them per asset in git.
+# assets/style.json (the anchor style_id) IS tracked — it's a decision, not scratch.
+assets/variants/
+
 # Claude Code per-machine settings. The shared .claude/settings.json IS tracked.
 .claude/settings.local.json
