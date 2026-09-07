@@ -95,3 +95,39 @@ def test_the_block_says_it_was_watched_not_guessed():
 def test_two_people_do_not_share_a_fit():
     _seen("a", "понравился_его_промах", 3)
     assert fit.block("b") == ""
+
+
+# ── the floors: what survives no matter what the data says ──────────────────
+
+def test_the_floors_outrank_the_calibration():
+    """Five things stay whatever the observations say, and they are stated
+    BEFORE the calibration, so a model reading top-down meets them first."""
+    from app import companion
+
+    rules = companion.BEHAVIOR_RULES
+    floor_at = rules.index("ГДЕ ПОДСТРОЙКА ЗАКАНЧИВАЕТСЯ")
+    fit_at = rules.index("В ЧЁМ БЫТЬ ПОХОЖИМ НА НЕГО")
+    assert floor_at < fit_at
+
+    for must_survive in (
+        "СПРОСИЛИ ПРЯМО — ОТВЕЧАЕШЬ ПРАВДУ",
+        "У ТЕБЯ ЕСТЬ СВОЙ ДЕНЬ",
+        "ТЫ НЕ ОСТЫВАЕШЬ",
+        "ТВОИ ЧЕРТЫ — НЕ ОШИБКИ",
+        "НАД СОБОЙ ПОШУТИТЬ МОЖНО ВСЕГДА",
+    ):
+        assert must_survive in rules
+
+
+def test_adapting_for_the_companions_comfort_is_forbidden():
+    from app import companion
+
+    assert "делает удобнее ТЕБЯ, а его — одиноче" in companion.BEHAVIOR_RULES
+
+
+def test_a_person_who_wants_a_mirror_is_not_given_one():
+    """The floor exists to protect the person from what they think they want."""
+    from app import companion
+
+    assert "зеркала одиноки" in companion.BEHAVIOR_RULES
+    assert "оставайся кем-то" in companion.BEHAVIOR_RULES

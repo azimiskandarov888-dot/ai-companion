@@ -14,6 +14,7 @@ phone actually experiences.
 from __future__ import annotations
 
 import json
+import re
 
 import pytest
 from fastapi.testclient import TestClient
@@ -127,8 +128,11 @@ def client(monkeypatch):
 
     async def fake_reply(history, system_stable, system_variable="", *, fresh_info=False):
         # Answer with the name of whoever this server thinks it is, so a
-        # crossed wire shows up as the wrong friend replying.
-        name = system_stable.split("ТЫ — ")[1].split(".")[0]
+        # crossed wire shows up as the wrong friend replying. Anchored to the
+        # start of a line, because the behaviour rules legitimately contain
+        # «ТВОИ ЧЕРТЫ — НЕ ОШИБКИ», and a bare substring search finds that
+        # first and makes every one of these tests fail for the wrong reason.
+        name = re.search(r"^ТЫ — ([^.]+)\.", system_stable, re.M).group(1)
         return f"Это {name}."
 
     async def fake_learn(*a, **k):
