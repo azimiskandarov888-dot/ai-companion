@@ -61,6 +61,7 @@ from . import (
     config,
     db,
     diary,
+    fit,
     identity,
     intake,
     learn,
@@ -195,6 +196,8 @@ async def _assemble(user_id: str, user_text: str) -> tuple[str, str, list, str |
         reading_block=reading.standing_block(reading.load(user_id)),
         # Proven on him, not guessed about him. See mood.py.
         confirmed_block=mood.standing_block(user_id),
+        # How the two of them fit — watched, never guessed.
+        fit_block=fit.block(user_id),
         elder_facts=elder_facts,
         bob_facts=bob_facts,
         memory_context=mem_ctx,
