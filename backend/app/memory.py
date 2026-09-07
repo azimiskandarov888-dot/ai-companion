@@ -485,9 +485,18 @@ async def build_memory_context(user_id: str, query_text: str) -> str:
         )
         surface_follow_up(user_id, fup["id"])
 
-    mood = latest_mood(user_id)
-    if mood:
-        sections.append(f"Его настроение в последнее время: {mood}.")
+    # How he is against HIS OWN normal, not a word with nothing to compare it
+    # to. This is the section companion.py's «перемена важнее самого тона»
+    # depends on; see mood.py for why one word could never carry it.
+    from . import mood as _mood   # local: mood imports db only, keep it that way
+
+    said = _mood.block(user_id)
+    if said:
+        sections.append(said)
+    else:
+        latest = latest_mood(user_id)
+        if latest:
+            sections.append(f"Его настроение в последнее время: {latest}.")
 
     return "\n\n".join(sections)
 

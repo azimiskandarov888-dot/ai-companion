@@ -83,6 +83,39 @@ CREATE TABLE IF NOT EXISTS diary (
     fingerprint TEXT NOT NULL,                       -- of the memory it was written from
     updated_ts  REAL NOT NULL
 );
+
+-- One numeric read of how he seemed, per exchange. A word ("устал") cannot be
+-- compared with the word before it, so a word can never show a CHANGE — and the
+-- change is the whole point. Five small scales can. See mood.py.
+CREATE TABLE IF NOT EXISTS mood_readings (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id     TEXT NOT NULL,
+    ts          REAL NOT NULL,
+    energy      REAL,      -- -2..+2, higher is better on every one of these,
+    warmth      REAL,      --         so they can be averaged without thinking
+    lightness   REAL,      --         about which way each one points
+    clarity     REAL,
+    engagement  REAL,
+    word        TEXT,      -- the one-word mood, kept for the diary
+    note        TEXT,      -- one human sentence about how he seemed
+    because     TEXT       -- his own words that showed it
+);
+
+-- The "seen once, watching" register. Several rules in companion.py say some
+-- version of «по одному разу не решай» — decide only when it happens twice.
+-- That is unenforceable with nowhere to hold the first time, so this is that
+-- place. `times` is what makes something true; a single occurrence is kept and
+-- deliberately not acted on.
+CREATE TABLE IF NOT EXISTS observations (
+    user_id     TEXT NOT NULL,
+    tag         TEXT NOT NULL,               -- from mood.TAGS, never free text
+    subject     TEXT NOT NULL DEFAULT '',    -- the topic it was about, if any
+    times       INTEGER NOT NULL DEFAULT 0,
+    first_ts    REAL NOT NULL,
+    last_ts     REAL NOT NULL,
+    evidence    TEXT,
+    PRIMARY KEY (user_id, tag, subject)
+);
 """
 
 # Every index leads with user_id. Nothing is ever read across users, so a
@@ -98,6 +131,8 @@ _INDEXES = (
     # add_memory's duplicate check, which runs before every single write.
     "CREATE INDEX IF NOT EXISTS idx_memories_user_owner_created "
     "ON memories(user_id, owner, created_ts)",
+    # mood.recent(): WHERE user_id=? ORDER BY ts DESC LIMIT ?
+    "CREATE INDEX IF NOT EXISTS idx_mood_user_ts ON mood_readings(user_id, ts)",
 )
 
 #: Indexes from the single-user schema. After a RENAME COLUMN, SQLite rewrites

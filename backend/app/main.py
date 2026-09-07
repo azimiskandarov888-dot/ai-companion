@@ -66,6 +66,7 @@ from . import (
     learn,
     matchmaker,
     memory,
+    mood,
     occasions,
     persona,
     reading,
@@ -192,6 +193,8 @@ async def _assemble(user_id: str, user_text: str) -> tuple[str, str, list, str |
         # How this person needs to be spoken to, and what must never be
         # joked about. Stable, so it rides in the cached half for free.
         reading_block=reading.standing_block(reading.load(user_id)),
+        # Proven on him, not guessed about him. See mood.py.
+        confirmed_block=mood.standing_block(user_id),
         elder_facts=elder_facts,
         bob_facts=bob_facts,
         memory_context=mem_ctx,
