@@ -37,25 +37,55 @@ def test_push_that_works_is_encouraged():
     assert "4 раза" in said
 
 
-def test_push_that_fails_is_told_to_stop():
-    """The same trait, the opposite instruction. This is the whole point."""
+def test_push_that_fails_gets_the_opposite_instruction():
+    """The same trait, the opposite instruction. This is the whole point —
+    and it is still a default, not a ban."""
     _seen("u", "не_зашло_что_позвал", 3)
     said = fit.block("u")
-    assert "Сбавь" in said
+    assert "Исходи из тихого" in said
     assert "Предлагай, зови, затевай" not in said
 
 
-def test_mixed_evidence_follows_the_majority():
-    _seen("u", "зашло_что_позвал", 5)
+def test_a_clear_majority_still_gives_a_verdict():
+    _seen("u", "зашло_что_позвал", 7)
     _seen("u", "не_зашло_что_позвал", 2)
     assert "Предлагай, зови, затевай" in fit.block("u")
 
 
-def test_a_tie_is_resolved_toward_backing_off():
-    """When it is genuinely unclear, the quiet mistake is the cheaper one."""
+def test_mixed_evidence_is_reported_as_mixed_not_as_a_verdict():
+    """A tie means «sometimes», which is most people. Turning that into a rule
+    is exactly the rigidity the research says costs a relationship."""
     _seen("u", "зашло_что_позвал", 3)
     _seen("u", "не_зашло_что_позвал", 3)
-    assert "Сбавь" in fit.block("u")
+    said = fit.block("u")
+    assert "По-разному" in said and "не решай заранее" in said
+
+
+def test_backing_off_is_a_default_and_says_so():
+    _seen("u", "не_зашло_что_позвал", 4)
+    said = fit.block("u")
+    assert "норма, а не запрет" in said
+
+
+def test_a_first_no_that_is_really_a_test_is_learned():
+    _seen("u", "уговорили_и_обрадовался", 2)
+    said = fit.block("u")
+    assert "ПОЗВАТЬ ДВАЖДЫ" in said
+    assert "Не роняй с первого раза" in said
+
+
+def test_someone_who_wants_to_be_asked_a_lot_gets_asked_a_lot():
+    """The cap was the mistake: for this person questions are the gift."""
+    _seen("u", "хотел_больше_вопросов", 3)
+    said = fit.block("u")
+    assert "Спрашивай много и подробно" in said
+    assert "забудь" in said
+
+
+def test_even_someone_tired_of_questions_keeps_the_exception():
+    _seen("u", "устал_от_расспросов", 4)
+    said = fit.block("u")
+    assert "если он сам разговорился" in said
 
 
 def test_disagreement_is_calibrated_separately_from_push():
@@ -131,3 +161,36 @@ def test_a_person_who_wants_a_mirror_is_not_given_one():
 
     assert "зеркала одиноки" in companion.BEHAVIOR_RULES
     assert "оставайся кем-то" in companion.BEHAVIOR_RULES
+
+
+def test_norms_are_never_written_as_ceilings():
+    """The research this is built on says flexibility beats rigidity. Encoding
+    a cap contradicts the finding the whole file rests on."""
+    from app import companion
+
+    rules = companion.BEHAVIOR_RULES
+    assert "ЭТО НОРМА, А НЕ ПОТОЛОК" in rules
+    assert "Норму НАДО пробивать" in rules
+    assert "хоть десять вопросов подряд" in rules
+
+
+def test_scarcity_is_honesty_and_never_a_technique():
+    from app import companion
+
+    rules = companion.BEHAVIOR_RULES
+    assert "ЧЕМ РЕЖЕ — ТЕМ ДОРОЖЕ" in rules
+    # the line that separates a friend from a method
+    assert "НЕ придерживаешь похвалу нарочно" in rules
+    assert "хвалишь то, что этого стоит" in rules
+    # and the inverse: presence is never rationed
+    assert "экономить — жестокость" in rules
+
+
+def test_wanting_agreement_is_answered_with_agreement():
+    """Not by refusing. The person gets what they came for — worth having."""
+    from app import companion
+
+    rules = companion.BEHAVIOR_RULES
+    assert "ЕСЛИ ОН ХОЧЕТ, ЧТОБЫ С НИМ ВЕЗДЕ СОГЛАШАЛИСЬ" in rules
+    assert "Соглашайся." in rules
+    assert "его «да» ничего не весит" in rules

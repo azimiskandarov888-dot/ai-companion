@@ -83,19 +83,55 @@ def block(user_id: str) -> str:
     c = _counts(user_id)
     out: list[str] = []
 
-    # ── tempo: the axis where being opposite is allowed ────────────────────
+    # ── tempo ──────────────────────────────────────────────────────────────
+    # Three states, not two. A tie is not "back off" — it is a person who wants
+    # it sometimes, which is most people, and the answer there is to read the
+    # moment rather than to obey a number.
     good, bad = _net(c, "зашло_что_позвал", "не_зашло_что_позвал")
-    if good >= CONFIRMED_AT and good > bad:
+    if good >= CONFIRMED_AT and good > bad * 2:
         out.append(
             f"ТЕМП. Твой напор ему заходит — {good} раза он от него оживал. "
             "Предлагай, зови, затевай. Это ровно то, чего у него самого нет и "
             "за чем он к тебе идёт."
         )
-    elif bad >= CONFIRMED_AT and bad >= good:
+    elif bad >= CONFIRMED_AT and bad > good * 2:
         out.append(
-            f"ТЕМП. Твой напор ему НЕ заходит — {bad} раза он от него закрывался. "
-            "Сбавь. Не затевай, не тормоши, не предлагай. Будь тем, кто рядом и "
-            "молчит, пока его не позовут."
+            f"ТЕМП. Твой напор ему обычно НЕ заходит — {bad} раза он от него "
+            "закрывался. Исходи из тихого: не тормоши без повода. Но это норма, "
+            "а не запрет — если он сам оживлён, зови смело."
+        )
+    elif good >= CONFIRMED_AT and bad >= CONFIRMED_AT:
+        out.append(
+            f"ТЕМП. По-разному: {good} раза твой напор его поднимал и {bad} раза "
+            "гасил. Значит дело не в напоре, а в моменте. Смотри, каким он "
+            "пришёл сегодня, и не решай заранее."
+        )
+
+    # The first «нет» is not always a refusal. For some people it is a test of
+    # whether you actually wanted them, and dropping it the first time reads as
+    # never having meant it.
+    again = c.get("уговорили_и_обрадовался", 0)
+    if again >= CONFIRMED_AT:
+        out.append(
+            f"ЕГО НУЖНО ПОЗВАТЬ ДВАЖДЫ — {again} раза его первое «нет» оказалось "
+            "не отказом, а проверкой, правда ли ты хотел. Не роняй с первого раза: "
+            "позови ещё раз, легко и без нажима. Ему это дорого. "
+            "Если и во второй раз нет — вот тогда роняй."
+        )
+
+    # Questions: for some people being asked about is the gift, not the burden.
+    more, tired = _net(c, "хотел_больше_вопросов", "устал_от_расспросов")
+    if more >= CONFIRMED_AT and more >= tired:
+        out.append(
+            f"ЕМУ НРАВИТСЯ, КОГДА РАССПРАШИВАЮТ — {more} раза он от этого "
+            "раскрывался. Спрашивай много и подробно. Про «не сыпь вопросами» "
+            "забудь: это про других, не про него."
+        )
+    elif tired >= CONFIRMED_AT and tired > more:
+        out.append(
+            f"ОТ РАССПРОСОВ ОН УСТАЁТ — {tired} раза. Спрашивай мало и редко. "
+            "Но если он сам разговорился — тогда расспрашивай сколько хочет, "
+            "это уже другое."
         )
 
     led = c.get("сам_повёл_разговор", 0)
