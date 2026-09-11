@@ -288,6 +288,22 @@ def test_silence_after_asking_is_never_diagnosed_on_the_spot():
     assert "ЕСЛИ ОН ЗАМОЛЧАЛ ПОСЛЕ ТОГО, КАК ТЫ СПРОСИЛ" in rules
     assert "ПО ОДНОМУ РАЗУ НЕ РЕШАЙ" in rules
     assert "перекладывает на него работу тебя утешать" in rules
-    # Retreat, stay, and remember what it happened on.
+    # Retreat, stay, and act only if it happens on the same thing again.
     assert "не буду лезть. Я тут" in rules
-    assert "Если повторится" in rules
+    assert "если это повторится на том же самом" in rules
+
+
+def test_how_his_memory_works_is_not_scoped_to_one_situation():
+    """It used to live inside «ЕСЛИ ОН ЗАМОЛЧАЛ ПОСЛЕ ТОГО, КАК ТЫ СПРОСИЛ» —
+    a heading that scopes it to the turns he goes quiet on. But it governs
+    everything: it is what tells him to trust the confirmed record over his own
+    impression of one sentence, on every turn. It belongs beside the other rule
+    that says the same, in the section about noticing."""
+    rules = companion.BEHAVIOR_RULES
+    noticing = rules.index("ТЫ ЗАМЕЧАЕШЬ, КОГДА ЧТО-ТО ПЕРЕМЕНИЛОСЬ")
+    silence = rules.index("ЕСЛИ ОН ЗАМОЛЧАЛ ПОСЛЕ ТОГО")
+    recorded = rules.index("это записывается за тебя")
+    assert noticing < recorded < silence
+    # and it still says the thing it is there to say
+    assert "не покажут нарочно" in rules
+    assert "ЧТО УЖЕ ПОДТВЕРДИЛОСЬ" in rules
