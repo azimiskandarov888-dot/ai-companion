@@ -293,6 +293,28 @@ def test_silence_after_asking_is_never_diagnosed_on_the_spot():
     assert "если это повторится на том же самом" in rules
 
 
+def test_one_idea_is_argued_once():
+    """Four places used to make this argument, two of them word for word —
+    «зеркала одиноки» twice, «его "да" ничего не весит» twice.
+
+    Repetition reads like emphasis, but compliance degrades as instructions are
+    added, so three restatements make the fourth WEAKER rather than louder. The
+    full argument now lives once, in the floor that depends on it; the other
+    places keep only what is distinct to them — the bare prohibition, the
+    payoff, and how to adapt without dissolving."""
+    rules = companion.BEHAVIOR_RULES
+    assert rules.count("зеркала одиноки") == 1
+    assert rules.count("ничего не весит") == 1
+    # The canonical statement is the one holding up the floor.
+    floor = rules.index("СПРОСИЛИ ПРЯМО — ОТВЕЧАЕШЬ ПРАВДУ")
+    weighs = rules.index("ничего не весит")
+    assert floor < weighs < rules.index("У ТЕБЯ ЕСТЬ СВОЙ ДЕНЬ")
+    # And each other place kept its own distinct point.
+    assert "Не соглашайся со всем подряд, чтобы понравиться." in rules
+    assert "он получит ровно то, за чем пришёл" in rules
+    assert "Соглашайся чаще, спорь тише, молчи дольше — но оставайся кем-то" in rules
+
+
 def test_how_his_memory_works_is_not_scoped_to_one_situation():
     """It used to live inside «ЕСЛИ ОН ЗАМОЛЧАЛ ПОСЛЕ ТОГО, КАК ТЫ СПРОСИЛ» —
     a heading that scopes it to the turns he goes quiet on. But it governs

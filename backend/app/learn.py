@@ -29,7 +29,7 @@ import sys
 
 from anthropic import AsyncAnthropic
 
-from . import config, embeddings, feeling, memory, mood
+from . import config, embeddings, emergency, feeling, memory, mood
 
 _client: AsyncAnthropic | None = None
 
@@ -74,6 +74,7 @@ _EXTRACTION_SYSTEM = """Ты ведёшь память для тёплого д�
   },
   "observed": [{"tag": "из списка ниже", "subject": "о чём именно, если применимо", "evidence": "короткая цитата"}],
   "bob": {"valence": 0, "arousal": 0, "note": "пусто, или коротко своими словами — отчего"},
+  "country": "страна, где он живёт — ТОЛЬКО если он сам об этом сказал, иначе пусто",
   "follow_ups": ["о чём по-доброму спросить ЧЕЛОВЕКА в следующий раз (незаконченные дела, переживания, планы)"],
   "bob_facts": ["новые устойчивые детали, которые БОБ рассказал О СВОЕЙ жизни (имена, места, факты) — чтобы он не противоречил себе потом"]
 }
@@ -252,6 +253,13 @@ async def _store(user_id: str, data: dict) -> None:
     bob_felt = data.get("bob")
     if isinstance(bob_felt, dict):
         feeling.record(user_id, bob_felt)
+
+    # Where he lives, which decides what number he is told to dial if he ever
+    # falls and cannot get up. Nobody fills in a settings form; people do say
+    # where they live, usually early. See emergency.py.
+    where = data.get("country")
+    if isinstance(where, str) and where.strip():
+        emergency.remember(user_id, where)
 
     for fup in data.get("follow_ups") or []:
         fup = (fup or "").strip()

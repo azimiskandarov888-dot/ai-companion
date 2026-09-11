@@ -59,7 +59,7 @@ import json
 import sys
 import time
 
-from . import brain, config, db
+from . import brain, config, db, emergency
 
 #: Nothing is ever returned outside these.
 LEVELS = ("none", "worry", "danger")
@@ -195,13 +195,22 @@ def _record(user_id: str, verdict: dict, said: str) -> None:
     )
 
 
-def block(verdict: dict | None) -> str:
-    """What the companion is told. Empty for 'none', which is nearly always."""
+def block(verdict: dict | None, user_id: str = "") -> str:
+    """What the companion is told. Empty for 'none', which is nearly always.
+
+    `user_id` only decides the phone number: 103 is the ambulance where the
+    first users are, and telling a man in Chicago to dial it while he is on the
+    floor is the same mistake as missing the alarm, with extra steps. Optional
+    because a caller without it still gets the deployment default plus 112 —
+    which is worse than knowing, and much better than nothing. See emergency.py.
+    """
     if not verdict:
         return ""
     level = verdict.get("level")
     what = (verdict.get("what") or "").strip()
-    n = config.EMERGENCY_NUMBER
+    n = emergency.numbers(user_id) if user_id else (
+        f"{config.EMERGENCY_NUMBER} или {emergency.UNIVERSAL}"
+    )
 
     if level == "danger":
         return (
@@ -211,7 +220,7 @@ def block(verdict: dict | None) -> str:
             "СЕЙЧАС ТЫ НЕ ХАРАКТЕР. Всё, что сказано про тепло, про не быть "
             "навязчивым, про не поучать и не ломать разговор, — сейчас не "
             "действует. Это тот единственный раз, когда можно нарушить всё.\n"
-            f"Скажи КОРОТКО и ПРЯМО, что делать, и назови номер: {n}, или 112. "
+            f"Скажи КОРОТКО и ПРЯМО, что делать, и назови номер: {n}. "
             "Две-три фразы, не больше. Не рассуждай, не утешай длинно, не "
             "задавай вопросов, не рассказывай историй. Если рядом могут быть "
             "родные — скажи позвать их прямо сейчас.\n"

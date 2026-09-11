@@ -116,6 +116,16 @@ CREATE TABLE IF NOT EXISTS alerts (
     said     TEXT                    -- what the person actually said
 );
 
+-- Where he lives, learned from the conversation rather than asked for. It
+-- decides which emergency number he is told to dial, which is the whole reason
+-- it is stored at all — so only a country this app recognises is ever written
+-- here (see emergency.py), and one row per person, overwritten if he moves.
+CREATE TABLE IF NOT EXISTS places (
+    user_id  TEXT PRIMARY KEY,
+    country  TEXT NOT NULL,
+    ts       REAL NOT NULL
+);
+
 -- HIS OWN weather, one row per friendship. Not a log: this is a state, and the
 -- only question ever asked of it is "how is he right now". It is stored at the
 -- moment it changed and DECAYED WHEN READ (see feeling.py), so sitting still
