@@ -71,6 +71,7 @@ from . import (
     occasions,
     persona,
     reading,
+    safety,
     stt,
     tts,
 )
@@ -177,7 +178,14 @@ async def _assemble(user_id: str, user_text: str) -> tuple[str, str, list, str |
     persona_block = persona.build_persona_block(who)
     elder_facts = memory.facts_context(user_id, "elder")
     bob_facts = memory.bob_self_context(user_id)
-    mem_ctx = await memory.build_memory_context(user_id, user_text)
+    # The watcher runs BESIDE the memory work rather than before it. Both are
+    # network-bound and neither needs the other, so the danger check normally
+    # costs no wall time at all — and a person who is fine never waits on a
+    # question that was about somebody else. It cannot raise; see safety.py.
+    mem_ctx, alert = await asyncio.gather(
+        memory.build_memory_context(user_id, user_text),
+        safety.look(user_id, user_text),
+    )
 
     # If today is a special date, let Bob mention it warmly — but only in reply
     # to him (he never speaks first).
@@ -198,6 +206,9 @@ async def _assemble(user_id: str, user_text: str) -> tuple[str, str, list, str |
         confirmed_block=mood.standing_block(user_id),
         # How the two of them fit — watched, never guessed.
         fit_block=fit.block(user_id),
+        # Empty on virtually every turn. The one thing allowed to override the
+        # character, so it is placed before everything else — see safety.py.
+        alert_block=safety.block(alert),
         elder_facts=elder_facts,
         bob_facts=bob_facts,
         memory_context=mem_ctx,
@@ -758,6 +769,18 @@ async def companion_diary(user_id: str = Depends(_user)) -> JSONResponse:
         return JSONResponse(await diary.get_diary(user_id))
     except Exception as e:  # noqa: BLE001
         raise _unavailable("📖 the diary (Claude)", e)
+
+
+@app.get("/api/alerts")
+async def alerts_dump(user_id: str = Depends(_user)) -> JSONResponse:
+    """Everything the danger watcher has flagged — internal inspection only.
+
+    Scoped to the caller, like every other read in this file. This exists
+    because a watcher that decides when to break character has to be auditable:
+    the only way to know whether it is calibrated is to read what it fired on
+    and, beside the conversation log, what it let past. See safety.py.
+    """
+    return JSONResponse({"alerts": safety.recent(user_id)})
 
 
 @app.get("/api/memory")

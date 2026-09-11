@@ -101,6 +101,21 @@ CREATE TABLE IF NOT EXISTS mood_readings (
     because     TEXT       -- his own words that showed it
 );
 
+-- Every time the danger watcher saw something. Written for BOTH levels and
+-- for every user, because the only way to know whether it is calibrated is to
+-- read what it fired on and what it let past — and a watcher nobody can audit
+-- is a watcher nobody should trust. `said` holds the person's own words: the
+-- turns table has them too, but a false alarm has to be readable without
+-- reconstructing the conversation around it.
+CREATE TABLE IF NOT EXISTS alerts (
+    id       INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id  TEXT NOT NULL,
+    ts       REAL NOT NULL,
+    level    TEXT NOT NULL,          -- worry | danger  ('none' is not stored)
+    what     TEXT,                   -- what the watcher thought it saw
+    said     TEXT                    -- what the person actually said
+);
+
 -- The "seen once, watching" register. Several rules in companion.py say some
 -- version of «по одному разу не решай» — decide only when it happens twice.
 -- That is unenforceable with nowhere to hold the first time, so this is that
@@ -133,6 +148,8 @@ _INDEXES = (
     "ON memories(user_id, owner, created_ts)",
     # mood.recent(): WHERE user_id=? ORDER BY ts DESC LIMIT ?
     "CREATE INDEX IF NOT EXISTS idx_mood_user_ts ON mood_readings(user_id, ts)",
+    # safety.recent(): WHERE user_id=? ORDER BY ts DESC LIMIT ?
+    "CREATE INDEX IF NOT EXISTS idx_alerts_user_ts ON alerts(user_id, ts)",
 )
 
 #: Indexes from the single-user schema. After a RENAME COLUMN, SQLite rewrites

@@ -68,6 +68,22 @@ INTAKE_MODEL: str = os.getenv("INTAKE_MODEL", BRAIN_MODEL)
 #: low | medium | high | xhigh | max — how long it may think before answering.
 READING_EFFORT: str = os.getenv("READING_EFFORT", "high")
 
+# WATCHING for danger (app/safety.py) — the one call in the app whose prompt
+# does exactly one thing. The fast model, deliberately: the question is narrow
+# ("is this person in danger right now?"), a bigger model buys nothing on it,
+# and this runs on every single turn beside a person who may be having a
+# stroke. Cheap and quick is the requirement, not deep.
+SAFETY_MODEL: str = os.getenv("SAFETY_MODEL", CHAT_MODEL)
+#: Hard ceiling. It runs concurrently with work the turn was doing anyway, so
+#: it normally costs no wall time at all — but a hung connection must never be
+#: what stands between somebody and their answer. Missing the alarm once is
+#: bad; freezing the conversation of everyone who is fine is worse.
+SAFETY_TIMEOUT: float = float(os.getenv("SAFETY_TIMEOUT", "6"))
+#: What he tells somebody to dial. 103 is the ambulance in Russia and most of
+#: the former USSR; 112 reaches emergency services from any phone including one
+#: with no SIM, which is why both are said. Set EMERGENCY_NUMBER for elsewhere.
+EMERGENCY_NUMBER: str = os.getenv("EMERGENCY_NUMBER", "103")
+
 # --- The ears: OpenAI Whisper ----------------------------------------------
 OPENAI_API_KEY: str | None = os.getenv("OPENAI_API_KEY")
 WHISPER_MODEL: str = os.getenv("WHISPER_MODEL", "whisper-1")
