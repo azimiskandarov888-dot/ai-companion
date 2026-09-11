@@ -7,7 +7,7 @@ These protect the two most important correctness properties:
 
 from __future__ import annotations
 
-from app import companion
+from app import companion, situations
 
 
 def test_third_way_honesty_present():
@@ -44,24 +44,40 @@ def test_length_and_word_rules_present():
     assert "не вставляй их в каждый ответ" in rules
 
 
-def test_games_present():
+def test_he_always_knows_he_can_play_and_never_pushes():
+    """The capability stays in the constitution; the rulebook does not.
+
+    He has to know he plays games — otherwise he can never offer one, and the
+    offer is where a game comes from. He does NOT need the rules of «Города» on
+    a turn about her knee. See situations.py for where those went and why."""
     rules = companion.BEHAVIOR_RULES
-    assert "ИГРЫ И ЗАБАВЫ" in rules
-    # A rich menu, not just one or two games…
-    for game in ("В слова", "Города", "данетки", "продолжи пословицу", "угадай песню", "загадай число"):
-        assert game in rules
-    # …played warmly, never to win.
-    assert "без соревнования" in rules
+    assert "в слова" in rules and "города" in rules.lower()
+    assert "не навязывай" in rules
+    # The rulebook itself is gone from every turn that is not about a game.
+    assert "данетки" not in rules
+    assert "без соревнования" not in rules
 
 
-def test_news_and_weather_rule_present():
+def test_the_rulebook_still_exists_where_it_now_lives():
+    games = situations.block("давай сыграем в слова")
+    for game in ("В слова", "Города", "данетки", "продолжи пословицу",
+                 "угадай песню", "загадай число"):
+        assert game in games
+    assert "без соревнования" in games
+
+
+def test_he_always_knows_he_may_look_things_up_and_only_when_asked():
     rules = companion.BEHAVIOR_RULES
-    assert "НОВОСТИ И ПОГОДА" in rules
-    # Delivered like a person keeping up, not a news reader…
     assert "не как диктор" in rules
-    assert "не ссылайся на источники" in rules
-    # …and bad news handled gently.
-    assert "не пугай его" in rules
+    assert "только когда он правда спросил" in rules
+    # The how-to is gone from turns where nobody asked about the news.
+    assert "не ссылайся на источники" not in rules
+
+
+def test_the_news_manner_still_exists_where_it_now_lives():
+    news = situations.block("какая сегодня погода?")
+    assert "не ссылайся на источники" in news
+    assert "не пугай его" in news
 
 
 def test_human_speech_disfluencies_present():

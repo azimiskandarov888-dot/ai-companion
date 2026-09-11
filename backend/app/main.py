@@ -73,6 +73,7 @@ from . import (
     persona,
     reading,
     safety,
+    situations,
     stt,
     tts,
 )
@@ -213,6 +214,10 @@ async def _assemble(user_id: str, user_text: str) -> tuple[str, str, list, str |
         # How HE is today, carried over from their last exchange and fading on
         # its own since. The one thing in the prompt that is not about her.
         feeling_block=feeling.block(user_id),
+        # Rules that only apply to the turn in front of him — the game they are
+        # playing, the news he asked for. Empty nearly always; see situations.py
+        # for why they are no longer read on every turn.
+        situation_block=situations.block(user_text, memory.recent_turns(user_id)),
         elder_facts=elder_facts,
         bob_facts=bob_facts,
         memory_context=mem_ctx,
