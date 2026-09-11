@@ -61,6 +61,7 @@ from . import (
     config,
     db,
     diary,
+    feeling,
     fit,
     identity,
     intake,
@@ -209,6 +210,9 @@ async def _assemble(user_id: str, user_text: str) -> tuple[str, str, list, str |
         # Empty on virtually every turn. The one thing allowed to override the
         # character, so it is placed before everything else — see safety.py.
         alert_block=safety.block(alert),
+        # How HE is today, carried over from their last exchange and fading on
+        # its own since. The one thing in the prompt that is not about her.
+        feeling_block=feeling.block(user_id),
         elder_facts=elder_facts,
         bob_facts=bob_facts,
         memory_context=mem_ctx,

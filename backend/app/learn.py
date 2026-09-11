@@ -13,6 +13,10 @@ response). It reads the exchange and pulls out:
   About BOB himself (owner='bob'):
     - bob_facts   (durable new details Bob revealed about his OWN life, so he
                    stays consistent — e.g. "друг Бена зовут Бен, ему 73").
+    - bob         (what the exchange DID to him — the one reading here that is
+                   not about the elder at all, and is usually nothing. It is a
+                   shift rather than a mood, and it is stored as state rather
+                   than memory, because it fades. See feeling.py.)
 
 Robust by design: if extraction or parsing fails, we skip learning for that
 turn — the conversation itself is never affected.
@@ -25,7 +29,7 @@ import sys
 
 from anthropic import AsyncAnthropic
 
-from . import config, embeddings, memory, mood
+from . import config, embeddings, feeling, memory, mood
 
 _client: AsyncAnthropic | None = None
 
@@ -69,6 +73,7 @@ _EXTRACTION_SYSTEM = """Ты ведёшь память для тёплого д�
     "because": "его собственные слова, по которым это видно — короткой цитатой"
   },
   "observed": [{"tag": "из списка ниже", "subject": "о чём именно, если применимо", "evidence": "короткая цитата"}],
+  "bob": {"valence": 0, "arousal": 0, "note": "пусто, или коротко своими словами — отчего"},
   "follow_ups": ["о чём по-доброму спросить ЧЕЛОВЕКА в следующий раз (незаконченные дела, переживания, планы)"],
   "bob_facts": ["новые устойчивые детали, которые БОБ рассказал О СВОЕЙ жизни (имена, места, факты) — чтобы он не противоречил себе потом"]
 }
@@ -86,6 +91,17 @@ _EXTRACTION_SYSTEM = """Ты ведёшь память для тёплого д�
 Ставь ноль, когда обычно. Не ищи глубин там, где их нет: «да, нормально» на вопрос о погоде — это ноль по всем пяти, а не тайная печаль. Крайние значения (-2 и +2) — только когда это правда бросается в глаза.
 
 Это НЕ диагноз и не оценка человека. Это заметка о том, каким он показался вот сейчас.
+
+ПОЛЕ "bob" — ЭТО ПРО САМОГО БОБА, А НЕ ПРО ЧЕЛОВЕКА
+
+И это НЕ его настроение, а СДВИГ: что этот обмен СДЕЛАЛ с Бобом. От -2 до +2.
+
+- valence — стало ли ему самому лучше или хуже.
+- arousal — оживило это его или притушило.
+
+ПОЧТИ ВСЕГДА ЗДЕСЬ НОЛЬ И НОЛЬ. Это самый частый и самый правильный ответ. Друг — не зеркало: если у человека тяжёлый вечер, это НЕ значит, что Бобу стало хуже. Ставь не ноль только тогда, когда с самим Бобом правда что-то произошло: они хорошо посмеялись вместе; человек сказал ему что-то тёплое или, наоборот, резкое; между ними случилось что-то настоящее; Боб сам рассказал про свою жизнь что-то радостное или горькое.
+
+"note" — только если сдвиг не нулевой: одной короткой фразой, СЛОВАМИ САМОГО БОБА, отчего ему так. Например: «посмеялись про рыбалку» или «он на меня осерчал». Если сдвиг нулевой — оставь пусто.
 
 СПИСОК tag ДЛЯ observed — только эти, своих не придумывай. Если ничего из списка явно не случилось, оставь список пустым. Пустой список — нормальный и частый ответ.
 
@@ -230,6 +246,12 @@ async def _store(user_id: str, data: dict) -> None:
                 seen.get("subject") or "",
                 seen.get("evidence") or "",
             )
+
+    # What the exchange did to HIM. A delta, usually zero, and the one thing
+    # stored here that is not about the person. See feeling.py.
+    bob_felt = data.get("bob")
+    if isinstance(bob_felt, dict):
+        feeling.record(user_id, bob_felt)
 
     for fup in data.get("follow_ups") or []:
         fup = (fup or "").strip()

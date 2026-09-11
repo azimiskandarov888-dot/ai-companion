@@ -116,6 +116,20 @@ CREATE TABLE IF NOT EXISTS alerts (
     said     TEXT                    -- what the person actually said
 );
 
+-- HIS OWN weather, one row per friendship. Not a log: this is a state, and the
+-- only question ever asked of it is "how is he right now". It is stored at the
+-- moment it changed and DECAYED WHEN READ (see feeling.py), so sitting still
+-- costs nothing and a mood nobody asked about still fades on its own — which is
+-- what moods do. `note` is his own reason in his own words, kept short because
+-- it is his to mention once, not to dwell on.
+CREATE TABLE IF NOT EXISTS companion_feeling (
+    user_id  TEXT PRIMARY KEY,
+    valence  REAL NOT NULL DEFAULT 0,   -- -2..+2, how good he feels
+    arousal  REAL NOT NULL DEFAULT 0,   -- -2..+2, how awake and lively he feels
+    note     TEXT,
+    ts       REAL NOT NULL              -- when it last MOVED, not when last read
+);
+
 -- The "seen once, watching" register. Several rules in companion.py say some
 -- version of «по одному разу не решай» — decide only when it happens twice.
 -- That is unenforceable with nowhere to hold the first time, so this is that

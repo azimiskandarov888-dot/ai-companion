@@ -249,6 +249,7 @@ def build_system_parts(
     confirmed_block: str = "",
     fit_block: str = "",
     alert_block: str = "",
+    feeling_block: str = "",
     broke_off: bool = False,
     acquaintance: str = "",
 ) -> tuple[str, str]:
@@ -306,6 +307,17 @@ def build_system_parts(
     # needs a position.
     if acquaintance.strip():
         variable_parts.append("ГДЕ ВЫ СЕЙЧАС:\n" + acquaintance.strip())
+
+    # His own weather — structure first (how well you two know each other), then
+    # today's weather over it. Empty whenever he is simply himself, which is
+    # most days. See feeling.py.
+    #
+    # Dropped ENTIRELY when the watcher has fired, rather than left for the
+    # alert's «сейчас не действует» to argue with: a man who cannot get up off
+    # the floor does not need to know his friend slept badly, and the cheapest
+    # way to win that argument is not to have it in the prompt at all.
+    if feeling_block.strip() and not alert_block.strip():
+        variable_parts.append(feeling_block.strip())
 
     if bob_facts.strip():
         variable_parts.append(
