@@ -128,9 +128,10 @@ TAGS: dict[str, str] = {
     "подняло_молчание": "ему стало легче оттого, что просто побыли рядом без бодрости",
     "оживился_на_теме": "на этой теме он оживает",
     # ── how the two of them fit, which is a different thing from how he is ──
-    # These feed fit.py. They are here rather than in their own vocabulary
-    # because they are found the same way — watched happening, twice — and one
-    # register is one place to look.
+    # These feed fit.py — see PAIR below, which is the list of them and the
+    # reason standing_block leaves them alone. They live here rather than in
+    # their own vocabulary because they are found the same way — watched
+    # happening, twice — and one register is one place to look.
     "зашло_что_позвал": "друг предложил, позвал, затеял — и человек оживился",
     "не_зашло_что_позвал": "друг предложил или затеял — и человек закрылся, ушёл",
     "понравилось_несогласие": "друг не согласился с ним — и человеку это понравилось",
@@ -157,6 +158,26 @@ LIFTS = (
     "подняли_воспоминания",
     "подняло_дело",
     "подняло_молчание",
+)
+
+#: The tags that describe the PAIR rather than the man, and that fit.py renders
+#: with what to do about them. standing_block leaves these out, and that is not
+#: a detail: before it did, every confirmed one of them was stated TWICE in the
+#: same half of the same prompt — «друг предложил, позвал — и человек оживился,
+#: 4 раза» from here, and «ТЕМП: твой напор ему заходит — 4 раза» from there,
+#: back to back. One fact, one place.
+PAIR = (
+    "зашло_что_позвал",
+    "не_зашло_что_позвал",
+    "понравилось_несогласие",
+    "не_понравилось_несогласие",
+    "понравился_его_промах",
+    "сам_повёл_разговор",
+    "просил_помедленнее",
+    "не_расслышал",
+    "уговорили_и_обрадовался",
+    "хотел_больше_вопросов",
+    "устал_от_расспросов",
 )
 
 #: And the tags that answer «что его задевает» — the evidence behind the
@@ -380,12 +401,18 @@ def standing_block(user_id: str) -> str:
     Only what has happened at least twice. A single occurrence is held in the
     table and deliberately withheld: acting on one is exactly the mistake the
     register exists to prevent.
+
+    And only what is about HIM. The tags in PAIR describe the two of them and
+    are rendered by fit.py with what to do about them; listing them here as well
+    put the same fact in the same prompt twice, a few lines apart.
     """
+    marks = ",".join("?" for _ in PAIR)
     with db.connect() as conn:
         rows = conn.execute(
             "SELECT tag, subject, times FROM observations"
-            " WHERE user_id=? AND times>=? ORDER BY times DESC, last_ts DESC LIMIT 8",
-            (user_id, CONFIRMED_AT),
+            f" WHERE user_id=? AND times>=? AND tag NOT IN ({marks})"
+            " ORDER BY times DESC, last_ts DESC LIMIT 8",
+            (user_id, CONFIRMED_AT, *PAIR),
         ).fetchall()
     if not rows:
         return ""

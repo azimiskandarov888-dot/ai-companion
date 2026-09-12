@@ -33,7 +33,7 @@ def test_one_occurrence_is_never_enough():
 def test_push_that_works_is_encouraged():
     _seen("u", "зашло_что_позвал", 4)
     said = fit.block("u")
-    assert "Предлагай, зови, затевай" in said
+    assert "твой напор ему заходит" in said and "Зови смело" in said
     assert "4 раза" in said
 
 
@@ -43,13 +43,13 @@ def test_push_that_fails_gets_the_opposite_instruction():
     _seen("u", "не_зашло_что_позвал", 3)
     said = fit.block("u")
     assert "Исходи из тихого" in said
-    assert "Предлагай, зови, затевай" not in said
+    assert "Зови смело" not in said
 
 
 def test_a_clear_majority_still_gives_a_verdict():
     _seen("u", "зашло_что_позвал", 7)
     _seen("u", "не_зашло_что_позвал", 2)
-    assert "Предлагай, зови, затевай" in fit.block("u")
+    assert "Зови смело" in fit.block("u")
 
 
 def test_mixed_evidence_is_reported_as_mixed_not_as_a_verdict():
@@ -58,7 +58,7 @@ def test_mixed_evidence_is_reported_as_mixed_not_as_a_verdict():
     _seen("u", "зашло_что_позвал", 3)
     _seen("u", "не_зашло_что_позвал", 3)
     said = fit.block("u")
-    assert "По-разному" in said and "не решай заранее" in said
+    assert "по-разному" in said and "не решай заранее" in said
 
 
 def test_backing_off_is_a_default_and_says_so():
@@ -70,7 +70,7 @@ def test_backing_off_is_a_default_and_says_so():
 def test_a_first_no_that_is_really_a_test_is_learned():
     _seen("u", "уговорили_и_обрадовался", 2)
     said = fit.block("u")
-    assert "ПОЗВАТЬ ДВАЖДЫ" in said
+    assert "ЗВАТЬ ДВАЖДЫ" in said
     assert "Не роняй с первого раза" in said
 
 
@@ -79,7 +79,7 @@ def test_someone_who_wants_to_be_asked_a_lot_gets_asked_a_lot():
     _seen("u", "хотел_больше_вопросов", 3)
     said = fit.block("u")
     assert "Спрашивай много и подробно" in said
-    assert "забудь" in said
+    assert "не про него" in said
 
 
 def test_even_someone_tired_of_questions_keeps_the_exception():
@@ -92,7 +92,7 @@ def test_disagreement_is_calibrated_separately_from_push():
     _seen("u", "зашло_что_позвал", 3)
     _seen("u", "не_понравилось_несогласие", 3)
     said = fit.block("u")
-    assert "Предлагай, зови, затевай" in said       # keep the energy
+    assert "Зови смело" in said                     # keep the energy
     assert "Своё мнение оставь при себе" in said    # drop the arguing
 
 
@@ -101,7 +101,7 @@ def test_the_nose_is_protected_rather_than_fixed():
     _seen("u", "понравился_его_промах", 2)
     said = fit.block("u")
     assert "Не исправляйся" in said
-    assert "за что он тебя любит" in said
+    assert "не становись безупречным" in said
 
 
 def test_hearing_trouble_is_counted_from_both_signals():
@@ -194,3 +194,68 @@ def test_wanting_agreement_is_answered_with_agreement():
     assert "ЕСЛИ ОН ХОЧЕТ, ЧТОБЫ С НИМ ВЕЗДЕ СОГЛАШАЛИСЬ" in rules
     assert "Соглашайся." in rules
     assert "его «да» ничего не весит" in rules
+
+
+# --------------------------------------------------------------------------- #
+# One fact, one place — and the teaching where it is taught
+# --------------------------------------------------------------------------- #
+
+
+def test_a_pair_observation_is_not_also_listed_as_a_fact_about_him():
+    """Both blocks ride in the same half of the same prompt, a few lines apart.
+    Before this, every confirmed pair tag was stated twice there: «друг
+    предложил, позвал — и человек оживился, 4 раза» from the register, and
+    «ТЕМП: твой напор ему заходит — 4 раза» from here."""
+    _seen("u", "зашло_что_позвал", 4)
+    assert "твой напор ему заходит" in fit.block("u")
+    assert mood.standing_block("u") == ""
+
+
+def test_what_is_about_him_is_still_listed_as_being_about_him():
+    """The exclusion is of the PAIR tags only — not of the register."""
+    _seen("u", "подняло_молчание", 3)
+    assert "побыли рядом" in mood.standing_block("u")
+    assert fit.block("u") == ""
+
+
+def test_the_two_blocks_never_report_the_same_thing():
+    _seen("u", "зашло_что_позвал", 3)
+    _seen("u", "закрылся_на_теме", 2, "война")
+    him, pair = mood.standing_block("u"), fit.block("u")
+    assert "война" in him and "война" not in pair
+    assert "напор" in pair and "напор" not in him
+
+
+def test_every_pair_tag_is_claimed_by_exactly_one_of_them():
+    """A tag added to TAGS and forgotten in PAIR would be reported twice again,
+    silently. Everything fit.py reads has to be in PAIR."""
+    import inspect
+
+    source = inspect.getsource(fit.block)
+    read_by_fit = {t for t in mood.TAGS if f'"{t}"' in source}
+    assert read_by_fit, "the test itself is broken if this is empty"
+    assert read_by_fit <= set(mood.PAIR), read_by_fit - set(mood.PAIR)
+
+
+def test_a_direction_is_never_left_looking_like_a_ban():
+    """His own correction, and it is not the constitution's lesson repeated: it
+    is what stops a calibration being read as a prohibition, right where the
+    calibration is given."""
+    _seen("u", "не_зашло_что_позвал", 4)
+    assert "норма, а не запрет" in fit.block("u")
+
+    _seen("v", "устал_от_расспросов", 4)
+    assert "если он сам разговорился" in fit.block("v")
+
+
+def test_the_reason_is_kept_only_where_nothing_else_teaches_it():
+    """Poor hearing is the one line here the constitution teaches nowhere, so it
+    keeps its whole explanation while the others lost theirs — a bare count
+    would read as a preference, and it is not one."""
+    _seen("u", "просил_помедленнее", 2)
+    said = fit.block("u")
+    assert "люди с плохим слухом не жалуются" in said
+    # …while the ones that ARE taught elsewhere no longer restate themselves
+    _seen("v", "понравился_его_промах", 2)
+    assert "Идеальных не любят" not in fit.block("v")
+    assert "гладких не любят" in __import__("app.companion", fromlist=["x"]).BEHAVIOR_RULES

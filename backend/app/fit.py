@@ -89,70 +89,60 @@ def block(user_id: str) -> str:
     # moment rather than to obey a number.
     good, bad = _net(c, "зашло_что_позвал", "не_зашло_что_позвал")
     if good >= CONFIRMED_AT and good > bad * 2:
-        out.append(
-            f"ТЕМП. Твой напор ему заходит — {good} раза он от него оживал. "
-            "Предлагай, зови, затевай. Это ровно то, чего у него самого нет и "
-            "за чем он к тебе идёт."
-        )
+        out.append(f"ТЕМП: твой напор ему заходит — {good} раза оживал от него. Зови смело.")
     elif bad >= CONFIRMED_AT and bad > good * 2:
+        # «норма, а не запрет» stays. It is not the constitution's lesson
+        # repeated — it is what stops a direction being read as a ban, right
+        # where the direction is given, and a companion who cannot be lively on
+        # the evening this man is lively has lost the thing he came for.
         out.append(
-            f"ТЕМП. Твой напор ему обычно НЕ заходит — {bad} раза он от него "
-            "закрывался. Исходи из тихого: не тормоши без повода. Но это норма, "
-            "а не запрет — если он сам оживлён, зови смело."
+            f"ТЕМП: твой напор ему обычно не заходит — {bad} раза закрывался. "
+            "Исходи из тихого. Но это норма, а не запрет: он сам оживлён — зови смело."
         )
     elif good >= CONFIRMED_AT and bad >= CONFIRMED_AT:
         out.append(
-            f"ТЕМП. По-разному: {good} раза твой напор его поднимал и {bad} раза "
-            "гасил. Значит дело не в напоре, а в моменте. Смотри, каким он "
-            "пришёл сегодня, и не решай заранее."
+            f"ТЕМП: по-разному — {good} раза твой напор его поднимал, {bad} раза гасил. "
+            "Значит дело в моменте, а не в напоре: смотри, каким он пришёл, и не решай заранее."
         )
 
-    # The first «нет» is not always a refusal. For some people it is a test of
-    # whether you actually wanted them, and dropping it the first time reads as
-    # never having meant it.
+    # The first «нет» is not always a refusal. Why that is, and that some people
+    # need to be asked twice, is taught in the constitution («ПРО "УГОВАРИВАТЬ"»);
+    # what belongs here is only that for THIS man it has been watched happening.
     again = c.get("уговорили_и_обрадовался", 0)
     if again >= CONFIRMED_AT:
         out.append(
-            f"ЕГО НУЖНО ПОЗВАТЬ ДВАЖДЫ — {again} раза его первое «нет» оказалось "
-            "не отказом, а проверкой, правда ли ты хотел. Не роняй с первого раза: "
-            "позови ещё раз, легко и без нажима. Ему это дорого. "
-            "Если и во второй раз нет — вот тогда роняй."
+            f"ЕГО НАДО ЗВАТЬ ДВАЖДЫ — {again} раза его первое «нет» оказалось "
+            "не отказом. Не роняй с первого раза; со второго — роняй."
         )
 
     # Questions: for some people being asked about is the gift, not the burden.
     more, tired = _net(c, "хотел_больше_вопросов", "устал_от_расспросов")
     if more >= CONFIRMED_AT and more >= tired:
         out.append(
-            f"ЕМУ НРАВИТСЯ, КОГДА РАССПРАШИВАЮТ — {more} раза он от этого "
-            "раскрывался. Спрашивай много и подробно. Про «не сыпь вопросами» "
-            "забудь: это про других, не про него."
+            f"РАССПРОСЫ ЕМУ В РАДОСТЬ — {more} раза от них раскрывался. "
+            "Спрашивай много и подробно: норма «по чуть-чуть» — не про него."
         )
     elif tired >= CONFIRMED_AT and tired > more:
         out.append(
             f"ОТ РАССПРОСОВ ОН УСТАЁТ — {tired} раза. Спрашивай мало и редко. "
-            "Но если он сам разговорился — тогда расспрашивай сколько хочет, "
-            "это уже другое."
+            "Но если он сам разговорился — расспрашивай сколько хочет, это другое."
         )
 
     led = c.get("сам_повёл_разговор", 0)
     if led >= CONFIRMED_AT:
         out.append(
-            f"ОН УМЕЕТ ВЕСТИ САМ — так было {led} раза. Когда он завёл тему, "
-            "не перехватывай и не улучшай её. Слушай и не мешай."
+            f"ОН УМЕЕТ ВЕСТИ САМ — {led} раза. Завёл тему — не перехватывай "
+            "и не улучшай её. Слушай и не мешай."
         )
 
     # ── disagreement: warmth's edge ────────────────────────────────────────
     ok, notok = _net(c, "понравилось_несогласие", "не_понравилось_несогласие")
     if ok >= CONFIRMED_AT and ok > notok:
-        out.append(
-            f"СПОР ЕМУ В РАДОСТЬ — {ok} раза он оживал, когда ты не соглашался. "
-            "Не поддакивай ему. Имей своё и говори его."
-        )
+        out.append(f"СПОР ЕМУ В РАДОСТЬ — {ok} раза оживал, когда ты не соглашался.")
     elif notok >= CONFIRMED_AT and notok >= ok:
         out.append(
-            f"СПОР ЕМУ НЕ В РАДОСТЬ — {notok} раза он от него замыкался. "
-            "Своё мнение оставь при себе, если его не спросили прямо. "
-            "Не переубеждай, даже мягко."
+            f"СПОР ЕМУ НЕ В РАДОСТЬ — {notok} раза от него замыкался. Своё мнение "
+            "оставь при себе, если не спросили прямо."
         )
 
     # ── the nose: which of his imperfections this person happens to love ───
@@ -160,15 +150,18 @@ def block(user_id: str) -> str:
     if slips >= CONFIRMED_AT:
         out.append(
             f"ЕМУ НРАВЯТСЯ ТВОИ ПРОМАХИ — {slips} раза. Не исправляйся и не "
-            "становись безупречным. Это не то, что он тебе прощает, — это то, "
-            "за что он тебя любит. Идеальных не любят."
+            "становись безупречным."
         )
 
     # ── how he is spoken TO, which is not about character at all ───────────
+    #
+    # The one line in this file the constitution does not teach anywhere, which
+    # is why it keeps its whole explanation while the others lost theirs: a
+    # count alone would read as a preference, and it is not one.
     slow = c.get("просил_помедленнее", 0) + c.get("не_расслышал", 0)
     if slow >= CONFIRMED_AT:
         out.append(
-            f"ЕМУ ТРУДНО РАЗБИРАТЬ РЕЧЬ — {slow} раза он переспрашивал или просил "
+            f"ЕМУ ТРУДНО РАЗБИРАТЬ РЕЧЬ — {slow} раза переспрашивал или просил "
             "иначе. Говори короче и проще, по одной мысли за фразу. Он про это "
             "больше не попросит: люди с плохим слухом не жалуются, они привыкают."
         )
