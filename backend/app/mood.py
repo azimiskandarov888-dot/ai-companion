@@ -15,6 +15,21 @@ computed from a single word, and neither survives being averaged across people.
 So each exchange is read on five small scales, his own baseline is built from
 his own history, and what the companion is told is the difference.
 
+── AND HIS NORMAL DEPENDS ON THE HOUR ──────────────────────────────────────
+
+«His own normal» was at first one number for the whole day, and that was wrong
+in a way that fired daily. Older adults shift toward morningness, and morning
+types are reliably worse in the evening; a man who is simply flatter at eight
+therefore sat below a single all-day average EVERY evening, and was announced as
+subdued every evening. A false alarm on a schedule is worse than no alarm: it
+teaches the companion to tread carefully when nothing is wrong, and it buries
+the real change on the day it finally arrives.
+
+So the baseline is kept per part of the day — evenings compared with evenings.
+The descriptive lines still use his overall normal, because «обычно он ровный»
+is a fact about the man rather than about eight in the evening; only the
+WARNING uses the hour. See _normal_by_part.
+
 ── THE FIVE ───────────────────────────────────────────────────────────────
 
 All five run -2..+2 and all five point the same way: higher is better. That
@@ -75,6 +90,22 @@ STRONGLY = 1.0
 
 #: A gap this long means the next reading belongs to a new conversation.
 CONVERSATION_GAP = 10 * 60
+
+#: How many readings from the same part of the day before that part gets its own
+#: normal. Below it, the overall baseline is used — which is exactly the
+#: behaviour that existed before this, so a new friendship loses nothing waiting.
+#:
+#: Three, and the number was picked by reproducing the fault rather than by
+#: taste. Five looked prudent and was wrong: the evenings that most need their
+#: own normal belong to somebody who talks in the evening only OCCASIONALLY, and
+#: he reaches five of them after a month or two — during which he is flagged as
+#: subdued every single time. A median over three is coarse, but it errs toward
+#: silence, which is the right way to be wrong here.
+MIN_PER_PART = 3
+
+#: Hours per part of the day. Four even blocks rather than named ones, because
+#: the names would be a lie: see _part().
+_PART_HOURS = 6
 
 #: How far back "when did this start" is allowed to look.
 _TRAIL = 40
@@ -224,19 +255,86 @@ def _composite(per_dim: dict[str, float | None]) -> float | None:
     return statistics.fmean(vals) if vals else None
 
 
-def _started_days_ago(rows: list[dict], baseline: float) -> float | None:
+def _part(ts: float) -> int:
+    """Which part of HIS day a reading belongs to. 0–3.
+
+    UTC, and the hour is deliberately never shown to anybody. It does not need
+    to be the right hour where he lives — it needs to be the SAME hour every
+    time. His eight-in-the-evening is always the same block whatever that block
+    would be called here, so evenings get compared with evenings without the app
+    ever knowing his timezone.
+
+    UTC rather than server-local for one reason: local time moves. Daylight
+    saving, or the server being rehomed, would drop new readings into a
+    different block from the old ones and quietly compare his evenings against
+    his mornings — the exact fault this function exists to remove, reintroduced
+    invisibly and six months later.
+    """
+    return int(time.gmtime(ts).tm_hour) // _PART_HOURS
+
+
+def _normal_by_part(older: list[dict], overall: float | None) -> dict[int, float | None]:
+    """His usual level for each part of the day.
+
+    Older adults shift toward morningness, and morning types are reliably worse
+    in the evening — so a man who is simply flatter at eight is, against a single
+    all-day average, BELOW HIS NORMAL every single evening. That fired the
+    "he is quieter than usual" warning daily: a false alarm on a schedule, which
+    teaches the companion to tread carefully when nothing is wrong and buries
+    the real change on the day it finally comes.
+
+    Parts with too little history fall back to the overall normal, which is
+    precisely the old behaviour.
+    """
+    out: dict[int, float | None] = {}
+    for part in range(24 // _PART_HOURS):
+        same = [r for r in older if _part(r["ts"]) == part]
+        level = (
+            _composite({d: _median(same, d) for d in DIMS})
+            if len(same) >= MIN_PER_PART
+            else None
+        )
+        out[part] = overall if level is None else level
+    return out
+
+
+def _drop_against_own_part(
+    newest: list[dict], normal: dict[int, float | None], overall: float | None
+) -> float | None:
+    """How far he is from usual — each reading judged against its OWN hour.
+
+    Compared per reading and then averaged, rather than averaging first: the
+    newest few can straddle a morning and an evening, and averaging those
+    together before comparing would reintroduce the mixing this fixes.
+    """
+    diffs = []
+    for r in newest:
+        c = _composite(r)
+        if c is None:
+            continue
+        against = normal.get(_part(r["ts"]), overall)
+        if against is not None:
+            diffs.append(c - against)
+    return statistics.fmean(diffs) if diffs else None
+
+
+def _started_days_ago(
+    rows: list[dict], normal: dict[int, float | None], overall: float | None
+) -> float | None:
     """How long he has been below his own normal.
 
     Walks back from now to the last reading that was still at his usual level,
-    and reports the age of the one after it — the first one that wasn't.
+    and reports the age of the one after it — the first one that wasn't. Each
+    reading is measured against the normal for its own part of the day, or the
+    dip would appear to start at whichever evening came first.
     """
-    edge = baseline - MOVED
     last_ok: dict | None = None
     for r in rows:                                   # newest first
         c = _composite(r)
         if c is None:
             continue
-        if c >= edge:
+        against = normal.get(_part(r["ts"]), overall)
+        if against is None or c >= against - MOVED:
             last_ok = r
             break
     if last_ok is None:
@@ -336,8 +434,15 @@ def block(user_id: str) -> str:
     if base_c is None or now_c is None:
         return "\n".join(out)
 
-    delta = now_c - base_c
-    days = _started_days_ago(rows, base_c) if delta <= -MOVED else None
+    # The descriptive lines above use his overall normal, which is the right
+    # thing to SAY — «обычно он ровный» is a fact about the man, not about eight
+    # in the evening. The warning below uses his normal FOR THIS HOUR, which is
+    # the right thing to ACT on. See _normal_by_part.
+    normal = _normal_by_part(older, base_c)
+    delta = _drop_against_own_part(newest, normal, base_c)
+    if delta is None:
+        return "\n".join(out)
+    days = _started_days_ago(rows, normal, base_c) if delta <= -MOVED else None
 
     if delta <= -STRONGLY:
         out.append("")

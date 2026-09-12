@@ -151,3 +151,99 @@ def test_what_lifts_him_is_confirmed_the_same_way():
     said = mood.standing_block("u")
     assert "вспоминали хорошее" in said
     assert "3 раза" in said
+
+
+# --------------------------------------------------------------------------- #
+# His normal depends on the hour, because he does
+# --------------------------------------------------------------------------- #
+#
+# Older adults shift toward morningness, and morning types are reliably worse in
+# the evening. Against one all-day average, a man who is simply flatter at eight
+# reads as BELOW HIS NORMAL every single evening — a false alarm on a schedule,
+# which teaches the companion to tread carefully when nothing is wrong and
+# buries the real change on the day it finally comes.
+
+DAY = 86400
+
+
+def _at(user: str, days_ago: float, utc_hour: int, level: float, nudge: int = 0) -> None:
+    """One reading landing on a given UTC hour, `days_ago` days back."""
+    t = time.time() - days_ago * DAY
+    t -= (time.gmtime(t).tm_hour - utc_hour) * 3600
+    with db.connect() as conn:
+        conn.execute(
+            "INSERT INTO mood_readings (user_id, ts, energy, warmth, lightness,"
+            " clarity, engagement, word, note, because) VALUES (?,?,?,?,?,?,?,?,?,?)",
+            (user, t + nudge, level, level, level, 0.0, level, "", "", ""),
+        )
+
+
+def _a_man_brighter_by_day(user: str = "u") -> None:
+    """Talks most days around noon and is bright (+1); drops in on some evenings
+    and is flatter then (-1). Both are simply how he is."""
+    for d in range(14, 1, -1):
+        _at(user, d, 13, 1.0)
+        _at(user, d, 13, 1.0, nudge=600)
+        if d % 3 == 0:
+            _at(user, d, 20, -1.0)
+
+
+def _tonight(level: float, user: str = "u", hour: int = 20) -> None:
+    for k in range(3):
+        _at(user, 0, hour, level, nudge=k * 600)
+
+
+def test_his_ordinary_evening_is_not_treated_as_a_bad_day():
+    """The fault this exists to remove. He is flatter every evening and always
+    has been; that is not news and must not be announced as news."""
+    _a_man_brighter_by_day()
+    _tonight(-1.0)
+    said = mood.block("u")
+    assert "⚠" not in said
+    assert "немного тише" not in said
+
+
+def test_an_evening_worse_than_his_own_evenings_is_still_caught():
+    """Sensitivity is the thing that must survive the fix."""
+    _a_man_brighter_by_day()
+    _tonight(-2.0)
+    assert "⚠" in mood.block("u")
+
+
+def test_a_daytime_drop_is_still_caught():
+    """He is always bright at noon, so flat at noon is a real change — and the
+    per-hour normal must not soften it."""
+    _a_man_brighter_by_day()
+    _tonight(-1.0, hour=13)
+    assert "⚠" in mood.block("u")
+
+
+def test_a_part_of_the_day_he_barely_visits_falls_back_to_his_overall_normal():
+    """Below MIN_PER_PART there is no such thing as his three-in-the-morning
+    self, and inventing one from a single reading would be worse than the
+    all-day average it replaced."""
+    _a_man_brighter_by_day()
+    _tonight(-1.0, hour=3)                     # a part with no history at all
+    assert "⚠" in mood.block("u")
+
+
+def test_the_hour_is_read_in_utc_so_it_cannot_drift():
+    """Local time moves — daylight saving, or the server being rehomed — and a
+    reading that changed parts would compare his evenings against his mornings
+    six months later, invisibly."""
+    winter = time.mktime((2026, 1, 15, 20, 0, 0, 0, 0, 0))
+    summer = time.mktime((2026, 7, 15, 20, 0, 0, 0, 0, 0))
+    assert mood._part(winter) == mood._part(summer)
+
+
+def test_every_hour_of_the_day_lands_in_a_part():
+    seen = {mood._part(time.time() - h * 3600) for h in range(48)}
+    assert seen == set(range(24 // mood._PART_HOURS))
+
+
+def test_a_new_friendship_behaves_exactly_as_it_did_before():
+    """With no per-hour history, the fallback is the old all-day baseline — so
+    nothing about somebody's first fortnight changed."""
+    _fill("u", 12, level=1.0)
+    _fill("u", 3, level=-1.0)
+    assert "⚠" in mood.block("u")
