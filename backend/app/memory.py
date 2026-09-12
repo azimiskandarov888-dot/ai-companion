@@ -55,6 +55,18 @@ FOLLOW_UP_COOLDOWN = 12 * 3600
 # Follow-ups older than this (seconds) are considered stale and dropped.
 FOLLOW_UP_MAX_AGE = 21 * 24 * 3600
 
+#: EVERY read that tells the companion what is true of his friend's life today
+#: carries this. A memory with a `superseded_ts` is not deleted and not false —
+#: it stopped being CURRENT (see supersede()), and the difference between those
+#: two words is the difference between a diary that still remembers his wife
+#: and a companion who asks how she is.
+#:
+#: It is a constant rather than typed out per query for one reason: the failure
+#: mode of forgetting it is silent. A read without it returns MORE rows, never
+#: an error, and the extra row is the one thing in this database that must
+#: never be spoken aloud.
+_LIVE = "superseded_ts IS NULL"
+
 
 # --------------------------------------------------------------------------- #
 # Raw conversation log
@@ -226,9 +238,13 @@ def add_memory(
     if not content:
         return None
     with db.connect() as conn:
+        # Only a LIVE row counts as a duplicate. If something was retired and he
+        # then says it again — a mistake corrected, a daughter who came back, a
+        # pain that returned — the fact has to be able to come back with it, and
+        # matching against a retired row would silently swallow it forever.
         dup = conn.execute(
             "SELECT id FROM memories WHERE user_id=? AND owner=? AND kind=? "
-            "AND content=? LIMIT 1",
+            f"AND content=? AND {_LIVE} LIMIT 1",
             (user_id, owner, kind, content),
         ).fetchone()
         if dup:
@@ -269,14 +285,92 @@ def _mark_recalled(ids: list[int]) -> None:
 # Facts
 # --------------------------------------------------------------------------- #
 def facts_context(user_id: str, owner: str = "elder") -> str:
-    """The known facts for an owner, formatted for the prompt."""
+    """The known facts for an owner, formatted for the prompt.
+
+    Live facts only. This is the one function that decides what the companion
+    believes is true of his friend's life RIGHT NOW, which is why the whole of
+    supersede() exists: a row left in here after it stopped being true is how
+    somebody gets asked how their dead wife is doing.
+    """
     with db.connect() as conn:
         rows = conn.execute(
             "SELECT content FROM memories WHERE user_id=? AND kind='fact' AND owner=? "
-            "ORDER BY importance DESC, created_ts ASC",
+            f"AND {_LIVE} ORDER BY importance DESC, created_ts ASC",
             (user_id, owner),
         ).fetchall()
     return "\n".join(f"- {r['content']}" for r in rows)
+
+
+def believes(user_id: str, owner: str = "elder") -> str:
+    """Everything the companion currently holds as true — numbered, for the
+    extractor and nobody else.
+
+    The companion is never shown these numbers: he would have no idea what they
+    were and might well say one out loud. But something has to be able to POINT
+    at a memory to retire it, and pointing by text is how the wrong one gets
+    retired when two of them start with «дочь».
+
+    OPEN FOLLOW-UPS ARE IN HERE TOO, and that is the whole reason this is not
+    just the facts. «Спросить, как Валя» is a separate row from «жена Валя»:
+    retiring the fact leaves the follow-up open, due_follow_ups surfaces it,
+    and the companion asks after a dead woman anyway — for up to three weeks,
+    which is how long one takes to expire on its own. Both have to be able to
+    end, so both are offered here and the caller need not know the difference.
+    """
+    with db.connect() as conn:
+        rows = conn.execute(
+            "SELECT id, kind, content FROM memories"
+            " WHERE user_id=? AND owner=?"
+            "   AND (kind='fact' OR (kind='follow_up' AND status='open'))"
+            f"  AND {_LIVE}"
+            " ORDER BY kind DESC, importance DESC, created_ts ASC",
+            (user_id, owner),
+        ).fetchall()
+    out = []
+    for r in rows:
+        mark = "собирается спросить: " if r["kind"] == "follow_up" else ""
+        out.append(f"[{r['id']}] {mark}{r['content']}")
+    return "\n".join(out)
+
+
+def supersede(user_id: str, memory_id: int, why: str = "") -> bool:
+    """Retire one memory: it is no longer true of his life today.
+
+    NOT a delete, and the difference is the whole point. «Жена Валя» does not
+    become false when Valya dies — it becomes PAST. She was real, she mattered,
+    and the diary is meant to outlive the subscription and still be able to
+    write about her. What has to stop is the present tense reaching the
+    companion, and that is exactly what this does and all it does.
+
+    Scoped to `user_id` and not merely to `memory_id`, so a wrong id can only
+    ever fail — never reach into somebody else's life. Returns True if a row
+    was actually retired, which is what makes a bad id visible instead of
+    silent.
+    """
+    with db.connect() as conn:
+        cur = conn.execute(
+            f"UPDATE memories SET superseded_ts=?, superseded_why=? "
+            f"WHERE id=? AND user_id=? AND {_LIVE}",
+            (time.time(), (why or "").strip()[:300], memory_id, user_id),
+        )
+        return cur.rowcount > 0
+
+
+def past_facts(user_id: str, owner: str = "elder") -> list[dict]:
+    """What was once true and no longer is. Newest ending first.
+
+    Nothing in the live conversation reads this — it is for the diary, which
+    is the one place his life is allowed to have a past tense, and for anybody
+    checking later whether something was retired that should not have been.
+    """
+    with db.connect() as conn:
+        rows = conn.execute(
+            "SELECT id, kind, content, superseded_ts, superseded_why FROM memories"
+            " WHERE user_id=? AND owner=? AND superseded_ts IS NOT NULL"
+            " ORDER BY superseded_ts DESC",
+            (user_id, owner),
+        ).fetchall()
+    return [dict(r) for r in rows]
 
 
 def bob_self_context(user_id: str) -> str:
@@ -324,7 +418,8 @@ def _rows(user_id: str, kinds: tuple[str, ...], owner: str = "elder") -> list:
     marks = ",".join("?" for _ in kinds)
     with db.connect() as conn:
         return conn.execute(
-            f"SELECT * FROM memories WHERE user_id=? AND owner=? AND kind IN ({marks})",
+            f"SELECT * FROM memories WHERE user_id=? AND owner=? AND kind IN ({marks})"
+            f" AND {_LIVE}",
             (user_id, owner, *kinds),
         ).fetchall()
 
@@ -366,6 +461,7 @@ def resurface(user_id: str, exclude: set[int] | None = None) -> dict | None:
     with db.connect() as conn:
         rows = conn.execute(
             "SELECT * FROM memories WHERE user_id=? AND owner='elder' AND kind='story' "
+            f"AND {_LIVE} "
             "ORDER BY (last_recalled_ts IS NULL) DESC, last_recalled_ts ASC, "
             "created_ts ASC LIMIT 5",
             (user_id,),
@@ -384,7 +480,7 @@ def due_follow_ups(user_id: str, limit: int = 1) -> list[dict]:
     with db.connect() as conn:
         rows = conn.execute(
             "SELECT * FROM memories WHERE user_id=? AND owner='elder' AND kind='follow_up' "
-            "AND status='open' AND created_ts < ? AND created_ts > ? "
+            f"AND status='open' AND {_LIVE} AND created_ts < ? AND created_ts > ? "
             "AND recall_count < ? AND (last_recalled_ts IS NULL OR last_recalled_ts < ?) "
             "ORDER BY created_ts ASC LIMIT ?",
             (
@@ -424,7 +520,7 @@ def counts(user_id: str, owner: str = "elder") -> dict[str, int]:
     with db.connect() as conn:
         rows = conn.execute(
             "SELECT kind, COUNT(*) AS n FROM memories WHERE user_id=? AND owner=? "
-            "GROUP BY kind",
+            f"AND {_LIVE} GROUP BY kind",
             (user_id, owner),
         ).fetchall()
     return {r["kind"]: r["n"] for r in rows}

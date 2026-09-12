@@ -799,10 +799,16 @@ async def memory_dump(user_id: str = Depends(_user)) -> JSONResponse:
     Scoped to the caller. It used to `SELECT ... FROM memories` with no WHERE
     at all, which on a server with more than one person on it is a single
     unauthenticated GET that returns everybody's private life.
+
+    Retired memories are INCLUDED, carrying when and why they ended. This is the
+    one view that must show them: the question somebody actually asks here is
+    "why has he stopped mentioning the dog", and a dump that silently omitted
+    the answer would make a wrong retirement impossible to find.
     """
     with db.connect() as conn:
         rows = conn.execute(
-            "SELECT owner, kind, title, content, status, recall_count, created_ts "
+            "SELECT owner, kind, title, content, status, recall_count, created_ts,"
+            " superseded_ts, superseded_why "
             "FROM memories WHERE user_id=? ORDER BY created_ts DESC LIMIT 200",
             (user_id,),
         ).fetchall()

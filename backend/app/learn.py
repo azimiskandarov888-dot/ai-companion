@@ -75,6 +75,7 @@ _EXTRACTION_SYSTEM = """Ты ведёшь память для тёплого д�
   "observed": [{"tag": "из списка ниже", "subject": "о чём именно, если применимо", "evidence": "короткая цитата"}],
   "bob": {"valence": 0, "arousal": 0, "note": "пусто, или коротко своими словами — отчего"},
   "country": "страна, где он живёт — ТОЛЬКО если он сам об этом сказал, иначе пусто",
+  "no_longer_true": [{"id": 0, "because": "его слова, из которых это следует"}],
   "follow_ups": ["о чём по-доброму спросить ЧЕЛОВЕКА в следующий раз (незаконченные дела, переживания, планы)"],
   "bob_facts": ["новые устойчивые детали, которые БОБ рассказал О СВОЕЙ жизни (имена, места, факты) — чтобы он не противоречил себе потом"]
 }
@@ -92,6 +93,29 @@ _EXTRACTION_SYSTEM = """Ты ведёшь память для тёплого д�
 Ставь ноль, когда обычно. Не ищи глубин там, где их нет: «да, нормально» на вопрос о погоде — это ноль по всем пяти, а не тайная печаль. Крайние значения (-2 и +2) — только когда это правда бросается в глаза.
 
 Это НЕ диагноз и не оценка человека. Это заметка о том, каким он показался вот сейчас.
+
+ПОЛЕ "no_longer_true" — ЧТО ПЕРЕСТАЛО БЫТЬ ПРАВДОЙ
+
+Всё, что друг сейчас считает правдой, пронумеровано — и факты, и то, о чём он собирается спросить в следующий раз. Если человек сказал что-то, из чего следует, что какой-то из пунктов БОЛЬШЕ НЕ ВЕРЕН СЕГОДНЯ, — укажи его номер и его слова.
+
+Если отменяешь факт, посмотри, нет ли в списке вопроса про то же самое: «жена Валя» и «спросить, как Валя» — это два разных номера, и отменять надо оба. Иначе друг всё равно спросит.
+
+Зачем это нужно: если этого не сделать, друг будет спрашивать «как там Валя?» после того, как Валя умерла. Это худшее, что может случиться в этом разговоре.
+
+СТАВЬ НОМЕР ТОЛЬКО ТОГДА, КОГДА ОН САМ ЭТО СКАЗАЛ:
+- «Валя умерла весной» → факт «жена Валя» больше не верен
+- «Переехал к дочери» → факт «живёт один» больше не верен
+- «Колено прошло» → факт «болит колено» больше не верен
+- «Собаку пришлось отдать» → факт «пёс Буран» больше не верен
+
+НЕ ТРОГАЙ, ЕСЛИ:
+- Это его БИОГРАФИЯ, а не сегодняшний день. «Работал сварщиком тридцать лет» — правда навсегда, даже если он давно на пенсии. Прошлое не перестаёт быть правдой оттого, что оно прошло. Отменяют только то, что было записано как ЕСТЬ, а стало НЕТ.
+- Ты это домыслил. «Что-то Валя не звонит» — значит Валя жива и не звонит. Это не смерть.
+- Он просто расстроен, устал или сказал что-то в сердцах.
+- Ты не уверен. Сомневаешься — не ставь. Пропущенная отмена стоит одного неловкого вопроса. Лишняя — стирает у друга кусок его жизни.
+
+ПОЧТИ ВСЕГДА ЗДЕСЬ ПУСТОЙ СПИСОК. Люди не меняют свою жизнь каждый вечер.
+Больше пяти номеров за один обмен репликами не бывает никогда.
 
 ПОЛЕ "bob" — ЭТО ПРО САМОГО БОБА, А НЕ ПРО ЧЕЛОВЕКА
 
@@ -158,7 +182,16 @@ async def learn_from_exchange(
 
 async def _extract(user_id: str, user_text: str, assistant_text: str) -> dict:
     client = _get_client()
-    known_elder = memory.facts_context(user_id, "elder") or "(пока ничего)"
+    # Numbered, and only here. The companion never sees an id — he would have
+    # no idea what it was and might say one out loud — but something has to be
+    # able to POINT at a fact to retire it, and pointing by text is how the
+    # wrong «дочь» gets retired when there are two of them.
+    #
+    # Deliberately only the ELDER's facts carry numbers. Bob's own life is
+    # invented rather than reported, so there is nothing there a person could
+    # contradict — and leaving it unnumbered means the model has no id to
+    # retire his biography with even if it wanted to.
+    known_elder = memory.believes(user_id, "elder") or "(пока ничего)"
     known_bob = memory.bob_self_context(user_id) or "(пока ничего)"
     prompt = (
         f"Что уже известно о ЧЕЛОВЕКЕ (не повторяй это):\n{known_elder}\n\n"
@@ -197,6 +230,15 @@ def _parse_json(text: str) -> dict:
 
 
 async def _store(user_id: str, data: dict) -> None:
+    # --- What stopped being true ---
+    #
+    # FIRST, before anything is added, and the order is not cosmetic. If a new
+    # fact were written before the old one was retired and the two happened to
+    # carry the same text, add_memory would see the old row as a live duplicate
+    # and write nothing — and then the retirement would fire on the only copy
+    # there was. Retiring first means the worst case is a harmless re-add.
+    _retire(user_id, data.get("no_longer_true"))
+
     # --- About the person ---
     for fact in data.get("facts") or []:
         if not isinstance(fact, dict):
@@ -273,6 +315,57 @@ async def _store(user_id: str, data: dict) -> None:
         bf = (bf or "").strip()
         if bf:
             memory.add_memory(user_id, "fact", bf, owner="bob", importance=2)
+
+
+#: The runaway guard, and the number is a judgement rather than a round figure.
+#: One real event can honestly end several rows at once — a death takes the
+#: person, the follow-up about them, and whatever was recorded about their
+#: health — so a cap of two or three would clip exactly the case this whole
+#: mechanism exists for. Ten is not a life changing; it is a model that has
+#: misread the question.
+#:
+#: Over the cap NOTHING is retired, not the first five. A partial apply would
+#: mean acting on a batch already known to be wrong, and the safe failure here
+#: is the old behaviour: the companion keeps believing what he believed, which
+#: is survivable, rather than losing rows nobody can see were lost.
+_MAX_RETIRED = 5
+
+
+def _retire(user_id: str, claims) -> None:
+    """Mark facts the person's own words have just ended. Never raises.
+
+    Loud on purpose — same reasoning as safety.py. This is the only place that
+    stops the companion believing something, so it has to be readable in a log
+    by somebody asking later why he never mentioned the dog again.
+    """
+    if not isinstance(claims, list) or not claims:
+        return
+    if len(claims) > _MAX_RETIRED:
+        print(
+            f"[learn] refusing to retire {len(claims)} facts at once for "
+            f"{user_id[:8]} — that is not a change of life, it is a misread",
+            file=sys.stderr,
+            flush=True,
+        )
+        return
+
+    for claim in claims:
+        if not isinstance(claim, dict):
+            continue
+        try:
+            memory_id = int(claim.get("id"))
+        except (TypeError, ValueError):
+            continue
+        why = str(claim.get("because") or "").strip()
+        # supersede() is scoped to this user, so a hallucinated id belonging to
+        # somebody else simply does not match — it cannot reach another person's
+        # memory even in principle.
+        if memory.supersede(user_id, memory_id, why):
+            print(
+                f"  ⊘ больше не так · {user_id[:8]} · #{memory_id} · {why[:120]}",
+                file=sys.stderr,
+                flush=True,
+            )
 
 
 async def _safe_embed(text: str) -> list[float] | None:

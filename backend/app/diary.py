@@ -60,7 +60,7 @@ def _memory_rows(user_id: str) -> list:
     marks = ",".join("?" for _ in _DIARY_KINDS)
     with db.connect() as conn:
         return conn.execute(
-            f"SELECT id, kind, title, content FROM memories "
+            f"SELECT id, kind, title, content, superseded_ts FROM memories "
             f"WHERE user_id=? AND owner='elder' AND kind IN ({marks}) "
             f"ORDER BY created_ts ASC",
             (user_id, *_DIARY_KINDS),
@@ -73,10 +73,19 @@ def _fingerprint(rows) -> str:
 
 
 def _notes_text(rows) -> str:
-    """His distilled notes, grouped by kind, as the writing material."""
+    """His distilled notes, grouped by kind, as the writing material.
+
+    Retired notes are KEPT here and marked, rather than filtered out the way
+    every live read filters them. This is the one place his life is allowed a
+    past tense — the book is meant to outlive the subscription, and a book that
+    silently dropped his wife the week she died would be worse than no book.
+    What it must not do is write her in the present, hence the mark.
+    """
     grouped: dict[str, list[str]] = {}
     for r in rows:
         line = f"«{r['title']}» — {r['content']}" if r["title"] else r["content"]
+        if r["superseded_ts"]:
+            line += "  [этого больше нет — пиши об этом в прошедшем времени]"
         grouped.setdefault(r["kind"], []).append(f"- {line}")
     parts = [
         _KIND_LABEL[kind] + ":\n" + "\n".join(grouped[kind])

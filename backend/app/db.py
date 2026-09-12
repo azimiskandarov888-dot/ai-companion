@@ -66,7 +66,15 @@ CREATE TABLE IF NOT EXISTS memories (
     meta              TEXT,              -- JSON, optional
     created_ts        REAL NOT NULL,
     last_recalled_ts  REAL,
-    recall_count      INTEGER DEFAULT 0
+    recall_count      INTEGER DEFAULT 0,
+    -- WHEN THIS STOPPED BEING TRUE OF HIS LIFE TODAY. NULL means it still is,
+    -- which is almost always. Nothing is ever deleted: «жена Валя» does not
+    -- become false when Valya dies, it becomes PAST — and the diary, which is
+    -- meant to outlive the subscription, still has to be able to write about
+    -- her. What must stop is the present tense reaching the companion, so
+    -- every read path that tells him what IS filters on this being NULL.
+    superseded_ts     REAL,
+    superseded_why    TEXT               -- his own words that ended it
 );
 
 CREATE TABLE IF NOT EXISTS usage (
@@ -219,6 +227,13 @@ def _migrate(conn: sqlite3.Connection) -> None:
         conn.execute(
             "ALTER TABLE memories ADD COLUMN user_id TEXT NOT NULL DEFAULT 'default'"
         )
+    # Everything remembered before this existed is still true as far as anyone
+    # knows — NULL is exactly that statement, and it is the column default, so
+    # the upgrade neither invents an ending for anything nor loses a row.
+    if memory_cols and "superseded_ts" not in memory_cols:
+        conn.execute("ALTER TABLE memories ADD COLUMN superseded_ts REAL")
+    if memory_cols and "superseded_why" not in memory_cols:
+        conn.execute("ALTER TABLE memories ADD COLUMN superseded_why TEXT")
 
     # `turns` and `usage` were keyed by a client-supplied `session_id`, which
     # every device sent as the literal string "default". The column is renamed
