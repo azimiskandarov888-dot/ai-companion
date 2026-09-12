@@ -407,6 +407,44 @@ def lifts_confirmed(user_id: str) -> bool:
     return row is not None
 
 
+def as_measured(user_id: str) -> str:
+    """What has been COUNTED about him — for the re-reading, not for the prompt.
+
+    reading.reread() was handed the old document and a transcript, and asked to
+    work out from the transcript what lifts him — while «подняло_молчание · 4
+    раза» sat in a table it was never shown. Two systems learning the same thing
+    separately, neither aware of the other, and the one with arithmetic behind it
+    was the one kept in the dark.
+
+    Empty until there is enough history to mean anything, because a baseline off
+    three readings is not a measurement, it is a rumour with a number on it.
+    """
+    rows = recent(user_id)
+    if len(rows) < MIN_FOR_BASELINE:
+        return ""
+
+    out = ["ЧТО ПРО НЕГО УЖЕ ИЗМЕРЕНО (это не догадки — это считалось само, по каждому разговору):"]
+    base = {d: _median(rows[RECENT_N:], d) for d in DIMS}
+    usual = _describe(base, "")
+    if usual:
+        out.append(f"Обычно он: {usual}.")
+
+    with db.connect() as conn:
+        seen = conn.execute(
+            "SELECT tag, subject, times FROM observations WHERE user_id=? AND times>=?"
+            " ORDER BY times DESC, last_ts DESC LIMIT 12",
+            (user_id, CONFIRMED_AT),
+        ).fetchall()
+    if seen:
+        out.append("Случалось не по одному разу:")
+        for r in seen:
+            what = TAGS.get(r["tag"], r["tag"])
+            subject = f" — {r['subject']}" if r["subject"] else ""
+            out.append(f"- {what}{subject}. Раз: {r['times']}.")
+
+    return "\n".join(out) if len(out) > 1 else ""
+
+
 def block(user_id: str) -> str:
     """How he is today against his own normal — VARIABLE half, every turn."""
     rows = recent(user_id)

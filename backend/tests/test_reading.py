@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import time
 
 import pytest
 
@@ -425,3 +426,87 @@ def test_one_persons_register_does_not_silence_anothers_reading(tmp_path, monkey
         mood.observe("анна", "поднял_юмор", "")
     assert mood.lifts_confirmed("анна") is True
     assert mood.lifts_confirmed("борис") is False
+
+
+# --------------------------------------------------------------------------- #
+# The re-reading is no longer blind to what was counted
+# --------------------------------------------------------------------------- #
+#
+# It used to be handed the old document and a transcript and asked to work out
+# from the transcript what lifts him — while «подняло_молчание · 4 раза» sat in
+# a table nobody showed it. Two systems learning the same thing separately, and
+# the one with arithmetic behind it was the one kept in the dark.
+
+
+def _measured_person(user: str, tmp_path, monkeypatch):
+    from app import db, mood
+
+    monkeypatch.setattr(config, "DB_PATH", str(tmp_path / "t.db"))
+    db.init_db()
+    now = time.time()
+    with db.connect() as conn:
+        for i in range(14):
+            v = -1.0 if i % 4 else 0.0
+            conn.execute(
+                "INSERT INTO mood_readings (user_id, ts, energy, warmth, lightness,"
+                " clarity, engagement, word, note, because) VALUES (?,?,?,?,?,?,?,?,?,?)",
+                (user, now - (14 - i) * 7200, v, v, v, 0.0, v, "", "", ""),
+            )
+    for _ in range(4):
+        mood.observe(user, "подняло_молчание", "")
+    mood.observe(user, "поднял_юмор", "")          # once — deliberately not counted
+    return mood
+
+
+def test_the_reread_is_handed_what_was_counted(tmp_path, monkeypatch):
+    _measured_person("u", tmp_path, monkeypatch)
+    seen: dict[str, str] = {}
+
+    async def fake_think(system, prompt, **kw):
+        seen["prompt"] = prompt
+        seen["system"] = system
+        return '{"register": "сухо"}'
+
+    monkeypatch.setattr(reading.brain, "think", fake_think)
+    asyncio.run(reading.reread("u", {"register": "сухо"},
+                               [{"role": "user", "content": "ну"}]))
+
+    assert "УЖЕ ИЗМЕРЕНО" in seen["prompt"]
+    assert "просто побыли рядом без бодрости" in seen["prompt"]
+    assert "Обычно он:" in seen["prompt"]
+
+
+def test_what_happened_only_once_is_still_withheld(tmp_path, monkeypatch):
+    """Same bar as everywhere. A single occurrence is held and not acted on —
+    including here, where acting on it would write it into who he is."""
+    mood = _measured_person("u", tmp_path, monkeypatch)
+    assert "шутк" not in mood.as_measured("u")
+    assert "дурачество" not in mood.as_measured("u")
+
+
+def test_nothing_is_claimed_before_there_is_enough_to_claim_it(tmp_path, monkeypatch):
+    """A baseline off three readings is not a measurement, it is a rumour with
+    a number on it."""
+    from app import db, mood
+
+    monkeypatch.setattr(config, "DB_PATH", str(tmp_path / "t.db"))
+    db.init_db()
+    mood.record("u", {"energy": -1, "warmth": -1, "note": "устал"})
+    assert mood.as_measured("u") == ""
+
+
+def test_one_persons_measurements_are_not_anothers(tmp_path, monkeypatch):
+    mood = _measured_person("анна", tmp_path, monkeypatch)
+    assert mood.as_measured("анна")
+    assert mood.as_measured("борис") == ""
+
+
+def test_the_reread_is_told_the_count_beats_its_impression():
+    """It sees a few dozen turns; the register counted all of them. When the
+    transcript and the arithmetic disagree, the arithmetic is right."""
+    s = reading._REREAD_SYSTEM
+    assert "ПОСЧИТАНО ЗА ТЕБЯ" in s
+    assert "верь посчитанному" in s
+    assert "what_lifts_him" in s
+    # and it is told the count covers only a short list, not all of him
+    assert "Всё остальное про него — по-прежнему твоя работа" in s
