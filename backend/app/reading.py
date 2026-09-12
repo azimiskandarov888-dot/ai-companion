@@ -340,7 +340,7 @@ async def reread(user_id: str, existing: dict, turns: list[dict]) -> dict:
     return merged
 
 
-def standing_block(reading: dict | None) -> str:
+def standing_block(reading: dict | None, *, lifts_confirmed: bool = False) -> str:
     """The slice of the reading that belongs in EVERY turn, not just creation.
 
     Three fields only. Who he is already carries the rest — the write stage
@@ -374,7 +374,17 @@ def standing_block(reading: dict | None) -> str:
             "«я тебя ждал» — и звучит ли оно вообще):\n"
             + str(r["closeness"]).strip()
         )
-    if str(r.get("what_lifts_him") or "").strip():
+    # DROPPED ENTIRELY once the register has watched what actually lifts him.
+    #
+    # This line is a guess — made from a paragraph somebody wrote to a machine
+    # they had never met, on the day their son installed it — and it is phrased
+    # as an instruction («не угадывай — вот это и делай»). mood.standing_block
+    # carries the measured answer in the same prompt, phrased more mildly. When
+    # both are present the louder, weaker one wins, which is backwards.
+    #
+    # So it is not argued with, it is removed. A rule that can be replaced by a
+    # mechanism should be; this is the mechanism.
+    if str(r.get("what_lifts_him") or "").strip() and not lifts_confirmed:
         parts.append(
             "Чем его поднимать, когда ему тяжело (не угадывай — вот это и "
             "делай):\n" + str(r["what_lifts_him"]).strip()

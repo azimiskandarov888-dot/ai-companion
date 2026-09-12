@@ -146,6 +146,19 @@ TAGS: dict[str, str] = {
 #: Once is a coincidence. This is the whole reason the register exists.
 CONFIRMED_AT = 2
 
+#: The tags that answer «чем его поднимать». The reading guesses at this from
+#: the way somebody wrote a paragraph on the day they installed the app; these
+#: are what actually worked on him, watched happening. When any of them is
+#: confirmed, the guess is dropped rather than argued with — see
+#: reading.standing_block.
+LIFTS = (
+    "поднял_юмор",
+    "подняла_история",
+    "подняли_воспоминания",
+    "подняло_дело",
+    "подняло_молчание",
+)
+
 
 # ── words for numbers ───────────────────────────────────────────────────────
 
@@ -373,6 +386,25 @@ def standing_block(user_id: str) -> str:
         "\nЭто дороже любых догадок: это проверено на нём самом. Пользуйся этим,"
         " а не общими правилами."
     )
+
+
+def lifts_confirmed(user_id: str) -> bool:
+    """Has it been WATCHED, twice or more, what actually lifts him?
+
+    Asked by the one caller that needs to stand down when the answer is yes:
+    the reading's «чем его поднимать» is a guess made from a paragraph somebody
+    wrote to a stranger on their first day, and it rides in the same prompt as
+    this register, phrased as an instruction. Two answers to one question, and
+    the weaker one said more loudly.
+    """
+    marks = ",".join("?" for _ in LIFTS)
+    with db.connect() as conn:
+        row = conn.execute(
+            f"SELECT 1 FROM observations WHERE user_id=? AND tag IN ({marks})"
+            " AND times>=? LIMIT 1",
+            (user_id, *LIFTS, CONFIRMED_AT),
+        ).fetchone()
+    return row is not None
 
 
 def block(user_id: str) -> str:

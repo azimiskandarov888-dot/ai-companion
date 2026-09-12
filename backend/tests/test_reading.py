@@ -349,3 +349,79 @@ def test_every_reading_field_reaches_both_places_it_is_needed(tmp_path):
         assert f"ЗНАЧ-{field}" in reading.standing_block({field: f"ЗНАЧ-{field}"}), field
     for field in the_write:
         assert f"ЗНАЧ-{field}" in reading.as_brief({field: f"ЗНАЧ-{field}"}), field
+
+
+# --------------------------------------------------------------------------- #
+# When the register has watched it, the reading stops guessing at it
+# --------------------------------------------------------------------------- #
+#
+# «Чем его поднимать» is answered twice in the same prompt. The reading guesses
+# it from a paragraph somebody wrote to a machine they had never met, on the day
+# their son installed the app — and phrases it as an instruction: «не угадывай —
+# вот это и делай». mood.standing_block carries the answer that was actually
+# watched happening, twice or more, and phrases it mildly. Both present, the
+# louder and weaker one wins, which is backwards.
+
+_GUESSES = {"register": "коротко", "what_lifts_him": "истории, чтобы отвлечься"}
+
+
+def test_the_guess_is_used_while_nothing_has_been_watched():
+    """It is a guess, but at the start it is the only answer there is."""
+    said = reading.standing_block(_GUESSES, lifts_confirmed=False)
+    assert "истории, чтобы отвлечься" in said
+
+
+def test_the_guess_is_dropped_once_it_has_been_watched():
+    """Not argued with — removed. Two answers to one question is the problem."""
+    said = reading.standing_block(_GUESSES, lifts_confirmed=True)
+    assert "истории" not in said
+    assert "Чем его поднимать" not in said
+
+
+def test_nothing_else_about_him_is_dropped_with_it():
+    said = reading.standing_block(
+        {**_GUESSES, "do_not_touch": "про сына не спрашивать"}, lifts_confirmed=True
+    )
+    assert "коротко" in said
+    assert "про сына не спрашивать" in said
+
+
+def test_a_reading_with_nothing_else_in_it_goes_quiet_entirely():
+    assert reading.standing_block({"what_lifts_him": "истории"}, lifts_confirmed=True) == ""
+
+
+def test_it_is_watched_that_decides_not_guessed(tmp_path, monkeypatch):
+    """The switch is the observation register, at its usual bar of twice."""
+    from app import db, mood
+
+    monkeypatch.setattr(config, "DB_PATH", str(tmp_path / "t.db"))
+    db.init_db()
+
+    assert mood.lifts_confirmed("u") is False
+    mood.observe("u", "подняло_молчание", "")
+    assert mood.lifts_confirmed("u") is False, "once is a coincidence, as everywhere"
+    mood.observe("u", "подняло_молчание", "")
+    assert mood.lifts_confirmed("u") is True
+
+
+def test_a_confirmed_observation_about_something_else_does_not_count(tmp_path, monkeypatch):
+    """«Он устал от расспросов» is confirmed knowledge, and it is not an answer
+    to what lifts him — so it must not silence the only answer there is."""
+    from app import db, mood
+
+    monkeypatch.setattr(config, "DB_PATH", str(tmp_path / "t.db"))
+    db.init_db()
+    for _ in range(3):
+        mood.observe("u", "устал_от_расспросов", "")
+    assert mood.lifts_confirmed("u") is False
+
+
+def test_one_persons_register_does_not_silence_anothers_reading(tmp_path, monkeypatch):
+    from app import db, mood
+
+    monkeypatch.setattr(config, "DB_PATH", str(tmp_path / "t.db"))
+    db.init_db()
+    for _ in range(2):
+        mood.observe("анна", "поднял_юмор", "")
+    assert mood.lifts_confirmed("анна") is True
+    assert mood.lifts_confirmed("борис") is False

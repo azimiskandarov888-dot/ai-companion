@@ -203,7 +203,12 @@ async def _assemble(user_id: str, user_text: str) -> tuple[str, str, list, str |
         persona_block=persona_block,
         # How this person needs to be spoken to, and what must never be
         # joked about. Stable, so it rides in the cached half for free.
-        reading_block=reading.standing_block(reading.load(user_id)),
+        reading_block=reading.standing_block(
+            reading.load(user_id),
+            # Once the register has WATCHED what lifts him, the reading's guess
+            # at it is dropped rather than left to argue with the measurement.
+            lifts_confirmed=mood.lifts_confirmed(user_id),
+        ),
         # Proven on him, not guessed about him. See mood.py.
         confirmed_block=mood.standing_block(user_id),
         # How the two of them fit — watched, never guessed.
