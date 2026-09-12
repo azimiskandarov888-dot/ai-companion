@@ -219,7 +219,7 @@ def test_a_reread_refines_and_never_demolishes(monkeypatch):
     assert after["register"] == "теплее, чем казалось"      # revised
     assert after["do_not_touch"] == "смерть жены"           # kept, untouched
     assert after["would_ring_false"] == "бодрячок"          # kept, untouched
-    assert after["learned"] == "не любит, когда его жалеют"  # new
+    assert after["learned"] == ["не любит, когда его жалеют"]  # new, accumulated
 
 
 def test_an_empty_stretch_of_talk_changes_nothing(monkeypatch):
@@ -304,15 +304,62 @@ def test_one_bad_evening_is_never_evidence():
     """The diagnostic he described, with the half that makes it safe. Mood
     drops, he's asked, he doesn't answer — that looks EXACTLY the same whether
     the companion caused it or whether it's something private. One occurrence
-    cannot tell them apart, so one occurrence may not be written down."""
+    cannot tell them apart, so one occurrence may not be written down.
+
+    This used to be enforced by telling the model to count repeats by eye across
+    sixty turns, under a rule demanding «дважды или больше» — while those same
+    events were being counted for it, one exchange at a time, in a table. Now the
+    counting is the register's and only the meaning is the model's.
+    """
     r = reading._REREAD_SYSTEM
-    assert "ОДИН СЛУЧАЙ — НЕ ДОКАЗАТЕЛЬСТВО" in r
+    assert "СЧИТАТЬ ТЕБЕ НЕ НАДО" in r
+    assert "ТОЛЬКО то, что стоит в этом списке" in r
+    # The reason one occurrence cannot be trusted still has to be stated, or the
+    # rule reads as bureaucracy and gets argued with.
     assert "РОВНО ТАК ЖЕ ВЫГЛЯДИТ ПРОСТО ЛИЧНОЕ" in r
-    # Only a repeat counts, and it has to carry its evidence.
-    assert "дважды или больше" in r
-    assert "приводи оба случая как доказательство" in r
+    assert "НЕВОЗМОЖНО" in r
+    # An empty list means leave it alone — not "look harder in the transcript".
+    assert "Если список пуст" in r
     # And the cost of a false entry is named, because it is permanent.
     assert "навсегда отнимает у друга что-то живое" in r
+
+
+def test_the_model_is_left_the_part_that_is_actually_thinking():
+    """Counting is arithmetic and was taken away from it. Turning «закрылся на
+    теме — война, 3 раза» into «про войну не расспрашивать» is not arithmetic,
+    and that half is deliberately left where it was."""
+    r = reading._REREAD_SYSTEM
+    assert "ЧТО С ЭТИМ ДЕЛАТЬ — уже твоя работа" in r
+    assert "это ещё не запись" in r
+
+
+def test_the_evidence_for_hurt_is_handed_over_already_sorted(tmp_path, monkeypatch):
+    """Which observations count as hurt must be a fact, not the model's
+    judgement — otherwise we hand it a pile and call it evidence."""
+    from app import db, mood
+
+    monkeypatch.setattr(config, "DB_PATH", str(tmp_path / "t.db"))
+    db.init_db()
+    now = time.time()
+    with db.connect() as conn:
+        for i in range(14):
+            conn.execute(
+                "INSERT INTO mood_readings (user_id, ts, energy, warmth, lightness,"
+                " clarity, engagement, word, note, because) VALUES (?,?,?,?,?,?,?,?,?,?)",
+                ("u", now - (14 - i) * 7200, -1.0, -1.0, -1.0, 0.0, -1.0, "", "", ""),
+            )
+    for _ in range(3):
+        mood.observe("u", "закрылся_на_теме", "война")
+    for _ in range(4):
+        mood.observe("u", "подняло_молчание", "")
+    mood.observe("u", "ушёл_от_вопроса", "")          # once — not evidence
+
+    said = mood.as_measured("u")
+    hurt_part = said.split("Ещё случалось")[0]
+    assert "доказательство для hurt_by" in hurt_part
+    assert "война" in hurt_part
+    assert "побыли рядом" not in hurt_part            # a lift, not a hurt
+    assert "замолчал или свернул" not in said         # seen once, still withheld
 
 
 def test_what_is_proven_to_hurt_is_stated_as_an_absolute():
@@ -510,3 +557,137 @@ def test_the_reread_is_told_the_count_beats_its_impression():
     assert "what_lifts_him" in s
     # and it is told the count covers only a short list, not all of him
     assert "Всё остальное про него — по-прежнему твоя работа" in s
+
+
+# --------------------------------------------------------------------------- #
+# Copying the document forward is bookkeeping, and bookkeeping belongs in code
+# --------------------------------------------------------------------------- #
+
+
+def test_a_reread_that_changed_nothing_costs_nothing():
+    """«Пустой объект {} — правильный ответ» has to actually work, or the
+    instruction is a lie and the model will keep restating everything."""
+    before = {"register": "сухо", "do_not_touch": "смерть жены"}
+    after = asyncio.run(_reread_returning("{}", before))
+    assert after["register"] == "сухо"
+    assert after["do_not_touch"] == "смерть жены"
+
+
+def test_what_was_learned_before_is_not_lost_when_only_new_is_sent():
+    """The trap in asking for new-only. Replacing would erase everything
+    understood before this revision, every thirty turns."""
+    before = {"learned": ["не звать по отчеству"]}
+    after = asyncio.run(_reread_returning('{"learned": ["не любит, когда его жалеют"]}', before))
+    assert after["learned"] == ["не звать по отчеству", "не любит, когда его жалеют"]
+
+
+def test_restating_something_already_known_does_not_duplicate_it():
+    before = {"learned": ["не звать по отчеству"]}
+    after = asyncio.run(_reread_returning('{"learned": ["не звать по отчеству"]}', before))
+    assert after["learned"] == ["не звать по отчеству"]
+
+
+def test_understanding_does_not_pile_up_forever():
+    """It rides in the cached block on EVERY turn, and «что ты понял про него»
+    only ever grows. The oldest fall off; the things that must never expire live
+    in do_not_touch and hurt_by, which are not capped."""
+    before = {"learned": [f"понял {i}" for i in range(reading.MAX_LEARNED + 5)]}
+    after = asyncio.run(_reread_returning('{"learned": ["самое свежее"]}', before))
+    assert len(after["learned"]) == reading.MAX_LEARNED
+    assert after["learned"][-1] == "самое свежее"
+    assert "понял 0" not in after["learned"]          # oldest dropped
+
+
+def test_a_learned_written_as_one_sentence_still_works():
+    """Readings written before it became a list, and models that answer with a
+    sentence. Neither may end up rendered as «['...']» in somebody's prompt."""
+    after = asyncio.run(_reread_returning('{"learned": "стал доверять"}',
+                                          {"learned": "раньше был сух"}))
+    assert after["learned"] == ["раньше был сух", "стал доверять"]
+    assert "[" not in reading.standing_block(after)
+
+
+def test_the_reread_is_told_to_send_only_what_changed():
+    r = reading._REREAD_SYSTEM
+    assert "ТОЛЬКО ТЕ ПОЛЯ, КОТОРЫЕ ТЫ МЕНЯЕШЬ" in r
+    assert "останется как было, само" in r
+    assert "только НОВОЕ" in r
+    # and permanent prohibitions are steered to the fields that never expire
+    assert '"do_not_touch" или "hurt_by"' in r
+
+
+async def _reread_returning(payload: str, before: dict) -> dict:
+    import app.reading as _r
+
+    async def fake_think(system, prompt, **kw):
+        return payload
+
+    real, _r.brain.think = _r.brain.think, fake_think
+    try:
+        return await _r.reread("u", before, [{"role": "user", "content": "ну"}])
+    finally:
+        _r.brain.think = real
+
+
+# --------------------------------------------------------------------------- #
+# A revision can be undone
+# --------------------------------------------------------------------------- #
+
+
+def test_a_revision_records_what_the_field_used_to_say(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "READING_PATH", tmp_path / "reading.json")
+    reading.save(U, {"register": "сухо"})
+    reading.save(U, {"register": "теплее, чем казалось"})
+    past = reading.history(U)
+    assert len(past) == 1
+    assert past[0]["was"] == {"register": "сухо"}
+
+
+def test_a_field_the_model_invented_can_be_taken_back(tmp_path, monkeypatch):
+    """The case this exists for, and the one the first version missed: an
+    invented field has no previous value, so it appears nowhere in `was`. An
+    invented hurt_by would have his friend avoid his children forever."""
+    monkeypatch.setattr(config, "READING_PATH", tmp_path / "reading.json")
+    reading.save(U, {"register": "сухо"})
+    reading.save(U, {"register": "сухо", "hurt_by": "не спрашивать про детей"})
+
+    entry = reading.history(U)[-1]
+    assert entry["added"] == ["hurt_by"]
+
+    undone = {**reading.load(U), **entry["was"]}
+    for key in entry["added"]:
+        undone.pop(key, None)
+    assert "hurt_by" not in undone
+    assert undone["register"] == "сухо"
+
+
+def test_saving_the_same_reading_again_records_nothing(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "READING_PATH", tmp_path / "reading.json")
+    reading.save(U, {"register": "сухо"})
+    reading.save(U, {"register": "сухо"})
+    assert reading.history(U) == []
+
+
+def test_the_first_reading_has_nothing_behind_it(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "READING_PATH", tmp_path / "reading.json")
+    reading.save(U, {"register": "сухо"})
+    assert reading.history(U) == []
+
+
+def test_only_the_last_few_revisions_are_kept(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "READING_PATH", tmp_path / "reading.json")
+    for i in range(reading.KEEP_REVISIONS + 4):
+        reading.save(U, {"register": f"ревизия {i}"})
+    past = reading.history(U)
+    assert len(past) == reading.KEEP_REVISIONS
+    assert past[-1]["was"]["register"] == f"ревизия {reading.KEEP_REVISIONS + 2}"
+
+
+def test_a_broken_history_file_never_costs_a_reading(tmp_path, monkeypatch):
+    """A log must not be able to stop a friendship learning something."""
+    monkeypatch.setattr(config, "READING_PATH", tmp_path / "reading.json")
+    reading.save(U, {"register": "сухо"})
+    reading.history_path(U).write_text("не json", encoding="utf-8")
+    reading.save(U, {"register": "теплее"})
+    assert reading.load(U)["register"] == "теплее"
+    assert reading.history(U) == [] or reading.history(U)[-1]["was"]["register"] == "сухо"

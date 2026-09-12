@@ -59,6 +59,7 @@ people, mark what it got wrong, and sharpen the method. See docs/SOUL.md.
 from __future__ import annotations
 
 import json
+import time
 
 from . import brain, config, db, identity, mood
 
@@ -203,8 +204,77 @@ def save(user_id: str, data: dict) -> dict:
     """
     path = identity.reading_path(user_id)
     path.parent.mkdir(parents=True, exist_ok=True)
+    _archive(user_id, load(user_id), data)
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
     return data
+
+
+#: How many revisions of a reading are kept behind it.
+KEEP_REVISIONS = 8
+
+
+def history_path(user_id: str):
+    p = identity.reading_path(user_id)
+    return p.with_name(p.stem + ".history.json")
+
+
+def _archive(user_id: str, before: dict | None, after: dict) -> None:
+    """Remember what a field USED to say, just before it stops saying it.
+
+    The reading is the most consequential document in the app and it is rewritten
+    by a model, unattended, every thirty turns. One bad revision is permanent:
+    an invented «hurt_by: не спрашивать про детей» would have his friend avoid
+    his children forever, and there would be no way back.
+
+    Only the OLD VALUES OF CHANGED FIELDS are kept, not whole copies. Smaller,
+    but that is not the reason — it is that this shape is already an undo. Laying
+    one entry back over the current reading restores exactly what that revision
+    took away, and reading the file top to bottom says what changed and when,
+    which whole snapshots make you diff for.
+
+    `added` is the other half of that undo and is easy to leave out, which is
+    how the first version of this missed the exact case it was written for. A
+    field the revision INVENTED has no previous value, so it appears nowhere in
+    `was` — and an invented hurt_by, the very example above, would have been
+    unrecorded and permanent. Undoing an entry means laying `was` back down AND
+    removing everything in `added`.
+
+    Never raises. A friendship must not fail to learn something because a log
+    could not be written.
+    """
+    if not before:
+        return
+    keys = lambda d: {k for k in d if not str(k).startswith("_")}
+    was = {k: before[k] for k in keys(before) if after.get(k) != before[k]}
+    added = sorted(keys(after) - keys(before))
+    if not was and not added:
+        return
+    try:
+        path = history_path(user_id)
+        past = []
+        if path.exists():
+            loaded = json.loads(path.read_text(encoding="utf-8"))
+            if isinstance(loaded, list):
+                past = loaded
+        past.append({"ts": time.time(), "was": was, "added": added})
+        path.write_text(
+            json.dumps(past[-KEEP_REVISIONS:], ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+    except Exception as e:  # noqa: BLE001 — a log, never a reason to lose a reading
+        print(f"  · reading history skipped ({e})", flush=True)
+
+
+def history(user_id: str) -> list[dict]:
+    """What previous revisions said, oldest first. Empty if nothing changed yet."""
+    path = history_path(user_id)
+    if not path.exists():
+        return []
+    try:
+        loaded = json.loads(path.read_text(encoding="utf-8"))
+        return loaded if isinstance(loaded, list) else []
+    except (json.JSONDecodeError, OSError):
+        return []
 
 
 def load(user_id: str) -> dict | None:
@@ -262,11 +332,11 @@ _REREAD_SYSTEM = """Ты уже читал этого человека одна�
 - Над чем он смеётся. Юмор — самый быстрый способ понять человека и самый частый способ промахнуться.
 - Поправлял ли он собеседника: «не надо так», «хватит про это», «я не об этом». Это дороже всего остального вместе взятого — человек сказал прямо.
 - ЧЕМ ЕГО ПОДНИМАТЬ (поле what_lifts_him). Найди места, где ему было тяжело, и посмотри, что было ДАЛЬШЕ. После чего он оживал: после истории? после дурачества? после дела и совета? после того, что его просто не трогали? А после чего замыкался сильнее? Это самое полезное, что вообще можно вынести из их разговоров.
-- ЧТО ЕГО ЗАДЕВАЕТ (поле hurt_by) — и здесь нужна осторожность, иначе выйдет хуже, чем было.
-  Признак такой: настроение упало, собеседник спросил, что случилось, — и человек не ответил или ушёл от вопроса. Часто это значит, что задело именно собеседника: то, как он сказал, чем пошутил, на что нажал прямо перед этим.
-  НО РОВНО ТАК ЖЕ ВЫГЛЯДИТ ПРОСТО ЛИЧНОЕ, о чём человек не хочет говорить. Отличить по одному случаю НЕВОЗМОЖНО, и не пытайся.
-  Поэтому правило жёсткое: ОДИН СЛУЧАЙ — НЕ ДОКАЗАТЕЛЬСТВО, в hurt_by его не пиши. Записывай только то, что повторилось: одно и то же поведение друга — и одна и та же реакция, дважды или больше. Тогда пиши коротко и конкретно, ЧТО делать нельзя, и приводи оба случая как доказательство.
-  Если сомневаешься — не пиши. Ложная запись здесь навсегда отнимает у друга что-то живое.
+- ЧТО ЕГО ЗАДЕВАЕТ (поле hurt_by). СЧИТАТЬ ТЕБЕ НЕ НАДО — за тебя уже посчитали.
+  Тебе дают отдельным списком то, что задевало его НЕ ПО ОДНОМУ РАЗУ. Это и есть единственное доказательство, которое здесь принимается. В расшифровке ты видишь несколько десятков реплик; там посчитаны все разговоры, какие были.
+  Пиши в hurt_by ТОЛЬКО то, что стоит в этом списке. Если список пуст — оставь hurt_by как было, даже если тебе что-то показалось в расшифровке. Показалось — это один случай, а один случай тут не доказательство: РОВНО ТАК ЖЕ ВЫГЛЯДИТ ПРОСТО ЛИЧНОЕ, о чём человек не хочет говорить, и отличить одно от другого по одному разу НЕВОЗМОЖНО.
+  А вот ЧТО С ЭТИМ ДЕЛАТЬ — уже твоя работа, и ради неё всё остальное. «Закрылся на теме — война, 3 раза» это ещё не запись; запись это «про войну не расспрашивать, только если сам заговорит». Превращай счёт в короткое и конкретное «чего делать нельзя», и смотри в расшифровку, чтобы понять, что именно из этого выходит.
+  Ложная запись здесь навсегда отнимает у друга что-то живое.
 - КАК ОН ХОЧЕТ БЫТЬ НУЖНЫМ (поле closeness). В анкете этого почти никогда не видно, а в живом разговоре видно каждый раз, когда он возвращается после перерыва. Сам ли он говорит, что скучал? Извиняется ли, что пропал, — и легчает ли ему, когда его от этого освобождают, или он будто не получил, чего хотел? Спрашивает ли, ждали ли его? Это и есть ответ, и он дороже любой догадки.
 
 ЕСТЬ ТО, ЧТО УЖЕ ПОСЧИТАНО ЗА ТЕБЯ:
@@ -281,7 +351,11 @@ _REREAD_SYSTEM = """Ты уже читал этого человека одна�
 - Если сомневаешься — не меняй.
 - Никогда не смягчай «чего не трогать». Список больного может только расти.
 
-Верни ТОЛЬКО JSON, теми же полями, что были, плюс поле "learned" — короткий список того, что выяснилось в живом разговоре и чего не было видно в начале. Если человек что-то прямо просил не делать, это в "learned" в первую очередь, дословно."""
+Верни ТОЛЬКО JSON и ТОЛЬКО ТЕ ПОЛЯ, КОТОРЫЕ ТЫ МЕНЯЕШЬ. Остальные не перечисляй — то, чего ты не прислал, останется как было, само. Чаще всего меняются одно-два поля, а в спокойный раз — ни одного, и пустой объект {} тут правильный ответ.
+
+Плюс поле "learned" — только НОВОЕ, что выяснилось с прошлого раза. Не переписывай в него то, что уже было там раньше: оно никуда не делось, к нему просто допишется твоё.
+
+Если человек прямо просил чего-то не делать — это в "do_not_touch" или "hurt_by", дословно. Там оно останется навсегда; "learned" — про понимание, и старое оттуда со временем вытесняется новым."""
 
 
 async def keep_reading(user_id: str) -> None:
@@ -346,11 +420,57 @@ async def reread(user_id: str, existing: dict, turns: list[dict]) -> dict:
     )
     fresh = _extract_json(raw)
 
-    # A re-reading may refine, never demolish. Anything the model dropped is
-    # kept from the old reading — a field that goes missing is a model slip,
-    # not a discovery that the person no longer has a register.
+    # A re-reading may refine, never demolish. Anything the model did not send
+    # is kept from the old reading — which is also why it is no longer ASKED to
+    # send everything back. Copying a document forward is bookkeeping, and
+    # bookkeeping belongs in code: retyping it costs tokens every time and gives
+    # a model the chance to quietly reword what the prompt just told it to leave
+    # alone, word for word.
     merged = {**existing, **{k: v for k, v in fresh.items() if str(v).strip()}}
+    merged["learned"] = _accumulate(existing.get("learned"), fresh.get("learned"))
+    if not merged["learned"]:
+        merged.pop("learned")
     return merged
+
+
+#: How many live learnings ride in the cached block. They are short lines and
+#: they are read on every single turn, so this is a real per-turn cost with no
+#: natural ceiling — «что ты понял про него» only ever grows. Fifteen is a lot
+#: of accumulated understanding; past that, the oldest fall off.
+#:
+#: Safe to drop the oldest because the things that must NEVER expire do not live
+#: here: a standing request, or something that wounded him, belongs in
+#: do_not_touch and hurt_by, and neither of those is capped.
+MAX_LEARNED = 15
+
+
+def _as_lines(value) -> list[str]:
+    """A field that may be one string or a list of them, as clean lines.
+
+    `learned` accumulates and so is a list; a reading written before that, or by
+    a model that answered with a sentence, is a plain string. Both are read, and
+    neither is ever rendered with str() on a list — which is how «['не звать по
+    отчеству']», brackets and quotes and all, ends up in somebody's prompt.
+    """
+    if isinstance(value, (list, tuple)):
+        return [str(v).strip() for v in value if str(v).strip()]
+    text = str(value or "").strip()
+    return [text] if text else []
+
+
+def _accumulate(old, new) -> list[str]:
+    """Add what was just learned to what was already known, keeping it bounded.
+
+    The re-reading is asked for NEW learnings only — so this has to add rather
+    than replace, or every re-reading would erase everything understood before
+    it. Duplicates are dropped on exact text, which is enough: the model is
+    looking at its own previous list and has no reason to restate it.
+    """
+    out = _as_lines(old)
+    for item in _as_lines(new):
+        if item not in out:
+            out.append(item)
+    return out[-MAX_LEARNED:]
 
 
 def standing_block(reading: dict | None, *, lifts_confirmed: bool = False) -> str:
@@ -411,11 +531,11 @@ def standing_block(reading: dict | None, *, lifts_confirmed: bool = False) -> st
             "один раз; просто больше так не делай, и не объявляй об этом):\n"
             + str(r["hurt_by"]).strip()
         )
-    if str(r.get("learned") or "").strip():
+    if _as_lines(r.get("learned")):
         parts.append(
             "Что ты понял про него за время знакомства (это дороже всего "
             "остального — до этого дошли вместе):\n"
-            + str(r["learned"]).strip()
+            + "\n".join(f"- {line}" for line in _as_lines(r["learned"]))
         )
     if not parts:
         return ""

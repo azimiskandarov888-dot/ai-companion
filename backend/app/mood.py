@@ -159,6 +159,20 @@ LIFTS = (
     "подняло_молчание",
 )
 
+#: And the tags that answer «что его задевает» — the evidence behind the
+#: reading's hurt_by. The re-reading used to be asked to find these by reading
+#: sixty turns of transcript and counting repeats BY EYE, under a rule that
+#: demanded «дважды или больше» — while these very events were being counted
+#: for it, one exchange at a time, in a table. Counting is arithmetic and
+#: belongs here; what the count MEANS is the re-reading's job.
+HURTS = (
+    "ушёл_от_вопроса",
+    "утешение_не_зашло",
+    "закрылся_на_теме",
+    "не_понравилось_несогласие",
+    "устал_от_расспросов",
+)
+
 
 # ── words for numbers ───────────────────────────────────────────────────────
 
@@ -435,12 +449,26 @@ def as_measured(user_id: str) -> str:
             " ORDER BY times DESC, last_ts DESC LIMIT 12",
             (user_id, CONFIRMED_AT),
         ).fetchall()
-    if seen:
-        out.append("Случалось не по одному разу:")
-        for r in seen:
+    def render(rows) -> list[str]:
+        lines = []
+        for r in rows:
             what = TAGS.get(r["tag"], r["tag"])
             subject = f" — {r['subject']}" if r["subject"] else ""
-            out.append(f"- {what}{subject}. Раз: {r['times']}.")
+            lines.append(f"- {what}{subject}. Раз: {r['times']}.")
+        return lines
+
+    # Hurts are listed apart, and that is not tidiness. It is the difference
+    # between handing somebody evidence and handing them a pile to sort: the
+    # re-reading writes hurt_by from this group and from nothing else, so which
+    # rows belong to it must be a fact rather than its judgement.
+    hurts = [r for r in seen if r["tag"] in HURTS]
+    rest = [r for r in seen if r["tag"] not in HURTS]
+    if hurts:
+        out.append("ЕГО ЗАДЕВАЛО — и не по одному разу (вот доказательство для hurt_by):")
+        out += render(hurts)
+    if rest:
+        out.append("Ещё случалось не по одному разу:")
+        out += render(rest)
 
     return "\n".join(out) if len(out) > 1 else ""
 
