@@ -299,7 +299,7 @@ def _normal_by_part(older: list[dict], overall: float | None) -> dict[int, float
 
 
 def _drop_against_own_part(
-    newest: list[dict], normal: dict[int, float | None], overall: float | None
+    newest: list[dict], normal: dict[int, float | None]
 ) -> float | None:
     """How far he is from usual — each reading judged against its OWN hour.
 
@@ -310,17 +310,13 @@ def _drop_against_own_part(
     diffs = []
     for r in newest:
         c = _composite(r)
-        if c is None:
-            continue
-        against = normal.get(_part(r["ts"]), overall)
-        if against is not None:
+        against = normal[_part(r["ts"])]
+        if c is not None and against is not None:
             diffs.append(c - against)
     return statistics.fmean(diffs) if diffs else None
 
 
-def _started_days_ago(
-    rows: list[dict], normal: dict[int, float | None], overall: float | None
-) -> float | None:
+def _started_days_ago(rows: list[dict], normal: dict[int, float | None]) -> float | None:
     """How long he has been below his own normal.
 
     Walks back from now to the last reading that was still at his usual level,
@@ -333,7 +329,7 @@ def _started_days_ago(
         c = _composite(r)
         if c is None:
             continue
-        against = normal.get(_part(r["ts"]), overall)
+        against = normal[_part(r["ts"])]
         if against is None or c >= against - MOVED:
             last_ok = r
             break
@@ -439,10 +435,10 @@ def block(user_id: str) -> str:
     # in the evening. The warning below uses his normal FOR THIS HOUR, which is
     # the right thing to ACT on. See _normal_by_part.
     normal = _normal_by_part(older, base_c)
-    delta = _drop_against_own_part(newest, normal, base_c)
+    delta = _drop_against_own_part(newest, normal)
     if delta is None:
         return "\n".join(out)
-    days = _started_days_ago(rows, normal, base_c) if delta <= -MOVED else None
+    days = _started_days_ago(rows, normal) if delta <= -MOVED else None
 
     if delta <= -STRONGLY:
         out.append("")
