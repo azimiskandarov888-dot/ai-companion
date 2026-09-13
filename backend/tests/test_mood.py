@@ -247,3 +247,51 @@ def test_a_new_friendship_behaves_exactly_as_it_did_before():
     _fill("u", 12, level=1.0)
     _fill("u", 3, level=-1.0)
     assert "⚠" in mood.block("u")
+
+
+# --------------------------------------------------------------------------- #
+# One spelling per topic, or nothing is ever counted twice
+# --------------------------------------------------------------------------- #
+#
+# The row is keyed on (user, tag, subject), so the whole «дважды — это правда»
+# rule silently failed for every observation carrying a subject — which are the
+# most specific and most valuable ones it holds.
+
+
+def test_the_same_topic_spelled_differently_still_counts_as_the_same():
+    for spelling in ("Война.", "война", "  ВОЙНА  ", "«война»"):
+        mood.observe("u", "закрылся_на_теме", spelling)
+    said = mood.standing_block("u")
+    assert "война" in said
+    assert "4 раза" in said
+
+
+def test_genuinely_different_topics_still_count_apart():
+    """The fix must not collapse his children into his war."""
+    mood.observe("u", "закрылся_на_теме", "война")
+    mood.observe("u", "закрылся_на_теме", "дети")
+    assert mood.standing_block("u") == ""          # neither reached two
+
+
+def test_the_extractor_is_shown_the_words_it_already_used():
+    """No cleaning in code turns «про войну» into «война». Showing what exists
+    and letting the model recognise its own topic does."""
+    mood.observe("u", "закрылся_на_теме", "война")
+    mood.observe("u", "оживился_на_теме", "рыбалка")
+    seen = mood.subjects_seen("u")
+    assert "«война»" in seen and "«рыбалка»" in seen
+
+
+def test_nothing_is_offered_before_anything_was_named():
+    assert mood.subjects_seen("u") == ""
+
+
+def test_observations_without_a_topic_are_not_offered_as_topics():
+    mood.observe("u", "поднял_юмор", "")
+    assert mood.subjects_seen("u") == ""
+
+
+def test_one_persons_topics_are_not_anothers():
+    mood.observe("анна", "закрылся_на_теме", "война")
+    assert "война" in mood.subjects_seen("анна")
+    assert mood.subjects_seen("борис") == ""

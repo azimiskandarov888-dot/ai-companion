@@ -256,12 +256,25 @@ def record(user_id: str, reading: dict) -> None:
         )
 
 
+def _same_subject(subject: str) -> str:
+    """One spelling per topic, or nothing is ever counted twice.
+
+    The row is keyed on (user, tag, subject), so «Война» and «война» were two
+    different truths that each waited forever to reach two — and «закрылся на
+    теме» is one of the most valuable things this register holds. Case and
+    trailing punctuation are free to fix here; wording («война» versus «про
+    войну») is not, and is handled where it can be: the extractor is shown the
+    words it has already used for this person and asked to reuse them.
+    """
+    return (subject or "").strip().strip(".,!?;:«»\"'…- ").lower()[:80]
+
+
 def observe(user_id: str, tag: str, subject: str = "", evidence: str = "") -> None:
     """Note that something happened — once. Twice is what makes it true."""
     tag = (tag or "").strip()
     if tag not in TAGS:
         return
-    subject = (subject or "").strip()[:80]
+    subject = _same_subject(subject)
     now = time.time()
     with db.connect() as conn:
         conn.execute(
@@ -427,6 +440,23 @@ def standing_block(user_id: str) -> str:
         "\nЭто дороже любых догадок: это проверено на нём самом. Пользуйся этим,"
         " а не общими правилами."
     )
+
+
+def subjects_seen(user_id: str, limit: int = 20) -> str:
+    """Topics already named for this person — for the extractor, to reuse.
+
+    Counting «закрылся на теме» needs one spelling per topic, and no amount of
+    cleaning in code turns «про войну» into «война». What does work is the thing
+    the app already does for facts: show what exists and let the model recognise
+    its own topic in it. Nothing to enumerate in advance, nothing to maintain.
+    """
+    with db.connect() as conn:
+        rows = conn.execute(
+            "SELECT DISTINCT subject FROM observations"
+            " WHERE user_id=? AND subject<>'' ORDER BY last_ts DESC LIMIT ?",
+            (user_id, limit),
+        ).fetchall()
+    return ", ".join(f"«{r['subject']}»" for r in rows)
 
 
 def lifts_confirmed(user_id: str) -> bool:

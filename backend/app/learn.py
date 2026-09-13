@@ -192,11 +192,23 @@ async def _extract(user_id: str, user_text: str, assistant_text: str) -> dict:
     # contradict — and leaving it unnumbered means the model has no id to
     # retire his biography with even if it wanted to.
     known_elder = memory.believes(user_id, "elder") or "(пока ничего)"
+    # Topics already named for this person. The observations row is keyed on the
+    # subject TEXT, so «война» and «про войну» are two separate truths that each
+    # wait forever to reach two — and «закрылся на теме» is among the most
+    # valuable things the register holds. Showing what exists is the only thing
+    # that fixes wording; see mood.subjects_seen.
+    topics = mood.subjects_seen(user_id)
     known_bob = memory.bob_self_context(user_id) or "(пока ничего)"
     prompt = (
         f"Что уже известно о ЧЕЛОВЕКЕ (не повторяй это):\n{known_elder}\n\n"
         f"Что уже известно о БОБЕ (не повторяй это):\n{known_bob}\n\n"
-        f"Последний обмен репликами:\n"
+        + (
+            f"Темы, которые уже назывались у этого человека: {topics}\n"
+            "Если сейчас речь про ту же самую — напиши в subject ТО ЖЕ САМОЕ слово, "
+            "буква в букву. Иначе это посчитается как другая тема и не сойдётся.\n\n"
+            if topics else ""
+        )
+        + f"Последний обмен репликами:\n"
         f"ЧЕЛОВЕК: {user_text}\n"
         f"БОБ: {assistant_text}\n\n"
         "Выпиши новое, что стоит запомнить, в требуемом JSON."
