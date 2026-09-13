@@ -238,6 +238,7 @@ def build_system_parts(
     fit_block: str = "",
     alert_block: str = "",
     feeling_block: str = "",
+    life_block: str = "",
     body_block: str = "",
     situation_block: str = "",
     broke_off: bool = False,
@@ -309,9 +310,13 @@ def build_system_parts(
     if feeling_block.strip() and not alert_block.strip():
         variable_parts.append(feeling_block.strip())
 
-    # His throat, straight after his mood, for the same reason and under the
-    # same suspension: both are about HIM, and a man on the floor does not need
-    # to know his friend has been talking too long. See body.py.
+    # What is going on in his week, then his throat. All three of these are
+    # about HIM and all three are suspended by an alarm for the same reason: a
+    # man who cannot get up off the floor does not need to know his friend has
+    # a cold. See life.py and body.py.
+    if life_block.strip() and not alert_block.strip():
+        variable_parts.append(life_block.strip())
+
     if body_block.strip() and not alert_block.strip():
         variable_parts.append(body_block.strip())
 

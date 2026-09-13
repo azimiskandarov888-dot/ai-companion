@@ -134,6 +134,19 @@ CREATE TABLE IF NOT EXISTS places (
     ts       REAL NOT NULL
 );
 
+-- WHAT IS HAPPENING TO HIM THIS WEEK. One row per friendship, holding at most
+-- one thing at a time — a man with three simultaneous dramas is a soap opera.
+-- `arc` is the whole course, day by day, written once by the model that knows
+-- what a cold is; the code only ever looks up which day today is. `ended_ts` is
+-- when the last one finished, and is what keeps the quiet gap between them.
+CREATE TABLE IF NOT EXISTS life (
+    user_id   TEXT PRIMARY KEY,
+    what      TEXT NOT NULL DEFAULT '',  -- «простуда», or '' when nothing is on
+    arc       TEXT NOT NULL DEFAULT '[]',-- JSON: [{"state": …, "shows": …}, …]
+    started   REAL,
+    ended_ts  REAL
+);
+
 -- HIS THROAT. One row per friendship, decayed when read like the mood above,
 -- so nothing has to run between conversations and somebody who comes back next
 -- morning finds a friend who has rested. `hoarse_ts` is when he last coughed —

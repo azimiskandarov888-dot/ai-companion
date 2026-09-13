@@ -67,6 +67,7 @@ from . import (
     identity,
     intake,
     learn,
+    life,
     matchmaker,
     memory,
     mood,
@@ -223,6 +224,9 @@ async def _assemble(user_id: str, user_text: str) -> tuple[str, str, list, str |
         # His throat and his tiredness — facts about him, never instructions to
         # cough. The valence is his own mood arriving in his breathing, which is
         # where a mood actually goes. See body.py.
+        # What is going on in his week — a cold, a brother visiting — with its
+        # own shape over days. Background, never the topic; see life.py.
+        life_block=life.block(user_id),
         body_block=body.block(user_id, valence=feeling.now(user_id)["valence"]),
         # Rules that only apply to the turn in front of him — the game they are
         # playing, the news he asked for. Empty nearly always; see situations.py
@@ -295,6 +299,10 @@ def _remember(
     # everything since is better evidence. It decides for itself whether
     # enough has been said to be worth it, and costs nothing when it isn't.
     background_tasks.add_task(reading.keep_reading, user_id)
+    # And perhaps something starts happening to him this week — a cold, a
+    # brother visiting. It decides for itself, rolls rarely, and costs nothing
+    # on the days it decides not to. See life.py.
+    background_tasks.add_task(life.maybe_begin, user_id)
     # And, more rarely still, let the friendship reveal more of HIM. His facts
     # never move — but who is around him, what is wrong with him and what he
     # is up to this week are things you only learn by knowing somebody.
