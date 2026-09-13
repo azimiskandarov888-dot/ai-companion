@@ -238,6 +238,7 @@ def build_system_parts(
     fit_block: str = "",
     alert_block: str = "",
     feeling_block: str = "",
+    body_block: str = "",
     situation_block: str = "",
     broke_off: bool = False,
     acquaintance: str = "",
@@ -307,6 +308,12 @@ def build_system_parts(
     # way to win that argument is not to have it in the prompt at all.
     if feeling_block.strip() and not alert_block.strip():
         variable_parts.append(feeling_block.strip())
+
+    # His throat, straight after his mood, for the same reason and under the
+    # same suspension: both are about HIM, and a man on the floor does not need
+    # to know his friend has been talking too long. See body.py.
+    if body_block.strip() and not alert_block.strip():
+        variable_parts.append(body_block.strip())
 
     if bob_facts.strip():
         variable_parts.append(

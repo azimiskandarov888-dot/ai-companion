@@ -134,6 +134,18 @@ CREATE TABLE IF NOT EXISTS places (
     ts       REAL NOT NULL
 );
 
+-- HIS THROAT. One row per friendship, decayed when read like the mood above,
+-- so nothing has to run between conversations and somebody who comes back next
+-- morning finds a friend who has rested. `hoarse_ts` is when he last coughed —
+-- the consequence half, which is what keeps a cough from being a sound effect.
+CREATE TABLE IF NOT EXISTS body (
+    user_id   TEXT PRIMARY KEY,
+    throat    REAL NOT NULL DEFAULT 0,   -- 0..1, dryness from talking
+    tired     REAL NOT NULL DEFAULT 0,   -- 0..1, from a conversation gone long
+    hoarse_ts REAL,                      -- when he last coughed, or NULL
+    ts        REAL NOT NULL              -- when this last MOVED
+);
+
 -- HIS OWN weather, one row per friendship. Not a log: this is a state, and the
 -- only question ever asked of it is "how is he right now". It is stored at the
 -- moment it changed and DECAYED WHEN READ (see feeling.py), so sitting still

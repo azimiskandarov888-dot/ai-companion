@@ -47,7 +47,7 @@ import sys
 
 import httpx
 
-from . import companion, config
+from . import body, companion, config
 
 _FISH_API_URL = "https://api.fish.audio/v1/tts"
 _ELEVENLABS_API_BASE = "https://api.elevenlabs.io/v1/text-to-speech"
@@ -240,6 +240,13 @@ def spoken(text: str) -> str:
     # would leave «КОНЕЦ» behind as a word and he would announce the end of
     # the conversation out loud.
     text = text.replace(companion.FAREWELL_MARKER, " ")
+    # And the body markers, for the same reason and just as early. These matter
+    # MORE here than at the end of a turn, because the streaming path
+    # synthesises each fragment as it arrives — long before anything has looked
+    # at the finished reply. «Две косые черты кашель» is the worst sound this
+    # app could make, and this is the only place that sees every fragment.
+    for mark in body.MARKERS:
+        text = text.replace(mark, " ")
     for pattern in _STAGE_DIRECTIONS:
         text = pattern.sub(" ", text)
     text = _BULLET.sub("", text)

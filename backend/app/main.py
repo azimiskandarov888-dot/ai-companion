@@ -56,6 +56,7 @@ from pydantic import BaseModel, Field
 
 from . import (
     allowance,
+    body,
     brain,
     companion,
     config,
@@ -219,6 +220,9 @@ async def _assemble(user_id: str, user_text: str) -> tuple[str, str, list, str |
         # How HE is today, carried over from their last exchange and fading on
         # its own since. The one thing in the prompt that is not about her.
         feeling_block=feeling.block(user_id),
+        # His throat and his tiredness — facts about him, never instructions to
+        # cough. What he does with them is his; see body.py.
+        body_block=body.block(user_id),
         # Rules that only apply to the turn in front of him — the game they are
         # playing, the news he asked for. Empty nearly always; see situations.py
         # for why they are no longer read on every turn.
@@ -244,6 +248,21 @@ def _farewell(reply: str) -> tuple[str, bool]:
     if companion.FAREWELL_MARKER not in reply:
         return reply, False
     return reply.replace(companion.FAREWELL_MARKER, "").strip(), True
+
+
+def _body(user_id: str, reply: str) -> str:
+    """Apply what his body just did, and take the markers out of the reply.
+
+    Called on BOTH reply paths, and the markers must be gone before anything is
+    remembered: they exist to move a number in body.py and to tell the voice
+    where a cough went, and they belong in neither the conversation log nor the
+    diary. tts.spoken() strips them again on the way to the audio — that is not
+    redundant, it is the streaming path, where a fragment is synthesised long
+    before the finished reply exists to be cleaned.
+    """
+    said = body.read_markers(reply, user_id)
+    body.spoke(user_id, laughed=body.laughed_in(reply))
+    return said
 
 
 def _remember(
@@ -295,6 +314,7 @@ async def _think_and_speak(
     )
 
     reply, leaving = _farewell(reply)
+    reply = _body(user_id, reply)
     _remember(user_id, user_text, reply, background_tasks, farewell=leaving)
 
     # The mouth is optional. With a voice provider configured we return warm
@@ -434,6 +454,7 @@ async def _speak_as_he_thinks(
             writer.cancel()
 
         reply, leaving = _farewell(reply.strip())
+        reply = _body(user_id, reply)
         if reply:
             _remember(user_id, transcript, reply, background_tasks, farewell=leaving)
 
