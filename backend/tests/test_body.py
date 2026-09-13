@@ -31,9 +31,16 @@ def _age(user: str, hours: float) -> None:
         )
 
 
-def _talk(n: int, user: str = U, laughed: bool = False) -> None:
+#: The companion is invented per person and may be any age — matchmaker.py
+#: writes both of these as readily. Every test below says which one is talking,
+#: because it is the variable that decides whether a throat happens at all.
+OLD = "87 лет"
+YOUNG = "31 год"
+
+
+def _talk(n: int, user: str = U, laughed: bool = False, age: str = OLD) -> None:
     for _ in range(n):
-        body.spoke(user, laughed=laughed)
+        body.spoke(user, laughed=laughed, age=age)
 
 
 # ── a body that has done nothing ────────────────────────────────────────────
@@ -53,7 +60,7 @@ def test_a_few_polite_exchanges_are_not_a_sore_throat():
 # ── the cause ───────────────────────────────────────────────────────────────
 
 def test_talking_a_long_time_dries_his_throat():
-    _talk(12)
+    _talk(18)
     assert body.state(U)["throat"] >= body.NOTABLE
     assert "В горле першит" in body.block(U, may_sneeze=False)
 
@@ -72,14 +79,14 @@ def test_laughter_is_read_from_what_HE_wrote_not_from_her_mood():
 
 
 def test_a_long_conversation_makes_him_sleepy():
-    _talk(16)
+    _talk(20)
     assert "клонит в сон" in body.block(U, may_sneeze=False)
 
 
 # ── the fading, so nobody has to run a clock ────────────────────────────────
 
 def test_a_throat_clears_while_nobody_is_talking():
-    _talk(12)
+    _talk(18)
     assert "першит" in body.block(U, may_sneeze=False)
     _age(U, 3)
     assert body.block(U, may_sneeze=False) == ""
@@ -313,3 +320,105 @@ def test_clearing_one_body_leaves_the_other_alone():
     body.clear("анна")
     assert body.block("анна", may_sneeze=False) == ""
     assert body.block("борис", may_sneeze=False) != ""
+
+
+# --------------------------------------------------------------------------- #
+# A young companion does not have an old man's throat
+# --------------------------------------------------------------------------- #
+#
+# The companion is invented per person and may be any age: matchmaker.py writes
+# «34 года» as readily as «87 лет», because the people this app is for include a
+# lonely teenager and a middle-aged man living alone. The first version of this
+# file gave all of them the same throat.
+
+
+def test_the_same_conversation_costs_a_young_voice_far_less():
+    _talk(14, user="молодой", age=YOUNG)
+    _talk(14, user="старый", age=OLD)
+    assert body.state("молодой")["throat"] < body.state("старый")["throat"] / 2
+
+
+def test_a_young_companion_does_not_start_coughing_mid_conversation():
+    """The bug, named. Fourteen turns is a long, warm evening — and it leaves a
+    thirty-one-year-old with nothing to say about his throat at all."""
+    _talk(14, age=YOUNG)
+    assert "першит" not in body.block(U, may_sneeze=False)
+
+
+def test_but_a_young_voice_is_not_made_of_stone_either():
+    """He is not immune — he simply needs to have really talked."""
+    _talk(70, age=YOUNG)
+    assert body.state(U)["throat"] >= body.NOTABLE
+
+
+def test_the_rate_climbs_smoothly_because_nothing_happens_at_a_birthday():
+    rates = [body.wear_rate(f"{y} лет") for y in (20, 30, 45, 60, 75, 90)]
+    assert rates == sorted(rates)
+    assert len(set(rates)) > 3, "ступеньки вместо плавного роста"
+
+
+@pytest.mark.parametrize(
+    "written", ["31 год", "34 года", "87 лет", "73", "мне 68 лет", 55]
+)
+def test_age_is_read_however_the_persona_wrote_it(written):
+    assert body._RATE_FLOOR <= body.wear_rate(written) <= body._RATE_CEILING
+
+
+@pytest.mark.parametrize("junk", [None, "", "средних лет", "неизвестно", "0", "999"])
+def test_an_unreadable_age_leans_young_not_old(junk):
+    """The two mistakes are not equal. Too low and an old man coughs less than
+    he might, which nobody notices; too high and a young man coughs like an old
+    one, which is the thing this was written to stop."""
+    rate = body.wear_rate(junk)
+    assert rate == body._RATE_UNKNOWN
+    assert rate < body.wear_rate("87 лет")
+
+
+def test_tiredness_follows_age_too():
+    _talk(20, user="молодой", age=YOUNG)
+    _talk(20, user="старый", age=OLD)
+    assert body.state("молодой")["tired"] < body.state("старый")["tired"]
+
+
+# --------------------------------------------------------------------------- #
+# The step before a cough, and the one that is not physical at all
+# --------------------------------------------------------------------------- #
+
+
+def test_a_throat_does_not_go_from_nothing_straight_to_coughing():
+    """A body with two states — fine and coughing — is a switch, not a body."""
+    _talk(11)
+    said = body.block(U, may_sneeze=False)
+    assert "прочистить горло" in said
+    assert "першит" not in said
+
+
+def test_clearing_gives_way_to_coughing_as_it_gets_worse():
+    _talk(18)
+    said = body.block(U, may_sneeze=False)
+    assert "першит" in said
+    assert "прочистить горло" not in said
+
+
+def test_a_low_mood_arrives_in_his_breathing():
+    """The one non-verbal here whose cause is not physical: feeling.py's valence
+    is his own mood, and a mood goes into the body."""
+    said = body.block(U, may_sneeze=False, valence=-1.0)
+    assert "вздыхается" in said
+    assert body.MARK_SIGH in said
+
+
+def test_an_ordinary_mood_does_not_sigh():
+    assert body.block(U, may_sneeze=False, valence=0.0) == ""
+    _talk(14)
+    assert "вздыхается" not in body.block(U, may_sneeze=False, valence=0.0)
+
+
+def test_he_is_not_offered_a_sigh_he_has_no_reason_for():
+    _talk(14)
+    assert body.MARK_SIGH not in body.block(U, may_sneeze=False, valence=0.0)
+
+
+def test_a_sigh_needs_no_sore_throat():
+    """It is not a throat at all, and must not wait on one."""
+    assert body.block(U, may_sneeze=False, valence=-1.5) != ""

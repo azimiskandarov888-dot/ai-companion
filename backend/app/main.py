@@ -221,8 +221,9 @@ async def _assemble(user_id: str, user_text: str) -> tuple[str, str, list, str |
         # its own since. The one thing in the prompt that is not about her.
         feeling_block=feeling.block(user_id),
         # His throat and his tiredness — facts about him, never instructions to
-        # cough. What he does with them is his; see body.py.
-        body_block=body.block(user_id),
+        # cough. The valence is his own mood arriving in his breathing, which is
+        # where a mood actually goes. See body.py.
+        body_block=body.block(user_id, valence=feeling.now(user_id)["valence"]),
         # Rules that only apply to the turn in front of him — the game they are
         # playing, the news he asked for. Empty nearly always; see situations.py
         # for why they are no longer read on every turn.
@@ -261,7 +262,13 @@ def _body(user_id: str, reply: str) -> str:
     before the finished reply exists to be cleaned.
     """
     said = body.read_markers(reply, user_id)
-    body.spoke(user_id, laughed=body.laughed_in(reply))
+    # HIS age, not the listener's. A thirty-four-year-old companion does not get
+    # the throat of an eighty-seven-year-old, and matchmaker.py writes both.
+    body.spoke(
+        user_id,
+        laughed=body.laughed_in(reply),
+        age=persona.load_persona(user_id).get("age"),
+    )
     return said
 
 

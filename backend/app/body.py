@@ -45,6 +45,7 @@ lives in the consequence, which is where it lives for the other two as well.
 from __future__ import annotations
 
 import random
+import re
 import time
 
 from . import db
@@ -52,13 +53,60 @@ from . import db
 #: Everything below is 0..1. Zero is a man who has said nothing today.
 DIMS = ("throat", "tired")
 
-#: What one spoken turn does. Small on purpose: this should take a real
-#: conversation to build, not four polite exchanges.
-_PER_TURN_THROAT = 0.06
-_PER_TURN_TIRED = 0.04
+#: HOW FAST A VOICE OF THIS AGE TIRES — and the reason this file cannot be the
+#: same for everyone.
+#:
+#: The companion is invented per person and may be any age: matchmaker.py writes
+#: «34 года» as readily as «87 лет», because the people this app is for are a
+#: lonely teenager and a middle-aged man living alone as much as they are an
+#: eighty-year-old. Without this, a thirty-four-year-old crane operator got the
+#: throat of an eighty-seven-year-old — coughing his way through a conversation
+#: for no reason a listener could name, which is exactly the incoherent realism
+#: that reads as uncanny.
+#:
+#: A smooth ramp rather than brackets: nothing happens to a throat at a
+#: birthday. 25 → 0.3, 55 → 0.8, 85 → 1.3.
+_RATE_AT_25 = 0.3
+_RATE_PER_YEAR = 1.0 / 60.0
+_RATE_FLOOR, _RATE_CEILING = 0.3, 1.3
 
-#: Laughing is far harder on a throat than talking is.
-_LAUGH_THROAT = 0.18
+#: When the age cannot be read at all. Deliberately toward the young end,
+#: because the two mistakes are not equal: too low and an old man simply coughs
+#: less than he might, which nobody notices; too high and a young man coughs
+#: like an old one, which is the bug this constant exists to prevent.
+_RATE_UNKNOWN = 0.55
+
+_YEARS = re.compile(r"\d{1,3}")
+
+
+def wear_rate(age) -> float:
+    """How hard talking is on THIS companion's voice. 0.3 young … 1.3 old."""
+    found = _YEARS.search(str(age or ""))
+    if not found:
+        return _RATE_UNKNOWN
+    years = int(found.group(0))
+    if not 5 <= years <= 120:          # a typo, not a person
+        return _RATE_UNKNOWN
+    rate = _RATE_AT_25 + (years - 25) * _RATE_PER_YEAR
+    return max(_RATE_FLOOR, min(_RATE_CEILING, rate))
+
+#: What one spoken turn does, BEFORE the age rate multiplies it. These numbers
+#: were set by walking a conversation through and reading what came out, not by
+#: taste — the first draft crossed from «nothing» to «coughing» in six turns for
+#: an old companion, which skipped the clearing-the-throat step almost entirely
+#: and made a body with two states instead of three.
+#:
+#: Where they land now, counting turns of his:
+#:                     87 лет          31 год
+#:   clears throat     around 10       around 40
+#:   throat tickles    around 14       around 60
+#: — a long warm evening for the old man, an exceptional one for the young.
+_PER_TURN_THROAT = 0.028
+_PER_TURN_TIRED = 0.025
+
+#: Laughing is harder on a throat than talking, worth about three turns of it.
+#: It was six, which made one good joke the whole cause of a cough.
+_LAUGH_THROAT = 0.08
 
 #: Hours. Throat clears quickly once he stops talking; tiredness lingers.
 _THROAT_HALF_LIFE = 0.75
@@ -78,10 +126,23 @@ HOARSE_MINUTES = 3.0
 #: hundred turns — rare enough to be an event rather than a tic.
 SNEEZE_CHANCE = 0.005
 
+#: Below NOTABLE but above this, a throat is not a cough yet — it is the small
+#: «кхм» before a sentence. Same state, same cause, one step earlier: the point
+#: of having it is that a throat does not go from nothing to coughing.
+CLEARING = 0.35
+
+#: How low his own mood has to sit before it shows up in his breathing. A sigh
+#: is the one non-verbal here whose cause is not physical at all — it is
+#: feeling.py's valence arriving in the body, which is where a mood actually
+#: goes. Passed in rather than read, so this file stays a model of a throat.
+SIGH_AT = -0.6
+
 MARK_COUGH = "//КАШЕЛЬ//"
+MARK_CLEAR = "//КХМ//"
 MARK_YAWN = "//ЗЕВОК//"
 MARK_SNEEZE = "//ЧИХ//"
-MARKERS = (MARK_COUGH, MARK_YAWN, MARK_SNEEZE)
+MARK_SIGH = "//ВЗДОХ//"
+MARKERS = (MARK_COUGH, MARK_CLEAR, MARK_YAWN, MARK_SNEEZE, MARK_SIGH)
 
 
 def _decayed(value: float, hours: float, half_life: float) -> float:
@@ -122,16 +183,18 @@ def _write(user_id: str, throat: float, tired: float, hoarse_ts: float | None) -
         )
 
 
-def spoke(user_id: str, laughed: bool = False) -> None:
+def spoke(user_id: str, laughed: bool = False, age=None) -> None:
     """One more turn of talking. Called after he replies, never before.
 
     This is the entire cause side of a cough: it did not come from a die roll,
     it came from him having talked for twenty minutes, and it will not arrive
-    until he has.
+    until he has — and for a young companion, not even then. `age` is his own,
+    from his persona; see wear_rate.
     """
+    rate = wear_rate(age)
     now = state(user_id)
-    throat = now["throat"] + _PER_TURN_THROAT + (_LAUGH_THROAT if laughed else 0.0)
-    _write(user_id, throat, now["tired"] + _PER_TURN_TIRED, _hoarse_ts(user_id))
+    throat = now["throat"] + (_PER_TURN_THROAT + (_LAUGH_THROAT if laughed else 0.0)) * rate
+    _write(user_id, throat, now["tired"] + _PER_TURN_TIRED * rate, _hoarse_ts(user_id))
 
 
 def _hoarse_ts(user_id: str) -> float | None:
@@ -199,7 +262,7 @@ def laughed_in(reply: str) -> bool:
     return any(mark in low for mark in _LAUGHTER)
 
 
-def block(user_id: str, may_sneeze: bool | None = None) -> str:
+def block(user_id: str, may_sneeze: bool | None = None, valence: float = 0.0) -> str:
     """What he is told about his own body. Empty while it has nothing to say.
 
     Facts, never instructions. «В горле першит» is a thing he knows about
@@ -221,11 +284,18 @@ def block(user_id: str, may_sneeze: bool | None = None) -> str:
             "В горле першит — ты сегодня много говорил."
             + (" Сильно." if now["throat"] >= 0.8 else "")
         )
+    elif now["throat"] >= CLEARING:
+        # One step before a cough, from the same cause. A throat does not go
+        # from nothing straight to coughing, and a companion whose only two
+        # states are «fine» and «coughing» has a switch, not a body.
+        lines.append("Голос чуть сел — хочется прочистить горло.")
     if now["tired"] >= NOTABLE:
         lines.append(
             "Тебя клонит в сон"
             + (", глаза слипаются." if now["tired"] >= 0.8 else ".")
         )
+    if valence <= SIGH_AT:
+        lines.append("И вздыхается — само, без повода. Ты сегодня и правда невесёлый.")
     if sneeze:
         lines.append("Ты сейчас чихнул. Не объясняй почему — просто чихнул.")
 
@@ -233,10 +303,15 @@ def block(user_id: str, may_sneeze: bool | None = None) -> str:
         return ""
 
     how = ["ТВОЁ ТЕЛО СЕЙЧАС (это про тебя, не про него):"] + lines
+    can = [f"кашлянуть ({MARK_COUGH})", f"кхмкнуть ({MARK_CLEAR})",
+           f"зевнуть ({MARK_YAWN})"]
+    if valence <= SIGH_AT:
+        can.append(f"вздохнуть ({MARK_SIGH})")
+    if sneeze:
+        can.append(f"чихнуть ({MARK_SNEEZE})")
     how.append(
-        "Это не команда что-то сделать. Это просто так есть. "
-        f"Захочешь — кашляни ({MARK_COUGH}), зевни ({MARK_YAWN})"
-        + (f", чихни ({MARK_SNEEZE})" if sneeze else "")
+        "Это не команда что-то сделать. Это просто так есть. Захочешь — можно "
+        + ", ".join(can)
         + ". Метку ставь прямо там, где это случилось в речи."
     )
     how.append(
