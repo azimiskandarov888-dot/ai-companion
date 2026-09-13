@@ -131,6 +131,40 @@ Chrome's own password store and nowhere near a transcript.
 
 ---
 
+## MCP-серверы: что стоит и откуда
+
+Проверено по npm — издатель и репозиторий сходятся с официальными.
+
+| Сервер | Пакет | Кто издаёт | Зачем здесь |
+|---|---|---|---|
+| `browser` | `@playwright/mcp` | Microsoft, `microsoft/playwright-mcp` | сайты без API: Apple Developer, Picovoice, Fish Audio |
+| `context7` | `@upstash/context7-mcp` | Upstash, `upstash/context7` | свежая документация FastAPI, Whisper, SwiftUI, Picovoice — вместо устаревшей из памяти модели |
+
+Ключ Context7 не обязателен для начала: без него работает с ограничениями,
+с ним — быстрее. Кладётся в `CONTEXT7_API_KEY`, не в этот файл.
+
+### Не подключено, и почему
+
+**Supabase** (`@supabase/mcp-server-supabase`, издаёт `supabase/mcp`) — пакет
+настоящий, но этому проекту не нужен: по `PLAN.md` память живёт в SQLite и
+дальше в Postgres + pgvector, который мы держим сами. Если Supabase всё же
+появится, строка такая:
+
+```jsonc
+"supabase": {
+  "command": "npx",
+  "args": ["-y", "@supabase/mcp-server-supabase@latest", "--read-only"],
+  "env": { "SUPABASE_ACCESS_TOKEN": "${SUPABASE_ACCESS_TOKEN}" }
+}
+```
+
+`--read-only` тут не украшение: без него у модели есть право удалять таблицы.
+
+**Strix** — под этим именем лежат минимум четыре разных проекта, и это не
+опечатка, а причина не ставить его вслепую. Подробности в чате.
+
+---
+
 ## Talking to it, and doing it from the phone
 
 Two things that are not browser automation and are worth having first.

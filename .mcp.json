@@ -8,6 +8,13 @@
         "--user-data-dir=${HOME}/.claude-browser-profile",
         "--output-dir=${CLAUDE_PROJECT_DIR}/.browser"
       ]
+    },
+    "context7": {
+      "command": "npx",
+      "args": ["-y", "@upstash/context7-mcp@latest"],
+      "env": {
+        "CONTEXT7_API_KEY": "${CONTEXT7_API_KEY:-}"
+      }
     }
   }
 }
