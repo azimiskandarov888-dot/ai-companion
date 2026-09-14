@@ -446,6 +446,25 @@ def standing_block(user_id: str) -> str:
     )
 
 
+def wants_to_hear(user_id: str) -> bool:
+    """Has it been WATCHED that he wants to be let in on the friend's own life?
+
+    Either of two things counts: he asked about it and listened gladly, or the
+    friend deflected and he would not let it go. Both mean the same — waiting to
+    be asked is no longer the right shape with him, and life.py is told to let
+    the companion simply say it.
+    """
+    marks = ("хотел_слушать_про_тебя", "настоял_чтобы_рассказал")
+    holes = ",".join("?" for _ in marks)
+    with db.connect() as conn:
+        row = conn.execute(
+            f"SELECT 1 FROM observations WHERE user_id=? AND tag IN ({holes})"
+            " AND times>=? LIMIT 1",
+            (user_id, *marks, CONFIRMED_AT),
+        ).fetchone()
+    return row is not None
+
+
 def subjects_seen(user_id: str, limit: int = 20) -> str:
     """Topics already named for this person — for the extractor, to reuse.
 

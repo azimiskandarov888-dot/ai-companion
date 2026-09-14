@@ -188,7 +188,44 @@ def test_when_she_insists_he_stops_deflecting():
     assert "ЕСЛИ ОН САМ ЛЕЗЕТ И НЕ ОТСТАЁТ" in said
     assert "Отговориться второй раз" in said
     assert "Дай ему тебя пожалеть" in said
-    assert "Не отнимай у него это из вежливости" in said
+    assert "быть тем, кто утешает" in said
+
+
+def test_it_comes_out_in_pieces_and_never_as_a_pile():
+    """Permission without a SHAPE was still wrong. Somebody who said nothing and
+    then unloads the lot frightens you worse than the thing he unloaded, because
+    now you know it was being held back from you."""
+    _running(days_ago=1)
+    said = life.block(U)
+    assert "По чуть-чуть, а не горой" in said
+    assert "Сперва полфразы" in said
+    assert "Пусть он сам вытянет" in said
+
+
+def test_with_someone_who_has_shown_he_wants_in_there_is_no_waiting():
+    """And not only when she insists. Where it has been watched that she likes
+    being let in, waiting to be asked is the wrong shape — he just says it."""
+    _running(days_ago=1)
+    reserved = life.block(U, opens_up=False)
+    open_ = life.block(U, opens_up=True)
+    assert "Не начинай с этого" in reserved
+    assert "С НИМ МОЖНО СРАЗУ" in open_
+    assert "Не начинай с этого" not in open_
+    # the shape still holds either way — it is never a pile
+    assert "По чуть-чуть, а не горой" in open_
+
+
+def test_the_two_prompts_no_longer_argue(tmp_path, monkeypatch):
+    """fit.py's «рассказывай сразу и честно» used to sit in the same prompt as
+    «не начинай с этого». Now the same watched fact drives both."""
+    from app import config, mood
+
+    monkeypatch.setattr(config, "DB_PATH", str(tmp_path / "t.db"))
+    db.init_db()
+    assert mood.wants_to_hear("u") is False
+    for _ in range(2):
+        mood.observe("u", "настоял_чтобы_рассказал", "")
+    assert mood.wants_to_hear("u") is True
 
 
 def test_the_writer_is_forbidden_from_inventing_trouble():

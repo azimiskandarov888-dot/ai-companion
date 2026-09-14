@@ -226,7 +226,14 @@ async def _assemble(user_id: str, user_text: str) -> tuple[str, str, list, str |
         # where a mood actually goes. See body.py.
         # What is going on in his week — a cold, a brother visiting — with its
         # own shape over days. Background, never the topic; see life.py.
-        life_block=life.block(user_id),
+        life_block=life.block(
+            user_id,
+            # Watched, not assumed: with somebody who has shown he wants to be
+            # let in, waiting to be asked is the wrong shape — and leaving it
+            # unset put fit.py's «рассказывай сразу» in the same prompt as «не
+            # начинай с этого».
+            opens_up=mood.wants_to_hear(user_id),
+        ),
         body_block=body.block(user_id, valence=feeling.now(user_id)["valence"]),
         # Rules that only apply to the turn in front of him — the game they are
         # playing, the news he asked for. Empty nearly always; see situations.py
