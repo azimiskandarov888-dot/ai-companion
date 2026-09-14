@@ -144,6 +144,9 @@ TAGS: dict[str, str] = {
     "хотел_больше_вопросов": "человек раскрылся именно оттого, что его расспрашивали",
     "хотел_слушать_про_тебя": "человек сам расспрашивал про жизнь друга и слушал охотно",
     "настоял_чтобы_рассказал": "друг отговорился, а человек продолжил выспрашивать — ему важно было влезть и помочь",
+    "не_хотел_слушать_про_тебя": "друг заговорил о своём — и человек поскучнел, свернул тему или вернул разговор к себе",
+    "просил_не_рассказывать_про_тебя": "человек ПРЯМО сказал, что не хочет слушать про дела и беды друга",
+    "просил_рассказывать_про_себя": "человек ПРЯМО попросил друга больше рассказывать о себе",
 }
 
 #: Once is a coincidence. This is the whole reason the register exists.
@@ -182,6 +185,9 @@ PAIR = (
     "устал_от_расспросов",
     "хотел_слушать_про_тебя",
     "настоял_чтобы_рассказал",
+    "не_хотел_слушать_про_тебя",
+    "просил_не_рассказывать_про_тебя",
+    "просил_рассказывать_про_себя",
 )
 
 #: And the tags that answer «что его задевает» — the evidence behind the
@@ -446,23 +452,69 @@ def standing_block(user_id: str) -> str:
     )
 
 
-def wants_to_hear(user_id: str) -> bool:
-    """Has it been WATCHED that he wants to be let in on the friend's own life?
+#: HOW MUCH OF HIS OWN LIFE THIS PERSON WANTS. One dial, and it replaces the
+#: one choreography that used to be handed to everybody.
+#:
+#: Two people, the same app. One is in a bad way and does not want to hear about
+#: anybody's troubles, not even hinted at. The other would far rather listen to
+#: his friend's week than recount his own. Nothing about them is the same, and a
+#: single «сперва полфразы, потом ещё немного» was being read to both.
+_OPEN = ("хотел_слушать_про_тебя", "настоял_чтобы_рассказал")
+_CLOSED = ("не_хотел_слушать_про_тебя",)
 
-    Either of two things counts: he asked about it and listened gladly, or the
-    friend deflected and he would not let it go. Both mean the same — waiting to
-    be asked is no longer the right shape with him, and life.py is told to let
-    the companion simply say it.
+#: SAID OUTRIGHT, and therefore true at once.
+#:
+#: Everything else in this register waits for a second occurrence, and that rule
+#: is right because everything else is an INFERENCE — he went quiet, and quiet
+#: has more than one meaning. «Не рассказывай мне про свои болячки» is not an
+#: inference. Making a person say it twice before it counts is not caution, it
+#: is ignoring them, and it is the thing they would notice.
+_SAID_OPEN = ("просил_рассказывать_про_себя",)
+_SAID_CLOSED = ("просил_не_рассказывать_про_тебя",)
+
+
+def _seen_any(user_id: str, tags: tuple[str, ...], times: int) -> bool:
+    """Have these been watched, BETWEEN THEM, at least `times`?
+
+    Summed across the group rather than counted per tag, and the difference is
+    not a detail. The tags in a group are different BEHAVIOURS meaning the same
+    thing: somebody who asked about your week on Monday and, on Thursday,
+    refused to let you brush him off has shown you the same thing twice by two
+    different routes — which is better evidence than the same route twice, not
+    worse. Requiring one tag to reach two on its own would have read that as a
+    pair of coincidences and told him nothing.
     """
-    marks = ("хотел_слушать_про_тебя", "настоял_чтобы_рассказал")
-    holes = ",".join("?" for _ in marks)
+    if not tags:
+        return False
+    holes = ",".join("?" for _ in tags)
     with db.connect() as conn:
         row = conn.execute(
-            f"SELECT 1 FROM observations WHERE user_id=? AND tag IN ({holes})"
-            " AND times>=? LIMIT 1",
-            (user_id, *marks, CONFIRMED_AT),
+            "SELECT COALESCE(SUM(times), 0) n FROM observations"
+            f" WHERE user_id=? AND tag IN ({holes})",
+            (user_id, *tags),
         ).fetchone()
-    return row is not None
+    return (row["n"] or 0) >= times
+
+
+def openness(user_id: str) -> str:
+    """How much of the companion's own life this person wants: closed|normal|open.
+
+    Asked outright beats watched, and watched beats nothing. Where somebody has
+    both asked to hear more and later asked to hear less, the later ASKING is
+    what counts — so a direct request in either direction is checked before any
+    amount of inference, and closed is checked before open, because being spared
+    something you wanted is a smaller harm than being handed something you asked
+    not to hear.
+    """
+    if _seen_any(user_id, _SAID_CLOSED, 1):
+        return "closed"
+    if _seen_any(user_id, _SAID_OPEN, 1):
+        return "open"
+    if _seen_any(user_id, _CLOSED, CONFIRMED_AT):
+        return "closed"
+    if _seen_any(user_id, _OPEN, CONFIRMED_AT):
+        return "open"
+    return "normal"
 
 
 def subjects_seen(user_id: str, limit: int = 20) -> str:

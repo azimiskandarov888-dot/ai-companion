@@ -201,6 +201,13 @@ async def _assemble(user_id: str, user_text: str) -> tuple[str, str, list, str |
         )
         mem_ctx = f"{mem_ctx}\n\n{note}".strip() if mem_ctx else note
 
+    # How much of his own life THIS person wants — closed, normal or open,
+    # learned from what has actually been watched and from anything he simply
+    # asked for outright. Read once and handed to everything that talks about
+    # him, so his week, his mood and the standing calibration cannot end up
+    # giving three different answers in the same prompt. See mood.openness.
+    wants = mood.openness(user_id)
+
     system_stable, system_variable = companion.build_system_parts(
         persona_block=persona_block,
         # How this person needs to be spoken to, and what must never be
@@ -220,20 +227,13 @@ async def _assemble(user_id: str, user_text: str) -> tuple[str, str, list, str |
         alert_block=safety.block(alert, user_id),
         # How HE is today, carried over from their last exchange and fading on
         # its own since. The one thing in the prompt that is not about her.
-        feeling_block=feeling.block(user_id),
+        feeling_block=feeling.block(user_id, openness=wants),
         # His throat and his tiredness — facts about him, never instructions to
         # cough. The valence is his own mood arriving in his breathing, which is
         # where a mood actually goes. See body.py.
         # What is going on in his week — a cold, a brother visiting — with its
         # own shape over days. Background, never the topic; see life.py.
-        life_block=life.block(
-            user_id,
-            # Watched, not assumed: with somebody who has shown he wants to be
-            # let in, waiting to be asked is the wrong shape — and leaving it
-            # unset put fit.py's «рассказывай сразу» in the same prompt as «не
-            # начинай с этого».
-            opens_up=mood.wants_to_hear(user_id),
-        ),
+        life_block=life.block(user_id, openness=wants),
         body_block=body.block(user_id, valence=feeling.now(user_id)["valence"]),
         # Rules that only apply to the turn in front of him — the game they are
         # playing, the news he asked for. Empty nearly always; see situations.py

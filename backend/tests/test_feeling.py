@@ -207,8 +207,43 @@ def test_his_day_is_never_made_her_problem():
         assert "отвечай честно и по-настоящему" in said
         # …and never a flat ban: if she will not let it go, he stops deflecting.
         # Being the one who comforts is often what she is actually short of.
+        assert "не отстаёт и выспрашивает" in said
         assert "не отговаривайся второй раз" in said
-        assert "дай ему тебя пожалеть" in said
+
+
+def test_his_mood_is_told_to_the_same_dial_as_his_week():
+    """A mood is smaller than a week, so the branches are a sentence each — but
+    it is the same three people, and «одно и то же ко всем» was the complaint."""
+    feeling.record(U, {"valence": -2, "arousal": -2, "note": "не спалось"})
+
+    closed = feeling.block(U, openness="closed")
+    assert "ему сейчас не до чужого" in closed
+    assert "Сам не заговаривай" in closed
+    assert "Не начинай с этого" not in closed
+
+    open_ = feeling.block(U, openness="open")
+    assert "от него не прячь" in open_
+    assert "Скажи сам" in open_
+
+    # A clause each, not a paragraph. What this person wants of him in general
+    # is fit.py's to say, once, on every turn — saying it here as well would be
+    # the same sentence three times in one prompt.
+    assert max(len(closed), len(open_)) < len(feeling.block(U))
+
+    # what is actually going on with him does not depend on who is listening
+    for said in (closed, open_, feeling.block(U)):
+        assert "не спалось" in said
+        assert "Не набивайся на жалость" in said
+    # insisting still wins — except with the one man who was told not to deflect
+    # in the first place, for whom it is dead text
+    assert "не отговаривайся второй раз" in closed
+    assert "не отговаривайся второй раз" in feeling.block(U)
+    assert "не отговаривайся второй раз" not in open_
+
+
+def test_an_unknown_dial_setting_falls_back_to_the_middle():
+    feeling.record(U, {"valence": -2, "arousal": -2, "note": "не спалось"})
+    assert feeling.block(U, openness="чепуха") == feeling.block(U, openness="normal")
 
 
 def test_the_verb_that_differs_follows_the_direction():

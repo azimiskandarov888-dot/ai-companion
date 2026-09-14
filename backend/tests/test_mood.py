@@ -295,3 +295,123 @@ def test_one_persons_topics_are_not_anothers():
     mood.observe("анна", "закрылся_на_теме", "война")
     assert "война" in mood.subjects_seen("анна")
     assert mood.subjects_seen("борис") == ""
+
+
+# ── the dial: how much of his own life this person wants ────────────────────
+#
+# «Мне не нравится, что одно и то же принимается ко всем.» Two people, the same
+# app. One is in a bad way and does not want to hear about anybody's troubles,
+# not even hinted at. The other would far rather listen to his friend's week
+# than recount his own. They are not the same person and the same paragraph was
+# being read to both.
+#
+# Watched, never guessed — and the watching is the varied, indirect part: one
+# goes quiet and terse when the friend starts on himself, another asks harder.
+# The TAG is the conclusion the reader reached, not the signal it reached it
+# from, which is why nothing here enumerates the signals.
+
+def test_most_people_are_simply_in_the_middle():
+    """Which is the point. A dial that took a side on everybody would be the
+    same mistake with three settings instead of one."""
+    assert mood.openness("u") == "normal"
+
+
+def test_once_is_not_enough_to_conclude_anything():
+    """He went quiet on it. Quiet has more than one meaning, and reshaping a
+    friendship around a single coincidence is worse than not reshaping at all."""
+    mood.observe("u", "не_хотел_слушать_про_тебя", "")
+    assert mood.openness("u") == "normal"
+    mood.observe("u", "хотел_слушать_про_тебя", "")
+    assert mood.openness("u") == "normal"
+
+
+def test_twice_is():
+    mood.observe("анна", "не_хотел_слушать_про_тебя", "")
+    mood.observe("анна", "не_хотел_слушать_про_тебя", "")
+    assert mood.openness("анна") == "closed"
+
+    mood.observe("борис", "хотел_слушать_про_тебя", "")
+    mood.observe("борис", "хотел_слушать_про_тебя", "")
+    assert mood.openness("борис") == "open"
+
+
+def test_either_of_the_two_open_signals_counts_toward_the_same_conclusion():
+    """Asking to hear more and refusing to be brushed off are different
+    behaviours that mean the same thing, so they are added, not counted apart."""
+    mood.observe("u", "хотел_слушать_про_тебя", "")
+    mood.observe("u", "настоял_чтобы_рассказал", "")
+    assert mood.openness("u") == "open"
+
+
+def test_asking_outright_counts_the_very_first_time():
+    """The «twice» rule is for INFERENCES. «Не рассказывай мне про свои
+    болячки» is not an inference. Making somebody say it twice before it counts
+    is not caution, it is ignoring them — and it is the thing they would
+    notice."""
+    mood.observe("анна", "просил_не_рассказывать_про_тебя", "")
+    assert mood.openness("анна") == "closed"
+
+    mood.observe("борис", "просил_рассказывать_про_себя", "")
+    assert mood.openness("борис") == "open"
+
+
+def test_what_he_said_outweighs_what_was_guessed_from_him():
+    """He was watched brushing it aside twice — and then asked, in words, to
+    hear about it. The words win: they are the one signal that cannot be a
+    misreading."""
+    for _ in range(3):
+        mood.observe("u", "не_хотел_слушать_про_тебя", "")
+    mood.observe("u", "просил_рассказывать_про_себя", "")
+    assert mood.openness("u") == "open"
+
+
+def test_where_both_were_said_the_quieter_answer_wins():
+    """Nothing here can tell which request came later, so it takes the safer of
+    the two: being spared something you wanted is a smaller harm than being
+    handed something you asked not to hear."""
+    mood.observe("u", "просил_рассказывать_про_себя", "")
+    mood.observe("u", "просил_не_рассказывать_про_тебя", "")
+    assert mood.openness("u") == "closed"
+
+
+def test_the_same_holds_for_what_was_merely_watched():
+    for _ in range(2):
+        mood.observe("u", "хотел_слушать_про_тебя", "")
+        mood.observe("u", "не_хотел_слушать_про_тебя", "")
+    assert mood.openness("u") == "closed"
+
+
+def test_one_persons_dial_is_not_anothers():
+    """The whole complaint, in one assertion."""
+    mood.observe("анна", "просил_не_рассказывать_про_тебя", "")
+    for _ in range(2):
+        mood.observe("борис", "хотел_слушать_про_тебя", "")
+    assert mood.openness("анна") == "closed"
+    assert mood.openness("борис") == "open"
+    assert mood.openness("виктор") == "normal"
+
+
+def test_the_three_tags_are_in_the_vocabulary_the_reader_is_given():
+    """A tag the extractor has never been shown is a tag that is never written,
+    and the dial would sit at «normal» for everybody for ever."""
+    from app import learn
+
+    for tag in ("не_хотел_слушать_про_тебя", "просил_не_рассказывать_про_тебя",
+                "просил_рассказывать_про_себя"):
+        assert tag in mood.TAGS, tag
+        assert tag in learn._EXTRACTION_SYSTEM, tag
+
+
+def test_the_dial_tags_are_never_also_reported_as_findings():
+    """The register reports what is proven about HIM; the dial is about the two
+    of them, and fit.py renders it. A tag that escaped PAIR would arrive twice
+    in one prompt — once as «подтвердилось: не хотел слушать про тебя» and once
+    as the instruction — which is the double-reporting this file already fixed
+    once and must not reintroduce."""
+    for tag in (*mood._OPEN, *mood._CLOSED, *mood._SAID_OPEN, *mood._SAID_CLOSED):
+        assert tag in mood.PAIR, tag
+
+    for _ in range(3):
+        mood.observe("u", "не_хотел_слушать_про_тебя", "")
+    assert mood.openness("u") == "closed"
+    assert "слушать" not in mood.standing_block("u")

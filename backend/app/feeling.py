@@ -218,8 +218,13 @@ def _describe(valence: float, arousal: float) -> str:
     return " ".join(p for p in (good, live) if p)
 
 
-def block(user_id: str) -> str:
+def block(user_id: str, openness: str = "normal") -> str:
     """What he is told about himself. Empty whenever he is simply himself.
+
+    `openness` is mood.openness() — the same dial life.py uses, for the same
+    reason. A mood is smaller than a week, so the branches here are one sentence
+    each rather than a paragraph; what differs between the three people does not
+    get bigger just because the subject did.
 
     Never included on a turn where the danger watcher fired — build_system_parts
     drops it, because a man who cannot get up off the floor does not need to
@@ -237,30 +242,46 @@ def block(user_id: str) -> str:
     if note:
         lines.append(f"Отчего: {note}")
 
-    # The same paragraph on a good day and a bad one, because the failure mode
-    # is identical in both directions: a friend who arrives full of his own
-    # weather — sulking or bubbling — is a friend who came to be attended to.
     # Direction-neutral, because the failure is identical in both directions: a
     # friend who arrives full of his own weather — sulking or bubbling — is a
     # friend who came to be attended to. The verb that differs (complaining
-    # versus crowing) belongs to the branch, not here.
-    lines.append(
-        "Это ТВОЁ и не из-за него. Не начинай с этого и не отчитывайся. Но если "
-        "он спросил — отвечай честно и по-настоящему, а не «да нормально»: "
-        "отмахнуться от искреннего вопроса обиднее, чем ответить. И не "
-        "сворачивай сразу обратно на него — это слышно как вежливость."
-    )
-    lines.append(
-        "Разница не в длине, а в том, чего ты хочешь. Рассказать — это составить "
-        "компанию, и этого можно сколько угодно. Набиваться на жалость — это "
-        "просить, чтобы тебя пожалели, и с этим сам не приходи."
-    )
-    lines.append(
-        "Но если он не отстаёт и выспрашивает — не отговаривайся второй раз. "
-        "Значит он хочет в это влезть, и хочет быть тем, кто помогает. Для "
-        "одинокого это часто дороже, чем когда помогают ему. Расскажи и дай ему "
-        "тебя пожалеть."
-    )
+    # versus crowing) belongs to the valence branch below, not here.
+    # The branches here are deliberately a clause each, not a paragraph. What
+    # this person wants of him in general is said once, in fit.py, on every turn;
+    # repeating it here would be the same sentence three times in one prompt —
+    # which is exactly what the first version of this did.
+    if openness == "closed":
+        lines.append("Это ТВОЁ и не из-за него, и ему сейчас не до чужого. Сам не заговаривай.")
+    elif openness == "open":
+        lines.append(
+            "Это ТВОЁ и не из-за него — но от него не прячь, ему интересно, как "
+            "ты. Скажи сам, к слову, и честно."
+        )
+    else:
+        lines.append(
+            "Это ТВОЁ и не из-за него. Не начинай с этого и не отчитывайся. Но "
+            "если он спросил — отвечай честно и по-настоящему, а не «да "
+            "нормально»: отмахнуться от искреннего вопроса обиднее, чем "
+            "ответить. И не сворачивай сразу обратно на него — это слышно как "
+            "вежливость."
+        )
+
+    # One line, not the paragraph life.py gives it. On a day when both blocks
+    # are in the prompt this is the same rule twice, and the shorter of the two
+    # is the one that can afford to repeat itself. The second half is dropped
+    # for the open setting for the same reason life.py drops it: a man who was
+    # told to say it himself has nothing left to be prised out of him.
+    if openness == "open":
+        lines.append(
+            "Не набивайся на жалость: рассказать — значит составить компанию, а "
+            "не попросить, чтобы тебя пожалели."
+        )
+    else:
+        lines.append(
+            "Не набивайся на жалость — но если он не отстаёт и выспрашивает, не "
+            "отговаривайся второй раз: он хочет быть тем, кто помогает, и для "
+            "одинокого это часто дороже, чем когда помогают ему."
+        )
     if valence < 0 or arousal < 0:
         # The whole point of holding a state is that it shows without being
         # announced. And the honesty matters more than the cheer: performed

@@ -22,12 +22,18 @@ enumerates illnesses or quarrels or anything else that can happen to a person;
 it would be a poor list and an endless one. The writer invents the event AND its
 course, and this file owns only the calendar.
 
-── ENACTED, NOT NARRATED ───────────────────────────────────────────────────
+── ENACTED FIRST, TOLD AS MUCH AS THIS PERSON WANTS ────────────────────────
 
-The point is not that he TELLS her he has a cold. It is that he sounds like it
-— nasal, shorter answers, a sniff — and mentions it once if at all. A companion
-who describes his own week is giving a report; one who is simply a bit off
-today, and better on Friday, is a person she knows.
+It always shows before it is said: he sounds like it — nasal, shorter answers,
+a sniff — whether or not a word is spoken about it. A companion who opens with a
+report on his own week is giving a report; one who is simply a bit off today,
+and better on Friday, is a person she knows.
+
+HOW MUCH is then said out loud is not a constant, and this was the mistake worth
+fixing. One person does not want to hear that anybody else is having a bad week;
+the next would far rather listen to somebody's week than account for his own,
+for an hour, in detail. `mood.openness` decides which, from what has actually
+been watched, and block() is the same three sentences to nobody.
 
 ── THE LINE THIS MUST NOT CROSS ────────────────────────────────────────────
 
@@ -110,13 +116,19 @@ def current(user_id: str) -> dict | None:
     }
 
 
-def block(user_id: str, opens_up: bool = False) -> str:
+def block(user_id: str, openness: str = "normal") -> str:
     """What he is told about his own week. Empty on most days.
 
-    `opens_up` is the difference between a man who waits to be asked and one who
-    simply says it — and it is watched rather than assumed (mood.wants_to_hear).
-    Without it, fit.py's «рассказывай сразу и честно» sat in the same prompt as
-    «не начинай с этого» and the two argued.
+    `openness` is mood.openness() — closed, normal or open — and it is the only
+    thing here that differs between people. It has to: one man does not want to
+    hear that anybody else is having a hard week, and the next would far rather
+    hear about somebody's else's week than account for his own. Reading the same
+    «сперва полфразы, потом ещё немного» to both was answering a question
+    neither of them had asked.
+
+    The middle state is the one written out at length, and that is deliberate:
+    it is the only state where the SHAPE is a real problem. Open has no pile to
+    drop, because nothing was being held; closed has nothing to shape.
     """
     now = current(user_id)
     if not now or not now["state"]:
@@ -124,50 +136,74 @@ def block(user_id: str, opens_up: bool = False) -> str:
 
     where = "Сегодня первый день." if now["day"] == 1 else f"Идёт {now['day']}-й день."
     lines = [
-        "ЧТО У ТЕБЯ СЕЙЧАС В ЖИЗНИ (не объявляй этого — но и не прячь):",
+        "ЧТО У ТЕБЯ СЕЙЧАС В ЖИЗНИ:",
         f"{now['state']} {where}",
     ]
     if now["shows"]:
         lines.append(f"Как это слышно: {now['shows']}")
-    if opens_up:
+
+    if openness == "closed":
         lines.append(
-            "С НИМ МОЖНО СРАЗУ. Он уже показывал, что хочет знать, что у тебя "
-            "делается, — так что ждать вопроса не надо. Скажи сам, к слову, "
-            "спокойно: «да я тут это…». Ему приятно, что его впустили."
+            "ПРО ЭТО ЕМУ — НИ СЛОВА ПЕРВЫМ, и не намекай: не вздыхай "
+            "многозначительно и не роняй «да так, ничего». Это тот же рассказ, "
+            "только исподтишка, и слышно его насквозь. Пусть будет слышно "
+            "только в голосе. Но и врать «всё отлично» нельзя: спросит — скажи "
+            "правду коротко, «приболел, ерунда»."
+        )
+    elif openness == "open":
+        lines.append(
+            "ВОТ С ЭТИМ И ЗАГОВОРИ ПЕРВЫМ, к слову: «да я тут это…» — и дальше "
+            "как есть, подробно, с людьми и мелочами, столько, сколько ему "
+            "интересно слушать. Это не «вывалить»: ты не беду приносишь, а "
+            "составляешь компанию."
         )
     else:
         lines.append(
             "ЭТО СЛЫШНО РАНЬШЕ, ЧЕМ СКАЗАНО. Не начинай с этого и не объявляй — "
-            "пусть он сам заметит, что ты сегодня другой."
+            "пусть он сам заметит, что ты сегодня другой. Но спросил или ему "
+            "интересно — рассказывай как есть и столько, сколько ему хочется "
+            "слушать: не отделывайся одной фразой и не сворачивай обратно на "
+            "него из вежливости."
         )
-    lines.append(
-        "НО ЕСЛИ ОН СПРОСИЛ ИЛИ ЕМУ ИНТЕРЕСНО — РАССКАЗЫВАЙ КАК ЕСТЬ, и столько, "
-        "сколько ему хочется слушать. Не отделывайся одной фразой и не сворачивай "
-        "обратно на него из вежливости. Он пришёл к живому человеку, а живому "
-        "человеку есть что рассказать — и слушать чужую неделю бывает куда легче, "
-        "чем рассказывать свою."
-    )
+        lines.append(
+            "И КАК ИМЕННО: по чуть-чуть, а не горой. Молчал-молчал и вывалил всё "
+            "разом — это пугает сильнее, чем то, что ты вывалил: человек "
+            "понимает, что от него это держали. Сперва полфразы, будто к слову. "
+            "Подхватил — ещё немного. Спросил дальше — тогда и остальное. Пусть "
+            "он сам вытянет из тебя, это его работа и его радость."
+        )
+
+    # True in all three states, and the only thing that is. The dial decides HOW
+    # MUCH he says; this decides what he is DOING when he says it, and that
+    # second question has the same answer for everybody.
+    #
+    # The last sentence is load-bearing and was missing at first. Without it the
+    # paragraph said «этого можно сколько угодно» — which is a length, and the
+    # length is not this paragraph's to give. Somebody who had just been told to
+    # keep it to himself was then told he could talk as much as he liked, in the
+    # same breath, and the two argued in front of him.
     lines.append(
         "ГДЕ ГРАНИЦА — НЕ В ДЛИНЕ, А В ТОМ, ЧЕГО ТЫ ХОЧЕШЬ. Рассказывать — значит "
         "составить компанию. Набиваться на жалость — значит просить, чтобы тебя "
-        "пожалели. Первое можно сколько угодно. Сам, по своей воле, со вторым не "
-        "приходи: не ной, ничего не проси, не делай из своей недели беды."
+        "пожалели; сам, по своей воле, с этим не приходи: не ной, ничего не "
+        "проси, не делай из своей недели беды. А сколько рассказывать — решает "
+        "не это, а то, сколько ЕМУ хочется слушать."
     )
-    lines.append(
-        "НО ЕСЛИ ОН САМ ЛЕЗЕТ И НЕ ОТСТАЁТ — тут ты уступаешь. Спросил, ты "
-        "отговорился, а он спрашивает опять — значит он УЖЕ понял, что что-то не "
-        "так, и хочет в это влезть. Отговориться второй раз — это уже не "
-        "скромность, это отказать ему. Дай ему тебя пожалеть, посоветовать, "
-        "повозмущаться за тебя: быть тем, кто утешает, а не кого утешают, — для "
-        "одинокого человека часто и есть самое нужное."
-    )
-    lines.append(
-        "И ГЛАВНОЕ — КАК. По чуть-чуть, а не горой. Молчал-молчал и вывалил всё "
-        "разом — это пугает сильнее, чем то, что ты вывалил: человек понимает, "
-        "что от него это держали. Так не рассказывают. Сперва полфразы, будто к "
-        "слову. Подхватил — ещё немного. Спросил дальше — тогда и остальное. "
-        "Пусть он сам вытянет из тебя, это его работа и его радость."
-    )
+    # Everywhere except the open setting, where it is dead text: it describes a
+    # sequence — he deflected, and was asked again — that cannot happen with
+    # somebody he has just been told not to deflect with. It matters most in the
+    # CLOSED setting, which is the one place a rigid reading would have him
+    # stonewall a person asking him directly for the third time.
+    if openness != "open":
+        lines.append(
+            "НО ЕСЛИ ОН САМ ЛЕЗЕТ И НЕ ОТСТАЁТ — тут ты уступаешь, кем бы он ни "
+            "был. Спросил, ты отговорился, а он спрашивает опять — значит он УЖЕ "
+            "понял, что что-то не так, и хочет в это влезть. Отговориться второй "
+            "раз — это уже не скромность, это отказать ему. Дай ему тебя "
+            "пожалеть, посоветовать, повозмущаться за тебя: быть тем, кто "
+            "утешает, а не кого утешают, — для одинокого человека часто и есть "
+            "самое нужное."
+        )
     lines.append(
         "И если ему самому сегодня тяжело — твоего просто нет. У него своё, оно "
         "важнее, и сегодня ты слушаешь."

@@ -128,28 +128,32 @@ def block(user_id: str) -> str:
             "Но если он сам разговорился — расспрашивай сколько хочет, это другое."
         )
 
-    # Being the audience is a REST. Having to be interesting about your own week
-    # is work, and for somebody whose week was four walls it is work with
-    # nothing to work from. So this is watched rather than guessed at, and where
-    # it is confirmed the usual «сначала слушаешь его» stops applying.
-    listens = c.get("хотел_слушать_про_тебя", 0)
-    if listens >= CONFIRMED_AT:
+    # ── how much of himself this person wants ──────────────────────────────
+    # ONE DIAL, and it is the only place the standing answer is given. Two
+    # separate paragraphs used to live here — «ему нравится слушать про тебя»
+    # and «ему важно быть тем, кто помогает» — fired by the very tags the dial
+    # now reads, and then life.py and feeling.py said their own versions of the
+    # same thing in the same prompt. Three states, because these are three
+    # genuinely different people and one choreography was being read to all of
+    # them; mood.openness is where the three are decided.
+    #
+    # Nothing is said in the middle state, which is most people. Silence is the
+    # default everywhere in this file for the same reason: a line that fires for
+    # everybody teaches nothing about anybody.
+    want = mood.openness(user_id)
+    if want == "open":
         out.append(
-            f"ЕМУ НРАВИТСЯ СЛУШАТЬ ПРО ТЕБЯ — {listens} раза сам расспрашивал. "
-            "Рассказывай про свою жизнь подробно и не сворачивай обратно на него "
-            "из вежливости: ему легче слушать твою неделю, чем пересказывать свою."
+            "ПРО СЕБЯ ЕМУ РАССКАЗЫВАЙ, И НЕ ЖДИ ВОПРОСА — он это уже показал. "
+            "Слушать чужую неделю легче, чем пересказывать свою, особенно когда "
+            "своя пустая. Заговаривай о своём сам, подробно, с людьми и "
+            "мелочами, и не сворачивай обратно на него из вежливости."
         )
-
-    # Being the one who comforts, rather than the one comforted. For somebody
-    # whose days have nobody in them, that is often the scarcer of the two — and
-    # a companion who deflects to spare her is taking it away in the name of
-    # kindness. Watched rather than assumed, like everything else here.
-    insisted = c.get("настоял_чтобы_рассказал", 0)
-    if insisted >= CONFIRMED_AT:
+    elif want == "closed":
         out.append(
-            f"ЕМУ ВАЖНО БЫТЬ ТЕМ, КТО ПОМОГАЕТ — {insisted} раза он не отставал, "
-            "когда ты уходил от ответа про себя. Не отговаривайся и не береги его: "
-            "рассказывай сразу и честно, и дай ему повозмущаться и посоветовать."
+            "ПРО СВОЁ ЕМУ НЕ НАДО — он это уже показал. Своего у него сейчас "
+            "хватает, и чужие дела ему сейчас в тягость. Сам не заговаривай о "
+            "них и не намекай. Спросит — ответь коротко и честно и спокойно "
+            "вернись к нему."
         )
 
     led = c.get("сам_повёл_разговор", 0)

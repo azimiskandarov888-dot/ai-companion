@@ -261,21 +261,36 @@ def test_the_reason_is_kept_only_where_nothing_else_teaches_it():
     assert "гладких не любят" in __import__("app.companion", fromlist=["x"]).BEHAVIOR_RULES
 
 
-def test_wanting_to_be_the_one_who_helps_is_watched_not_assumed():
-    """Being the one who comforts, rather than the one comforted, is often the
-    scarcer of the two for somebody whose days have nobody in them. A companion
-    who deflects to spare her is taking that away in the name of kindness — so
-    it is watched, at the usual bar, and then he stops deflecting."""
+def test_how_much_of_himself_this_person_wants_is_one_dial_not_two_paragraphs():
+    """Two separate lines used to live here — «ему нравится слушать про тебя»
+    and «ему важно быть тем, кто помогает» — fired by the very tags the dial now
+    reads, while life.py and feeling.py said their own versions of the same
+    thing in the same prompt. One answer, given once. See mood.openness."""
     _seen("u", "настоял_чтобы_рассказал", 1)
     assert fit.block("u") == ""                      # once is a coincidence
-    _seen("u", "настоял_чтобы_рассказал", 1)
+    _seen("u", "хотел_слушать_про_тебя", 1)          # …different route, same thing
     said = fit.block("u")
-    assert "ЕМУ ВАЖНО БЫТЬ ТЕМ, КТО ПОМОГАЕТ" in said
-    assert "Не отговаривайся и не береги его" in said
-
-
-def test_liking_to_hear_about_him_is_watched_the_same_way():
-    _seen("u", "хотел_слушать_про_тебя", 2)
-    said = fit.block("u")
-    assert "СЛУШАТЬ ПРО ТЕБЯ" in said
+    assert "ПРО СЕБЯ ЕМУ РАССКАЗЫВАЙ, И НЕ ЖДИ ВОПРОСА" in said
     assert "не сворачивай обратно на него" in said
+    assert said.count("ПРО СЕБЯ") == 1
+
+
+def test_the_other_end_of_the_dial_is_a_different_person_entirely():
+    """The complaint that produced all of this. Somebody in a bad way does not
+    want to hear that anybody else is having a hard week either, and reading him
+    «рассказывай про свою жизнь подробно» is the opposite of knowing him."""
+    _seen("v", "не_хотел_слушать_про_тебя", 2)
+    said = fit.block("v")
+    assert "ПРО СВОЁ ЕМУ НЕ НАДО" in said
+    assert "не намекай" in said
+    assert "ответь коротко и честно" in said
+    assert "РАССКАЗЫВАЙ" not in said
+
+
+def test_the_middle_says_nothing_at_all():
+    """Most people. A line that fires for everybody teaches nothing about
+    anybody, so silence is the default here as it is everywhere in this file."""
+    _seen("w", "хотел_слушать_про_тебя", 1)
+    _seen("w", "не_хотел_слушать_про_тебя", 1)
+    assert "ПРО СЕБЯ" not in fit.block("w")
+    assert "ПРО СВОЁ" not in fit.block("w")
