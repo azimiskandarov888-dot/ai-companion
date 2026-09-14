@@ -483,3 +483,16 @@ def test_the_write_refuses_virtues_dressed_as_faults():
     assert "ОДНО ПРОТИВОРЕЧИЕ В САМОМ СЕБЕ" in w
     assert "ЕГО СОБСТВЕННАЯ РАНА" in w
     assert "никогда не просит помощи и не грузит" in w
+
+
+def test_how_the_friend_addresses_him_is_decided_rather_than_defaulted():
+    """«address (обычно "ты")» nudged every companion ever invented toward «ты»
+    — including a thirty-four-year-old meeting an eighty-four-year-old widow on
+    the first evening, where it is simply rude. Both ages are in front of the
+    writer; the rule that actually decides it is not hard to state."""
+    spec = matchmaker._WRITE_SYSTEM
+    assert 'address (обычно "ты")' not in spec
+    assert "по обоим возрастам" in spec
+    assert "заметно старше" in spec
+    # and the same asymmetry the intake uses, for the same reason
+    assert "лишняя вежливость поправима" in spec

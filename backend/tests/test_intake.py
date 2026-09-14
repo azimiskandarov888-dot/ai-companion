@@ -286,3 +286,31 @@ def test_free_writing_still_works(monkeypatch):
         r = client.post("/api/companion/create", json={"about": "Люблю рыбалку и тишину."})
         assert r.status_code == 200
         assert r.json()["name"] == "Гриша"
+
+
+# ── the first conversation must not assume a life mostly behind him ─────────
+#
+# This is the app's first impression, and it feeds the reading that shapes
+# everything downstream — so an intake that asks an old person's questions of a
+# young one builds the whole friendship out of awkward, disengaged answers.
+
+def test_the_ladder_asks_about_the_life_he_actually_has():
+    ask = intake._ASK_SYSTEM
+    assert "СПРАШИВАЙ ПРО ТУ ЖИЗНЬ, КОТОРАЯ У НЕГО ЕСТЬ" in ask
+    assert "у другого почти вся впереди" in ask
+    # the examples that only fitted one kind of life are gone
+    assert "какую музыку слушал в молодости" not in ask
+    assert "что сказал бы себе молодому" not in ask
+    assert "А кем работали?" not in ask
+
+
+def test_ty_or_vy_is_decided_and_no_longer_an_absolute():
+    """He has already said how old he is, two questions earlier — and «вы» to
+    somebody of twenty reads as a personnel department, which closes them on
+    the first line."""
+    ask = intake._ASK_SYSTEM
+    assert "Обращайся на «вы», но по-домашнему" not in ask
+    assert "НА «ТЫ» ИЛИ НА «ВЫ» — смотри, кому пишешь" in ask
+    assert "возраст он назвал выше" in ask
+    # …and it fails toward politeness, which is the recoverable mistake
+    assert "лишняя вежливость поправима, панибратство нет" in ask
