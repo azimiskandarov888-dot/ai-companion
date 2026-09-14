@@ -193,8 +193,12 @@ def test_gladness_is_free_but_absence_is_never_billed():
     for billed in ("где ты был", "тебя давно не было", "я ждал", "ты пропал"):
         assert billed in rules
     # The two reasons, both of which have to survive an edit.
-    assert "мог лежать в больнице" in rules
+    assert "лежал в больнице" in rules
     assert "по обязанности, к тому перестают ходить совсем" in rules
+    # …and the first reason must not be written as a list of an old person's
+    # misfortunes. He may equally have been away because his week was good,
+    # which is the best of the reasons and used not to be among them.
+    assert "у него всё было хорошо" in rules
     # And it must not contradict the one place he IS allowed to notice.
     assert "оборвался на полуслове" in rules
 
@@ -329,3 +333,51 @@ def test_how_his_memory_works_is_not_scoped_to_one_situation():
     # and it still says the thing it is there to say
     assert "не покажут нарочно" in rules
     assert "ЧТО УЖЕ ПОДТВЕРДИЛОСЬ" in rules
+
+
+# ── this app is not only for the very old ───────────────────────────────────
+#
+# The constitution opened by asserting that the person on the other end is very
+# old and has almost no strength left. That was read on every turn by every
+# user, and it is false for most of the people this is for: somebody can be
+# alone at nineteen, having moved to a city where they know nobody, or at
+# forty, living by themselves. The one thing that IS true of all of them is the
+# loneliness — so that is what the constitution says now, and who this person
+# actually is comes from what is known and what has been watched.
+
+def test_the_constitution_no_longer_decides_his_age_for_him():
+    rules = companion.BEHAVIOR_RULES
+    for assumed in ("очень пожилого человека", "Твой человек очень стар",
+                    "как простой пожилой человек", "как живой пожилой человек",
+                    "соцработники"):
+        assert assumed not in rules, assumed
+
+
+def test_what_is_actually_true_of_everybody_is_the_loneliness():
+    rules = companion.BEHAVIOR_RULES
+    assert "Твой человек одинок" in rules
+    assert "единственное, что есть общего у всех" in rules
+
+
+def test_he_is_told_to_look_rather_than_assume():
+    """And taught with the failure in both directions, so it cannot be read as
+    «значит, он молодой» — which would be the same mistake facing the other way."""
+    rules = companion.BEHAVIOR_RULES
+    assert "СМОТРИ, НЕ ПРЕДПОЛАГАЙ" in rules
+    assert "восемьдесят семь" in rules and "девятнадцать" in rules
+    assert "Вспомни молодость» двадцатилетнему" in rules
+    assert "в школе как дела» восьмидесятилетнему" in rules
+    assert "Пока не сказано — не решай за него" in rules
+
+
+def test_his_own_day_is_no_longer_invented_on_the_spot():
+    """feeling.py holds his real mood, life.py his real week, body.py his real
+    throat. The constitution used to tell him to make up a varied day — which
+    competed with all three, and inventing is the exact thing feeling.py exists
+    to replace («random warmth reads as broken rather than as human»)."""
+    rules = companion.BEHAVIOR_RULES
+    assert "НАСТОЯЩИЙ ответ, а не выдуманный на ходу" in rules
+    assert "кот принёс котят" not in rules
+    # and the same rule is no longer repeated two hundred lines further down
+    assert "Длина зависит и от твоего настроения" not in rules
+    assert "чем не терпится поделиться" not in rules

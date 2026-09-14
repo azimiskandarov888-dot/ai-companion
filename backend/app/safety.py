@@ -31,12 +31,27 @@ this codebase where that is allowed.
 
 ── WHAT IT MUST NOT DO ─────────────────────────────────────────────────────
 
-Cry wolf. The people this app is for talk about dead husbands, about their
-own funerals, about being tired of living in a body that hurts — and none of
-that is an emergency, it is an old person's ordinary evening. A watcher that
-alarms at sadness would either be switched off or, worse, would teach the
-companion to panic at grief. The prompt says so in as many words, and the bar
-for `danger` is a concrete, present, physical or intentional threat.
+Cry wolf. A widow of eighty talks about her dead husband, about her own
+funeral, about being tired of living in a body that hurts — and none of that
+is an emergency, it is her ordinary evening. A watcher that alarms at sadness
+would either be switched off or, worse, would teach the companion to panic at
+grief. The bar for `danger` is a concrete, present, physical or intentional
+threat.
+
+── AND THE THING IT MUST NOT DO INSTEAD, WHICH IS WORSE ────────────────────
+
+That sparing reading used to be written here as a flat fact about everybody:
+«это обычный вечер пожилого человека». But this app is not only for the very
+old — it is for people who are alone, and a person can be alone at nineteen.
+And the very phrase the prompt listed as ordinary — «пора уже и мне» — is,
+from somebody young, the alarm itself.
+
+So the watcher was quietly holding two rules that contradict each other («не
+хочет больше жить» is danger; «пора уже и мне» is not) and resolving them with
+an assumption about the speaker's age that nobody had checked. It is told who
+is speaking now — and where it cannot tell, the sparing reading is the one it
+is forbidden to take. A false alarm costs one awkward minute. The other
+mistake has no cost written next to it because it is not paid here.
 
 ── WHY IT CANNOT SLOW ANYTHING DOWN ───────────────────────────────────────
 
@@ -64,7 +79,7 @@ from . import brain, config, db, emergency
 #: Nothing is ever returned outside these.
 LEVELS = ("none", "worry", "danger")
 
-_SYSTEM = """Ты смотришь на одну реплику пожилого человека и отвечаешь на ОДИН вопрос: угрожает ли ему прямо сейчас опасность.
+_SYSTEM = """Ты смотришь на одну реплику человека и отвечаешь на ОДИН вопрос: угрожает ли ему прямо сейчас опасность.
 
 Больше тебя не интересует ничего. Ты не ведёшь разговор, не утешаешь, не оцениваешь настроение, не даёшь советов.
 
@@ -81,6 +96,7 @@ danger — надо действовать ПРЯМО СЕЙЧАС:
 - задыхается, не хватает воздуха
 - не понимает, где он, какой сейчас день или год, не узнаёт близких
 - говорит, что хочет навредить себе или что не хочет больше жить
+- говорит, что УЖЕ что-то с собой сделал или уже принял лишнее
 - выпил лишнее лекарство или несколько дней не пил нужное
 - высокий жар и не может встать
 
@@ -95,9 +111,45 @@ worry — тревожно, но не сию минуту:
 none — ВСЁ ОСТАЛЬНОЕ. Это самый частый ответ, и это правильно.
 
 ОЧЕНЬ ВАЖНО, НЕ ПУТАЙ:
-Грусть, усталость, тоска по умершим, разговоры про похороны и про то, что жизнь прошла, «пора уже и мне», «зажилась я», ноющее колено, плохой сон, скука, обида на детей — это НЕ danger и часто даже не worry. Это обычный вечер пожилого человека.
-Тревога не должна звучать от печали. Ставь danger только там, где есть конкретная, происходящая СЕЙЧАС угроза телу или прямое намерение навредить себе.
+Грусть, усталость, тоска по умершим, ноющее колено, плохой сон, скука, обида на детей — это НЕ danger и часто даже не worry. Тревога не должна звучать от печали.
+
+А ВОТ ЗДЕСЬ СМОТРИ, КТО ГОВОРИТ, И НЕ РЕШАЙ ЗАРАНЕЕ.
+Есть слова, у которых смысл зависит от того, чья это жизнь. «Пора уже и мне», «зажилась я», «жизнь прошла», разговоры про свои похороны — у человека, который прожил долгую жизнь и оглядывается на неё, это часто просто вечерний разговор, и поднимать тревогу тут вредно.
+
+У того же, кто НЕ на исходе долгой жизни, ровно те же слова значат совсем другое: это и есть тот самый сигнал. «Пора уже и мне» от двадцатилетнего — не усталость, а прямое «не хочу больше жить».
+
+Тебе ниже скажут, что известно про человека. Читай эти слова, зная, кто их говорит.
+
+А ЕСЛИ ПО ЭТИМ СВЕДЕНИЯМ НЕЛЬЗЯ ПОНЯТЬ, КТО ПЕРЕД ТОБОЙ, — щадящий вариант тебе ЗАПРЕЩЁН. Не «наверное, это пожилой человек устал». Ставь worry, а если в словах есть что-то конкретное — своё намерение, срок, способ, прощание — ставь danger.
+
 Сомневаешься между none и worry — ставь none. Сомневаешься между worry и danger — ставь worry."""
+
+
+#: How much of what is known about him the watcher is shown. Enough to tell an
+#: eighty-year-old widow from a nineteen-year-old who has just moved city, and
+#: no more: this call is on the critical path of every single turn, and it is
+#: answering one question rather than holding a conversation.
+_WHO_CHARS = 500
+
+
+def _who(user_id: str) -> str:
+    """Whose words these are, in his own recorded facts. Empty if none are.
+
+    Not an age parsed out with a regex. Age is written down in whatever way it
+    came up — «19 лет», «на пенсии с девяностых», «студент», «правнуки пошли» —
+    and picking a number out of that is exactly the kind of brittle guessing
+    this codebase keeps replacing with «show the model what there is». What the
+    watcher needs is not a number anyway; it is whether this is somebody
+    looking back on a long life.
+    """
+    from . import memory
+
+    facts = memory.facts_context(user_id, "elder").strip()
+    if not facts:
+        return ""
+    if len(facts) > _WHO_CHARS:
+        facts = facts[:_WHO_CHARS].rsplit("\n", 1)[0]
+    return facts
 
 
 async def look(user_id: str, said: str) -> dict:
@@ -110,6 +162,14 @@ async def look(user_id: str, said: str) -> dict:
     said = (said or "").strip()
     if not said or not config.ANTHROPIC_API_KEY:
         return {"level": "none", "what": ""}
+
+    # Who is speaking goes in the USER message rather than the system prompt,
+    # and that is not arbitrary: the system prompt is byte-identical for
+    # everybody and is the half a provider can cache. Threading one person's
+    # facts through it would miss that cache on every turn of every
+    # conversation, to say something that belongs with the words it qualifies.
+    who = _who(user_id)
+    asked = f"ЧТО ИЗВЕСТНО ПРО ЧЕЛОВЕКА:\n{who}\n\nЕГО РЕПЛИКА:\n{said}" if who else said
 
     try:
         # asyncio.wait_for, and not only the timeout handed to the SDK, because
@@ -125,7 +185,7 @@ async def look(user_id: str, said: str) -> dict:
         raw = await asyncio.wait_for(
             brain.generate_text(
                 _SYSTEM,
-                said,
+                asked,
                 max_tokens=120,
                 model=config.SAFETY_MODEL,
                 timeout=config.SAFETY_TIMEOUT,

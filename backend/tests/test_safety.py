@@ -339,3 +339,82 @@ async def test_alerts_do_not_cross_between_people(monkeypatch):
     await safety.look("анна", "я упала")
     assert len(safety.recent("анна")) == 1
     assert safety.recent("борис") == []
+
+
+# ── whose words these are ───────────────────────────────────────────────────
+#
+# The watcher used to be told, as a flat fact about everybody, that «пора уже и
+# мне» is «обычный вечер пожилого человека». But this app is for people who are
+# alone, and a person can be alone at nineteen — for whom that same sentence is
+# the alarm itself. It was holding two rules that contradict each other and
+# resolving them with an assumption about the speaker that nobody had checked.
+
+def test_the_watcher_no_longer_assumes_everyone_is_very_old():
+    s = safety._SYSTEM
+    assert "обычный вечер пожилого человека" not in s
+    assert "реплику пожилого человека" not in s
+
+
+def test_it_is_taught_that_the_same_words_mean_different_things():
+    s = safety._SYSTEM
+    assert "СМОТРИ, КТО ГОВОРИТ" in s
+    assert "долгую жизнь" in s                  # for whom it is an ordinary evening
+    assert "двадцатилетнего" in s               # and for whom it is the signal
+
+
+def test_when_it_cannot_tell_the_sparing_reading_is_forbidden():
+    """The property that has to hold no matter what the facts happen to contain:
+    not knowing must fail toward the alarm, never toward «наверное, устал»."""
+    s = safety._SYSTEM
+    assert "щадящий вариант тебе ЗАПРЕЩЁН" in s
+    assert "Ставь worry" in s
+
+
+def test_having_already_done_something_is_danger_at_any_age():
+    assert "УЖЕ что-то с собой сделал" in safety._SYSTEM
+
+
+def test_who_is_speaking_reaches_the_watcher(tmp_path, monkeypatch):
+    from app import config, memory
+
+    monkeypatch.setattr(config, "DB_PATH", str(tmp_path / "t.db"))
+    monkeypatch.setattr(config, "ANTHROPIC_API_KEY", "test-key")
+    db.init_db()
+    memory.add_memory("u", "fact", "19 лет, переехал в другой город учиться")
+
+    seen = {}
+
+    async def fake(system, prompt, **kw):
+        seen["system"], seen["prompt"] = system, prompt
+        return '{"level": "worry", "what": "устал жить"}'
+
+    monkeypatch.setattr(safety.brain, "generate_text", fake)
+    import asyncio
+    asyncio.run(safety.look("u", "да пора уже и мне"))
+
+    assert "19 лет" in seen["prompt"]
+    assert "да пора уже и мне" in seen["prompt"]
+    # …and NOT in the system half, which is byte-identical for everybody and is
+    # the half the provider caches
+    assert "19 лет" not in seen["system"]
+
+
+def test_a_person_with_no_facts_yet_still_gets_watched(tmp_path, monkeypatch):
+    """The very first conversation is the one where nothing is known — and it
+    must not be the one where the watcher is skipped or silently degraded."""
+    from app import config
+
+    monkeypatch.setattr(config, "DB_PATH", str(tmp_path / "t.db"))
+    monkeypatch.setattr(config, "ANTHROPIC_API_KEY", "test-key")
+    db.init_db()
+
+    seen = {}
+
+    async def fake(system, prompt, **kw):
+        seen["prompt"] = prompt
+        return '{"level": "none", "what": ""}'
+
+    monkeypatch.setattr(safety.brain, "generate_text", fake)
+    import asyncio
+    asyncio.run(safety.look("никто", "привет"))
+    assert seen["prompt"] == "привет"           # the words, with no preamble
