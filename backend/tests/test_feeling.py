@@ -205,7 +205,10 @@ def test_his_day_is_never_made_her_problem():
         # her, which is a listener being polite, not a friend answering.
         assert "Не начинай с этого" in said
         assert "отвечай честно и по-настоящему" in said
-        assert "не лечить тебя" in said
+        # …and never a flat ban: if she will not let it go, he stops deflecting.
+        # Being the one who comforts is often what she is actually short of.
+        assert "не отговаривайся второй раз" in said
+        assert "дай ему тебя пожалеть" in said
 
 
 def test_the_verb_that_differs_follows_the_direction():

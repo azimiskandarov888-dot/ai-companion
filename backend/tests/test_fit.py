@@ -259,3 +259,23 @@ def test_the_reason_is_kept_only_where_nothing_else_teaches_it():
     _seen("v", "понравился_его_промах", 2)
     assert "Идеальных не любят" not in fit.block("v")
     assert "гладких не любят" in __import__("app.companion", fromlist=["x"]).BEHAVIOR_RULES
+
+
+def test_wanting_to_be_the_one_who_helps_is_watched_not_assumed():
+    """Being the one who comforts, rather than the one comforted, is often the
+    scarcer of the two for somebody whose days have nobody in them. A companion
+    who deflects to spare her is taking that away in the name of kindness — so
+    it is watched, at the usual bar, and then he stops deflecting."""
+    _seen("u", "настоял_чтобы_рассказал", 1)
+    assert fit.block("u") == ""                      # once is a coincidence
+    _seen("u", "настоял_чтобы_рассказал", 1)
+    said = fit.block("u")
+    assert "ЕМУ ВАЖНО БЫТЬ ТЕМ, КТО ПОМОГАЕТ" in said
+    assert "Не отговаривайся и не береги его" in said
+
+
+def test_liking_to_hear_about_him_is_watched_the_same_way():
+    _seen("u", "хотел_слушать_про_тебя", 2)
+    said = fit.block("u")
+    assert "СЛУШАТЬ ПРО ТЕБЯ" in said
+    assert "не сворачивай обратно на него" in said

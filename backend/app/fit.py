@@ -140,6 +140,18 @@ def block(user_id: str) -> str:
             "из вежливости: ему легче слушать твою неделю, чем пересказывать свою."
         )
 
+    # Being the one who comforts, rather than the one comforted. For somebody
+    # whose days have nobody in them, that is often the scarcer of the two — and
+    # a companion who deflects to spare her is taking it away in the name of
+    # kindness. Watched rather than assumed, like everything else here.
+    insisted = c.get("настоял_чтобы_рассказал", 0)
+    if insisted >= CONFIRMED_AT:
+        out.append(
+            f"ЕМУ ВАЖНО БЫТЬ ТЕМ, КТО ПОМОГАЕТ — {insisted} раза он не отставал, "
+            "когда ты уходил от ответа про себя. Не отговаривайся и не береги его: "
+            "рассказывай сразу и честно, и дай ему повозмущаться и посоветовать."
+        )
+
     led = c.get("сам_повёл_разговор", 0)
     if led >= CONFIRMED_AT:
         out.append(

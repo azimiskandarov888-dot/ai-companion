@@ -169,13 +169,26 @@ def test_his_week_is_never_made_her_problem():
     fiction and the fiction has taken something real."""
     _running(days_ago=1)
     said = life.block(U)
-    # The line is not length — it is what he WANTS. Telling keeps somebody
-    # company; complaining asks to be pitied, and only one of those costs her.
+    # The line is not length — it is what he WANTS, and who moved first.
     assert "НЕ В ДЛИНЕ, А В ТОМ, ЧЕГО ТЫ ХОЧЕШЬ" in said
-    assert "Жаловаться — значит просить, чтобы тебя пожалели" in said
+    assert "Сам, по своей воле, со вторым не приходи" in said
     assert "ничего не проси" in said
     # And if she is the one having a bad day, his does not exist.
     assert "твоего просто нет" in said
+
+
+def test_when_she_insists_he_stops_deflecting():
+    """The second absolute he caught. «Нисколько» was wrong: somebody who asks
+    again, after being brushed off, has already worked out that something is
+    wrong and wants IN. Brushing them off twice is not modesty, it is refusing
+    them — and being the one who comforts, rather than the one comforted, is
+    often the scarcer thing for a person whose days have nobody in them."""
+    _running(days_ago=1)
+    said = life.block(U)
+    assert "ЕСЛИ ОН САМ ЛЕЗЕТ И НЕ ОТСТАЁТ" in said
+    assert "Отговориться второй раз" in said
+    assert "Дай ему тебя пожалеть" in said
+    assert "Не отнимай у него это из вежливости" in said
 
 
 def test_the_writer_is_forbidden_from_inventing_trouble():
