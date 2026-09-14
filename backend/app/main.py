@@ -191,15 +191,12 @@ async def _assemble(user_id: str, user_text: str) -> tuple[str, str, list, str |
         safety.look(user_id, user_text),
     )
 
-    # If today is a special date, let Bob mention it warmly — but only in reply
-    # to him (he never speaks first).
-    occ = occasions.occasion_for()
-    if occ:
-        note = (
-            f"Сегодня {occ['name']}. {occ['note']} "
-            "Если это уместно и к слову — тепло упомяни это сам."
-        )
-        mem_ctx = f"{mem_ctx}\n\n{note}".strip() if mem_ctx else note
+    # WHAT DAY IT IS. He did not know — not the date, not the weekday — which
+    # meant «дочь Валя, день рождения 3 мая» could sit in his memory for a year
+    # and pass unremarked on the third of May. Given the day and given the
+    # facts, noticing is his job and he is good at it. See occasions.py.
+    today = occasions.today_block(user_id, elder_facts)
+    mem_ctx = f"{today}\n\n{mem_ctx}".strip() if mem_ctx else today
 
     # How much of his own life THIS person wants — closed, normal or open,
     # learned from what has actually been watched and from anything he simply
