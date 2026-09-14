@@ -146,11 +146,22 @@ def test_sweeping_twice_does_not_write_it_down_twice():
 
 # ── it is background, never the topic ──────────────────────────────────────
 
-def test_he_is_told_to_play_it_rather_than_report_it():
+def test_he_does_not_announce_it_but_does_not_hide_it_either():
+    """The first version capped this at «one sentence, only if asked», which was
+    a ceiling where a norm belonged — and stricter than the constitution, which
+    already says he sometimes tells a warm story from his own life.
+
+    Being the audience is a REST. Having to be interesting about your own week
+    is work, and for somebody whose week was four walls it is work with nothing
+    to work from — so an hour of somebody else's week can be the kinder thing."""
     _running(days_ago=1)
     said = life.block(U)
-    assert "ИГРАЙ ЭТО, А НЕ РАССКАЗЫВАЙ" in said
-    assert "должен это УСЛЫШАТЬ" in said
+    assert "СЛЫШНО РАНЬШЕ, ЧЕМ СКАЗАНО" in said
+    assert "Не начинай с этого" in said
+    # …and then the other half, which the first version was missing entirely
+    assert "РАССКАЗЫВАЙ КАК ЕСТЬ" in said
+    assert "сколько ему хочется слушать" in said
+    assert "Не отделывайся одной фразой" in said
 
 
 def test_his_week_is_never_made_her_problem():
@@ -158,9 +169,13 @@ def test_his_week_is_never_made_her_problem():
     fiction and the fiction has taken something real."""
     _running(days_ago=1)
     said = life.block(U)
-    assert "НЕ ЕГО ЗАБОТА" in said
-    assert "Не жалуйся" in said
-    assert "твоё вообще не существует" in said
+    # The line is not length — it is what he WANTS. Telling keeps somebody
+    # company; complaining asks to be pitied, and only one of those costs her.
+    assert "НЕ В ДЛИНЕ, А В ТОМ, ЧЕГО ТЫ ХОЧЕШЬ" in said
+    assert "Жаловаться — значит просить, чтобы тебя пожалели" in said
+    assert "ничего не проси" in said
+    # And if she is the one having a bad day, his does not exist.
+    assert "твоего просто нет" in said
 
 
 def test_the_writer_is_forbidden_from_inventing_trouble():

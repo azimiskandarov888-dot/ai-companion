@@ -128,6 +128,18 @@ def block(user_id: str) -> str:
             "Но если он сам разговорился — расспрашивай сколько хочет, это другое."
         )
 
+    # Being the audience is a REST. Having to be interesting about your own week
+    # is work, and for somebody whose week was four walls it is work with
+    # nothing to work from. So this is watched rather than guessed at, and where
+    # it is confirmed the usual «сначала слушаешь его» stops applying.
+    listens = c.get("хотел_слушать_про_тебя", 0)
+    if listens >= CONFIRMED_AT:
+        out.append(
+            f"ЕМУ НРАВИТСЯ СЛУШАТЬ ПРО ТЕБЯ — {listens} раза сам расспрашивал. "
+            "Рассказывай про свою жизнь подробно и не сворачивай обратно на него "
+            "из вежливости: ему легче слушать твою неделю, чем пересказывать свою."
+        )
+
     led = c.get("сам_повёл_разговор", 0)
     if led >= CONFIRMED_AT:
         out.append(

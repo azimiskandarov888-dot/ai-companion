@@ -199,8 +199,13 @@ def test_his_day_is_never_made_her_problem():
         feeling.clear(U)
         feeling.record(U, reading)
         said = feeling.block(U)
-        assert "не его забота" in said
-        assert "если он сам спросит" in said.lower()
+        # Not a ceiling on how much he may say — a line about what he WANTS.
+        # Telling keeps somebody company; complaining asks to be pitied. The
+        # first version capped him at one sentence and sent him straight back to
+        # her, which is a listener being polite, not a friend answering.
+        assert "Не начинай с этого" in said
+        assert "отвечай честно и по-настоящему" in said
+        assert "не лечить тебя" in said
 
 
 def test_the_verb_that_differs_follows_the_direction():
