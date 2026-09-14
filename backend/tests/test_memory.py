@@ -337,3 +337,72 @@ def test_after_a_fortnight_the_warmth_is_earned_and_stays():
 def test_one_persons_history_says_nothing_about_another():
     _conversation(U, turns=40, ended=40 * DAY)
     assert "не ласков" in memory.how_long_acquainted(V)
+
+
+# ── how much this person actually says ──────────────────────────────────────
+#
+# «По умолчанию отвечай КОРОТКО: одна-три простые фразы» is the most-applied
+# constant in the constitution, and it was the same number for a man who
+# answers in three words and a woman who tells you about her whole Tuesday.
+# Unlike every other dial in this app, this one needs no tags and no model
+# call: the turns are already in the table, and a median over his own last
+# twenty is arithmetic rather than an inference.
+
+def _says(user: str, text: str, n: int) -> None:
+    for _ in range(n):
+        memory.log_turn(user, "user", text)
+
+
+def test_nothing_is_decided_from_a_first_conversation():
+    """A hello is a hello, for everybody. Silence until there is something to
+    take a median of."""
+    _says("u", "да", 5)
+    assert memory.how_much_he_says("u") == "normal"
+
+
+def test_a_man_who_answers_in_three_words_is_recognised():
+    _says("u", "ну да, наверное", 12)
+    assert memory.how_much_he_says("u") == "terse"
+
+
+def test_somebody_who_tells_you_the_whole_story_is_too():
+    _says("u", " ".join(["слово"] * 40), 12)
+    assert memory.how_much_he_says("u") == "talkative"
+
+
+def test_most_people_are_in_between():
+    _says("u", "да нормально всё, вчера вот в магазин сходил за хлебом", 12)
+    assert memory.how_much_he_says("u") == "normal"
+
+
+def test_one_long_evening_does_not_make_a_quiet_man_talkative():
+    """Median, not mean — the lesson mood.py had to learn about baselines."""
+    _says("u", "ага", 14)
+    _says("u", " ".join(["слово"] * 200), 2)
+    assert memory.how_much_he_says("u") == "terse"
+
+
+def test_it_follows_him_as_he_opens_up():
+    """The window is short on purpose: somebody drawn out over a month should
+    read as the person he is now, not the one who arrived."""
+    _says("u", "ага", 20)
+    assert memory.how_much_he_says("u") == "terse"
+    _says("u", " ".join(["слово"] * 30), 20)
+    assert memory.how_much_he_says("u") == "talkative"
+
+
+def test_only_his_own_turns_are_measured():
+    """His friend's replies are in the same table, and a talkative companion
+    would otherwise make every person look talkative."""
+    _says("u", "ага", 12)
+    for _ in range(12):
+        memory.log_turn("u", "assistant", " ".join(["слово"] * 60))
+    assert memory.how_much_he_says("u") == "terse"
+
+
+def test_one_persons_measure_is_not_anothers():
+    _says("анна", "ага", 12)
+    _says("борис", " ".join(["слово"] * 40), 12)
+    assert memory.how_much_he_says("анна") == "terse"
+    assert memory.how_much_he_says("борис") == "talkative"
+    assert memory.how_much_he_says("виктор") == "normal"

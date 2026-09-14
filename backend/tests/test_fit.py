@@ -329,3 +329,64 @@ def test_the_two_dials_are_independent():
     said = fit.block("w")
     assert "ПРО ЕГО ОТСУТСТВИЕ — НИ СЛОВА" in said
     assert "ПРО СЕБЯ ЕМУ РАССКАЗЫВАЙ" in said
+
+
+# ── how much he wants said back ─────────────────────────────────────────────
+
+def _turns(user: str, text: str, n: int) -> None:
+    from app import memory
+
+    for _ in range(n):
+        memory.log_turn(user, "user", text)
+
+
+def test_the_terse_man_is_answered_tersely_but_it_stays_a_norm():
+    _turns("u", "ну да", 12)
+    said = fit.block("u")
+    assert "ОН ГОВОРИТ КОРОТКО" in said
+    assert "самое машинное, что бывает" in said
+    # never a ban, and never an instruction to be cold
+    assert "норма, а не потолок" in said
+    assert "тепло помещается и в три слова" in said
+
+
+def test_the_talkative_one_is_not_answered_in_two_words():
+    _turns("v", " ".join(["слово"] * 40), 12)
+    said = fit.block("v")
+    assert "ОН ГОВОРИТ ПОДРОБНО" in said
+    assert "отмахнуться" in said
+    assert "не про него" in said
+
+
+def test_asking_outright_outranks_the_measurement():
+    """Somebody who says «покороче» is still speaking in long sentences while
+    he says it, so the median cannot hear him. A request is not an inference,
+    and it takes effect at once."""
+    _turns("w", " ".join(["слово"] * 40), 12)        # measures as talkative
+    assert "ОН ГОВОРИТ ПОДРОБНО" in fit.block("w")
+    _seen("w", "просил_говорить_короче", 1)
+    said = fit.block("w")
+    assert "ОН ГОВОРИТ КОРОТКО" in said
+    assert "ПОДРОБНО" not in said
+
+
+def test_asking_for_more_works_the_same_way():
+    _turns("w", "ага", 12)                           # measures as terse
+    _seen("w", "просил_рассказывать_подробнее", 1)
+    assert "ОН ГОВОРИТ ПОДРОБНО" in fit.block("w")
+
+
+def test_the_quieter_answer_wins_where_both_were_asked():
+    _seen("w", "просил_говорить_короче", 1)
+    _seen("w", "просил_рассказывать_подробнее", 1)
+    assert "ОН ГОВОРИТ КОРОТКО" in fit.block("w")
+
+
+def test_hearing_trouble_is_one_question_asked_in_two_places():
+    """block() asks the model for shorter sentences; tts.rate_for slows the
+    actual voice. Both read the same answer, so they cannot drift apart."""
+    _seen("u", "просил_помедленнее", 1)
+    assert fit.hard_of_hearing("u") is False
+    _seen("u", "не_расслышал", 1)
+    assert fit.hard_of_hearing("u") is True
+    assert "ТРУДНО РАЗБИРАТЬ РЕЧЬ" in fit.block("u")

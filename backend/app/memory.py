@@ -182,6 +182,67 @@ def broke_off_last_time(user_id: str) -> bool:
     return length >= REAL_CONVERSATION
 
 
+# --------------------------------------------------------------------------- #
+# How much this person actually says
+# --------------------------------------------------------------------------- #
+#
+# «По умолчанию отвечай КОРОТКО: одна-три простые фразы» is the most-applied
+# constant in the constitution — it governs every single reply — and it was the
+# same number for a man who answers in three words and a woman who tells you
+# about her whole Tuesday. Answering «ага» with five sentences is the most
+# robot-like thing a companion does; answering a long, detailed story with «да,
+# понятно» is dismissal. Length should CORRESPOND, and the constitution already
+# says as much about tempo: «скупость — не холодность, читай как ТЕМП, к
+# которому надо подстроиться».
+#
+# Unlike every other dial in this app, this one needs no tags and no model call.
+# The turns are already in the table. A median over his own last twenty is not
+# an inference to be confirmed twice — it is arithmetic, it cannot hallucinate,
+# and it keeps moving on its own as he opens up. The register's «twice» rule
+# exists because tags are inferences; measurement is not one.
+#
+# Thresholds in WORDS, chosen for speech rather than writing: a spoken
+# conversational turn runs ten to twenty-five words, «ну да» and «ага» are one
+# or two, and somebody telling a story goes well past thirty.
+_TERSE_AT = 5
+_TALKATIVE_AT = 25
+
+#: Below this many turns there is nothing to take a median of, and early turns
+#: are short for everybody — a hello is a hello. Silence until then.
+_ENOUGH_TO_JUDGE = 10
+
+#: How far back to look. Long enough to be stable, short enough that somebody
+#: who has been drawn out over a month reads as the person he is now rather
+#: than the one who arrived.
+_SPEECH_WINDOW = 20
+
+
+def how_much_he_says(user_id: str) -> str:
+    """terse | normal | talkative — measured, never guessed.
+
+    Returns "normal" for anybody there is not yet enough of, which is also the
+    right answer: the constitution's own default is the middle.
+    """
+    with db.connect() as conn:
+        rows = conn.execute(
+            "SELECT content FROM turns WHERE user_id=? AND role='user'"
+            " ORDER BY id DESC LIMIT ?",
+            (user_id, _SPEECH_WINDOW),
+        ).fetchall()
+    if len(rows) < _ENOUGH_TO_JUDGE:
+        return "normal"
+
+    # Median, not mean, for the reason mood.py had to learn: one evening when he
+    # told a long story must not turn a quiet man into a talkative one.
+    lengths = sorted(len((r["content"] or "").split()) for r in rows)
+    middle = lengths[len(lengths) // 2]
+    if middle <= _TERSE_AT:
+        return "terse"
+    if middle >= _TALKATIVE_AT:
+        return "talkative"
+    return "normal"
+
+
 #: Where the warmth rule gets something to stand on. Without this the model
 #: has only the last twelve turns to judge by, and twelve turns look identical
 #: on day one and in year two.

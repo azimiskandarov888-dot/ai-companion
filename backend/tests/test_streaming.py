@@ -103,7 +103,7 @@ def client(monkeypatch):
             yield REPLY[:i]
         yield REPLY
 
-    async def fake_tts(text, voice=None):
+    async def fake_tts(text, voice=None, *, rate=1.0):
         return b"MP3:" + text.encode("utf-8")
 
     monkeypatch.setattr(brain, "stream_reply", fake_stream)
@@ -266,7 +266,7 @@ def test_the_voice_never_holds_up_the_writing(client, monkeypatch):
         yield REPLY
         order.append("finished writing")
 
-    async def slow_voice(text, voice=None):
+    async def slow_voice(text, voice=None, *, rate=1.0):
         await asyncio.sleep(0.05)
         order.append("finished speaking")
         return b"MP3"
@@ -339,9 +339,11 @@ def test_the_streamed_voice_follows_the_persona(client, monkeypatch):
     persona.save_persona(UID, {"name": "Тамара", "gender": "женский", "age": "39 лет"})
 
     spoken_by: list[str | None] = []
+    spoken_at: list[float] = []
 
-    async def note_voice(text, voice=None):
+    async def note_voice(text, voice=None, *, rate=1.0):
         spoken_by.append(voice)
+        spoken_at.append(rate)
         return b"MP3"
 
     monkeypatch.setattr(tts, "synthesize", note_voice)
@@ -349,6 +351,9 @@ def test_the_streamed_voice_follows_the_persona(client, monkeypatch):
 
     assert spoken_by, "nothing was spoken at all"
     assert set(spoken_by) == {"alena"}
+    # …and at the ordinary rate, since nothing has been watched about her
+    # hearing. See tts.rate_for.
+    assert set(spoken_at) == {1.0}
 
 
 # --------------------------------------------------------------------------- #

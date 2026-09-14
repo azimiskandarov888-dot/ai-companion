@@ -268,12 +268,58 @@ def provider_name() -> str:
     return config.TTS_PROVIDER or "none"
 
 
-async def synthesize(text: str, voice: str | None = None) -> bytes:
+#: How much slower he speaks to somebody who has been struggling to follow him.
+#: 0.85 of the configured rate — noticeably easier to catch, and nowhere near
+#: the theatrical slowness that reads as talking to a child, which is its own
+#: insult and the one this app can least afford to give.
+SLOWER = 0.85
+
+
+def _base_speed(raw: str | float) -> float:
+    """The configured rate as a number. Bad config must not silence the voice."""
+    try:
+        return float(raw)
+    except (TypeError, ValueError):
+        return 1.0
+
+
+def rate_for(user_id: str | None) -> float:
+    """The speaking rate for THIS person, as a multiplier of the configured one.
+
+    The app already watched this and then did nothing mechanical about it: two
+    confirmed «переспросил» or «говори помедленнее» produced a line in the
+    prompt asking for shorter sentences — which helps, and is not what was
+    asked for. The knob is on the API. A rule that can be replaced by a
+    mechanism should be.
+
+    Never raises and never blocks: a voice that will not speak is far worse
+    than one speaking at the wrong speed, so anything unexpected here means
+    the ordinary rate.
+    """
+    if not user_id:
+        return 1.0
+    try:
+        from . import fit
+
+        return SLOWER if fit.hard_of_hearing(user_id) else 1.0
+    except Exception:  # noqa: BLE001 — see the docstring
+        return 1.0
+
+
+async def synthesize(
+    text: str, voice: str | None = None, *, rate: float = 1.0
+) -> bytes:
     """Turn a reply into spoken audio (MP3 bytes), via the chosen provider.
 
     `voice` is a provider-specific voice id/name — normally whatever
     `voice_for(persona)` returned, so that a companion who is a woman is
     not read aloud by a man. None means the configured default.
+
+    `rate` multiplies the configured speaking rate — `rate_for(user_id)`. Only
+    the providers that actually take a speed parameter honour it, and that is
+    stated rather than papered over: pretending to slow down a voice that has
+    not slowed down would be worse than the ordinary rate, because the watching
+    would look as though it had been acted on.
     """
     # One choke point, so all four providers get this for free.
     text = spoken(text)
@@ -292,7 +338,7 @@ async def synthesize(text: str, voice: str | None = None) -> bytes:
             raise RuntimeError(
                 "OPENAI_API_KEY is not set — the OpenAI voice is not configured."
             )
-        return await _synthesize_openai(text, voice)
+        return await _synthesize_openai(text, voice, rate=rate)
 
     if config.TTS_PROVIDER == "yandex":
         if not (config.YANDEX_API_KEY and config.YANDEX_FOLDER_ID):
@@ -300,7 +346,7 @@ async def synthesize(text: str, voice: str | None = None) -> bytes:
                 "YANDEX_API_KEY / YANDEX_FOLDER_ID not set — the Yandex voice "
                 "is not configured."
             )
-        return await _synthesize_yandex(text, voice)
+        return await _synthesize_yandex(text, voice, rate=rate)
 
     if config.TTS_PROVIDER == "elevenlabs":
         if not (config.ELEVENLABS_API_KEY and config.ELEVENLABS_VOICE_ID):
@@ -348,7 +394,7 @@ async def _synthesize_fish(text: str, voice: str | None = None) -> bytes:
         return resp.content
 
 
-async def _synthesize_openai(text: str, voice: str | None = None) -> bytes:
+async def _synthesize_openai(text: str, voice: str | None = None, *, rate: float = 1.0) -> bytes:
     """OpenAI TTS. Returns MP3 bytes.
 
     `instructions` is the interesting part: gpt-4o-mini-tts takes a plain-language
@@ -368,6 +414,10 @@ async def _synthesize_openai(text: str, voice: str | None = None) -> bytes:
     }
     if config.OPENAI_VOICE_STYLE:
         payload["instructions"] = config.OPENAI_VOICE_STYLE
+    # Only when it is not 1.0: the default is the provider's own, and sending
+    # an explicit 1.0 would quietly override any future change to that.
+    if rate != 1.0:
+        payload["speed"] = round(rate, 3)
 
     async with httpx.AsyncClient(timeout=60.0) as http:
         resp = await http.post(_OPENAI_TTS_URL, headers=headers, json=payload)
@@ -404,7 +454,7 @@ def _yandex_takes_emotion() -> bool:
     return bool(config.YANDEX_EMOTION)
 
 
-async def _synthesize_yandex(text: str, voice: str | None = None) -> bytes:
+async def _synthesize_yandex(text: str, voice: str | None = None, *, rate: float = 1.0) -> bytes:
     """Yandex SpeechKit. Form-encoded, not JSON. Returns MP3 bytes.
 
     Emotion is the one fiddly part — see `_yandex_takes_emotion`. The rule
@@ -426,7 +476,7 @@ async def _synthesize_yandex(text: str, voice: str | None = None) -> bytes:
             "text": text,
             "lang": "ru-RU",
             "voice": speaking_as,
-            "speed": config.YANDEX_SPEED,
+            "speed": str(round(_base_speed(config.YANDEX_SPEED) * rate, 3)),
             "format": "mp3",
             "folderId": config.YANDEX_FOLDER_ID,
         }

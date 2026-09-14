@@ -204,13 +204,50 @@ def block(user_id: str) -> str:
             "становись безупречным."
         )
 
+    # ── how much he wants said back ────────────────────────────────────────
+    # «По умолчанию отвечай КОРОТКО: одна-три простые фразы» is the
+    # most-applied constant in the constitution, and it was the same number for
+    # a man who answers in three words and a woman who tells you about her whole
+    # Tuesday. This is the one dial that needs no tags: the turns are already in
+    # the table, and a median over his own last twenty is arithmetic rather than
+    # an inference. See memory.how_much_he_says.
+    #
+    # But a REQUEST is not an inference either, and the measurement cannot hear
+    # one — somebody who asks «покороче» is still saying long sentences while he
+    # asks. So the two asking tags outrank it, at one occurrence, in the usual
+    # way; and the quieter answer wins where both were asked.
+    if c.get("просил_говорить_короче", 0):
+        says = "terse"
+    elif c.get("просил_рассказывать_подробнее", 0):
+        says = "talkative"
+    else:
+        from . import memory
+
+        says = memory.how_much_he_says(user_id)
+
+    if says == "terse":
+        out.append(
+            "ОН ГОВОРИТ КОРОТКО — отвечай так же: одна фраза, две. Длинный "
+            "ответ на короткую реплику — самое машинное, что бывает, и человек "
+            "просто перестаёт слушать. Коротко не значит сухо: тепло помещается "
+            "и в три слова. И это норма, а не потолок — попросил историю или "
+            "сам разговорился, говори сколько нужно."
+        )
+    elif says == "talkative":
+        out.append(
+            "ОН ГОВОРИТ ПОДРОБНО И ОХОТНО — отвечать ему в два слова значит "
+            "отмахнуться. Разворачивайся: договаривай, вспоминай своё, "
+            "добавляй подробности. Обычная норма «одна-три фразы» — не про "
+            "него."
+        )
+
     # ── how he is spoken TO, which is not about character at all ───────────
     #
     # The one line in this file the constitution does not teach anywhere, which
     # is why it keeps its whole explanation while the others lost theirs: a
     # count alone would read as a preference, and it is not one.
     slow = c.get("просил_помедленнее", 0) + c.get("не_расслышал", 0)
-    if slow >= CONFIRMED_AT:
+    if slow >= CONFIRMED_AT:   # …and the voice itself slows down: tts.rate_for
         out.append(
             f"ЕМУ ТРУДНО РАЗБИРАТЬ РЕЧЬ — {slow} раза переспрашивал или просил "
             "иначе. Говори короче и проще, по одной мысли за фразу. Он про это "
@@ -225,3 +262,17 @@ def block(user_id: str) -> str:
         "случалось между вами не по одному разу):\n"
         + "\n".join(f"- {line}" for line in out)
     )
+
+
+#: Both of these mean the same thing and neither is complained about twice, so
+#: they are added rather than each waiting for two on its own. People with poor
+#: hearing do not complain — they get used to it.
+def hard_of_hearing(user_id: str) -> bool:
+    """Has this person been struggling to make out what is said to him?
+
+    Read by tts.rate_for as well as by block(): the prompt line asks for shorter
+    sentences, which helps and is not what was asked for, and the speaking rate
+    is the thing that actually was.
+    """
+    c = _counts(user_id)
+    return c.get("просил_помедленнее", 0) + c.get("не_расслышал", 0) >= CONFIRMED_AT

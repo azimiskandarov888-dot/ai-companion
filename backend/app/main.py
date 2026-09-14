@@ -349,7 +349,11 @@ async def _think_and_speak(
     # let the client speak the reply with its own free voice — so testing needs
     # only Whisper + Claude. "voice" tells the client which path to take.
     if tts.configured():
-        audio_bytes = await tts.synthesize(reply, voice)
+        # Slower for somebody who has been struggling to make him out. The
+        # app has counted that for months and only ever answered it with a
+        # prompt line asking for shorter sentences; the speed is the knob
+        # that was actually asked for. See tts.rate_for.
+        audio_bytes = await tts.synthesize(reply, voice, rate=tts.rate_for(user_id))
         return {
             "reply": reply,
             "audio_base64": base64.b64encode(audio_bytes).decode("ascii"),
@@ -413,6 +417,9 @@ async def _speak_as_he_thinks(
     try:
         system_stable, system_variable, history, voice = await _assemble(user_id, transcript)
         speak = tts.configured()
+        # Read once per turn rather than per fragment: it is a database hit,
+        # and it cannot change in the middle of one reply.
+        rate = tts.rate_for(user_id)
 
         # TWO TASKS, NOT ONE LOOP. The obvious version — read a token, and when
         # a sentence is finished go and synthesise it — was measurably wrong:
@@ -467,7 +474,7 @@ async def _speak_as_he_thinks(
                 # say nothing is an error. Skip it rather than break the turn.
                 if not tts.spoken(fragment):
                     continue
-                audio = await tts.synthesize(fragment, voice)
+                audio = await tts.synthesize(fragment, voice, rate=rate)
                 yield _line(
                     {
                         "kind": "say",
