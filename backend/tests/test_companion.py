@@ -236,14 +236,17 @@ def test_the_general_rule_states_a_principle_and_never_a_line():
     another.
 
     So the shared rules carry the principle and the harm boundary. HOW it
-    sounds comes from the reading, per person, and the rule says so."""
+    sounds is per person — and it now comes from a DIAL that was watched
+    happening (mood.closeness, rendered by fit.py), not from three people
+    enumerated here and a «смотри, кто перед тобой» with nothing to look at."""
     rules = companion.BEHAVIOR_RULES
     assert "КАК ИМЕННО ЭТО ЗВУЧИТ — не общее правило, а правило про НЕГО" in rules
-    # All three positions named, so none of them reads as the default.
-    assert "чтобы это чуть кольнуло" in rules
-    assert "груз надо снять сразу же" in rules
-    assert "уже упрёк" in rules
-    assert "Не подставляй одну заготовку всем" in rules
+    # It says where the answer comes from, and outranks itself where there is one
+    assert "тебе скажут ниже отдельно, и это важнее того, что написано здесь" in rules
+    # …and names the default for everybody else, so «не сказано» is not a shrug
+    assert "просто радуйся приходу и молчи про отсутствие" in rules
+    # The enumeration is gone: it was a recipe standing in for a mechanism.
+    assert "Третьему всякое упоминание" not in rules
 
 
 def test_imperfection_only_counts_on_top_of_competence():

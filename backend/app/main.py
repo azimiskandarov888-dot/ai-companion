@@ -214,9 +214,14 @@ async def _assemble(user_id: str, user_text: str) -> tuple[str, str, list, str |
         # joked about. Stable, so it rides in the cached half for free.
         reading_block=reading.standing_block(
             reading.load(user_id),
-            # Once the register has WATCHED what lifts him, the reading's guess
+            # Once the register has WATCHED either of these, the reading's guess
             # at it is dropped rather than left to argue with the measurement.
+            # Both guesses were made from one paragraph on the day the app was
+            # installed, and both are phrased as instructions; the watched
+            # answer is phrased mildly, so with both present the louder and
+            # weaker one wins, which is backwards.
             lifts_confirmed=mood.lifts_confirmed(user_id),
+            closeness_confirmed=mood.closeness(user_id) != "normal",
         ),
         # Proven on him, not guessed about him. See mood.py.
         confirmed_block=mood.standing_block(user_id),

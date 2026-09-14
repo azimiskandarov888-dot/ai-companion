@@ -691,3 +691,25 @@ def test_a_broken_history_file_never_costs_a_reading(tmp_path, monkeypatch):
     reading.save(U, {"register": "теплее"})
     assert reading.load(U)["register"] == "теплее"
     assert reading.history(U) == [] or reading.history(U)[-1]["was"]["register"] == "сухо"
+
+
+def test_the_day_one_guess_at_closeness_is_dropped_once_it_has_been_watched():
+    """The same discipline as what_lifts_him, applied to the field that waited
+    longest for it. Both guesses are phrased as instructions and were made from
+    one paragraph written to a machine the person had never met; the watched
+    answer is phrased mildly. With both in the prompt the louder and weaker one
+    wins, which is backwards — so the guess is removed rather than argued with."""
+    r = {
+        "register": "коротко и просто",
+        "closeness": "надо прямо говорить, что ждал",
+        "what_lifts_him": "истории",
+    }
+    guessed = reading.standing_block(r)
+    assert "Как он хочет быть нужным" in guessed
+
+    watched = reading.standing_block(r, closeness_confirmed=True)
+    assert "Как он хочет быть нужным" not in watched
+    assert "надо прямо говорить, что ждал" not in watched
+    # and the two drops are independent of each other
+    assert "Чем его поднимать" in watched
+    assert "коротко и просто" in watched

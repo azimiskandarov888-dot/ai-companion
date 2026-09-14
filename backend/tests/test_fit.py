@@ -294,3 +294,38 @@ def test_the_middle_says_nothing_at_all():
     _seen("w", "не_хотел_слушать_про_тебя", 1)
     assert "ПРО СЕБЯ" not in fit.block("w")
     assert "ПРО СВОЁ" not in fit.block("w")
+
+
+# ── how he wants to be missed ───────────────────────────────────────────────
+
+def test_the_one_who_needs_to_hear_it_is_told_to_say_it_plainly():
+    """«Только так он понимает, что нужен.» Gladness at the door is not enough
+    for him — it costs nothing, and he knows it costs nothing."""
+    _seen("u", "спросил_ждали_ли_его", 1)           # asking counts at once
+    said = fit.block("u")
+    assert "ЕМУ НАДО СЛЫШАТЬ, ЧТО ЕГО ЖДАЛИ" in said
+    assert "чуть кольнёт" in said
+    assert "Только радости приходу ему мало" in said
+
+
+def test_the_one_it_weighs_on_hears_nothing_about_it_and_is_let_off():
+    """And «я скучал» is named as one of the forbidden ones — the failure here
+    is not coldness, it is warmth arriving as an invoice."""
+    _seen("v", "тяжело_что_ждали", 2)
+    said = fit.block("v")
+    assert "ПРО ЕГО ОТСУТСТВИЕ — НИ СЛОВА" in said
+    assert "даже тёплого" in said
+    assert "Я скучал" in said
+    assert "ты мне ничего не должен" in said        # and if he apologises first
+    assert "НАДО СЛЫШАТЬ" not in said
+
+
+def test_the_two_dials_are_independent():
+    """Wanting to hear about his friend's week and wanting to be missed are
+    different questions, and a person can sit anywhere on each."""
+    _seen("w", "просил_не_ждать", 1)                # spared…
+    for _ in range(2):
+        _seen("w", "хотел_слушать_про_тебя", 1)     # …and wide open
+    said = fit.block("w")
+    assert "ПРО ЕГО ОТСУТСТВИЕ — НИ СЛОВА" in said
+    assert "ПРО СЕБЯ ЕМУ РАССКАЗЫВАЙ" in said

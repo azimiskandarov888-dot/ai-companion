@@ -415,3 +415,62 @@ def test_the_dial_tags_are_never_also_reported_as_findings():
         mood.observe("u", "не_хотел_слушать_про_тебя", "")
     assert mood.openness("u") == "closed"
     assert "слушать" not in mood.standing_block("u")
+
+
+# ── the second dial: how he wants to be missed ──────────────────────────────
+#
+# The oldest unmechanised rule in the app. The constitution describes three
+# people in prose — one needs to hear outright that he was waited for and needs
+# it to sting; one finds somebody else's feeling a weight; one hears any mention
+# of his absence as a reproach — and then said «смотри, кто перед тобой» while
+# handing him nothing to look at. reading.py guessed at it on install day, from
+# a paragraph written to a machine the person had never met, and nothing ever
+# checked that guess. It governs the first sentence said to somebody who has
+# been gone a week, which is the highest-stakes sentence in the app.
+
+def test_most_people_are_in_the_middle_here_too():
+    assert mood.closeness("u") == "normal"
+
+
+def test_it_is_watched_and_once_is_not_enough():
+    mood.observe("u", "обрадовался_что_ждали", "")
+    assert mood.closeness("u") == "normal"
+    mood.observe("u", "обрадовался_что_ждали", "")
+    assert mood.closeness("u") == "missed"
+
+
+def test_the_other_end_is_watched_the_same_way():
+    for _ in range(2):
+        mood.observe("u", "тяжело_что_ждали", "")
+    assert mood.closeness("u") == "spared"
+
+
+def test_asking_whether_he_was_missed_counts_at_once():
+    """«Ты хоть скучал?» is not a thing the other two kinds of person ever say.
+    It is a direct act, not a tone to be read twice."""
+    mood.observe("u", "спросил_ждали_ли_его", "")
+    assert mood.closeness("u") == "missed"
+
+
+def test_asking_not_to_be_waited_for_counts_at_once():
+    mood.observe("u", "просил_не_ждать", "")
+    assert mood.closeness("u") == "spared"
+
+
+def test_the_quieter_answer_wins_here_too():
+    """The two mistakes are not the same size. Not hearing «я тебя ждал» when
+    you wanted it is a quiet disappointment; hearing it when it lands as a debt
+    is one more thing to feel guilty about — from the one place that was
+    supposed to be free of that."""
+    mood.observe("u", "спросил_ждали_ли_его", "")
+    mood.observe("u", "просил_не_ждать", "")
+    assert mood.closeness("u") == "spared"
+
+
+def test_the_four_new_tags_are_real_and_belong_to_the_pair():
+    from app import learn
+
+    for tag in (*mood._MISSED, *mood._SPARED, *mood._SAID_MISSED, *mood._SAID_SPARED):
+        assert tag in mood.TAGS, tag
+        assert tag in mood.PAIR, tag
+        assert tag in learn._EXTRACTION_SYSTEM, tag

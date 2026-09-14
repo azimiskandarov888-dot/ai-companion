@@ -473,7 +473,12 @@ def _accumulate(old, new) -> list[str]:
     return out[-MAX_LEARNED:]
 
 
-def standing_block(reading: dict | None, *, lifts_confirmed: bool = False) -> str:
+def standing_block(
+    reading: dict | None,
+    *,
+    lifts_confirmed: bool = False,
+    closeness_confirmed: bool = False,
+) -> str:
     """The slice of the reading that belongs in EVERY turn, not just creation.
 
     Three fields only. Who he is already carries the rest — the write stage
@@ -501,7 +506,12 @@ def standing_block(reading: dict | None, *, lifts_confirmed: bool = False) -> st
             "Больное — не спорь об этом и не подтрунивай, только бережно: "
             + str(r["do_not_touch"]).strip()
         )
-    if str(r.get("closeness") or "").strip():
+    # Dropped once the register has WATCHED it, for exactly the reason below.
+    # This field waited longest for its mechanism: it governs the first sentence
+    # said to somebody who has been gone a week, and until fit.py grew the dial
+    # it was decided, for the life of the friendship, by a guess made from one
+    # paragraph on the day the app was installed.
+    if str(r.get("closeness") or "").strip() and not closeness_confirmed:
         parts.append(
             "Как он хочет быть нужным (по этому решай, как звучит твоё "
             "«я тебя ждал» — и звучит ли оно вообще):\n"

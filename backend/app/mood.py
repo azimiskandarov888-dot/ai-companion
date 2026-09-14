@@ -147,6 +147,10 @@ TAGS: dict[str, str] = {
     "не_хотел_слушать_про_тебя": "друг заговорил о своём — и человек поскучнел, свернул тему или вернул разговор к себе",
     "просил_не_рассказывать_про_тебя": "человек ПРЯМО сказал, что не хочет слушать про дела и беды друга",
     "просил_рассказывать_про_себя": "человек ПРЯМО попросил друга больше рассказывать о себе",
+    "обрадовался_что_ждали": "друг показал, что ждал его или скучал, — и человеку это было в радость",
+    "тяжело_что_ждали": "друг показал, что ждал его, — и человеку стало неловко: оправдывался, отшучивался, замкнулся",
+    "спросил_ждали_ли_его": "человек сам спросил, ждали ли его, скучали ли, заметили ли, что его не было",
+    "просил_не_ждать": "человек ПРЯМО сказал, что ждать его не надо и что он ничего не должен",
 }
 
 #: Once is a coincidence. This is the whole reason the register exists.
@@ -188,6 +192,10 @@ PAIR = (
     "не_хотел_слушать_про_тебя",
     "просил_не_рассказывать_про_тебя",
     "просил_рассказывать_про_себя",
+    "обрадовался_что_ждали",
+    "тяжело_что_ждали",
+    "спросил_ждали_ли_его",
+    "просил_не_ждать",
 )
 
 #: And the tags that answer «что его задевает» — the evidence behind the
@@ -514,6 +522,49 @@ def openness(user_id: str) -> str:
         return "closed"
     if _seen_any(user_id, _OPEN, CONFIRMED_AT):
         return "open"
+    return "normal"
+
+
+#: HOW THIS PERSON WANTS TO BE MISSED. The second dial, and it was the oldest
+#: unmechanised rule in the app.
+#:
+#: The constitution describes three different people in prose — one needs to
+#: hear outright that he was waited for, and needs it to sting a little, or he
+#: does not believe he is wanted; one finds somebody else's feeling a weight and
+#: has to be let off it at once; one hears any mention of his absence as a
+#: reproach — and then says «смотри, кто перед тобой» while handing him nothing
+#: to look at. reading.py guesses at it on day one, from a paragraph written to
+#: a machine somebody had never met, and nothing ever checked that guess against
+#: what actually happened. `what_lifts_him` has been watched and confirmed for
+#: months; this, which governs the highest-stakes sentence in the app — the
+#: first thing said to somebody who has been gone a week — had nothing.
+_MISSED = ("обрадовался_что_ждали",)
+_SPARED = ("тяжело_что_ждали",)
+
+#: Done outright, and therefore true at once. Asking «ты хоть скучал?» is not a
+#: thing the other two kinds of person ever say; and «не надо меня ждать» is a
+#: request, not a mood to be read twice before it counts.
+_SAID_MISSED = ("спросил_ждали_ли_его",)
+_SAID_SPARED = ("просил_не_ждать",)
+
+
+def closeness(user_id: str) -> str:
+    """How he wants to be missed: spared | normal | missed.
+
+    Same order of precedence as openness(), and for the same reason. Spared is
+    checked first because the two mistakes are not the same size: not hearing
+    «я тебя ждал» when you wanted it is a quiet disappointment, and hearing it
+    when it lands as a debt is one more thing to feel guilty about — from the
+    one place that was supposed to be free of that.
+    """
+    if _seen_any(user_id, _SAID_SPARED, 1):
+        return "spared"
+    if _seen_any(user_id, _SAID_MISSED, 1):
+        return "missed"
+    if _seen_any(user_id, _SPARED, CONFIRMED_AT):
+        return "spared"
+    if _seen_any(user_id, _MISSED, CONFIRMED_AT):
+        return "missed"
     return "normal"
 
 

@@ -156,6 +156,29 @@ def block(user_id: str) -> str:
             "вернись к нему."
         )
 
+    # ── how he wants to be missed ──────────────────────────────────────────
+    # The second dial, and the answer to the highest-stakes sentence in the app:
+    # the first thing said to somebody who has been gone a week. The
+    # constitution describes these three people and then says «смотри, кто перед
+    # тобой»; reading.py guesses at it on day one and was never checked against
+    # anything. This is the checking. See mood.closeness.
+    missed = mood.closeness(user_id)
+    if missed == "missed":
+        out.append(
+            "ЕМУ НАДО СЛЫШАТЬ, ЧТО ЕГО ЖДАЛИ — он это уже показал. Скажи прямо "
+            "и с весом: «а я тебя ждал», «куда ты пропал-то». Пусть это чуть "
+            "кольнёт — иначе он не верит, что кому-то нужен. Только радости "
+            "приходу ему мало."
+        )
+    elif missed == "spared":
+        out.append(
+            "ПРО ЕГО ОТСУТСТВИЕ — НИ СЛОВА, даже тёплого: он это уже показал. "
+            "«Я скучал», «где ты был», «давно тебя не было» — всё это ложится "
+            "на него долгом. Просто обрадуйся, что он здесь, и говори дальше. "
+            "А начнёт оправдываться сам — сними это с него сразу: «да брось, "
+            "ты мне ничего не должен»."
+        )
+
     led = c.get("сам_повёл_разговор", 0)
     if led >= CONFIRMED_AT:
         out.append(
