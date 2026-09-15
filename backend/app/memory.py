@@ -231,11 +231,23 @@ def how_much_he_says(user_id: str) -> str:
     Returns "normal" for anybody there is not yet enough of, which is also the
     right answer: the constitution's own default is the middle.
     """
+    # Turns from BEFORE this conversation, which is both the honest measurement
+    # and the one that keeps the answer still.
+    #
+    # Honest, because the question is how this person usually speaks, not how he
+    # has spoken in the last four minutes. And still, because fit.block rides in
+    # the STABLE half of the system prompt — the half a provider caches on the
+    # promise that it is byte-identical turn to turn. A median recomputed every
+    # turn broke that promise in the middle of a conversation: nine long turns
+    # read as `normal`, twelve short ones later the same conversation read as
+    # `terse`, the cached block changed under the cache, and every turn after it
+    # paid full price for the whole character.
+    started = _this_conversation_began(user_id)
     with db.connect() as conn:
         rows = conn.execute(
-            "SELECT content FROM turns WHERE user_id=? AND role='user'"
+            "SELECT content FROM turns WHERE user_id=? AND role='user' AND ts < ?"
             " ORDER BY id DESC LIMIT ?",
-            (user_id, _SPEECH_WINDOW),
+            (user_id, started, _SPEECH_WINDOW),
         ).fetchall()
     if len(rows) < _ENOUGH_TO_JUDGE:
         return "normal"
@@ -586,10 +598,15 @@ def _this_conversation_began(user_id: str) -> float:
     """When the conversation happening right now started.
 
     Walks back through turns until the silence between two of them is long
-    enough to be somebody putting the phone down. Returns now for a person who
-    has said nothing yet, which is the right answer: everything is then still
-    ahead of them.
+    enough to be somebody putting the phone down.
+
+    Returns NOW when no conversation is in progress — nobody has said anything
+    yet, or the last word was long enough ago that the next one will begin a new
+    one. That is the right answer and it was not the first one: returning the
+    start of the LAST conversation, hours after it ended, put every turn of it
+    inside «this conversation» and hid the whole history from both callers.
     """
+    now = time.time()
     with db.connect() as conn:
         stamps = [
             r["ts"] for r in conn.execute(
@@ -597,8 +614,8 @@ def _this_conversation_began(user_id: str) -> float:
                 (user_id, _VISIT_SCAN),
             )
         ]
-    if not stamps:
-        return time.time()
+    if not stamps or now - stamps[0] > NEW_CONVERSATION_GAP:
+        return now
     started = stamps[0]
     for newer, older in zip(stamps, stamps[1:]):
         if newer - older > NEW_CONVERSATION_GAP:
@@ -760,3 +777,23 @@ def _fmt(row: dict) -> str:
     title = row.get("title")
     content = row.get("content", "")
     return f"«{title}» — {content}" if title else content
+
+
+def visits_so_far(user_id: str) -> int:
+    """How many separate conversations this person has had. Cheap and exact.
+
+    Counted in SQL rather than by walking rows in Python: a year of daily use is
+    eighteen thousand turns, and this is asked on every turn. The window
+    function gives each row the timestamp of the one before it, and a visit
+    begins wherever that gap is long enough to be somebody putting the phone
+    down — the same boundary the rest of this module uses.
+    """
+    with db.connect() as conn:
+        row = conn.execute(
+            "SELECT COUNT(*) n FROM ("
+            "  SELECT ts - LAG(ts) OVER (ORDER BY id) AS gap"
+            "  FROM turns WHERE user_id=?"
+            ") WHERE gap IS NULL OR gap > ?",
+            (user_id, NEW_CONVERSATION_GAP),
+        ).fetchone()
+    return int(row["n"] or 0)

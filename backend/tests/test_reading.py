@@ -14,7 +14,7 @@ import time
 
 import pytest
 
-from app import brain, companion, config, identity, matchmaker, persona, reading
+from app import db, brain, companion, config, identity, matchmaker, persona, reading
 
 #: These tests check config.READING_PATH / config.PERSONA_PATH directly, which
 #: are the anonymous user's files — so that is whose reading this is.
@@ -713,3 +713,56 @@ def test_the_day_one_guess_at_closeness_is_dropped_once_it_has_been_watched():
     # and the two drops are independent of each other
     assert "Чем его поднимать" in watched
     assert "коротко и просто" in watched
+
+
+# ── the permanent document is rewritten in visits, not in rows ──────────────
+
+def test_re_reading_is_counted_in_visits_and_not_in_turn_rows():
+    """`REREAD_EVERY` counted rows in `turns`, and a turn is logged twice per
+    exchange. «Roughly a few conversations» was, at twenty-five exchanges a
+    conversation, TWICE A DAY — six hundred rewritings a year of the permanent
+    document, with KEEP_REVISIONS covering under five days of that year."""
+    assert not hasattr(reading, "REREAD_EVERY")
+    assert reading.REREAD_EVERY_VISITS <= 8
+    # eight saved versions must cover more than a token amount of a year
+    assert reading.KEEP_REVISIONS * reading.REREAD_EVERY_VISITS >= 30
+
+
+def test_visits_are_counted_the_same_for_a_talker_and_a_quiet_man(tmp_path, monkeypatch):
+    """The property turns did not have. Five visits is five visits whether
+    somebody talks for an hour or for five minutes — «sixty turns» is a
+    fortnight for one of them and an afternoon for the other."""
+    from app import config, memory
+
+    monkeypatch.setattr(config, "DB_PATH", str(tmp_path / "t.db"))
+    db.init_db()
+
+    now = time.time()
+    with db.connect() as conn:
+        for who, per_visit in (("говорун", 25), ("молчун", 3)):
+            for visit in range(10):
+                for i in range(per_visit):
+                    conn.execute(
+                        "INSERT INTO turns(user_id,role,content,ts,farewell)"
+                        " VALUES (?,?,?,?,0)",
+                        (who, "user", "x", now - (10 - visit) * 86400 + i * 40),
+                    )
+    assert memory.visits_so_far("говорун") == 10
+    assert memory.visits_so_far("молчун") == 10
+
+
+def test_a_pause_inside_one_conversation_is_not_a_second_visit(tmp_path, monkeypatch):
+    """Answering the door must not count as leaving and coming back."""
+    from app import config, memory
+
+    monkeypatch.setattr(config, "DB_PATH", str(tmp_path / "t.db"))
+    db.init_db()
+
+    now = time.time()
+    with db.connect() as conn:
+        for offset in (0, 60, 120, 400, 460):          # all inside ten minutes
+            conn.execute(
+                "INSERT INTO turns(user_id,role,content,ts,farewell) VALUES (?,?,?,?,0)",
+                ("u", "user", "x", now - 3600 + offset),
+            )
+    assert memory.visits_so_far("u") == 1

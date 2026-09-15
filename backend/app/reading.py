@@ -310,15 +310,35 @@ def load(user_id: str) -> dict | None:
 # still holds and change only what the conversation actually contradicted. A
 # reading that swings on one odd evening is worse than one that never moves.
 
-#: Turns of conversation between re-readings. Roughly a few conversations —
-#: often enough to follow somebody, rare enough that one bad evening cannot
-#: rewrite who they are, and cheap enough to be invisible (once per ~30 turns
-#: against a full brain call every turn).
-REREAD_EVERY = 30
+#: VISITS between re-readings — conversations, not turns and not exchanges.
+#:
+#: This counted rows in `turns`, and a turn is logged twice per exchange (his
+#: word and the answer). So «roughly a few conversations» was, measured against
+#: a twenty-five-exchange conversation, TWICE A DAY — about six hundred
+#: re-writings a year, each one a full LLM call rewriting the permanent
+#: document. `KEEP_REVISIONS = 8` then covered under five days of that year:
+#: the undo history the docstring leans on had almost nothing in it.
+#:
+#: Counted in visits because that is the only unit that means the same thing to
+#: two different people. Turns are not: five visits is five visits whether
+#: somebody talks for an hour or for five minutes, while «sixty turns» is a
+#: fortnight for one of them and an afternoon for the other.
+#:
+#: Five: about seventy-five re-readings a year for somebody who talks daily
+#: (it was six hundred), and the same five visits for somebody who talks twice a
+#: month. Rare enough that one bad evening is a fifth of the evidence rather
+#: than a third, and it puts KEEP_REVISIONS — eight saved versions — back to
+#: covering over a month of undo instead of under five days.
+REREAD_EVERY_VISITS = 5
 
 #: Never re-read on a scrap. Below this there is nothing to learn from that
 #: the intake did not already say better.
 REREAD_MIN_TURNS = 20
+
+#: How much conversation the re-reading is shown. Turns rather than visits
+#: because that is what `recent_turns` takes, and generous enough to cover the
+#: visits that triggered it at either density.
+_REREAD_WINDOW = 120
 
 _REREAD_SYSTEM = """Ты уже читал этого человека однажды — по тому, что он рассказал о себе в самом начале, чужому и незнакомому, в первый день.
 
@@ -375,17 +395,25 @@ async def keep_reading(user_id: str) -> None:
         total = conn.execute(
             "SELECT COUNT(*) n FROM turns WHERE user_id=?", (user_id,)
         ).fetchone()["n"]
+    if total < REREAD_MIN_TURNS:
+        return
 
-    since = int(existing.get("_read_at_turn") or 0)
-    if total - since < REREAD_EVERY or total < REREAD_MIN_TURNS:
+    # Visits, not turns. `_read_at_visit` is the count as of the last re-reading;
+    # `_read_at_turn` is the old field and is read once so that a friendship
+    # already under way does not re-read itself on the very next word.
+    visits = memory.visits_so_far(user_id)
+    since = existing.get("_read_at_visit")
+    if since is None:
+        since = visits if existing.get("_read_at_turn") else 0
+    if visits - int(since) < REREAD_EVERY_VISITS:
         return
 
     try:
-        turns = memory.recent_turns(user_id, limit=REREAD_EVERY * 2)
+        turns = memory.recent_turns(user_id, limit=_REREAD_WINDOW)
         fresh = await reread(user_id, existing, turns)
-        fresh["_read_at_turn"] = total
+        fresh["_read_at_visit"] = visits
         save(user_id, fresh)
-        print(f"  ✎ re-read {user_id[:8]} at turn {total}", flush=True)
+        print(f"  ✎ re-read {user_id[:8]} at visit {visits}", flush=True)
     except Exception as e:  # noqa: BLE001 — a background refinement, never a failure
         print(f"  · re-reading skipped ({e})", flush=True)
 

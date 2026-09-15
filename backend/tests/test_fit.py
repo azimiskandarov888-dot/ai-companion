@@ -334,10 +334,14 @@ def test_the_two_dials_are_independent():
 # ── how much he wants said back ─────────────────────────────────────────────
 
 def _turns(user: str, text: str, n: int) -> None:
+    """n turns in conversations that are already over — see memory._says."""
     from app import memory
 
     for _ in range(n):
         memory.log_turn(user, "user", text)
+    with db.connect() as conn:
+        conn.execute("UPDATE turns SET ts = ts - ? WHERE user_id=?",
+                     (2 * 86400, user))
 
 
 def test_the_terse_man_is_answered_tersely_but_it_stays_a_norm():

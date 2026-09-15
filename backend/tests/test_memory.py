@@ -349,8 +349,18 @@ def test_one_persons_history_says_nothing_about_another():
 # twenty is arithmetic rather than an inference.
 
 def _says(user: str, text: str, n: int) -> None:
+    """n turns, in conversations that are already OVER.
+
+    How much somebody says is measured over past visits, not over the last four
+    minutes — both because that is the honest question and because the answer
+    rides in the cached half of the prompt and must not move mid-conversation.
+    So the fixture has to leave the conversation, which is what backdating does.
+    """
     for _ in range(n):
         memory.log_turn(user, "user", text)
+    with db.connect() as conn:
+        conn.execute("UPDATE turns SET ts = ts - ? WHERE user_id=?",
+                     (2 * 86400, user))
 
 
 def test_nothing_is_decided_from_a_first_conversation():
