@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import pytest
 
-from app import allowance
+from app import allowance, db
 
 
 @pytest.fixture(autouse=True)
@@ -112,3 +112,45 @@ def test_waking_clears_the_dozing():
     allowance.wake("napper")
 
     assert allowance.check("napper").allowed
+
+
+# ── a terse man is not stray noise ──────────────────────────────────────────
+
+def _talks_like(user: str, text: str, n: int = 12) -> None:
+    """n turns in conversations that are over, so they are measurable."""
+    from app import memory
+
+    for _ in range(n):
+        memory.log_turn(user, "user", text)
+    with db.connect() as conn:
+        conn.execute("UPDATE turns SET ts = ts - ? WHERE user_id=?", (2 * 86400, user))
+
+
+def test_two_words_are_a_man_answering():
+    """«Ага», «да», «угу», «ладно», «нет» are all under twelve characters, so six
+    of them in a row put somebody to sleep for talking the way he talks."""
+    for said in ("да нет, не надо", "ну ладно", "не знаю"):
+        for _ in range(allowance.DOZE_AFTER_STRAY_TURNS + 2):
+            allowance.note_turn("u", said)
+        assert not allowance.is_asleep("u"), said
+        allowance.wake("u")
+
+
+def test_a_measured_terse_man_is_never_dozed_on_for_single_words():
+    """The app already measures that he talks this way. Asking is the fix — and
+    the asymmetry decides it: dozing on a real person means a voice-only friend
+    saying «кажется, я задремал» and a man who has to find a tap; not dozing on
+    a scrap of television means a few odd replies."""
+    _talks_like("молчун", "ага")
+    for _ in range(allowance.DOZE_AFTER_STRAY_TURNS + 3):
+        allowance.note_turn("молчун", "угу")
+    assert not allowance.is_asleep("молчун")
+
+
+def test_but_somebody_who_does_not_talk_that_way_still_dozes():
+    """The mechanism has to survive, or the microphone answers the television
+    for ever."""
+    _talks_like("обычный", "да нормально всё, вчера в магазин ходил за хлебом")
+    for _ in range(allowance.DOZE_AFTER_STRAY_TURNS + 1):
+        allowance.note_turn("обычный", "угу")
+    assert allowance.is_asleep("обычный")

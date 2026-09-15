@@ -175,6 +175,11 @@ async def _assemble(user_id: str, user_text: str) -> tuple[str, str, list, str |
     # Also before the log, for the same reason: it counts turns, and this one
     # would otherwise count itself.
     acquaintance = memory.how_long_acquainted(user_id)
+    # …and HOW LONG HE HAS BEEN GONE, which nothing used to say. See
+    # memory.how_long_since_last_time. Before the log, like the two above.
+    gap = memory.how_long_since_last_time(user_id)
+    if gap:
+        acquaintance = f"{acquaintance}\n{gap}"
     memory.log_turn(user_id, "user", user_text)
 
     # All of it this person's — including WHICH VOICE he or she speaks in.
@@ -197,13 +202,6 @@ async def _assemble(user_id: str, user_text: str) -> tuple[str, str, list, str |
     # facts, noticing is his job and he is good at it. See occasions.py.
     today = occasions.today_block(user_id, elder_facts)
     mem_ctx = f"{today}\n\n{mem_ctx}".strip() if mem_ctx else today
-
-    # How much of his own life THIS person wants — closed, normal or open,
-    # learned from what has actually been watched and from anything he simply
-    # asked for outright. Read once and handed to everything that talks about
-    # him, so his week, his mood and the standing calibration cannot end up
-    # giving three different answers in the same prompt. See mood.openness.
-    wants = mood.openness(user_id)
 
     system_stable, system_variable = companion.build_system_parts(
         persona_block=persona_block,
@@ -231,13 +229,13 @@ async def _assemble(user_id: str, user_text: str) -> tuple[str, str, list, str |
         alert_level=alert.get("level", ""),
         # How HE is today, carried over from their last exchange and fading on
         # its own since. The one thing in the prompt that is not about her.
-        feeling_block=feeling.block(user_id, openness=wants),
+        feeling_block=feeling.block(user_id),
         # His throat and his tiredness — facts about him, never instructions to
         # cough. The valence is his own mood arriving in his breathing, which is
         # where a mood actually goes. See body.py.
         # What is going on in his week — a cold, a brother visiting — with its
         # own shape over days. Background, never the topic; see life.py.
-        life_block=life.block(user_id, openness=wants),
+        life_block=life.block(user_id),
         body_block=body.block(user_id, valence=feeling.now(user_id)["valence"]),
         # Rules that only apply to the turn in front of him — the game they are
         # playing, the news he asked for. Empty nearly always; see situations.py

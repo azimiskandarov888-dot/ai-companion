@@ -299,6 +299,51 @@ def how_long_acquainted(user_id: str) -> str:
             "которую вы нажили вместе. Не отыгрывай её назад.")
 
 
+#: Below this a gap is just life — he was busy, he slept in. Above it, it is a
+#: thing that happened, and a friend knows it happened.
+NOTICED_GAP = 3 * 86400
+
+
+def how_long_since_last_time(user_id: str) -> str:
+    """How long he has been gone. Empty unless it was long enough to matter.
+
+    NOTHING in the prompt used to say this. A woman whose last word was
+    sixty-two days ago got «Вы знакомы давно» and twelve UNDATED turns from
+    July, handed over as though they were the last twelve minutes — while the
+    constitution spent two thousand characters on how to handle an absence and
+    fit.py carried a whole confirmed dial for it. All of that machinery stood on
+    a fact the model was never given.
+
+    It says the length and nothing else. What to DO with it is per person and
+    lives where per-person things live (mood.closeness, rendered by fit.py); the
+    constitution's default, for everybody else, is to be glad he is here and say
+    nothing about the gap.
+    """
+    with db.connect() as conn:
+        row = conn.execute(
+            "SELECT MAX(ts) last FROM turns WHERE user_id=?", (user_id,)
+        ).fetchone()
+    gap = time.time() - (row["last"] or 0.0) if row and row["last"] else 0.0
+    if gap < NOTICED_GAP:
+        return ""
+    return f"Вы не разговаривали {_days(gap / 86400.0)}."
+
+
+def _days(days: float) -> str:
+    """«три дня», «две недели», «почти два месяца» — never a number of hours."""
+    if days < 14:
+        n = int(round(days))
+        if n % 10 == 1 and n % 100 != 11:
+            return f"{n} день"
+        if n % 10 in (2, 3, 4) and n % 100 not in (12, 13, 14):
+            return f"{n} дня"
+        return f"{n} дней"
+    if days < 60:
+        n = int(round(days / 7))
+        return f"около {n} недель" if n >= 5 else f"{n} недели"
+    return f"около {int(round(days / 30))} месяцев"
+
+
 # --------------------------------------------------------------------------- #
 # Storing what the companion learns
 # --------------------------------------------------------------------------- #

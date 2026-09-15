@@ -42,6 +42,11 @@ SECONDS_PER_DAY: int = config.DAILY_SECONDS
 DOZE_AFTER_STRAY_TURNS: int = 6
 #: A transcript shorter than this is background noise, not someone talking.
 MIN_MEANINGFUL_CHARS: int = 12
+
+#: …or this many words, whichever comes first. Two, because one word is
+#: what a microphone picks up off the television and two is somebody
+#: answering: «да нет», «не знаю», «ну ладно» are all a man talking.
+MIN_MEANINGFUL_WORDS: int = 2
 #: Once asleep, he stays asleep until woken from the app.
 _asleep: set[str] = set()
 _stray: dict[str, int] = {}
@@ -127,7 +132,30 @@ def note_turn(user_id: str, transcript: str) -> None:
     only trips when NOTHING has looked like conversation for several turns in a
     row, which is what a room with a television sounds like.
     """
-    meaningful = len(transcript.strip()) >= MIN_MEANINGFUL_CHARS
+    # Not a length. «Ага», «да», «не знаю», «угу», «ладно» are all under
+    # twelve characters, so six of them in a row put a terse man to sleep
+    # for talking the way he talks — and this app measures elsewhere
+    # (memory.how_much_he_says) that some people do. A word is the unit:
+    # a stray cough or a scrap of a television is not two words, and
+    # «да нет, не надо» is.
+    said = transcript.strip()
+    meaningful = len(said) >= MIN_MEANINGFUL_CHARS or len(said.split()) >= MIN_MEANINGFUL_WORDS
+    if not meaningful and said:
+        # AND THE LAST WORD IS HIS. «Ага», «да», «угу», «ладно», «нет» are all
+        # under every threshold above — and for somebody who talks that way they
+        # are not strays, they are how he answers. The app already measures
+        # whether he does; asking is the whole fix.
+        #
+        # The asymmetry decides it. Dozing on a real person means a voice-only
+        # friend saying «кажется, я задремал» mid-conversation, and a man who has
+        # to find a tap to wake him. Not dozing on a scrap of television means a
+        # few odd replies. The second is much the cheaper mistake.
+        from . import memory
+
+        try:
+            meaningful = memory.how_much_he_says(user_id) == "terse"
+        except Exception:  # noqa: BLE001 — never let this break a turn
+            meaningful = False
     if meaningful:
         _stray.pop(user_id, None)
         return

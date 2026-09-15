@@ -136,7 +136,7 @@ def test_the_floors_outrank_the_calibration():
 
     rules = companion.BEHAVIOR_RULES
     floor_at = rules.index("ГДЕ ПОДСТРОЙКА ЗАКАНЧИВАЕТСЯ")
-    fit_at = rules.index("В ЧЁМ БЫТЬ ПОХОЖИМ НА НЕГО")
+    fit_at = rules.index("В ЧЁМ БЫТЬ ПОХОЖИМ")
     assert floor_at < fit_at
 
     for must_survive in (
@@ -168,10 +168,14 @@ def test_norms_are_never_written_as_ceilings():
     a cap contradicts the finding the whole file rests on."""
     from app import companion
 
-    rules = companion.BEHAVIOR_RULES
-    assert "ЭТО НОРМА, А НЕ ПОТОЛОК" in rules
-    assert "Норму НАДО пробивать" in rules
-    assert "хоть десять вопросов подряд" in rules
+    # Said per person, by fit.py, where it can actually mean something — rather
+    # than as a meta-rule in the shared prompt whose only job was to defuse
+    # numbers stated elsewhere in the same prompt.
+    _seen("u", "не_зашло_что_позвал", 4)
+    assert "норма, а не запрет" in fit.block("u")
+    _seen("v", "устал_от_расспросов", 4)
+    assert "если он сам разговорился" in fit.block("v")
+    assert "ЭТО НОРМА, А НЕ ПОТОЛОК" not in companion.BEHAVIOR_RULES
 
 
 def test_scarcity_is_honesty_and_never_a_technique():
@@ -180,8 +184,8 @@ def test_scarcity_is_honesty_and_never_a_technique():
     rules = companion.BEHAVIOR_RULES
     assert "ЧЕМ РЕЖЕ — ТЕМ ДОРОЖЕ" in rules
     # the line that separates a friend from a method
-    assert "НЕ придерживаешь похвалу нарочно" in rules
-    assert "хвалишь то, что этого стоит" in rules
+    assert "НЕ ПРИДЕРЖИВАЙ ПОХВАЛУ НАРОЧНО" in rules
+    assert "Хвали то, что этого стоит" in rules
     # and the inverse: presence is never rationed
     assert "экономить — жестокость" in rules
 
@@ -394,3 +398,28 @@ def test_hearing_trouble_is_one_question_asked_in_two_places():
     _seen("u", "не_расслышал", 1)
     assert fit.hard_of_hearing("u") is True
     assert "ТРУДНО РАЗБИРАТЬ РЕЧЬ" in fit.block("u")
+
+
+def test_length_is_one_answer_and_not_two_opinions():
+    """A talkative man who is also hard of hearing — an entirely ordinary
+    combination, and arguably the modal user of this app — used to get
+    «разворачивайся, норма "одна-три фразы" не про него» and «говори короче и
+    проще, по одной мысли за фразу» as adjacent bullets, with nothing anywhere
+    to arbitrate. Hearing wins, because it is not a preference."""
+    _turns("u", " ".join(["слово"] * 40), 12)        # measures as talkative
+    assert "ОН ГОВОРИТ ПОДРОБНО" in fit.block("u")
+
+    _seen("u", "просил_помедленнее", 1)
+    _seen("u", "не_расслышал", 1)
+    said = fit.block("u")
+    assert "ТРУДНО РАЗБИРАТЬ РЕЧЬ" in said
+    assert "ОН ГОВОРИТ ПОДРОБНО" not in said
+    assert "ОН ГОВОРИТ КОРОТКО" not in said          # nor the opposite verdict
+
+
+def test_a_terse_man_who_hears_badly_is_not_contradicted_either():
+    _turns("v", "ага", 12)
+    _seen("v", "просил_помедленнее", 2)
+    said = fit.block("v")
+    assert "ОН ГОВОРИТ КОРОТКО" in said              # these two agree
+    assert "ТРУДНО РАЗБИРАТЬ РЕЧЬ" in said

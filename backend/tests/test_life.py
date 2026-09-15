@@ -146,35 +146,20 @@ def test_sweeping_twice_does_not_write_it_down_twice():
 
 # ── it is background, never the topic ──────────────────────────────────────
 
-def test_he_does_not_announce_it_but_does_not_hide_it_either():
-    """The first version capped this at «one sentence, only if asked», which was
-    a ceiling where a norm belonged — and stricter than the constitution, which
-    already says he sometimes tells a warm story from his own life.
-
-    Being the audience is a REST. Having to be interesting about your own week
-    is work, and for somebody whose week was four walls it is work with nothing
-    to work from — so an hour of somebody else's week can be the kinder thing."""
-    _running(days_ago=1)
-    said = life.block(U)
-    assert "СЛЫШНО РАНЬШЕ, ЧЕМ СКАЗАНО" in said
-    assert "Не начинай с этого" in said
-    # …and then the other half, which the first version was missing entirely
-    assert "рассказывай как есть" in said
-    assert "сколько ему хочется слушать" in said
-    assert "не отделывайся одной фразой" in said
-
-
 def test_his_week_is_never_made_her_problem():
     """The Stanford finding, pinned. Invite a lonely person to worry about a
     fiction and the fiction has taken something real."""
-    _running(days_ago=1)
-    said = life.block(U)
-    # The line is not length — it is what he WANTS, and who moved first.
-    assert "НЕ В ДЛИНЕ, А В ТОМ, ЧЕГО ТЫ ХОЧЕШЬ" in said
-    assert "сам, по своей воле, с этим не приходи" in said
-    assert "ничего не проси" in said
+    from app import companion
+
+    rules = companion.BEHAVIOR_RULES
+    # The line is not length — it is what he WANTS, and who moved first. Said
+    # once, in the constitution, because it is about him rather than about this
+    # particular week — and it used to arrive here AND in feeling.py.
+    assert "не в длине, а в том, чего ты хочешь" in rules
+    assert "сам, по своей воле, с этим не приходи" in rules
+    assert "ничего не проси" in rules
     # And if she is the one having a bad day, his does not exist.
-    assert "твоего просто нет" in said
+    assert "твоего просто нет" in rules
 
 
 def test_when_she_insists_he_stops_deflecting():
@@ -183,111 +168,64 @@ def test_when_she_insists_he_stops_deflecting():
     wrong and wants IN. Brushing them off twice is not modesty, it is refusing
     them — and being the one who comforts, rather than the one comforted, is
     often the scarcer thing for a person whose days have nobody in them."""
-    _running(days_ago=1)
-    said = life.block(U)
-    assert "ЕСЛИ ОН САМ ЛЕЗЕТ И НЕ ОТСТАЁТ" in said
-    assert "Отговориться второй раз" in said
-    assert "Дай ему тебя пожалеть" in said
-    assert "быть тем, кто утешает" in said
+    from app import companion
+
+    rules = companion.BEHAVIOR_RULES
+    assert "ЕСЛИ ОН САМ НЕ ОТСТАЁТ И ВЫСПРАШИВАЕТ" in rules
+    assert "Отговориться второй раз" in rules
+    assert "быть тем, кто утешает" in rules
 
 
-def test_it_comes_out_in_pieces_and_never_as_a_pile():
-    """Permission without a SHAPE was still wrong. Somebody who said nothing and
-    then unloads the lot frightens you worse than the thing he unloaded, because
-    now you know it was being held back from you.
-
-    This belongs to the MIDDLE state alone, and that is the whole point of the
-    dial: the other two have no pile to drop. Nothing was being held from the
-    open one, and nothing is being told to the closed one."""
-    _running(days_ago=1)
-    said = life.block(U)
-    assert "по чуть-чуть, а не горой" in said
-    assert "Сперва полфразы" in said
-    assert "Пусть он сам вытянет" in said
-
-
-# ── one dial, three people ──────────────────────────────────────────────────
+# ── one dial, and NOT in this file ──────────────────────────────────────────
 #
-# The complaint that produced this: the same choreography was being read to
-# everybody. One man is in a bad way and does not want to hear that anybody
-# else is having a hard week either; the next would far rather listen to his
-# friend's week for an hour than account for his own. Nothing about them is the
-# same, and «сперва полфразы, потом ещё немного» was answering a question
-# neither of them had asked.
+# It used to be here, and in feeling.py, and in fit.py — one instruction in
+# three places, worded three ways, all arriving in the same prompt. Each
+# module's comment claimed it had shortened itself to avoid repeating the
+# others; shortening each copy was the wrong fix. fit.py keeps it, because
+# fit.py is the one that is there on every turn.
 
-def test_the_open_one_is_told_without_being_asked():
-    """He has shown he wants in. Waiting to be asked is then the wrong shape —
-    and «по чуть-чуть» is not just unnecessary, it is the wrong instruction."""
+def test_this_file_no_longer_decides_how_much_he_tells():
+    import inspect
+
+    assert "openness" not in inspect.signature(life.block).parameters
+
+
+def test_what_stays_is_what_is_specific_to_a_visible_multi_day_event():
+    """Sideways telling, which no amount of «how much» covers: a meaningful
+    sigh and a dropped «да так, ничего» are the same story told from behind.
+    And its other side — not telling is not denying, and a cheerful lie from
+    somebody who is plainly not cheerful is the one thing a lonely person is
+    expert at hearing."""
     _running(days_ago=1)
-    said = life.block(U, openness="open")
-    assert "ЗАГОВОРИ ПЕРВЫМ" in said
-    assert "подробно" in said
-    assert "Не начинай с этого" not in said
-    assert "по чуть-чуть, а не горой" not in said
-
-
-def test_the_closed_one_is_not_told_at_all_and_is_not_lied_to_either():
-    """The hardest of the three to get right. «Не рассказывай» must not become
-    «врать, что всё хорошо» — a cheerful lie from somebody who is plainly not
-    cheerful is the exact thing a lonely person is expert at hearing. And the
-    meaningful sigh is not a loophole: it is the same telling, done sideways."""
-    _running(days_ago=1)
-    said = life.block(U, openness="closed")
-    assert "НИ СЛОВА ПЕРВЫМ" in said
-    assert "не намекай" in said
-    assert "не вздыхай" in said
+    said = life.block(U)
+    assert "НЕ НАМЕКАЙ НА ЭТО БОКОМ" in said
+    assert "не вздыхай многозначительно" in said
     assert "врать «всё отлично» нельзя" in said
-    # and none of the middle state's choreography survives into it
-    assert "Сперва полфразы" not in said
-    assert "Не начинай с этого" not in said
+    # …and the shape, which is about this event and not about how much of it
+    assert "НЕ ГОРОЙ" in said
+    assert "Сперва полфразы" in said
 
 
-def test_a_person_who_will_not_let_it_go_wins_even_against_the_closed_setting():
-    """The dial decides whom he TELLS. It does not decide what happens when the
-    person in front of him insists — and it matters most exactly where a rigid
-    reading is most dangerous: «не рассказывай ему» must not become stonewalling
-    somebody who is asking directly for the third time."""
+def test_the_two_modules_no_longer_argue_in_one_prompt():
+    """fit.py telling him to lead with his own week while this told him not to
+    was a contradiction that existed only in the assembly — each file was
+    individually sensible."""
     _running(days_ago=1)
-    for want in ("closed", "normal"):
-        said = life.block(U, openness=want)
-        assert "ЕСЛИ ОН САМ ЛЕЗЕТ И НЕ ОТСТАЁТ" in said, want
-        assert "кем бы он ни был" in said, want
-    # …and it is dropped for the open one, where it is dead text: it describes a
-    # deflection that cannot happen with somebody he was told not to deflect
-    # with, and dead text in a prompt is paid for out of the live text.
-    assert "ЕСЛИ ОН САМ ЛЕЗЕТ" not in life.block(U, openness="open")
+    said = life.block(U)
+    for gone in ("Не начинай с этого", "ЗАГОВОРИ ПЕРВЫМ", "НИ СЛОВА ПЕРВЫМ"):
+        assert gone not in said, gone
 
 
-def test_what_he_is_doing_is_the_same_question_for_everybody():
-    """Length is the dial's to decide. What he WANTS is not, and the paragraph
-    that says so must not quietly hand out a length as well — «этого можно
-    сколько угодно» told the closed one the opposite of the line above it."""
+def test_this_file_carries_facts_and_not_rules_about_him():
+    """Length is fit.py's to decide; the boundary is the constitution's. What is
+    left here is this week and the two traps that belong to having one."""
     _running(days_ago=1)
-    for want in ("closed", "normal", "open"):
-        said = life.block(U, openness=want)
-        assert "НЕ В ДЛИНЕ, А В ТОМ, ЧЕГО ТЫ ХОЧЕШЬ" in said, want
-        assert "не делай из своей недели беды" in said, want
-        assert "сколько ЕМУ хочется слушать" in said, want
-        assert "можно сколько угодно" not in said, want
-        # and if she is the one having a bad day, his does not exist
-        assert "твоего просто нет" in said, want
-
-
-def test_the_facts_of_his_week_are_the_same_for_everybody():
-    """What is happening to him does not depend on who is listening. Only how
-    much of it is said out loud does."""
-    _running(days_ago=1)
-    for want in ("closed", "normal", "open"):
-        said = life.block(U, openness=want)
-        assert "разболелся как следует" in said, want
-        assert "часто шмыгает" in said, want
-
-
-def test_an_unknown_dial_setting_falls_back_to_the_middle():
-    """Nothing should be able to hand him a state nobody wrote — and if it does,
-    the answer is the one that is safe for a stranger, not silence."""
-    _running(days_ago=1)
-    assert life.block(U, openness="кто-то-напутал") == life.block(U, openness="normal")
+    said = life.block(U)
+    for moved in ("НЕ В ДЛИНЕ", "набиваться на жалость", "ЕСЛИ ОН САМ ЛЕЗЕТ",
+                  "твоего просто нет"):
+        assert moved not in said, moved
+    assert "разболелся как следует" in said
+    assert "НЕ НАМЕКАЙ НА ЭТО БОКОМ" in said
 
 
 def test_the_writer_is_forbidden_from_inventing_trouble():

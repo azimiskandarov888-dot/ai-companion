@@ -207,43 +207,34 @@ def test_his_day_is_never_made_her_problem():
         assert "отвечай честно и по-настоящему" in said
         # …and never a flat ban: if she will not let it go, he stops deflecting.
         # Being the one who comforts is often what she is actually short of.
-        assert "не отстаёт и выспрашивает" in said
-        assert "не отговаривайся второй раз" in said
+    # The boundary itself now lives in the constitution, once, near the top —
+    # it is about him rather than about today, it is the same for everybody, and
+    # it used to arrive here AND in life.py in different words.
+    from app import companion
+
+    rules = companion.BEHAVIOR_RULES
+    assert "ГРАНИЦА, КОГДА РАССКАЗЫВАЕШЬ СВОЁ" in rules
+    assert "ЕСЛИ ОН САМ НЕ ОТСТАЁТ И ВЫСПРАШИВАЕТ" in rules
+    assert "твоего просто нет" in rules
 
 
-def test_his_mood_is_told_to_the_same_dial_as_his_week():
-    """A mood is smaller than a week, so the branches are a sentence each — but
-    it is the same three people, and «одно и то же ко всем» was the complaint."""
-    feeling.record(U, {"valence": -2, "arousal": -2, "note": "не спалось"})
+def test_this_file_no_longer_decides_how_much_he_tells():
+    import inspect
 
-    closed = feeling.block(U, openness="closed")
-    assert "ему сейчас не до чужого" in closed
-    assert "Сам не заговаривай" in closed
-    assert "Не начинай с этого" not in closed
-
-    open_ = feeling.block(U, openness="open")
-    assert "от него не прячь" in open_
-    assert "Скажи сам" in open_
-
-    # A clause each, not a paragraph. What this person wants of him in general
-    # is fit.py's to say, once, on every turn — saying it here as well would be
-    # the same sentence three times in one prompt.
-    assert max(len(closed), len(open_)) < len(feeling.block(U))
-
-    # what is actually going on with him does not depend on who is listening
-    for said in (closed, open_, feeling.block(U)):
-        assert "не спалось" in said
-        assert "Не набивайся на жалость" in said
-    # insisting still wins — except with the one man who was told not to deflect
-    # in the first place, for whom it is dead text
-    assert "не отговаривайся второй раз" in closed
-    assert "не отговаривайся второй раз" in feeling.block(U)
-    assert "не отговаривайся второй раз" not in open_
+    assert "openness" not in inspect.signature(feeling.block).parameters
 
 
-def test_an_unknown_dial_setting_falls_back_to_the_middle():
-    feeling.record(U, {"valence": -2, "arousal": -2, "note": "не спалось"})
-    assert feeling.block(U, openness="чепуха") == feeling.block(U, openness="normal")
+def test_it_no_longer_denies_the_cause_when_the_cause_is_him():
+    """«Это ТВОЁ и не из-за него» was false in exactly the case this mechanism
+    exists to catch. learn.py's own example of a non-zero shift is «он на меня
+    осерчал», so the line printed directly under «Отчего: он на меня накричал»
+    — instructing him to deny, out loud, the one thing that had just happened."""
+    feeling.record(U, {"valence": -2, "arousal": -1, "note": "он на меня накричал"})
+    said = feeling.block(U)
+    assert "он на меня накричал" in said
+    assert "не из-за него" not in said
+    # …and what it should say instead is still there
+    assert "Не начинай с этого и не отчитывайся" in said
 
 
 def test_the_verb_that_differs_follows_the_direction():

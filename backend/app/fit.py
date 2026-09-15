@@ -228,6 +228,15 @@ def block(user_id: str) -> str:
 
         says = memory.how_much_he_says(user_id)
 
+    # ONE ANSWER, NOT TWO OPINIONS. These used to be independent `if`s, so a
+    # talkative man who was also hard of hearing — the modal user of this app —
+    # got «разворачивайся, норма "одна-три фразы" не про него» and «говори
+    # короче и проще, по одной мысли за фразу» as adjacent bullets, with nothing
+    # anywhere to arbitrate. Hearing wins, because it is not a preference: he
+    # cannot follow long sentences whether or not he enjoys them.
+    if says == "talkative" and hard_of_hearing(user_id):
+        says = "normal"
+
     if says == "terse":
         out.append(
             "ОН ГОВОРИТ КОРОТКО — отвечай так же: одна фраза, две. Длинный "

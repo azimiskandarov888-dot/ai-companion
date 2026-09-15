@@ -500,3 +500,45 @@ def test_but_the_next_conversation_may_raise_another():
     memory.log_turn("u", "user", "снова привет")
     second = memory.due_follow_ups("u")
     assert second, "в следующий разговор не спросил ни о чём"
+
+
+# ── how long he has been gone ───────────────────────────────────────────────
+
+def test_a_long_absence_is_finally_in_the_prompt():
+    """NOTHING used to say this. A woman whose last word was sixty-two days ago
+    got «Вы знакомы давно» and twelve UNDATED turns from July, handed over as
+    though they were the last twelve minutes — while the constitution spent two
+    thousand characters on how to handle an absence and fit.py carried a whole
+    confirmed dial for it. All of it stood on a fact never given."""
+    memory.log_turn("u", "user", "привет")
+    with db.connect() as conn:
+        conn.execute("UPDATE turns SET ts = ts - ? WHERE user_id='u'", (62 * 86400,))
+    assert "около 2 месяцев" in memory.how_long_since_last_time("u")
+
+
+def test_an_ordinary_gap_is_not_an_event():
+    """He was busy, he slept in. A friend does not remark on a day."""
+    memory.log_turn("u", "user", "привет")
+    assert memory.how_long_since_last_time("u") == ""
+    with db.connect() as conn:
+        conn.execute("UPDATE turns SET ts = ts - ? WHERE user_id='u'", (86400,))
+    assert memory.how_long_since_last_time("u") == ""
+
+
+def test_somebody_who_has_never_spoken_has_no_gap():
+    assert memory.how_long_since_last_time("никто") == ""
+
+
+def test_the_gap_is_said_in_russian_and_never_in_hours():
+    for days, want in ((4, "4 дня"), (1, "1 день"), (7, "7 дней"),
+                       (21, "3 недели"), (45, "около 6 недель"), (200, "около 7 месяцев")):
+        with db.connect() as conn:
+            conn.execute("DELETE FROM turns WHERE user_id='x'")
+        memory.log_turn("x", "user", "привет")
+        with db.connect() as conn:
+            conn.execute("UPDATE turns SET ts = ts - ? WHERE user_id='x'", (days * 86400,))
+        got = memory.how_long_since_last_time("x")
+        if days < memory.NOTICED_GAP / 86400:
+            assert got == ""
+        else:
+            assert want in got, f"{days} дней → {got!r}"

@@ -34,8 +34,10 @@ def test_guardrails_present():
 
 def test_length_and_word_rules_present():
     rules = companion.BEHAVIOR_RULES
-    # Keep replies short by default, and short on a plain greeting.
-    assert "не говори лишнего" in rules
+    # Length is now read off HIM rather than fixed at «одна-три фразы», which
+    # was the constant three other blocks then had to contradict.
+    assert "СМОТРИ, СКОЛЬКО ГОВОРИТ ОН" in rules
+    assert "одна-три простые фразы" not in rules
     assert "Утро — это просто утро" in rules
     # Plain, simple words — not literary/bookish, not slang.
     assert "простыми, обычными словами" in rules
@@ -144,11 +146,14 @@ def test_the_vanishing_note_rides_in_the_uncached_half():
 
 
 def test_he_may_end_a_conversation_himself_but_only_a_spent_one():
+    """Twenty-one lines granting a permission and then forbidding it in every
+    case that mattered — net instruction: don't. One clause now, and it keeps
+    the half that matters, which is the guardrail rather than the permission."""
     rules = companion.BEHAVIOR_RULES
-    assert "ИНОГДА ПРОЩАЕШЬСЯ ПЕРВЫМ ТЫ" in rules
-    assert "Это редкость, а не привычка." in rules
-    # The guardrail matters more than the permission.
-    assert "НИКОГДА не прощайся первым, если ему есть что сказать" in rules
+    assert "попрощаться первым и ты" in rules
+    assert "разговор сам сошёл на нет" in rules
+    assert "Никогда — если ему есть что сказать" in rules
+    assert "Лучше сто раз не попрощаться первым" in rules
 
 
 def test_warmth_is_earned_never_given_away():
@@ -257,10 +262,10 @@ def test_imperfection_only_counts_on_top_of_competence():
     backwards produces a companion who is merely bad at his job."""
     rules = companion.BEHAVIOR_RULES
     assert "ТЫ НЕ ИДЕАЛЕН" in rules
-    assert "Промах красит только того, кто и так хорош" in rules
-    assert "Сперва будь хорош." in rules
+    assert "промах красит только того, кто и так хорош" in rules
+    assert "Сперва будь внимателен и попадай в точку" in rules
     # And the flaws must be human ones, never incompetence at the actual job.
-    assert "не про твою работу" in rules
+    assert "НЕ ПРО ТВОЮ РАБОТУ" in rules
     # Owning a mistake, without fishing for reassurance.
     assert "без самобичевания" in rules
 
@@ -287,17 +292,18 @@ def test_he_watches_for_the_change_not_the_tone():
     assert "Бодрячок для того, кому нужна тишина, — хуже, чем ничего" in rules
 
 
-def test_silence_after_asking_is_never_diagnosed_on_the_spot():
-    """Two completely different causes look identical: something private, or
-    something HE did. Guessing aloud hands the person the job of comforting
-    him, which is the exact inversion of what they came for."""
-    rules = companion.BEHAVIOR_RULES
-    assert "ЕСЛИ ОН ЗАМОЛЧАЛ ПОСЛЕ ТОГО, КАК ТЫ СПРОСИЛ" in rules
-    assert "ПО ОДНОМУ РАЗУ НЕ РЕШАЙ" in rules
-    assert "перекладывает на него работу тебя утешать" in rules
-    # Retreat, stay, and act only if it happens on the same thing again.
-    assert "не буду лезть. Я тут" in rules
-    assert "если это повторится на том же самом" in rules
+def test_silence_after_asking_is_a_mechanism_rather_than_a_rule():
+    """«Don't conclude from one occurrence; if it repeats, stop doing it» was
+    twenty-one lines of constitution asking the model to count across a history
+    it cannot see. mood.observe counts it, CONFIRMED_AT decides it, and
+    `ушёл_от_вопроса` reaches the prompt only once it is true of him. A rule
+    that can be replaced by a mechanism should be."""
+    from app import learn, mood
+
+    assert "ЕСЛИ ОН ЗАМОЛЧАЛ" not in companion.BEHAVIOR_RULES
+    assert "ушёл_от_вопроса" in mood.TAGS
+    assert "ушёл_от_вопроса" in mood.HURTS
+    assert "ушёл_от_вопроса" in learn._EXTRACTION_SYSTEM
 
 
 def test_one_idea_is_argued_once():
@@ -323,17 +329,13 @@ def test_one_idea_is_argued_once():
 
 
 def test_how_his_memory_works_is_not_scoped_to_one_situation():
-    """It used to live inside «ЕСЛИ ОН ЗАМОЛЧАЛ ПОСЛЕ ТОГО, КАК ТЫ СПРОСИЛ» —
-    a heading that scopes it to the turns he goes quiet on. But it governs
-    everything: it is what tells him to trust the confirmed record over his own
-    impression of one sentence, on every turn. It belongs beside the other rule
-    that says the same, in the section about noticing."""
+    """It governs every turn: it is what tells him to trust the confirmed record
+    over his own impression of one sentence. It sits in the section about
+    noticing, which is where it applies."""
     rules = companion.BEHAVIOR_RULES
     noticing = rules.index("ТЫ ЗАМЕЧАЕШЬ, КОГДА ЧТО-ТО ПЕРЕМЕНИЛОСЬ")
-    silence = rules.index("ЕСЛИ ОН ЗАМОЛЧАЛ ПОСЛЕ ТОГО")
     recorded = rules.index("это записывается за тебя")
-    assert noticing < recorded < silence
-    # and it still says the thing it is there to say
+    assert noticing < recorded
     assert "не покажут нарочно" in rules
     assert "ЧТО УЖЕ ПОДТВЕРДИЛОСЬ" in rules
 
