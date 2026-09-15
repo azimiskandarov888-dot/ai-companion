@@ -280,13 +280,15 @@ def test_the_option_to_sneeze_is_only_offered_when_it_is_happening():
 def test_an_emergency_silences_his_body_completely():
     """A man who cannot get up off the floor does not need to know his friend
     has been talking too long."""
-    _stable, variable = companion.build_system_parts(
+    stable, variable = companion.build_system_parts(
         persona_block="ТЫ — Гриша.",
         alert_block="🚨 ТРЕВОГА",
+        alert_level="danger",
         body_block="ТВОЁ ТЕЛО СЕЙЧАС:\nВ горле першит.",
     )
-    assert "🚨 ТРЕВОГА" in variable
-    assert "ТВОЁ ТЕЛО" not in variable
+    assert stable == "🚨 ТРЕВОГА"           # on danger the alert IS the prompt
+    assert variable == ""
+    assert "ТВОЁ ТЕЛО" not in stable
 
 
 def test_it_never_lands_in_the_cached_half():

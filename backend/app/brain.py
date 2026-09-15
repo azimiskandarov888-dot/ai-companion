@@ -75,14 +75,27 @@ _LIVE_REPLY_TIMEOUT = 20.0
 _READING_TIMEOUT = 90.0
 
 #: Substrings (lowercase) that mean the user is asking about the world right
-#: now, which his own written life can't answer. Deliberately narrow: a missed
-#: match just means he answers from his own head — which is what a person
-#: without a phone in his hand would do anyway, and perfectly in character.
+#: now, which his own written life can't answer.
+#:
+#: WHICH WAY TO ERR, and it is not the way this list first went. A miss costs
+#: nothing: he answers from his own head, which is what a person without a
+#: phone in his hand would do anyway and is perfectly in character. A false
+#: match costs a great deal — it attaches a search tool, switches to the slow
+#: model, and takes the turn OFF the streaming path entirely (see main.py), so
+#: the person waits noticeably longer. And `situations._NEWS` then tells him
+#: «он правда спросил», which on a false match is simply untrue.
+#:
+#: Measured, the old list said yes to all of these:
+#:     «температура тридцать восемь, вторые сутки»   ← a fever, routed to weather
+#:     «у нас всю неделю погода дрянь»
+#:     «прогноз у меня один — колено ноет, значит дождь»
+#: The first of those is the one that matters: `safety.py` lists «высокий жар»
+#: as a danger sign, and the same words were being read as a question about the
+#: forecast. «температур» and «прогноз» are gone for that reason — both are
+#: ordinary words about a body and about a hunch.
 _FRESH_INFO_HINTS = (
     "новост",          # новости, новостях…
     "погод",           # погода, погоду…
-    "прогноз",
-    "температур",
     "курс доллара",
     "курс евро",
     "курс рубля",
@@ -91,11 +104,21 @@ _FRESH_INFO_HINTS = (
     "что нового в мире",
 )
 
+#: And the subject is not enough: he has to be ASKING. «Погода дрянь» is a man
+#: complaining about the weather; «какая там погода?» is a man asking for it.
+#: The difference is the whole of this feature, and it used not to be looked at.
+_ASKING = (
+    "?", "что ", "чего ", "как ", "кака", "какой", "какое", "какие",
+    "скажи", "расскажи", "узна", "посмотри", "глянь", "не знаешь",
+)
+
 
 def wants_fresh_info(text: str) -> bool:
     """Does this message need the real, current world (news/weather/prices)?"""
-    lowered = text.lower()
-    return any(hint in lowered for hint in _FRESH_INFO_HINTS)
+    lowered = (text or "").lower()
+    if not any(hint in lowered for hint in _FRESH_INFO_HINTS):
+        return False
+    return any(a in lowered for a in _ASKING)
 
 
 def _get_client() -> AsyncAnthropic:

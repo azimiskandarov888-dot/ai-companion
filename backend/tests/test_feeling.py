@@ -278,7 +278,7 @@ def test_on_a_good_day_he_is_told_not_to_drag_her_into_it():
 # ── where it sits, and what silences it ─────────────────────────────────────
 
 def test_it_reaches_him_after_where_they_stand_and_before_the_facts():
-    _stable, variable = companion.build_system_parts(
+    stable, variable = companion.build_system_parts(
         persona_block="ТЫ — Гриша.",
         acquaintance="вы знакомы давно",
         feeling_block="КАК ТЫ СЕГОДНЯ САМ:\nТебе сегодня хорошо.",
@@ -288,16 +288,32 @@ def test_it_reaches_him_after_where_they_stand_and_before_the_facts():
     assert variable.index("КАК ТЫ СЕГОДНЯ САМ") < variable.index("ты сварщик")
 
 
+def test_a_worry_does_NOT_silence_his_own_weather():
+    """A back that has ached for three weeks is «не сию минуту» by the watcher's
+    own definition. It used to cost the man his companion's mood, his week and
+    his voice — nearly three thousand characters of him — on the turn he
+    mentioned it, with all of it reappearing next turn when the watcher said
+    «none». The guard was written for danger and applied to both."""
+    _, variable = companion.build_system_parts(
+        feeling_block="КАК ТЫ СЕГОДНЯ САМ:\nхорошо",
+        alert_block="Тревожный знак, но не сию минуту: спина",
+        alert_level="worry",
+    )
+    assert "Тревожный знак" in variable
+    assert "КАК ТЫ СЕГОДНЯ САМ" in variable
+
+
 def test_an_emergency_silences_his_own_weather_completely():
     """Not left for the alert's «сейчас не действует» to argue with. A man who
     cannot get up off the floor does not need to know his friend slept badly,
     and the cheapest way to win that argument is not to have it."""
-    _stable, variable = companion.build_system_parts(
+    stable, variable = companion.build_system_parts(
         persona_block="ТЫ — Гриша.",
         alert_block="🚨 ТРЕВОГА",
+        alert_level="danger",
         feeling_block="КАК ТЫ СЕГОДНЯ САМ:\nТебе сегодня и самому невесело.",
     )
-    assert "🚨 ТРЕВОГА" in variable
+    assert "🚨 ТРЕВОГА" in stable       # on danger the alert IS the prompt
     assert "КАК ТЫ СЕГОДНЯ САМ" not in variable
     assert "невесело" not in variable
 
@@ -358,11 +374,12 @@ async def test_a_real_emergency_turn_leaves_his_weather_out(monkeypatch):
 
     monkeypatch.setattr(safety.brain, "generate_text", watcher)
 
-    _stable, variable, _turns, _voice = await main._assemble(U, "я упал")
+    stable, variable, _turns, _voice = await main._assemble(U, "я упал")
 
-    assert "упал, не встаёт" in variable
-    assert "КАК ТЫ СЕГОДНЯ САМ" not in variable
-    assert "не спалось" not in variable
+    whole = stable + variable
+    assert "упал, не встаёт" in whole
+    assert "КАК ТЫ СЕГОДНЯ САМ" not in whole
+    assert "не спалось" not in whole
 
 
 # ── the wire from the extractor ─────────────────────────────────────────────

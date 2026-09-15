@@ -420,12 +420,13 @@ def test_a_very_long_day_is_trimmed_not_dropped():
 # ── where it sits ──────────────────────────────────────────────────────────
 
 def test_an_emergency_silences_his_week_completely():
-    _stable, variable = companion.build_system_parts(
+    stable, variable = companion.build_system_parts(
         persona_block="ТЫ — Гриша.",
         alert_block="🚨 ТРЕВОГА",
+        alert_level="danger",
         life_block="ЧТО У ТЕБЯ СЕЙЧАС В ЖИЗНИ:\nПростуда.",
     )
-    assert "🚨 ТРЕВОГА" in variable
+    assert "🚨 ТРЕВОГА" in stable       # on danger the alert IS the prompt
     assert "ЧТО У ТЕБЯ СЕЙЧАС В ЖИЗНИ" not in variable
 
 

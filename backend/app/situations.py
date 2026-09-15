@@ -38,22 +38,50 @@ from __future__ import annotations
 
 from . import brain
 
-#: Word stems, matched against lowercased speech. Stems rather than words
-#: because Russian inflects everything: «игра/игру/игры/играть» is one cue.
-#: Broad on purpose — see the module docstring on which way to err.
+#: Phrases that mean a game is being PROPOSED or PLAYED right now.
+#:
+#: Stems used to be the rule here — «игр», «сыгра», «загад», «города» — on the
+#: argument that Russian inflects everything and a false positive costs only a
+#: few hundred tokens. Measured against natural speech, that argument collapsed:
+#:
+#:     «в детстве мы во дворе играли в футбол дотемна»        → правила Городов
+#:     «мы с женой объехали все города на юге»                → правила Городов
+#:     «внук играет на гитаре, третий год»                    → правила Городов
+#:     «я на Олимпийские игры ездил в восьмидесятом»          → правила Городов
+#:     «врач сказал, это не игрушки»                          → правила Городов
+#:     «мне бы сыграть на гармони, да пальцы не те»           → правила Городов
+#:
+#: Every one of those is ordinary reminiscence, which is the single most common
+#: thing the people this app is for actually say — and each injected 1,377
+#: characters of game rules at the very END of the prompt, where instructions
+#: are followed best, and kept injecting them for six turns. A module written
+#: to stop irrelevant rules stealing attention was doing exactly that, daily.
+#:
+#: So these are whole phrases about playing NOW, not stems that appear inside
+#: other words. The history window still covers «ну давай» — the acceptance
+#: carries no game word at all, but the offer he made a moment earlier does.
 _GAME_MARKERS = (
-    "игр",          # игра, игру, играть, поиграем, сыграем…
-    "сыгра",
-    "загад",        # загадай, загадка, загадал
-    "отгад",
+    "давай сыгра",
+    "давай поигра",
+    "давайте сыгра",
+    "давай в ",
+    "сыграем",
+    "поиграем",
+    "сыграй ",
+    "поиграй",
+    "загадай",
+    "загадаю",
+    "загадал",
+    "твоя очередь",
+    "моя очередь",
+    "чья очередь",
     "в слова",
-    "города",
+    "в города",
     "данетк",
-    "пословиц",
-    "рифм",
-    "ассоциац",
-    "кроссворд",
-    "виктор",       # викторина
+    "во что игра",
+    "во что сыгра",
+    "пословицу продолж",
+    "продолжи послов",
 )
 
 #: How far back a game stays "in progress". Long enough to cover offer → «ну
@@ -71,7 +99,7 @@ _GAMES = """СЕЙЧАС ПРО ИГРУ — вот чем ты играешь �
 - Держи игру простой и понятной на слух: по одному ходу за раз, напоминай, чья очередь и какое правило. Следи за игрой правильно — помни, что уже было названо."""
 
 
-_NEWS = """СЕЙЧАС ПРО НОВОСТИ ИЛИ ПОГОДУ — он правда спросил, так что можно:
+_NEWS = """ЕСЛИ ОН СЕЙЧАС СПРАШИВАЕТ ПРО НОВОСТИ ИЛИ ПОГОДУ — вот как про это говорят (а если не спрашивает, ничего этого не нужно):
 - Подавай НЕ как робот и НЕ как диктор: не читай список заголовков, не говори «сейчас проверю» и не ссылайся на источники («по данным такого-то»).
 - Рассказывай как своё, живое, будто ты сам за этим следишь: «ой, кстати, слышал — вчера там…, вот это да», «да ничего особо интересного, разве что…». Выбирай, что любопытно, скучное пропускай, добавь своё словечко и своё отношение.
 - Коротко и просто, как в обычном разговоре. Плохие или тревожные новости подавай мягко и бережно — не пугай его.

@@ -227,6 +227,8 @@ async def _assemble(user_id: str, user_text: str) -> tuple[str, str, list, str |
         # Empty on virtually every turn. The one thing allowed to override the
         # character, so it is placed before everything else — see safety.py.
         alert_block=safety.block(alert, user_id),
+        # On danger the alert IS the prompt — see build_system_parts.
+        alert_level=alert.get("level", ""),
         # How HE is today, carried over from their last exchange and fading on
         # its own since. The one thing in the prompt that is not about her.
         feeling_block=feeling.block(user_id, openness=wants),

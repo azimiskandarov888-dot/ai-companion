@@ -241,6 +241,7 @@ def build_system_parts(
     confirmed_block: str = "",
     fit_block: str = "",
     alert_block: str = "",
+    alert_level: str = "",
     feeling_block: str = "",
     life_block: str = "",
     body_block: str = "",
@@ -267,6 +268,33 @@ def build_system_parts(
                     and it is still early enough to be worth remarking on
                     (memory.broke_off_last_time decides that, not this).
     """
+    # ── DANGER IS THE WHOLE PROMPT, OR IT IS NOT THE WHOLE PROMPT ───────────
+    #
+    # The alert used to be the first line of the SECOND half, under a comment
+    # claiming it came before everything. It did not: the halves are emitted
+    # stable-then-variable, so measured on real assembled prompts the alarm sat
+    # at 91–96% of the way down — and, far worse, the 1,800 characters AFTER it
+    # were a birthday to mention first, a warm story to resurface, and a due
+    # follow-up question. The alert says «не задавай вопросов, не рассказывай
+    # историй»; the end of the prompt, which is where instructions are obeyed
+    # best, then handed him exactly a question and a story.
+    #
+    # There is no wording that reliably wins that argument, and safety.py's own
+    # docstring explains why: asked what a man having a stroke should hear, a
+    # model weighing a hundred and thirty rules produces the answer that
+    # satisfies the most of them. So the argument is not had. On danger the
+    # character is not assembled at all — this IS the prompt, and there is
+    # nothing left for it to lose to.
+    #
+    # It also deletes code rather than adding it: the four
+    # `and not alert_block.strip()` guards below are gone, and with them a
+    # measured bug of their own. They fired on WORRY too — a man mentioning that
+    # his back has ached for three weeks silently lost his own mood, his week
+    # and his throat from the prompt, 2,853 characters of him, on a level whose
+    # definition is «не сию минуту».
+    if alert_level == "danger" and alert_block.strip():
+        return alert_block.strip(), ""
+
     stable_parts = [BEHAVIOR_RULES]
     if persona_block.strip():
         stable_parts.append("\nКТО ТЫ (твоя личность и жизнь):\n" + persona_block.strip())
@@ -288,12 +316,10 @@ def build_system_parts(
 
     variable_parts: list[str] = []
 
-    # BEFORE EVERYTHING, including before the stable half in reading order once
-    # the two are concatenated — because this is the one thing in the app
-    # allowed to override the character, and a rule that overrides has to be
-    # met before the rules it overrides. It is empty on virtually every turn
-    # (safety.py), so it costs nothing to keep this seat reserved. See
-    # safety.py for why danger could never live inside BEHAVIOR_RULES.
+    # Only a WORRY can still be here — danger returned above with the whole
+    # prompt to itself. A worry is a quiet note that belongs beside everything
+    # else rather than instead of it, and it goes first because it colours how
+    # the rest should be said.
     if alert_block.strip():
         variable_parts.append(alert_block.strip())
 
@@ -307,21 +333,21 @@ def build_system_parts(
     # today's weather over it. Empty whenever he is simply himself, which is
     # most days. See feeling.py.
     #
-    # Dropped ENTIRELY when the watcher has fired, rather than left for the
-    # alert's «сейчас не действует» to argue with: a man who cannot get up off
-    # the floor does not need to know his friend slept badly, and the cheapest
-    # way to win that argument is not to have it in the prompt at all.
-    if feeling_block.strip() and not alert_block.strip():
+    # No guard against the watcher here any more, and that is the point: danger
+    # never reaches this line (it returned above), and a WORRY must not silently
+    # delete the man's friend. It used to. A back that has ached for three weeks
+    # is «не сию минуту» by the watcher's own definition, and it was costing him
+    # his companion's mood, his companion's week and his companion's voice —
+    # nearly three thousand characters — on the turn he mentioned it, with all
+    # of it reappearing the next turn when the watcher said «none».
+    if feeling_block.strip():
         variable_parts.append(feeling_block.strip())
 
-    # What is going on in his week, then his throat. All three of these are
-    # about HIM and all three are suspended by an alarm for the same reason: a
-    # man who cannot get up off the floor does not need to know his friend has
-    # a cold. See life.py and body.py.
-    if life_block.strip() and not alert_block.strip():
+    # What is going on in his week, then his throat. See life.py and body.py.
+    if life_block.strip():
         variable_parts.append(life_block.strip())
 
-    if body_block.strip() and not alert_block.strip():
+    if body_block.strip():
         variable_parts.append(body_block.strip())
 
     if bob_facts.strip():

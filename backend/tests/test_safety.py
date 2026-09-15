@@ -245,21 +245,48 @@ def test_the_alert_is_the_only_thing_claiming_to_outrank_everything():
 
 # ── where it sits in the assembled prompt ───────────────────────────────────
 
-def test_the_alert_is_the_very_first_thing_he_reads():
+def test_on_danger_the_alert_is_the_entire_prompt():
+    """It used to say it came first and it came last. The halves are emitted
+    stable-then-variable and the alert lived at the top of the SECOND one, so
+    measured on real prompts it sat at 91–96% of the way down — with 1,800
+    characters after it holding a birthday to mention first, a warm story to
+    resurface and a due follow-up question, while the alert itself says «не
+    задавай вопросов, не рассказывай историй».
+
+    There is no wording that wins that argument reliably, so the argument is not
+    had: on danger the character is not assembled at all."""
     stable, variable = companion.build_system_parts(
         persona_block="ТЫ — Гриша. Обычный человек.",
         reading_block="ЧТО-ТО ПРО НЕГО",
         confirmed_block="ПОДТВЕРЖДЁННОЕ",
         fit_block="СОВМЕСТИМОСТЬ",
         alert_block="🚨 ТРЕВОГА",
+        alert_level="danger",
         elder_facts="факты",
         memory_context="воспоминания",
+        situation_block="ПРАВИЛА ИГРЫ В ГОРОДА",
+        broke_off=True,
         acquaintance="вы знакомы давно",
     )
-    assert variable.startswith("🚨 ТРЕВОГА")
-    # and it does not land in the cached half, which would freeze one person's
-    # emergency into every later turn
-    assert "ТРЕВОГА" not in stable
+    assert stable == "🚨 ТРЕВОГА"
+    assert variable == ""
+    whole = stable + variable
+    for must_be_gone in ("Гриша", "ПОДТВЕРЖДЁННОЕ", "воспоминания",
+                         "ГОРОДА", "ПРОПАЛ", "факты"):
+        assert must_be_gone not in whole, must_be_gone
+
+
+def test_a_worry_leaves_everything_else_standing():
+    """The guard was written for danger and applied to both. A back that has
+    ached for three weeks is «не сию минуту» by the watcher's own definition."""
+    _, variable = companion.build_system_parts(
+        alert_block="Тревожный знак", alert_level="worry",
+        feeling_block="КАК ТЫ СЕГОДНЯ САМ", life_block="ЧТО У ТЕБЯ В ЖИЗНИ",
+        body_block="ГОРЛО", memory_context="воспоминания",
+    )
+    assert variable.startswith("Тревожный знак")
+    for kept in ("КАК ТЫ СЕГОДНЯ САМ", "ЧТО У ТЕБЯ В ЖИЗНИ", "ГОРЛО", "воспоминания"):
+        assert kept in variable, kept
 
 
 def test_nothing_changes_on_a_calm_turn():
@@ -306,12 +333,15 @@ async def test_a_real_turn_carries_the_alert_to_the_model(monkeypatch):
         "u", "я упал и не могу встать"
     )
 
-    assert variable.lstrip().startswith("🚨")
-    assert "упал, не встаёт" in variable
-    assert config.EMERGENCY_NUMBER in variable
-    # The cached half must never carry it: a cached emergency is one that keeps
-    # firing for somebody who got up half an hour ago.
-    assert "🚨" not in stable
+    whole = stable + variable
+    assert whole.lstrip().startswith("🚨")
+    assert "упал, не встаёт" in whole
+    assert config.EMERGENCY_NUMBER in whole
+    # …and NOTHING else reached him. On danger the alert is the entire prompt,
+    # so there is nothing left for it to lose an argument to — which is the
+    # whole reason it is built this way. See build_system_parts.
+    assert variable == ""
+    assert "ЗАЧЕМ ТЫ НУЖЕН" not in whole
 
 
 @pytest.mark.asyncio
@@ -322,13 +352,16 @@ async def test_the_alarm_does_not_stick_to_the_next_turn(monkeypatch):
     monkeypatch.setattr(embeddings, "available", lambda: False)
 
     _answers(monkeypatch, '{"level":"danger","what":"упал"}')
-    _, first, _t, _v = await main._assemble("u", "я упал")
-    assert "🚨" in first
+    s1, v1, _t, _v = await main._assemble("u", "я упал")
+    assert "🚨" in s1 + v1
 
     _answers(monkeypatch, '{"level":"none","what":""}')
-    _, second, _t, _v = await main._assemble("u", "да всё хорошо, сижу уже")
+    stable, variable, _t, _v = await main._assemble("u", "да всё хорошо, сижу уже")
+    second = stable + variable
     assert "🚨" not in second
     assert config.EMERGENCY_NUMBER not in second
+    # …and he is himself again, whole, on the very next word
+    assert "ЗАЧЕМ ТЫ НУЖЕН" in second
 
 
 # ── one person's emergency is nobody else's ─────────────────────────────────

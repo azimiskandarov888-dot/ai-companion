@@ -100,7 +100,7 @@ def test_grief_is_never_answered_with_a_game():
 )
 def test_asking_for_news_brings_the_manner(said):
     out = situations.block(said)
-    assert "СЕЙЧАС ПРО НОВОСТИ" in out
+    assert "ПРО НОВОСТИ ИЛИ ПОГОДУ" in out
     assert "не ссылайся на источники" in out
 
 
@@ -111,8 +111,8 @@ def test_talking_about_the_weather_is_not_asking_for_it():
 
 
 def test_both_can_arrive_together():
-    out = situations.block("какая погода? а потом давай в слова сыграем")
-    assert "СЕЙЧАС ПРО ИГРУ" in out and "СЕЙЧАС ПРО НОВОСТИ" in out
+    out = situations.block("какая погода? а потом давай сыграем в слова")
+    assert "СЕЙЧАС ПРО ИГРУ" in out and "ПРО НОВОСТИ ИЛИ ПОГОДУ" in out
 
 
 # ── what the constitution kept, and what it let go ──────────────────────────
@@ -179,3 +179,80 @@ def test_no_history_is_not_a_crash():
     assert situations.block("привет", None) == ""
     assert situations.block("привет", []) == ""
     assert "СЕЙЧАС ПРО ИГРУ" in situations.block("давай в слова", [{}])
+
+
+# ── what the triggers must NOT fire on ──────────────────────────────────────
+#
+# Both of these were measured firing on ordinary speech, and both are expensive
+# when they do: the game rulebook puts 1,377 characters at the very end of the
+# prompt — where instructions are followed best — and keeps them there for six
+# turns; the news trigger attaches a search tool, switches to the slow model and
+# takes the turn off the streaming path entirely.
+
+@pytest.mark.parametrize("said", [
+    "в детстве мы во дворе играли в футбол дотемна",
+    "мы с женой объехали все города на юге",
+    "внук играет на гитаре, третий год",
+    "я на Олимпийские игры ездил в восьмидесятом",
+    "врач сказал, это не игрушки",
+    "люблю пословицы, мать много знала",
+    "мне бы сыграть на гармони, да пальцы не те",
+])
+def test_ordinary_reminiscence_is_not_a_game(said):
+    """The single most common thing this app's people say, and every one of
+    these used to be answered with the rules of «Города»."""
+    assert situations.block(said) == ""
+
+
+@pytest.mark.parametrize("said", [
+    "давай сыграем в слова",
+    "а давай в города",
+    "загадай мне загадку",
+    "чья очередь?",
+])
+def test_an_actual_invitation_still_brings_the_rules(said):
+    assert "В слова" in situations.block(said)
+
+
+def test_accepting_an_offer_still_counts():
+    """«Ну давай» carries no game word at all — the only record that a game is
+    happening is the offer he made a moment earlier."""
+    said = situations.block("ну давай", [{"role": "assistant",
+                                          "content": "а давай сыграем в слова?"}])
+    assert "В слова" in said
+
+
+@pytest.mark.parametrize("said", [
+    "температура тридцать восемь, вторые сутки",
+    "у нас всю неделю погода дрянь",
+    "прогноз у меня один — колено ноет, значит дождь",
+    "высокий жар, встать не могу",
+])
+def test_talking_about_a_body_is_not_asking_for_the_forecast(said):
+    """The one that mattered most: safety.py lists «высокий жар» as a danger
+    sign, and the same words were being read as a question about the weather —
+    with the turn taken off streaming, so the person waited longer for it."""
+    from app import brain
+
+    assert brain.wants_fresh_info(said) is False
+    assert "НОВОСТИ" not in situations.block(said)
+
+
+@pytest.mark.parametrize("said", [
+    "какая сегодня погода?",
+    "что нового в мире?",
+    "новости смотрел?",
+    "а погоду не знаешь на завтра",
+])
+def test_actually_asking_still_works(said):
+    from app import brain
+
+    assert brain.wants_fresh_info(said) is True
+
+
+def test_the_news_block_no_longer_asserts_that_he_asked():
+    """It said «он правда спросил», which on a false match is simply untrue —
+    and the model has the turn in front of it and can see that it is."""
+    said = situations.block("какая сегодня погода?")
+    assert "он правда спросил" not in said
+    assert "если не спрашивает" in said
