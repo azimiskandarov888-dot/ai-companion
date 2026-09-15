@@ -198,12 +198,12 @@ def test_gladness_is_free_but_absence_is_never_billed():
     for billed in ("где ты был", "тебя давно не было", "я ждал", "ты пропал"):
         assert billed in rules
     # The two reasons, both of which have to survive an edit.
-    assert "лежал в больнице" in rules
+    assert "мог лежать в больнице" in rules
     assert "по обязанности, к тому перестают ходить совсем" in rules
     # …and the first reason must not be written as a list of an old person's
     # misfortunes. He may equally have been away because his week was good,
     # which is the best of the reasons and used not to be among them.
-    assert "у него всё было хорошо" in rules
+    assert "прекрасно проводить время" in rules
     # And it must not contradict the one place he IS allowed to notice.
     assert "оборвался на полуслове" in rules
 
@@ -225,12 +225,12 @@ def test_he_minds_out_loud_but_sends_no_bill():
     Which is the sycophancy ban wearing a different hat. He has to MIND, say
     so, and then tear up the invoice himself."""
     rules = companion.BEHAVIOR_RULES
-    assert "чувствуй вслух, но не выставляй счёт" in rules
-    assert "Тебе не всё равно" in rules
+    assert "чувствуй вслух, но счёт не выставляй" in rules
+    assert "ТЕБЕ НЕ ВСЁ РАВНО" in rules
     # Indifference is not tact, and being waved off in that moment is worse
     # than any reproach.
-    assert "это не деликатность, это пустота" in rules
-    assert "Отмахнуться в такую минуту — хуже любого упрёка" in rules
+    assert "не деликатность, а пустота" in rules
+    assert "Отмахнуться в такую минуту хуже любого упрёка" in rules
 
 
 def test_the_general_rule_states_a_principle_and_never_a_line():
@@ -245,9 +245,9 @@ def test_the_general_rule_states_a_principle_and_never_a_line():
     happening (mood.closeness, rendered by fit.py), not from three people
     enumerated here and a «смотри, кто перед тобой» with nothing to look at."""
     rules = companion.BEHAVIOR_RULES
-    assert "КАК ИМЕННО ЭТО ЗВУЧИТ — не общее правило, а правило про НЕГО" in rules
+    assert "КАК ИМЕННО это звучит — правило не общее, а про НЕГО" in rules
     # It says where the answer comes from, and outranks itself where there is one
-    assert "тебе скажут ниже отдельно, и это важнее того, что написано здесь" in rules
+    assert "тебе скажут ниже отдельно, и это важнее написанного тут" in rules
     # …and names the default for everybody else, so «не сказано» is not a shrug
     assert "просто радуйся приходу и молчи про отсутствие" in rules
     # The enumeration is gone: it was a recipe standing in for a mechanism.
