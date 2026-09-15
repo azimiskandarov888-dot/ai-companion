@@ -542,3 +542,37 @@ def test_the_gap_is_said_in_russian_and_never_in_hours():
             assert got == ""
         else:
             assert want in got, f"{days} дней → {got!r}"
+
+
+def test_a_follow_up_nobody_ever_raised_eventually_expires():
+    """«Спросить, как прошла свадьба» from five weeks ago is not caring, it is
+    a filing cabinet. Untested until now: FOLLOW_UP_MAX_AGE could be set to a
+    hundred years and the suite stayed green."""
+    memory.add_memory("u", "follow_up", "спросить, как прошла свадьба")
+    with db.connect() as conn:
+        conn.execute("UPDATE memories SET created_ts = ? WHERE user_id='u'",
+                     (time.time() - 2 * memory.FOLLOW_UP_MIN_AGE,))
+    memory.log_turn("u", "user", "привет")
+    assert memory.due_follow_ups("u")
+
+    # An ABSOLUTE age, not one measured off the constant: moving it relative to
+    # FOLLOW_UP_MAX_AGE made the test follow the mutation and prove nothing.
+    with db.connect() as conn:
+        conn.execute("UPDATE memories SET created_ts = ? WHERE user_id='u'",
+                     (time.time() - 30 * 86400,))
+    assert memory.due_follow_ups("u") == []
+    assert memory.FOLLOW_UP_MAX_AGE < 30 * 86400
+
+
+def test_the_live_conversation_window_stays_small():
+    """Every extra turn here is tokens the brain re-reads before EVERY reply,
+    and this is spoken conversation, where that wait is a silence. Anything
+    older that mattered was distilled into memory and comes back by recall."""
+    for i in range(60):
+        memory.log_turn("u", "user", f"реплика {i}")
+    assert len(memory.recent_turns("u")) == memory.RECENT_TURNS
+    assert memory.RECENT_TURNS <= 20
+    # …and it is the NEWEST ones, in order
+    said = [t["content"] for t in memory.recent_turns("u")]
+    assert said[-1] == "реплика 59"
+    assert said == sorted(said, key=lambda s: int(s.split()[-1]))

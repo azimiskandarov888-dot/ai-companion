@@ -664,3 +664,32 @@ def test_a_truth_that_stopped_happening_stops_leading_the_list():
         mood.observe("u", "подняло_молчание", "")
     said = mood.standing_block("u")
     assert said.index("побыли рядом") < said.index("подняла история")
+
+
+def test_a_dimension_sitting_at_its_ordinary_value_is_not_mentioned():
+    """Printing all five every turn buries the one that has actually changed in
+    four that have not. Untested until now: _NOTABLE could be dropped to 0.01
+    and the suite stayed green."""
+    per_dim = {"energy": 0.2, "warmth": 0.1, "lightness": -0.2,
+               "clarity": 0.0, "engagement": 0.1}
+    assert mood._describe(per_dim, "ровный") == "ровный"
+    per_dim["energy"] = -1.6
+    assert mood._describe(per_dim, "ровный") == "совсем без сил"
+
+
+def test_his_own_words_are_handed_over_with_the_reading():
+    """The whole discipline of this file is that a claim about somebody comes
+    with the evidence for it. The quote was written, stored and rendered — and
+    nothing asserted that it arrived."""
+    for d in range(10, 0, -1):
+        _visit("u", d, 20, 1.0)
+    with db.connect() as conn:
+        conn.execute(
+            "INSERT INTO mood_readings (user_id, ts, energy, warmth, lightness,"
+            " clarity, engagement, word, note, because) VALUES (?,?,?,?,?,?,?,?,?,?)",
+            ("u", time.time(), -2, -2, -2, 0.0, -2, "",
+             "отвечает совсем коротко", "«да ничего, сынок»"),
+        )
+    said = mood.block("u")
+    assert "Его слова, по которым это видно: «да ничего, сынок»" in said
+    assert "В этот раз: отвечает совсем коротко" in said

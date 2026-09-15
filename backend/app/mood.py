@@ -380,7 +380,14 @@ def _times(n: int) -> str:
 
 
 def observe(user_id: str, tag: str, subject: str = "", evidence: str = "") -> None:
-    """Note that something happened — once. Twice is what makes it true."""
+    """Note that something happened — once. Twice is what makes it true.
+
+    `first_ts` and `evidence` are written here and read by nothing. `evidence`
+    used to be asked of the extractor on every observation, which was pure cost,
+    and that is gone from the prompt. `first_ts` costs one number on a write
+    that already happens and answers a question somebody will eventually ask —
+    «с каких пор он такой?» — so it stays, deliberately and not by oversight.
+    """
     tag = _known_tag(tag)
     if not tag:
         return

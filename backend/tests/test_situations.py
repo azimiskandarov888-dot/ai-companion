@@ -137,7 +137,7 @@ def test_the_constitution_got_materially_shorter():
     coming back fails this, and so does the slow accretion that put 136 rules
     here in the first place."""
     rules = companion.BEHAVIOR_RULES
-    assert len(rules) < 26_600, f"{len(rules)} chars — the constitution regrew"
+    assert len(rules) < 23_000, f"{len(rules)} chars — the constitution regrew"
 
 
 def test_what_was_removed_is_bigger_than_what_replaced_it():

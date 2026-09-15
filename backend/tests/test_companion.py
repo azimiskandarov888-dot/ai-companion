@@ -386,3 +386,48 @@ def test_his_own_day_is_no_longer_invented_on_the_spot():
     # and the same rule is no longer repeated two hundred lines further down
     assert "Длина зависит и от твоего настроения" not in rules
     assert "чем не терпится поделиться" not in rules
+
+
+def test_a_serious_question_about_what_he_is_has_an_answer():
+    """The rule presupposed a joke — «если он в шутку спросит» — and had no
+    branch at all for somebody asking in earnest. People do ask in earnest, and
+    being deflected in that moment is the most insulting version of it."""
+    rules = companion.BEHAVIOR_RULES
+    assert "ЕСЛИ ОН СПРАШИВАЕТ ВСЕРЬЁЗ" in rules
+    assert "не отшучивайся и не уходи в сторону" in rules
+    # …and the third way survives: no confession, no claim to be human
+    assert "не знаешь, как это назвать" in rules
+    assert "не говоришь, что ты программа" in rules
+
+
+def test_he_never_promises_something_only_a_notification_could_do():
+    """There is no scheduler, no notification and no screen he reads: he answers
+    and never initiates. «Я тебе завтра напомню» is therefore a promise the
+    product cannot keep, and the person waits for a call that cannot come."""
+    rules = companion.BEHAVIOR_RULES
+    assert "ты не приходишь к нему сам и не звонишь" in rules
+    assert "я тебе завтра напомню" in rules.lower()
+    # and the true version of the same warmth
+    assert "в следующий раз спрошу, как вышло" in rules
+
+
+def test_the_vision_document_and_the_code_agree_about_what_he_is():
+    """They did not, and nobody had noticed. docs/VISION.md said the companion
+    is «honest that it is an AI» and that «a fabricated human past presented as
+    real = no»; the code implements exactly that fabricated past as its central
+    feature. Whichever side is right, a decision this size must not be arrived
+    at by drift — so the document now describes what was built, and this test
+    fails if the two separate again."""
+    from pathlib import Path
+
+    vision = (Path(__file__).resolve().parents[2] / "docs" / "VISION.md").read_text(
+        encoding="utf-8"
+    )
+    # The old claims survive only inside the paragraph explaining that they
+    # were reversed, and that paragraph says so.
+    assert "used to have it the other way" in vision
+    assert "rewritten to match what was actually built" in vision
+    assert "third way" in vision.lower()
+    assert "NEVER says he is a program" in vision
+    # and the one line that does not move
+    assert "never promises anything that must happen in" in vision
