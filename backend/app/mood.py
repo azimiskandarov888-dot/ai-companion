@@ -15,20 +15,41 @@ computed from a single word, and neither survives being averaged across people.
 So each exchange is read on five small scales, his own baseline is built from
 his own history, and what the companion is told is the difference.
 
-── AND HIS NORMAL DEPENDS ON THE HOUR ──────────────────────────────────────
+── A VISIT IS ONE OBSERVATION, NOT TWENTY-FIVE ─────────────────────────────
 
-«His own normal» was at first one number for the whole day, and that was wrong
-in a way that fired daily. Older adults shift toward morningness, and morning
-types are reliably worse in the evening; a man who is simply flatter at eight
-therefore sat below a single all-day average EVERY evening, and was announced as
-subdued every evening. A false alarm on a schedule is worse than no alarm: it
-teaches the companion to tread carefully when nothing is wrong, and it buries
-the real change on the day it finally arrives.
+This was wrong for a long time and it is worth writing down why, because the
+mistake is easy to make again. Readings were counted one per exchange, and the
+baseline was a window of the last forty. Forty exchanges is one conversation —
+so «his usual» was computed from the very conversation being judged against it,
+and a man who had been bright for a month and arrived flat today was described
+to his friend as «обычно он вялый, слушает вполуха».
 
-So the baseline is kept per part of the day — evenings compared with evenings.
-The descriptive lines still use his overall normal, because «обычно он ровный»
-is a fact about the man rather than about eight in the evening; only the
-WARNING uses the hour. See _normal_by_part.
+The error has a name: twenty-five exchanges inside one conversation are not
+twenty-five observations of a person, they are ONE occasion sampled twenty-five
+times, and treating them as independent is the ecological fallacy. So a VISIT
+is the unit, everything is counted in visits, and the window means the same
+thing whether somebody comes every day or twice a month.
+
+It also explains why the per-part-of-day baseline never worked. Evenings were
+meant to be compared with evenings, so that a man who is simply flatter at
+eight is not announced as subdued every evening — a sound idea, and measured
+over ninety simulated days it never once did anything, because a forty-reading
+window only ever held ONE part of the day and the per-part normal was always
+the overall normal. The idea was right and the window made it unreachable. It
+is kept, as a sliding window over visits: see _comparable.
+
+── HOW FAR IS FAR IS NOT THE SAME DISTANCE FOR TWO PEOPLE ──────────────────
+
+Thresholds used to be absolute — 0.55 of a point was "moved" for everybody.
+Half a point from a man who is the same every evening is an event; half a point
+from somebody whose ordinary range is two points is Tuesday. One fixed number
+is deaf to the first and hysterical at the second.
+
+So the limits come from HIS OWN SPREAD between visits, which is what individual
+control charts do and what makes them work without per-person tuning. A steady
+person gets narrow limits; a variable one gets wide limits and his ordinary
+swings — including being flatter in the evenings — pass unremarked. Same code,
+different answer per person, nothing to configure.
 
 ── THE FIVE ───────────────────────────────────────────────────────────────
 
@@ -73,42 +94,73 @@ DIMS = ("energy", "warmth", "lightness", "clarity", "engagement")
 #: the module docstring.
 FEELING = ("energy", "warmth", "lightness", "engagement")
 
-#: Fewer readings than this and there is no such thing as his normal yet. Eight
-#: is roughly two real conversations: enough that one bad evening cannot become
-#: the baseline, few enough that the companion is not blind for a fortnight.
-MIN_FOR_BASELINE = 8
-
-#: The newest readings are what he is like NOW, so they are held out of the
-#: baseline. Including them would let a change quietly redefine "normal" and
-#: erase itself.
-RECENT_N = 3
-
-#: How far from his own normal counts as having moved. On a -2..+2 scale, half
-#: a step is noise and a whole step is a different person in the room.
-MOVED = 0.55
-STRONGLY = 1.0
+# ── THE UNIT OF OBSERVATION, WHICH IS A VISIT AND NOT A SENTENCE ────────────
+#
+# A twenty-minute conversation is about twenty-five exchanges, and learn.py
+# writes one reading per exchange. Those twenty-five are NOT twenty-five
+# observations of what this person is like. They are ONE occasion, sampled
+# twenty-five times, and treating them as independent is the ecological fallacy
+# — the error of drawing conclusions about one level from statistics gathered
+# at another. It has a name because it is common and because it is expensive.
+#
+# The cost here was exact and measurable. The old window held forty READINGS,
+# so for anybody who actually talks it spanned ONE CONVERSATION: «his usual»
+# was computed almost entirely from the very conversation being judged against
+# it. A man who had been bright for a month and arrived flat today was
+# described to his friend as «обычно он вялый, слушает вполуха» — a false
+# statement about a person, in the block the app calls the most valuable thing
+# it does.
+#
+# So a visit is one observation. Everything below counts in visits.
 
 #: A gap this long means the next reading belongs to a new conversation.
 CONVERSATION_GAP = 10 * 60
 
-#: How many readings from the same part of the day before that part gets its own
-#: normal. Below it, the overall baseline is used — which is exactly the
-#: behaviour that existed before this, so a new friendship loses nothing waiting.
+#: How many past VISITS make his usual. The same number means the same thing to
+#: everybody, which is the property the old window did not have: fourteen visits
+#: is fourteen visits whether he comes every day or twice a month. It is also
+#: what «usual» means to a friend — the last dozen-odd times he saw you, however
+#: long that took.
+USUAL_OVER = 14
+
+#: Fewer past visits than this and there is no usual yet, and the honest answer
+#: is to say so. Three is about a week for a daily talker and six weeks for a
+#: rare one — in both cases the point at which a friend starts to have an
+#: opinion about what you are normally like.
+MIN_VISITS = 3
+
+# ── HOW FAR IS FAR, WHICH IS NOT THE SAME DISTANCE FOR TWO PEOPLE ───────────
+#
+# The old thresholds were absolute: 0.55 of a point was «moved» for everybody.
+# But half a point from a man who is the same every single evening is a real
+# event, and half a point from somebody whose ordinary range is two points is
+# Tuesday. One fixed number has to be either deaf to the first or hysterical at
+# the second, and it was quietly both.
+#
+# So the limits are built from HIS OWN SPREAD — the standard answer in
+# individual control charts, where limits come from the process rather than
+# from a specification. It needs no per-user setting and no tuning: a steady
+# person gets narrow limits and small changes are caught, a variable person
+# gets wide ones and his ordinary swings pass unremarked. The same code, a
+# different answer for different people.
+
+#: How many of HIS OWN steps away from usual counts as noticed, and as serious.
+NOTICED = 1.5
+STRONG = 2.6
+
+#: A floor under the spread, for somebody with no variation at all: without it
+#: his limits would be zero and he would trip on rounding.
 #:
-#: Three, and the number was picked by reproducing the fault rather than by
-#: taste. Five looked prudent and was wrong: the evenings that most need their
-#: own normal belong to somebody who talks in the evening only OCCASIONALLY, and
-#: he reaches five of them after a month or two — during which he is flagged as
-#: subdued every single time. A median over three is coarse, but it errs toward
-#: silence, which is the right way to be wrong here.
-MIN_PER_PART = 3
+#: Set so that STRONG × MIN_SPREAD lands just under a whole point. That is the
+#: property worth holding: for a man who is the same every single time, a full
+#: point of change — a quarter of the entire scale — is a serious matter and
+#: must be said so. Anything above 0.385 quietly makes it merely «немного тише».
+MIN_SPREAD = 0.35
 
-#: Hours per part of the day. Four even blocks rather than named ones, because
-#: the names would be a lie: see _part().
-_PART_HOURS = 6
-
-#: How far back "when did this start" is allowed to look.
-_TRAIL = 40
+#: How many readings to pull in order to find those visits. Generous: at
+#: twenty-five exchanges a visit this covers twenty-four visits, and the query
+#: is one indexed read against a local file.
+_SCAN = 600
 
 
 # ── the observation register ────────────────────────────────────────────────
@@ -311,7 +363,7 @@ def observe(user_id: str, tag: str, subject: str = "", evidence: str = "") -> No
 
 # ── reading back ────────────────────────────────────────────────────────────
 
-def recent(user_id: str, limit: int = _TRAIL) -> list[dict]:
+def recent(user_id: str, limit: int = _SCAN) -> list[dict]:
     """Newest first."""
     with db.connect() as conn:
         rows = conn.execute(
@@ -319,11 +371,6 @@ def recent(user_id: str, limit: int = _TRAIL) -> list[dict]:
             (user_id, limit),
         ).fetchall()
     return [dict(r) for r in rows]
-
-
-def _mean(rows: list[dict], dim: str) -> float | None:
-    vals = [r[dim] for r in rows if r.get(dim) is not None]
-    return statistics.fmean(vals) if vals else None
 
 
 def _median(rows: list[dict], dim: str) -> float | None:
@@ -338,94 +385,123 @@ def _composite(per_dim: dict[str, float | None]) -> float | None:
     return statistics.fmean(vals) if vals else None
 
 
-def _part(ts: float) -> int:
-    """Which part of HIS day a reading belongs to. 0–3.
+def _visits(rows: list[dict]) -> list[list[dict]]:
+    """Group newest-first readings into visits, newest visit first.
 
-    UTC, and the hour is deliberately never shown to anybody. It does not need
-    to be the right hour where he lives — it needs to be the SAME hour every
-    time. His eight-in-the-evening is always the same block whatever that block
-    would be called here, so evenings get compared with evenings without the app
-    ever knowing his timezone.
-
-    UTC rather than server-local for one reason: local time moves. Daylight
-    saving, or the server being rehomed, would drop new readings into a
-    different block from the old ones and quietly compare his evenings against
-    his mornings — the exact fault this function exists to remove, reintroduced
-    invisibly and six months later.
+    A visit ends where the silence between two exchanges is long enough to be
+    somebody putting the phone down — the same gap memory.py uses to decide
+    that a word is starting a new conversation rather than continuing one.
     """
-    return int(time.gmtime(ts).tm_hour) // _PART_HOURS
-
-
-def _normal_by_part(older: list[dict], overall: float | None) -> dict[int, float | None]:
-    """His usual level for each part of the day.
-
-    Older adults shift toward morningness, and morning types are reliably worse
-    in the evening — so a man who is simply flatter at eight is, against a single
-    all-day average, BELOW HIS NORMAL every single evening. That fired the
-    "he is quieter than usual" warning daily: a false alarm on a schedule, which
-    teaches the companion to tread carefully when nothing is wrong and buries
-    the real change on the day it finally comes.
-
-    Parts with too little history fall back to the overall normal, which is
-    precisely the old behaviour.
-    """
-    out: dict[int, float | None] = {}
-    for part in range(24 // _PART_HOURS):
-        same = [r for r in older if _part(r["ts"]) == part]
-        level = (
-            _composite({d: _median(same, d) for d in DIMS})
-            if len(same) >= MIN_PER_PART
-            else None
-        )
-        out[part] = overall if level is None else level
+    if not rows:
+        return []
+    out: list[list[dict]] = [[rows[0]]]
+    for newer, older in zip(rows, rows[1:]):
+        if (newer["ts"] or 0.0) - (older["ts"] or 0.0) > CONVERSATION_GAP:
+            out.append([older])
+        else:
+            out[-1].append(older)
     return out
 
 
-def _drop_against_own_part(
-    newest: list[dict], normal: dict[int, float | None]
-) -> float | None:
-    """How far he is from usual — each reading judged against its OWN hour.
+#: Visits within this many hours of each other, around the clock, are the same
+#: time of day for this purpose. A sliding window rather than fixed blocks: with
+#: blocks, two visits forty minutes apart land in different ones whenever the
+#: boundary falls between them, and neither is comparable with the other.
+NEARBY_HOURS = 4
 
-    Compared per reading and then averaged, rather than averaging first: the
-    newest few can straddle a morning and an evening, and averaging those
-    together before comparing would reintroduce the mixing this fixes.
+
+def _hour_of(visit: list[dict]) -> int:
+    """When this visit began, in UTC hours.
+
+    UTC, and the hour is never shown to anybody. It does not need to be the
+    right hour where he lives — it needs to be the SAME hour every time, so his
+    eight-in-the-evening always lands near his other eight-in-the-evenings
+    without the app ever knowing his timezone. Local time would move under
+    daylight saving and quietly start comparing his evenings with his mornings.
     """
-    diffs = []
-    for r in newest:
-        c = _composite(r)
-        against = normal[_part(r["ts"])]
-        if c is not None and against is not None:
-            diffs.append(c - against)
-    return statistics.fmean(diffs) if diffs else None
+    return time.gmtime(min(r["ts"] or 0.0 for r in visit)).tm_hour
 
 
-def _started_days_ago(rows: list[dict], normal: dict[int, float | None]) -> float | None:
-    """How long he has been below his own normal.
+def _hours_apart(a: int, b: int) -> int:
+    gap = abs(a - b) % 24
+    return min(gap, 24 - gap)
 
-    Walks back from now to the last reading that was still at his usual level,
-    and reports the age of the one after it — the first one that wasn't. Each
-    reading is measured against the normal for its own part of the day, or the
-    dip would appear to start at whichever evening came first.
+
+def _comparable(levels: list[dict], visits: list[list[dict]], when: float) -> list[dict]:
+    """The past visits worth comparing today with — the ones at about this hour.
+
+    Older adults shift toward morningness and morning types are reliably worse
+    in the evening, so a man who is simply flatter at eight sits below any
+    all-day average EVERY evening. Judged against all his visits at once he is
+    announced as subdued on a schedule, which teaches the companion to tread
+    carefully when nothing is wrong and buries the real change on the day it
+    comes.
+
+    Falls back to all of them when there are too few nearby, which is also the
+    right answer: a man with two evening visits has no evening normal yet.
     """
-    last_ok: dict | None = None
-    for r in rows:                                   # newest first
-        c = _composite(r)
-        if c is None:
-            continue
-        against = normal[_part(r["ts"])]
-        if against is None or c >= against - MOVED:
-            last_ok = r
+    hour = time.gmtime(when).tm_hour
+    near = [
+        lv for lv, v in zip(levels, visits)
+        if _hours_apart(_hour_of(v), hour) <= NEARBY_HOURS
+    ]
+    return near if len(near) >= MIN_VISITS else levels
+
+
+def _level(visit: list[dict]) -> dict[str, float | None]:
+    """What one visit came to, per scale.
+
+    Median within the visit as well: a person who said one flat thing in an
+    hour of good talk had one flat exchange, not a flat evening.
+    """
+    return {d: _median(visit, d) for d in DIMS}
+
+
+def _spread(levels: list[dict[str, float | None]]) -> float:
+    """How much HE varies between visits, in points — his own yardstick.
+
+    Half the interquartile range. Not a standard deviation, for the reason the
+    baseline is a median: one genuinely awful evening should widen nobody's
+    limits, and over a dozen visits a single outlier moves a standard deviation
+    a great deal. On ordinary data IQR/2 and the median absolute deviation are
+    the same size, so the multipliers mean the same thing either way.
+
+    And NOT the median absolute deviation, which was tried first and failed the
+    exact case this exists for. A man who is bright at noon and quiet at eight
+    has two clusters, and more than half his visits sit in the bigger one — so
+    the median deviation is zero, his limits collapse to the floor, and every
+    ordinary evening is announced as a change. That was the daily false alarm
+    the old per-part-of-day baseline had been built to prevent. A quantile
+    measure sees the two clusters as the range they are, which is what makes
+    this replace that mechanism rather than merely delete it.
+    """
+    vals = sorted(c for c in (_composite(v) for v in levels) if c is not None)
+    if len(vals) < 4:
+        return MIN_SPREAD
+    low, _, high = statistics.quantiles(vals, n=4, method="inclusive")
+    return max(MIN_SPREAD, (high - low) / 2.0)
+
+
+def _days_since(levels: list[dict[str, float | None]],
+                visits: list[list[dict]], normal: float, limit: float) -> float | None:
+    """How long this has been going on — in days, counted back through visits.
+
+    Walks back from today to the first visit that was still at his usual level,
+    and reports the age of the visit after it. Returns None when today is the
+    first one that is off, which is most of the time and is the honest answer:
+    a thing that started today has no duration worth naming.
+    """
+    first_off = None
+    for level, visit in zip(levels, visits):         # newest first
+        c = _composite(level)
+        if c is None or c >= normal - limit:
             break
-    if last_ok is None:
+        first_off = visit
+    if first_off is None:
         return None
-    first_bad = None
-    for r in rows:
-        if r["ts"] <= last_ok["ts"]:
-            break
-        first_bad = r
-    if first_bad is None:
-        return None
-    return (time.time() - first_bad["ts"]) / 86400.0
+    started = min(r["ts"] or 0.0 for r in first_off)
+    days = (time.time() - started) / 86400.0
+    return days if days >= 0.7 else None
 
 
 # ── what he is told ─────────────────────────────────────────────────────────
@@ -620,12 +696,16 @@ def as_measured(user_id: str) -> str:
     Empty until there is enough history to mean anything, because a baseline off
     three readings is not a measurement, it is a rumour with a number on it.
     """
-    rows = recent(user_id)
-    if len(rows) < MIN_FOR_BASELINE:
+    past = _visits(recent(user_id))[1 : 1 + USUAL_OVER]
+    if len(past) < MIN_VISITS:
         return ""
 
     out = ["ЧТО ПРО НЕГО УЖЕ ИЗМЕРЕНО (это не догадки — это считалось само, по каждому разговору):"]
-    base = {d: _median(rows[RECENT_N:], d) for d in DIMS}
+    levels = [_level(v) for v in past]
+    base = {
+        d: (statistics.median(vals) if (vals := [lv[d] for lv in levels if lv[d] is not None]) else None)
+        for d in DIMS
+    }
     usual = _describe(base, "")
     if usual:
         out.append(f"Обычно он: {usual}.")
@@ -666,15 +746,19 @@ def block(user_id: str) -> str:
     if not rows:
         return ""
 
-    per_dim_now = {d: rows[0].get(d) for d in DIMS}
     today_note = (rows[0].get("note") or "").strip()
     because = (rows[0].get("because") or "").strip()
 
-    # Not enough history to know what usual even is. Say so plainly rather than
-    # inventing a baseline out of three readings.
-    if len(rows) < MIN_FOR_BASELINE:
-        parts = ["КАК ОН СЕЙЧАС:"]
-        parts.append(_describe(per_dim_now, "ничего особенного") + ".")
+    visits = _visits(rows)
+    today, past = visits[0], visits[1 : 1 + USUAL_OVER]
+    now = _level(today)
+
+    # Not enough visits to know what usual even is. Say so plainly rather than
+    # inventing a baseline out of one evening — and note that this branch is
+    # about VISITS, so an hour of talking on the first day does not buy an
+    # opinion about what he is normally like.
+    if len(past) < MIN_VISITS:
+        parts = ["КАК ОН СЕЙЧАС:", _describe(now, "ничего особенного") + "."]
         if today_note:
             parts.append(today_note)
         parts.append(
@@ -684,51 +768,53 @@ def block(user_id: str) -> str:
         )
         return "\n".join(parts)
 
-    older = rows[RECENT_N:]
-    newest = rows[:RECENT_N]
-    base = {d: _median(older, d) for d in DIMS}
-    now = {d: _mean(newest, d) for d in DIMS}
+    levels = [_level(v) for v in past]
+    # Like with like: his visits at about this hour, if he has enough of them.
+    against = _comparable(levels, past, today[0]["ts"] or time.time())
+    base = {
+        d: (statistics.median(vals) if (vals := [lv[d] for lv in against if lv[d] is not None]) else None)
+        for d in DIMS
+    }
     base_c, now_c = _composite(base), _composite(now)
 
     out = ["КАК ОН СЕГОДНЯ — И ЧЕМ ЭТО ОТЛИЧАЕТСЯ ОТ ОБЫЧНОГО:"]
     out.append("Обычно он: " + _describe(base, "ровный, без крайностей") + ".")
-    out.append("Последнее время: " + _describe(now, "как обычно") + ".")
+    out.append("Сегодня: " + _describe(now, "как обычно") + ".")
     if today_note:
         out.append(f"В этот раз: {today_note}")
     if because:
         out.append(f"Его слова, по которым это видно: {because}")
 
-    # Inside this one conversation — did he arrive one way and change?
-    turn = [r for r in rows if time.time() - r["ts"] < CONVERSATION_GAP * 3]
-    if len(turn) >= 3:
-        first_c, last_c = _composite(turn[-1]), _composite(turn[0])
-        if first_c is not None and last_c is not None:
-            d = last_c - first_c
-            if d <= -MOVED:
-                out.append("ВНУТРИ ЭТОГО РАЗГОВОРА он потускнел: начал живее, "
-                           "чем говорит сейчас. Что-то в самом разговоре его "
-                           "притушило — вспомни, о чём вы только что говорили.")
-            elif d >= MOVED:
-                out.append("ВНУТРИ ЭТОГО РАЗГОВОРА он ожил: сейчас живее, чем "
-                           "начинал. То, о чём вы сейчас говорите, ему хорошо.")
-
     if base_c is None or now_c is None:
         return "\n".join(out)
 
-    # The descriptive lines above use his overall normal, which is the right
-    # thing to SAY — «обычно он ровный» is a fact about the man, not about eight
-    # in the evening. The warning below uses his normal FOR THIS HOUR, which is
-    # the right thing to ACT on. See _normal_by_part.
-    normal = _normal_by_part(older, base_c)
-    delta = _drop_against_own_part(newest, normal)
-    if delta is None:
-        return "\n".join(out)
-    days = _started_days_ago(rows, normal) if delta <= -MOVED else None
+    # His own yardstick — see MIN_SPREAD and the note above it. Everything
+    # below is measured in these, which is why no number here is a preference.
+    limit = _spread(against)
+    delta = now_c - base_c
 
-    if delta <= -STRONGLY:
+    # Did he arrive one way and leave another? Halves of today's visit, not the
+    # first exchange against the last: those are two single integer judgements,
+    # and comparing them fired on ordinary model jitter one turn in seven. The
+    # same yardstick decides what counts, so this adds no second idea.
+    if len(today) >= 6:
+        half = len(today) // 2
+        started, ended = _composite(_level(today[half:])), _composite(_level(today[:half]))
+        if started is not None and ended is not None:
+            swing = ended - started
+            if swing <= -limit * NOTICED:
+                out.append("ВНУТРИ ЭТОГО РАЗГОВОРА он потускнел: начал живее, "
+                           "чем говорит сейчас. Что-то в самом разговоре его "
+                           "притушило — вспомни, о чём вы только что говорили.")
+            elif swing >= limit * NOTICED:
+                out.append("ВНУТРИ ЭТОГО РАЗГОВОРА он ожил: сейчас живее, чем "
+                           "начинал. То, о чём вы сейчас говорите, ему хорошо.")
+
+    if delta <= -limit * STRONG:
+        days = _days_since(levels, past, base_c, limit * NOTICED)
         out.append("")
         out.append("⚠ ЭТО ЗАМЕТНАЯ ПЕРЕМЕНА, И НЕ В ЛУЧШУЮ СТОРОНУ.")
-        if days and days >= 0.7:
+        if days:
             out.append(f"Длится примерно {_days(days)}.")
         out.append(
             "Не бодрись и не веди себя как ни в чём не бывало — бодрячок тому, "
@@ -737,14 +823,14 @@ def block(user_id: str) -> str:
             "Чем именно поднимать ЕГО — сказано выше, в чтении о нём; не "
             "подставляй общую заготовку."
         )
-    elif delta <= -MOVED:
+    elif delta <= -limit * NOTICED:
         out.append("")
         out.append(
             "Он немного тише обычного. Возможно, ничего. Не расспрашивай и не "
             "делай из этого события — просто будь чуть мягче, не тормоши и не "
             "требуй от него бодрости."
         )
-    elif delta >= MOVED:
+    elif delta >= limit * NOTICED:
         out.append("")
         out.append(
             "Он живее обычного. Не гаси это осторожностью и сочувствием — "
@@ -752,11 +838,16 @@ def block(user_id: str) -> str:
         )
 
     # Clarity alone: sadness and confusion are different things, and only one
-    # of them is a reason to be careful with how you speak rather than what
-    # you say.
+    # of them is a reason to be careful with how you speak rather than what you
+    # say. And it SUPPRESSES the paragraph above rather than sitting beside it:
+    # «заметь это одним касанием» and «ни в коем случае не показывай, что
+    # заметил» cancel each other, and they co-occur constantly, because both are
+    # read off the same five numbers.
     if base.get("clarity") is not None and now.get("clarity") is not None:
-        dc = now["clarity"] - base["clarity"]
-        if dc <= -STRONGLY:
+        if now["clarity"] - base["clarity"] <= -limit * STRONG:
+            out = [line for line in out if "ЗАМЕТНАЯ ПЕРЕМЕНА" not in line
+                   and "Заметь это ОДНИМ касанием" not in line
+                   and "немного тише обычного" not in line]
             out.append("")
             out.append(
                 "⚠ Сегодня ему заметно труднее держать нить, чем обычно. "

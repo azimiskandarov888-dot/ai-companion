@@ -165,32 +165,40 @@ def test_what_lifts_him_is_confirmed_the_same_way():
 
 DAY = 86400
 
+#: Exchanges inside one conversation are seconds apart, not minutes. This is the
+#: number that makes these fixtures describe production: `learn.py` writes one
+#: reading per exchange, and a twenty-minute conversation is about twenty-five
+#: of them. Fixtures that wrote one or two readings per visit were testing a
+#: density the app never reaches.
+APART = 40
+PER_VISIT = 25
 
-def _at(user: str, days_ago: float, utc_hour: int, level: float, nudge: int = 0) -> None:
-    """One reading landing on a given UTC hour, `days_ago` days back."""
+
+def _visit(user: str, days_ago: float, utc_hour: int, level: float,
+           n: int = PER_VISIT) -> None:
+    """One whole conversation: n exchanges, seconds apart, at a given level."""
     t = time.time() - days_ago * DAY
     t -= (time.gmtime(t).tm_hour - utc_hour) * 3600
     with db.connect() as conn:
-        conn.execute(
-            "INSERT INTO mood_readings (user_id, ts, energy, warmth, lightness,"
-            " clarity, engagement, word, note, because) VALUES (?,?,?,?,?,?,?,?,?,?)",
-            (user, t + nudge, level, level, level, 0.0, level, "", "", ""),
-        )
+        for i in range(n):
+            conn.execute(
+                "INSERT INTO mood_readings (user_id, ts, energy, warmth, lightness,"
+                " clarity, engagement, word, note, because) VALUES (?,?,?,?,?,?,?,?,?,?)",
+                (user, t + i * APART, level, level, level, 0.0, level, "", "", ""),
+            )
 
 
 def _a_man_brighter_by_day(user: str = "u") -> None:
     """Talks most days around noon and is bright (+1); drops in on some evenings
     and is flatter then (-1). Both are simply how he is."""
-    for d in range(14, 1, -1):
-        _at(user, d, 13, 1.0)
-        _at(user, d, 13, 1.0, nudge=600)
-        if d % 3 == 0:
-            _at(user, d, 20, -1.0)
+    for d in range(30, 1, -1):
+        _visit(user, d, 13, 1.0)
+        if d % 2 == 0:
+            _visit(user, d, 20, -1.0)
 
 
 def _tonight(level: float, user: str = "u", hour: int = 20) -> None:
-    for k in range(3):
-        _at(user, 0, hour, level, nudge=k * 600)
+    _visit(user, 0, hour, level)
 
 
 def test_his_ordinary_evening_is_not_treated_as_a_bad_day():
@@ -218,35 +226,124 @@ def test_a_daytime_drop_is_still_caught():
     assert "⚠" in mood.block("u")
 
 
-def test_a_part_of_the_day_he_barely_visits_falls_back_to_his_overall_normal():
-    """Below MIN_PER_PART there is no such thing as his three-in-the-morning
-    self, and inventing one from a single reading would be worse than the
-    all-day average it replaced."""
+def test_an_hour_he_barely_visits_falls_back_to_his_overall_normal():
+    """Below MIN_VISITS there is no such thing as his three-in-the-morning self,
+    and inventing one from a single visit would be worse than the all-day
+    comparison it replaced.
+
+    Note what the fallback then correctly does: this man's own range runs from
+    +1 at noon to −1 in the evening, so −1 at three in the morning is a level he
+    reaches routinely. It is worth a gentler word and it is NOT an alarm — and
+    the limits say so on their own, because they are built from that range."""
     _a_man_brighter_by_day()
-    _tonight(-1.0, hour=3)                     # a part with no history at all
+    _tonight(-1.0, hour=3)                     # an hour with no history at all
+    said = mood.block("u")
+    assert "немного тише" in said
+    assert "⚠" not in said
+
+
+def test_the_fallback_still_catches_something_genuinely_far_out():
+    """Sensitivity has to survive the widening, or the fallback is just a way of
+    going quiet at the hours nobody has seen him at."""
+    _a_man_brighter_by_day()
+    _tonight(-2.0, hour=3)                     # below anything he has ever been
     assert "⚠" in mood.block("u")
+
+
+def test_nearby_hours_count_as_the_same_time_of_day():
+    """A sliding window, not four blocks. With blocks, two visits forty minutes
+    apart land either side of a boundary and neither can be compared with the
+    other — and which of them is unlucky depends on the clock, not on him."""
+    _a_man_brighter_by_day()
+    _tonight(-1.0, hour=22)                    # two hours off his usual evening
+    assert "⚠" not in mood.block("u")
 
 
 def test_the_hour_is_read_in_utc_so_it_cannot_drift():
     """Local time moves — daylight saving, or the server being rehomed — and a
-    reading that changed parts would compare his evenings against his mornings
-    six months later, invisibly."""
-    winter = time.mktime((2026, 1, 15, 20, 0, 0, 0, 0, 0))
-    summer = time.mktime((2026, 7, 15, 20, 0, 0, 0, 0, 0))
-    assert mood._part(winter) == mood._part(summer)
+    visit that changed hours would compare his evenings against his mornings six
+    months later, invisibly."""
+    winter = [{"ts": time.mktime((2026, 1, 15, 20, 0, 0, 0, 0, 0))}]
+    summer = [{"ts": time.mktime((2026, 7, 15, 20, 0, 0, 0, 0, 0))}]
+    assert mood._hour_of(winter) == mood._hour_of(summer)
 
 
-def test_every_hour_of_the_day_lands_in_a_part():
-    seen = {mood._part(time.time() - h * 3600) for h in range(48)}
-    assert seen == set(range(24 // mood._PART_HOURS))
+def test_hours_apart_goes_the_short_way_round_the_clock():
+    assert mood._hours_apart(23, 1) == 2       # not 22
+    assert mood._hours_apart(1, 23) == 2
+    assert mood._hours_apart(13, 20) == 7
 
 
-def test_a_new_friendship_behaves_exactly_as_it_did_before():
-    """With no per-hour history, the fallback is the old all-day baseline — so
-    nothing about somebody's first fortnight changed."""
-    _fill("u", 12, level=1.0)
-    _fill("u", 3, level=-1.0)
-    assert "⚠" in mood.block("u")
+# --------------------------------------------------------------------------- #
+# A visit is one observation, not twenty-five
+# --------------------------------------------------------------------------- #
+#
+# Twenty-five exchanges inside one conversation are not twenty-five
+# observations of a person — they are one occasion sampled twenty-five times.
+# Treating them as independent is the ecological fallacy, and it cost exactly
+# this: a window of forty READINGS spanned one conversation, so «his usual» was
+# computed from the very conversation being judged against it.
+
+
+def test_a_month_of_being_bright_is_not_erased_by_one_flat_evening():
+    """The failure that started all of this. He was bright for a month and
+    arrived flat today; the old code described him to his friend as «обычно он
+    вялый, слушает вполуха» — a false statement about a person, in the block
+    the app calls the most valuable thing it does."""
+    for d in range(30, 0, -1):
+        _visit("u", d, 20, 1.0)
+    _tonight(-1.0)
+    said = mood.block("u")
+    assert "Обычно он: в тонусе, открыт, ему легко, увлечён." in said
+    assert "вялый" not in said.split("Сегодня")[0]
+    assert "⚠" in said                          # …and the change IS caught
+
+
+def test_one_long_conversation_does_not_become_a_baseline():
+    """Two hours of talking on the first day is one visit, not five."""
+    _visit("u", 0, 13, -2.0, n=120)
+    said = mood.block("u")
+    assert "слишком мало" in said
+
+
+def test_the_window_means_the_same_thing_to_a_daily_and_a_rare_talker():
+    """The property the old window did not have. Fourteen visits is fourteen
+    visits whether he comes every day or twice a month — so the same code gives
+    both of them a usual built from the same amount of knowing them."""
+    for d in range(20, 0, -1):                  # daily
+        _visit("часто", d, 20, 1.0)
+    for i in range(20, 0, -1):                  # twice a month, over ten months
+        _visit("редко", i * 15, 20, 1.0)
+    _visit("часто", 0, 20, -1.0)
+    _visit("редко", 0, 20, -1.0)
+    assert "⚠" in mood.block("часто")
+    assert "⚠" in mood.block("редко")
+
+
+# --------------------------------------------------------------------------- #
+# How far is far is not the same distance for two people
+# --------------------------------------------------------------------------- #
+
+
+def test_a_steady_man_is_read_finely_and_a_variable_one_is_not():
+    """One fixed threshold has to be either deaf to the first or hysterical at
+    the second. Limits built from his own spread are neither."""
+    for d in range(20, 0, -1):                  # never varies
+        _visit("ровный", d, 20, 1.0)
+    for d in range(20, 0, -1):                  # swings a full two points
+        _visit("качает", d, 20, 2.0 if d % 2 else 0.0)
+
+    _visit("ровный", 0, 20, 0.0)                # one point down
+    _visit("качает", 0, 20, 0.0)                # inside his ordinary range
+    assert "⚠" in mood.block("ровный")
+    assert "⚠" not in mood.block("качает")
+
+
+def test_a_whole_point_is_serious_for_somebody_who_never_varies():
+    """The floor under the spread is set to hold exactly this: a quarter of the
+    entire scale, from a man who is the same every single time, is not «немного
+    тише»."""
+    assert mood.STRONG * mood.MIN_SPREAD < 1.0
 
 
 # --------------------------------------------------------------------------- #
@@ -474,3 +571,49 @@ def test_the_four_new_tags_are_real_and_belong_to_the_pair():
         assert tag in mood.TAGS, tag
         assert tag in mood.PAIR, tag
         assert tag in learn._EXTRACTION_SYSTEM, tag
+
+
+def test_ordinary_scoring_noise_is_not_a_change():
+    """The threshold that guards the QUIET word, which is the one that fires
+    most and is therefore the one that can ruin the block by being too low.
+
+    The five scales are integer judgements an extractor makes from one exchange,
+    so two visits from an unchanged man never come out exactly equal. If that
+    jitter is enough to trip «он немного тише обычного», the companion treads
+    carefully every single day, and the day something is actually wrong reads
+    like all the others."""
+    import random
+
+    r = random.Random(20260915)
+    for d in range(24, 0, -1):
+        t = time.time() - d * DAY
+        t -= (time.gmtime(t).tm_hour - 20) * 3600
+        with db.connect() as conn:
+            for i in range(PER_VISIT):
+                v = max(-2, min(2, round(r.gauss(0, 0.6))))
+                conn.execute(
+                    "INSERT INTO mood_readings (user_id, ts, energy, warmth,"
+                    " lightness, clarity, engagement, word, note, because)"
+                    " VALUES (?,?,?,?,?,?,?,?,?,?)",
+                    ("u", t + i * APART, v, v, v, 0.0, v, "", "", ""),
+                )
+    said = mood.block("u")
+    assert "⚠" not in said
+    assert "немного тише" not in said
+    assert "живее обычного" not in said
+
+
+def test_a_day_that_is_merely_less_good_is_not_a_day_that_is_bad():
+    """The other half of the quiet threshold, and the half that actually bites.
+
+    Most people are not the same every time: some visits are ordinary, some are
+    good. Arriving ordinary after a good one is not news, and saying «ты сегодня
+    тише обычного» about it is the daily false alarm wearing a gentler face —
+    it teaches the companion to tread carefully on a schedule, and buries the
+    day something is genuinely wrong among all the days nothing was."""
+    for d in range(20, 0, -1):
+        _visit("u", d, 20, 1.0 if d % 2 else 0.0)   # good day, ordinary day
+    _tonight(0.0)                                    # arrives ordinary
+    said = mood.block("u")
+    assert "немного тише" not in said
+    assert "⚠" not in said
