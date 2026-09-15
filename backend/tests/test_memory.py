@@ -406,3 +406,87 @@ def test_one_persons_measure_is_not_anothers():
     assert memory.how_much_he_says("анна") == "terse"
     assert memory.how_much_he_says("борис") == "talkative"
     assert memory.how_much_he_says("виктор") == "normal"
+
+
+# ── a year of friendship must not break the prompt ──────────────────────────
+
+def test_facts_are_bounded_after_a_year():
+    """Two facts a day for a year is a conservative estimate for the case this
+    app exists for — and it used to put 30,000 characters into the system prompt
+    on every turn, with 33,000 more going to the extractor twenty-five times a
+    conversation."""
+    for i in range(730):
+        memory.add_memory("u", "fact", f"факт номер {i} про его жизнь и привычки")
+    assert len(memory.facts_context("u")) <= memory.FACTS_BUDGET
+    assert len(memory.believes("u")) <= memory.BELIEFS_BUDGET
+
+
+def test_what_survives_the_cap_is_the_important_and_then_the_recent():
+    """Ordering matters more than the cap. Oldest-first was the previous order,
+    so a cap would have kept last spring's dentist appointment and dropped
+    «переехал к дочери» — and importance stays ahead of recency because a
+    biography does not expire."""
+    memory.add_memory("u", "fact", "работал сварщиком тридцать лет", importance=3)
+    for i in range(400):
+        memory.add_memory("u", "fact", f"мелочь номер {i}, сказанная между делом")
+    memory.add_memory("u", "fact", "переехал к дочери")
+
+    said = memory.facts_context("u")
+    assert "работал сварщиком" in said          # important, and old
+    assert "переехал к дочери" in said          # ordinary, and newest
+    assert "мелочь номер 0" not in said         # ordinary, and oldest
+
+
+def test_the_extractor_keeps_far_more_than_the_prompt_does():
+    """The asymmetry is deliberate: a fact that falls out of `believes` can
+    never be marked superseded again, and asking how a dead wife is doing is the
+    worst thing this app can do. Tokens are the cheaper side of that trade."""
+    assert memory.BELIEFS_BUDGET > memory.FACTS_BUDGET * 3
+
+
+# ── one follow-up per conversation, not one per turn ────────────────────────
+
+def test_only_one_thing_is_checked_back_on_per_conversation():
+    """`FOLLOW_UP_COOLDOWN` is twelve hours PER ITEM and this runs once per
+    TURN, so a backlog produced a different «а как там твоё колено?» on nearly
+    every turn — twenty of them in one twenty-minute conversation. That is not
+    a friend remembering, it is a nurse with a clipboard."""
+    old = time.time() - 2 * memory.FOLLOW_UP_MIN_AGE
+    for i in range(40):
+        memory.add_memory("u", "follow_up", f"спросить про дело номер {i}")
+    with db.connect() as conn:
+        conn.execute("UPDATE memories SET created_ts=? WHERE user_id='u'", (old,))
+
+    raised = []
+    for turn in range(25):                      # one twenty-minute conversation
+        memory.log_turn("u", "user", f"реплика {turn}")
+        due = memory.due_follow_ups("u")
+        if due:
+            raised.append(due[0]["id"])
+            memory.surface_follow_up("u", due[0]["id"])
+        memory.log_turn("u", "assistant", "ответ")
+    assert len(raised) == 1, f"за один разговор поднято {len(raised)} дел"
+
+
+def test_but_the_next_conversation_may_raise_another():
+    """Bounded, not silenced. The whole value of the mechanism is that «как
+    твоё колено?» arrives NEXT time — so it has to arrive."""
+    old = time.time() - 2 * memory.FOLLOW_UP_MIN_AGE
+    for i in range(5):
+        memory.add_memory("u", "follow_up", f"спросить про дело номер {i}")
+    with db.connect() as conn:
+        conn.execute("UPDATE memories SET created_ts=? WHERE user_id='u'", (old,))
+
+    memory.log_turn("u", "user", "привет")
+    first = memory.due_follow_ups("u")
+    assert first
+    memory.surface_follow_up("u", first[0]["id"])
+
+    # …the next day
+    with db.connect() as conn:
+        conn.execute("UPDATE turns SET ts = ts - ? WHERE user_id='u'", (2 * 86400,))
+        conn.execute("UPDATE memories SET last_recalled_ts = last_recalled_ts - ?"
+                     " WHERE user_id='u' AND last_recalled_ts IS NOT NULL", (2 * 86400,))
+    memory.log_turn("u", "user", "снова привет")
+    second = memory.due_follow_ups("u")
+    assert second, "в следующий разговор не спросил ни о чём"

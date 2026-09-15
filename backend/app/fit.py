@@ -61,6 +61,9 @@ from __future__ import annotations
 
 from . import db, mood
 
+#: Russian counts do not work like English ones — see mood._times.
+_times = mood._times
+
 #: Same bar as everywhere else. Once is a coincidence.
 CONFIRMED_AT = mood.CONFIRMED_AT
 
@@ -89,19 +92,19 @@ def block(user_id: str) -> str:
     # moment rather than to obey a number.
     good, bad = _net(c, "зашло_что_позвал", "не_зашло_что_позвал")
     if good >= CONFIRMED_AT and good > bad * 2:
-        out.append(f"ТЕМП: твой напор ему заходит — {good} раза оживал от него. Зови смело.")
+        out.append(f"ТЕМП: твой напор ему заходит — {_times(good)} оживал от него. Зови смело.")
     elif bad >= CONFIRMED_AT and bad > good * 2:
         # «норма, а не запрет» stays. It is not the constitution's lesson
         # repeated — it is what stops a direction being read as a ban, right
         # where the direction is given, and a companion who cannot be lively on
         # the evening this man is lively has lost the thing he came for.
         out.append(
-            f"ТЕМП: твой напор ему обычно не заходит — {bad} раза закрывался. "
+            f"ТЕМП: твой напор ему обычно не заходит — {_times(bad)} закрывался. "
             "Исходи из тихого. Но это норма, а не запрет: он сам оживлён — зови смело."
         )
     elif good >= CONFIRMED_AT and bad >= CONFIRMED_AT:
         out.append(
-            f"ТЕМП: по-разному — {good} раза твой напор его поднимал, {bad} раза гасил. "
+            f"ТЕМП: по-разному — {_times(good)} твой напор его поднимал, {_times(bad)} гасил. "
             "Значит дело в моменте, а не в напоре: смотри, каким он пришёл, и не решай заранее."
         )
 
@@ -111,7 +114,7 @@ def block(user_id: str) -> str:
     again = c.get("уговорили_и_обрадовался", 0)
     if again >= CONFIRMED_AT:
         out.append(
-            f"ЕГО НАДО ЗВАТЬ ДВАЖДЫ — {again} раза его первое «нет» оказалось "
+            f"ЕГО НАДО ЗВАТЬ ДВАЖДЫ — {_times(again)} его первое «нет» оказалось "
             "не отказом. Не роняй с первого раза; со второго — роняй."
         )
 
@@ -119,12 +122,12 @@ def block(user_id: str) -> str:
     more, tired = _net(c, "хотел_больше_вопросов", "устал_от_расспросов")
     if more >= CONFIRMED_AT and more >= tired:
         out.append(
-            f"РАССПРОСЫ ЕМУ В РАДОСТЬ — {more} раза от них раскрывался. "
+            f"РАССПРОСЫ ЕМУ В РАДОСТЬ — {_times(more)} от них раскрывался. "
             "Спрашивай много и подробно: норма «по чуть-чуть» — не про него."
         )
     elif tired >= CONFIRMED_AT and tired > more:
         out.append(
-            f"ОТ РАССПРОСОВ ОН УСТАЁТ — {tired} раза. Спрашивай мало и редко. "
+            f"ОТ РАССПРОСОВ ОН УСТАЁТ — {_times(tired)}. Спрашивай мало и редко. "
             "Но если он сам разговорился — расспрашивай сколько хочет, это другое."
         )
 
@@ -182,17 +185,17 @@ def block(user_id: str) -> str:
     led = c.get("сам_повёл_разговор", 0)
     if led >= CONFIRMED_AT:
         out.append(
-            f"ОН УМЕЕТ ВЕСТИ САМ — {led} раза. Завёл тему — не перехватывай "
+            f"ОН УМЕЕТ ВЕСТИ САМ — {_times(led)}. Завёл тему — не перехватывай "
             "и не улучшай её. Слушай и не мешай."
         )
 
     # ── disagreement: warmth's edge ────────────────────────────────────────
     ok, notok = _net(c, "понравилось_несогласие", "не_понравилось_несогласие")
     if ok >= CONFIRMED_AT and ok > notok:
-        out.append(f"СПОР ЕМУ В РАДОСТЬ — {ok} раза оживал, когда ты не соглашался.")
+        out.append(f"СПОР ЕМУ В РАДОСТЬ — {_times(ok)} оживал, когда ты не соглашался.")
     elif notok >= CONFIRMED_AT and notok >= ok:
         out.append(
-            f"СПОР ЕМУ НЕ В РАДОСТЬ — {notok} раза от него замыкался. Своё мнение "
+            f"СПОР ЕМУ НЕ В РАДОСТЬ — {_times(notok)} от него замыкался. Своё мнение "
             "оставь при себе, если не спросили прямо."
         )
 
@@ -200,7 +203,7 @@ def block(user_id: str) -> str:
     slips = c.get("понравился_его_промах", 0)
     if slips >= CONFIRMED_AT:
         out.append(
-            f"ЕМУ НРАВЯТСЯ ТВОИ ПРОМАХИ — {slips} раза. Не исправляйся и не "
+            f"ЕМУ НРАВЯТСЯ ТВОИ ПРОМАХИ — {_times(slips)}. Не исправляйся и не "
             "становись безупречным."
         )
 
@@ -249,7 +252,7 @@ def block(user_id: str) -> str:
     slow = c.get("просил_помедленнее", 0) + c.get("не_расслышал", 0)
     if slow >= CONFIRMED_AT:   # …and the voice itself slows down: tts.rate_for
         out.append(
-            f"ЕМУ ТРУДНО РАЗБИРАТЬ РЕЧЬ — {slow} раза переспрашивал или просил "
+            f"ЕМУ ТРУДНО РАЗБИРАТЬ РЕЧЬ — {_times(slow)} переспрашивал или просил "
             "иначе. Говори короче и проще, по одной мысли за фразу. Он про это "
             "больше не попросит: люди с плохим слухом не жалуются, они привыкают."
         )

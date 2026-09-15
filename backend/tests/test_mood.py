@@ -617,3 +617,50 @@ def test_a_day_that_is_merely_less_good_is_not_a_day_that_is_bad():
     said = mood.block("u")
     assert "немного тише" not in said
     assert "⚠" not in said
+
+
+def test_a_tag_written_with_е_instead_of_ё_is_not_thrown_away():
+    """«Ё» is optional in written Russian and a model writes it or not by
+    chance. Two tags carry one, and a tag that missed the lookup was dropped in
+    total silence — no row, no error, nothing in the log. One of the two is in
+    HURTS, the set the re-reading is told to trust instead of its own judgement,
+    so half of that evidence was quietly disappearing."""
+    mood.observe("u", "ушел_от_вопроса", "здоровье")
+    mood.observe("u", "Ушёл_От_Вопроса", "здоровье")
+    said = mood.standing_block("u")
+    assert "здоровье" in said and "2 раза" in said
+
+
+def test_the_vocabulary_is_still_closed():
+    """It forgives one optional letter. It does not become a fuzzy match."""
+    for invented in ("он_грустный_потому_что_осень", "ушел_от_вопросов", "ушёл"):
+        mood.observe("v", invented, "")
+        mood.observe("v", invented, "")
+    assert mood.standing_block("v") == ""
+
+
+def test_counts_are_said_in_russian():
+    """This text goes into a Russian-speaking companion's prompt, and «так было
+    5 раза» is exactly the kind of mistake he will echo in his own voice."""
+    assert mood._times(1) == "1 раз"
+    assert mood._times(2) == "2 раза"
+    assert mood._times(5) == "5 раз"
+    assert mood._times(11) == "11 раз"          # not «11 раза»
+    assert mood._times(21) == "21 раз"
+    assert mood._times(22) == "22 раза"
+    assert mood._times(25) == "25 раз"
+
+
+def test_a_truth_that_stopped_happening_stops_leading_the_list():
+    """`times` only ever increments, so ordering by it froze the register: once
+    eight tags were ahead, the same eight lines showed for the rest of the
+    friendship, however long ago they stopped being true of him."""
+    for _ in range(9):                            # long ago, and often
+        mood.observe("u", "подняла_история", "")
+    with db.connect() as conn:
+        conn.execute("UPDATE observations SET last_ts=? WHERE user_id='u'",
+                     (time.time() - 300 * DAY,))
+    for _ in range(2):                            # recently, and twice
+        mood.observe("u", "подняло_молчание", "")
+    said = mood.standing_block("u")
+    assert said.index("побыли рядом") < said.index("подняла история")

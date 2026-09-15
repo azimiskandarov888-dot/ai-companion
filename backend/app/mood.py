@@ -343,10 +343,46 @@ def _same_subject(subject: str) -> str:
     return (subject or "").strip().strip(".,!?;:«»\"'…- ").lower()[:80]
 
 
+#: «Ё» is optional in written Russian, and a model writes it or writes «е» by
+#: chance, sentence to sentence. Two tags carry one — `ушёл_от_вопроса` and
+#: `сам_повёл_разговор` — and a tag that misses the lookup was dropped in total
+#: silence: no row, no error, nothing in the log. `ушёл_от_вопроса` is in HURTS,
+#: the set the re-reading is told to trust to the exclusion of its own judgement,
+#: so the silent half of those observations was being lost from the one place
+#: that is meant to be evidence rather than guesswork.
+#:
+#: Note what this is NOT: a fuzzy match. The vocabulary stays closed and an
+#: invented tag is still refused. It only forgives the one letter whose presence
+#: is genuinely optional in the language.
+_CANONICAL = {tag.replace("ё", "е"): tag for tag in TAGS}
+
+
+def _known_tag(tag: str) -> str:
+    """The real tag this is, or empty. See _CANONICAL."""
+    return _CANONICAL.get((tag or "").strip().lower().replace("ё", "е"), "")
+
+
+def _times(n: int) -> str:
+    """«1 раз», «2 раза», «5 раз» — and Russian does not count like English.
+
+    This text goes into the prompt of a Russian-speaking companion, and «так
+    было 5 раза» is the kind of mistake a model will happily echo back in his
+    own voice. Counts pass five routinely.
+    """
+    n = abs(int(n))
+    if n % 100 in (11, 12, 13, 14):
+        return f"{n} раз"
+    if n % 10 == 1:
+        return f"{n} раз"
+    if n % 10 in (2, 3, 4):
+        return f"{n} раза"
+    return f"{n} раз"
+
+
 def observe(user_id: str, tag: str, subject: str = "", evidence: str = "") -> None:
     """Note that something happened — once. Twice is what makes it true."""
-    tag = (tag or "").strip()
-    if tag not in TAGS:
+    tag = _known_tag(tag)
+    if not tag:
         return
     subject = _same_subject(subject)
     now = time.time()
@@ -522,7 +558,7 @@ def standing_block(user_id: str) -> str:
         rows = conn.execute(
             "SELECT tag, subject, times FROM observations"
             f" WHERE user_id=? AND times>=? AND tag NOT IN ({marks})"
-            " ORDER BY times DESC, last_ts DESC LIMIT 8",
+            " ORDER BY last_ts DESC, times DESC LIMIT 8",
             (user_id, CONFIRMED_AT, *PAIR),
         ).fetchall()
     if not rows:
@@ -531,7 +567,7 @@ def standing_block(user_id: str) -> str:
     for r in rows:
         what = TAGS.get(r["tag"], r["tag"])
         subject = f" — {r['subject']}" if r["subject"] else ""
-        lines.append(f"- {what}{subject}. Так было {r['times']} раза.")
+        lines.append(f"- {what}{subject}. Так было {_times(r['times'])}.")
     return (
         "ЧТО УЖЕ ПОДТВЕРДИЛОСЬ (не один раз, а несколько — значит это про НЕГО,"
         " а не случайность):\n" + "\n".join(lines) +
@@ -713,7 +749,7 @@ def as_measured(user_id: str) -> str:
     with db.connect() as conn:
         seen = conn.execute(
             "SELECT tag, subject, times FROM observations WHERE user_id=? AND times>=?"
-            " ORDER BY times DESC, last_ts DESC LIMIT 12",
+            " ORDER BY last_ts DESC, times DESC LIMIT 12",
             (user_id, CONFIRMED_AT),
         ).fetchall()
     def render(rows) -> list[str]:
@@ -721,7 +757,7 @@ def as_measured(user_id: str) -> str:
         for r in rows:
             what = TAGS.get(r["tag"], r["tag"])
             subject = f" — {r['subject']}" if r["subject"] else ""
-            lines.append(f"- {what}{subject}. Раз: {r['times']}.")
+            lines.append(f"- {what}{subject}. {_times(r['times']).capitalize()}.")
         return lines
 
     # Hurts are listed apart, and that is not tidiness. It is the difference

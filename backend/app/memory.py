@@ -123,6 +123,14 @@ REAL_CONVERSATION = 6
 #: than this was unquestionably a real conversation anyway.
 _CONVERSATION_SCAN = 40
 
+#: And enough to find where the CURRENT conversation started, which needs far
+#: more. Forty rows is twenty exchanges, and an ordinary conversation is
+#: twenty-five — so a scan sized for «was this a real conversation?» cannot see
+#: back to the beginning of one, and quietly reports that it began in the
+#: middle. Five hundred rows is a two-hundred-and-fifty-exchange conversation;
+#: the query is one indexed read against a local file.
+_VISIT_SCAN = 500
+
 
 def broke_off_last_time(user_id: str) -> bool:
     """Did their last real conversation just stop, with nobody saying goodbye?
@@ -345,6 +353,45 @@ def _mark_recalled(ids: list[int]) -> None:
 # --------------------------------------------------------------------------- #
 # Facts
 # --------------------------------------------------------------------------- #
+#
+# THESE HAVE TO BE BOUNDED, and for a long time they were not. There was no cap,
+# no merge and no decay — only exact-string dedup, so «ноет колено» and «ноет
+# левое колено» both lived for ever. Measured at a conservative two new facts a
+# day, after one year: 30,000 characters in the system prompt on every single
+# turn, and 33,000 more sent to the extractor twenty-five times a conversation.
+# A year of friendship is the case this app exists for; it must not be the case
+# that breaks it.
+#
+# Ordering is importance first and then NEWEST, which matters more than the cap
+# itself. Oldest-first was the previous order, so a cap would have kept the
+# dentist appointment from last spring and dropped «переехал к дочери». And
+# importance stays ahead of recency because a biography does not expire: «работал
+# сварщиком тридцать лет» is old, permanent and worth more than most of what was
+# said this week.
+
+#: What the companion carries about him in every prompt. Roughly a hundred
+#: facts, which is a great deal to know about somebody.
+FACTS_BUDGET = 3_000
+
+#: And what the extractor is shown so it can retire what stopped being true.
+#: Much larger on purpose, and the asymmetry is deliberate: a fact that falls
+#: out of THIS list can never be marked superseded again, and the worst thing
+#: this app can do is ask how a dead wife is doing. Tokens are the cheaper side
+#: of that trade by a wide margin.
+BELIEFS_BUDGET = 12_000
+
+
+def _within(lines: list[str], budget: int) -> list[str]:
+    """As many of these as fit, in the order given."""
+    out, used = [], 0
+    for line in lines:
+        used += len(line) + 1
+        if used > budget:
+            break
+        out.append(line)
+    return out
+
+
 def facts_context(user_id: str, owner: str = "elder") -> str:
     """The known facts for an owner, formatted for the prompt.
 
@@ -356,10 +403,10 @@ def facts_context(user_id: str, owner: str = "elder") -> str:
     with db.connect() as conn:
         rows = conn.execute(
             "SELECT content FROM memories WHERE user_id=? AND kind='fact' AND owner=? "
-            f"AND {_LIVE} ORDER BY importance DESC, created_ts ASC",
+            f"AND {_LIVE} ORDER BY importance DESC, created_ts DESC",
             (user_id, owner),
         ).fetchall()
-    return "\n".join(f"- {r['content']}" for r in rows)
+    return "\n".join(_within([f"- {r['content']}" for r in rows], FACTS_BUDGET))
 
 
 def believes(user_id: str, owner: str = "elder") -> str:
@@ -384,14 +431,14 @@ def believes(user_id: str, owner: str = "elder") -> str:
             " WHERE user_id=? AND owner=?"
             "   AND (kind='fact' OR (kind='follow_up' AND status='open'))"
             f"  AND {_LIVE}"
-            " ORDER BY kind DESC, importance DESC, created_ts ASC",
+            " ORDER BY kind DESC, importance DESC, created_ts DESC",
             (user_id, owner),
         ).fetchall()
     out = []
     for r in rows:
         mark = "собирается спросить: " if r["kind"] == "follow_up" else ""
         out.append(f"[{r['id']}] {mark}{r['content']}")
-    return "\n".join(out)
+    return "\n".join(_within(out, BELIEFS_BUDGET))
 
 
 def supersede(user_id: str, memory_id: int, why: str = "") -> bool:
@@ -535,10 +582,61 @@ def resurface(user_id: str, exclude: set[int] | None = None) -> dict | None:
     return dict(chosen)
 
 
-def due_follow_ups(user_id: str, limit: int = 1) -> list[dict]:
-    """Caring things that are *due* to be checked back on now (never nagging)."""
-    now = time.time()
+def _this_conversation_began(user_id: str) -> float:
+    """When the conversation happening right now started.
+
+    Walks back through turns until the silence between two of them is long
+    enough to be somebody putting the phone down. Returns now for a person who
+    has said nothing yet, which is the right answer: everything is then still
+    ahead of them.
+    """
     with db.connect() as conn:
+        stamps = [
+            r["ts"] for r in conn.execute(
+                "SELECT ts FROM turns WHERE user_id=? ORDER BY id DESC LIMIT ?",
+                (user_id, _VISIT_SCAN),
+            )
+        ]
+    if not stamps:
+        return time.time()
+    started = stamps[0]
+    for newer, older in zip(stamps, stamps[1:]):
+        if newer - older > NEW_CONVERSATION_GAP:
+            break
+        started = older
+    return started
+
+
+def due_follow_ups(user_id: str, limit: int = 1) -> list[dict]:
+    """Caring things that are *due* to be checked back on now (never nagging).
+
+    ONE PER CONVERSATION, and that is the whole point of the cooldown, which
+    used not to achieve it. `FOLLOW_UP_COOLDOWN` is twelve hours per item, and
+    this runs once per TURN — so a backlog of forty open follow-ups produced a
+    different one on nearly every turn. Measured on one twenty-minute
+    conversation with such a backlog: twenty turns, twenty different «а как там
+    твоё колено?», which is not a friend remembering, it is a nurse with a
+    clipboard.
+
+    The fix is the conversation boundary this module already computes for other
+    reasons: once ANYTHING has been raised in this conversation, the door is
+    shut until the next one.
+
+    And it has to be that global check rather than a stricter per-item cooldown,
+    which was tried first and did nothing: the per-item clause is `last_recalled
+    IS NULL OR last_recalled < …`, and a follow-up nobody has ever raised has
+    NULL, so it passes every threshold there is. Forty never-raised items meant
+    forty different questions no cooldown could touch.
+    """
+    now = time.time()
+    started = _this_conversation_began(user_id)
+    with db.connect() as conn:
+        if conn.execute(
+            "SELECT 1 FROM memories WHERE user_id=? AND owner='elder'"
+            " AND kind='follow_up' AND last_recalled_ts >= ? LIMIT 1",
+            (user_id, started),
+        ).fetchone():
+            return []
         rows = conn.execute(
             "SELECT * FROM memories WHERE user_id=? AND owner='elder' AND kind='follow_up' "
             f"AND status='open' AND {_LIVE} AND created_ts < ? AND created_ts > ? "
