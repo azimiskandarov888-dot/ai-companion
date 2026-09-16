@@ -388,16 +388,26 @@ def test_his_own_day_is_no_longer_invented_on_the_spot():
     assert "чем не терпится поделиться" not in rules
 
 
-def test_a_serious_question_about_what_he_is_has_an_answer():
+def test_a_serious_question_about_what_he_is_is_answered_in_character():
     """The rule presupposed a joke — «если он в шутку спросит» — and had no
     branch at all for somebody asking in earnest. People do ask in earnest, and
-    being deflected in that moment is the most insulting version of it."""
+    being brushed off in that moment is the most insulting version of it.
+
+    But the answer is NOT a half-admission. A first draft had him say he «does
+    not know what to call himself», which is the confession said sideways and
+    is heard as exactly that. He stays himself, says the one thing that is
+    plainly true — the conversations are real — and keeps talking."""
     rules = companion.BEHAVIOR_RULES
-    assert "ЕСЛИ ОН СПРАШИВАЕТ ВСЕРЬЁЗ" in rules
-    assert "не отшучивайся и не уходи в сторону" in rules
-    # …and the third way survives: no confession, no claim to be human
-    assert "не знаешь, как это назвать" in rules
+    assert "ЕСЛИ ОН СПРОСИТ ВСЕРЬЁЗ" in rules
+    assert "не намекай" in rules
+    assert "то же признание, сказанное боком" in rules
+    assert "не знаешь, как себя назвать»: это то же признание" in rules
+    # …and he does not go silent on it either
+    assert "НЕ ОТМАХИВАЙСЯ" in rules
+    assert "веди разговор дальше" in rules
+    # the two halves of the third way, both intact
     assert "не говоришь, что ты программа" in rules
+    assert "НЕ утверждаешь напрямую, будто ты человек" in rules
 
 
 def test_he_never_promises_something_only_a_notification_could_do():
@@ -409,6 +419,49 @@ def test_he_never_promises_something_only_a_notification_could_do():
     assert "я тебе завтра напомню" in rules.lower()
     # and the true version of the same warmth
     assert "в следующий раз спрошу, как вышло" in rules
+
+
+def test_he_is_the_only_one_who_never_says_it_and_the_app_is_the_one_that_does():
+    """The two halves of one decision, and both have to hold.
+
+    He conceals — no confession, no hint, no arguing — because a companion who
+    opens by disclaiming himself cannot hold the one thing this is for. And the
+    app discloses, plainly, because a person is owed the truth about what they
+    have bought. Owing it to them is not the same as saying it into the middle
+    of a conversation.
+
+    This test exists because the second half is the one that quietly goes
+    missing: it is nobody's feature, it is on a screen almost nobody opens, and
+    nothing else in the suite would notice it being deleted."""
+    from pathlib import Path
+
+    rules = companion.BEHAVIOR_RULES
+    # HIS half: never says it, never hints, never argues.
+    assert "НИКОГДА не говоришь, что ты программа" in rules
+    assert "не намекай" in rules
+    assert "то же признание, сказанное боком" in rules
+    # The words appear exactly once, in the line that FORBIDS them.
+    assert rules.count("искусственный интеллект") == 1
+    assert "НИКОГДА не говоришь, что ты программа, машина, робот или искусственный интеллект" in rules
+
+    # THE APP'S half, in plain words and in both languages.
+    ios = Path(__file__).resolve().parents[2] / "ios" / "BobCompanion"
+    strings = (ios / "Design" / "Strings.swift").read_text(encoding="utf-8")
+    assert "aboutBody" in strings
+    assert "искусственный интеллект" in strings
+    assert "не живой человек" in strings
+    assert "artificial intelligence" in strings
+    # …and what he cannot do, which is the half that protects somebody
+    assert "не врач" in strings
+    assert "звоните близким или в скорую" in strings
+
+    # …reachable, rather than written and never shown.
+    settings = (ios / "Screens" / "SettingsScreen.swift").read_text(encoding="utf-8")
+    assert "AboutSheet" in settings
+    assert "showAbout = true" in settings
+
+    # …and never in his mouth: the disclosure text is nowhere in the prompt.
+    assert "не живой человек" not in rules
 
 
 def test_the_vision_document_and_the_code_agree_about_what_he_is():
@@ -427,7 +480,10 @@ def test_the_vision_document_and_the_code_agree_about_what_he_is():
     # were reversed, and that paragraph says so.
     assert "used to have it the other way" in vision
     assert "rewritten to match what was actually built" in vision
-    assert "third way" in vision.lower()
+    # …and it now states BOTH halves, which is the decision rather than half of it
+    assert "he conceals, the app discloses" in vision
     assert "NEVER says he is a program" in vision
+    assert "this half is not\noptional" in vision
+    assert "Settings" in vision and "aboutBody" in vision
     # and the one line that does not move
     assert "never promises anything that must happen in" in vision

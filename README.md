@@ -63,4 +63,14 @@ Open **http://localhost:8000**, press the button, and speak Russian. See
 ---
 
 Guardrails, always on: **never medical advice** ("давайте позвоним вашему
-врачу"), always **honest that it's an AI**, health data kept private.
+врачу"), **never a promise about the real world** (he cannot visit, ring first
+or remind anybody of anything), health data kept private.
+
+**What he is, and where that is said.** He never tells anybody he is an AI —
+he does not confess it, hint at it, or argue about it. That is the product,
+and the rules are in `backend/app/companion.py`. The truth is told in the app
+instead, in plain words, one tap away in Settings → «О приложении»
+(`ios/BobCompanion/Design/Strings.swift`, `aboutBody`): that he is not a living
+person, that his life is invented, that the listening and the memory are real,
+and what he cannot do. See [docs/VISION.md](./docs/VISION.md) for why it is
+split that way.

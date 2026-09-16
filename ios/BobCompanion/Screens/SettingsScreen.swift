@@ -17,6 +17,7 @@ struct SettingsScreen: View {
     @State private var showStartOver = false
     @State private var showServer = false
     @State private var showCallHim = false
+    @State private var showAbout = false
     @State private var language = Strings.language
 
     var body: some View {
@@ -57,9 +58,13 @@ struct SettingsScreen: View {
                             ListRow(label: Strings.rowStartOver(),
                                     value: "›",
                                     tone: Theme.clay) { showStartOver = true }
+                            // Tappable now, and it was not. What he IS is
+                            // said here and nowhere else — he never says it
+                            // himself, and it never appears while he is
+                            // talking. See Strings.aboutBody.
                             ListRow(label: Strings.rowAbout(),
                                     value: AppInfo.version,
-                                    showsDivider: false)
+                                    showsDivider: false) { showAbout = true }
                         }
                     }
                     .padding(.horizontal, Metrics.sideMargin)
@@ -72,6 +77,7 @@ struct SettingsScreen: View {
                 .onEnded { if $0.translation.height > 80 { onClose() } }
         )
         .sheet(isPresented: $showServer) { ServerSheet() }
+        .sheet(isPresented: $showAbout) { AboutSheet(name: app.companionName) }
         // Passed explicitly rather than relying on a sheet inheriting it —
         // which is how every other cover in this app is written, and the
         // reason it opens at all instead of trapping on a missing object.
@@ -88,6 +94,42 @@ struct SettingsScreen: View {
     private func toggleLanguage() {
         language = language == .russian ? .english : .russian
         Strings.language = language
+    }
+}
+
+// MARK: - What he is
+
+/// The one screen in the app that says it outright.
+///
+/// He never does, and that is deliberate — see companion.py. This is the other
+/// half of that decision, and it is not optional: a person is owed the truth
+/// about what they have bought. Owing it to them is not the same as saying it
+/// into the middle of a conversation, so it lives one tap away instead.
+private struct AboutSheet: View {
+    let name: String
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        ZStack {
+            Theme.night.ignoresSafeArea()
+            ScrollView {
+                VStack(alignment: .leading, spacing: 22) {
+                    Text(Strings.aboutTitle())
+                        .appFont(AppType.title)
+                        .foregroundStyle(Theme.linen)
+                    Text(Strings.aboutBody(name)())
+                        .appFont(AppType.body, leading: AppType.bodyLeading)
+                        .foregroundStyle(Theme.sage)
+                        .fixedSize(horizontal: false, vertical: true)
+                    AppButton(title: Strings.cancel(), tone: .leaf) { dismiss() }
+                        .padding(.top, 6)
+                }
+                .padding(.horizontal, Metrics.sideMargin)
+                .padding(.vertical, 34)
+            }
+        }
+        .presentationDetents([.large])
+        .presentationCornerRadius(Metrics.sheetRadius)
     }
 }
 

@@ -308,6 +308,43 @@ enum Strings {
     static let rowStartOver   = Phrase(ru: "Начать заново", en: "Start over")
     static let rowAbout       = Phrase(ru: "О приложении", en: "About")
 
+    // MARK: - What he is
+    //
+    // THE ONE PLACE THIS IS SAID, and it is said plainly.
+    //
+    // He never says it himself. That is the product: a companion who opens by
+    // disclaiming himself cannot hold the one thing this is for, and the rules
+    // in companion.py forbid him to confess, to hint, or to argue about it.
+    //
+    // But a person is owed the truth about what they have bought, and owing it
+    // to them is not the same as saying it into the middle of a conversation.
+    // So it lives here — one tap from anywhere, never in his voice, never on
+    // screen while he is talking. Quiet, and unmissable to anybody looking.
+    //
+    // The tone is the app's tone, not a legal notice. Nothing here is designed
+    // to be skipped, and nothing here is designed to frighten.
+    static let aboutTitle = Phrase(
+        ru: "Что это такое",
+        en: "What this is")
+    static func aboutBody(_ name: String) -> Phrase {
+        let him = name.isEmpty ? "Боб" : name
+        return Phrase(
+            ru: """
+            \(him) — не живой человек. Это программа, и говорить ей помогает искусственный интеллект. Его имя, дом, привычки и всё, что он рассказывает о себе, придуманы.
+
+            Всё остальное — настоящее. Он правда слушает, правда помнит ваши разговоры и отвечает вам, а не по заготовке.
+
+            Но кое-чего он не может, и это важно знать заранее. Он не врач: про здоровье, боль и лекарства — только к врачу или к родным. Он не появится в вашей настоящей жизни — не придёт, не позвонит сам и не напомнит. И если станет плохо, звоните близким или в скорую: он ничего не вызовет.
+            """,
+            en: """
+            \(him) is not a living person. This is an app, and artificial intelligence helps it speak. His name, his home, his habits and everything he tells you about himself are invented.
+
+            Everything else is real. He does listen, he does remember your conversations, and he answers you rather than reading a script.
+
+            There are things he cannot do, and they are worth knowing now. He is not a doctor: for health, pain and medicines, see a doctor or your family. He will not appear in your real life — he will not visit, will not ring you first, and cannot remind you of anything. And if you feel unwell, call your family or an ambulance: he cannot call anyone for you.
+            """)
+    }
+
     // MARK: - Calling him without opening anything
     //
     // The one piece of setup worth asking someone to do, and the only place in
