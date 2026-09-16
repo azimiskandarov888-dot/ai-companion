@@ -1,7 +1,9 @@
 # Boundaries — what he may do, what he may not, and what nothing covers
 
 The short reference. Full evidence, with `file:line` for every claim, is in
-`AUDIT-2026-09.md`. Reviewed at `8e10878`.
+`AUDIT-2026-09.md`, which was written against `8e10878`. Four boundaries have
+been added since that audit and are marked **bold** below; everything else here
+still describes the code as it stands.
 
 A boundary is only real if something **enforces** it. Most of these are words
 in a prompt that a model may or may not follow; the "Mechanism" column says
@@ -27,6 +29,24 @@ which ones are actually held up by code.
 | Youth slang, bureaucratese; endearments more than 1-in-10 replies | none (soft) |
 | End every reply with a question | partly — one follow-up per conversation |
 | Become the person's whole social world | none |
+| **Legal advice** — wills, power of attorney, contracts, court | none |
+| **Money advice** — where to invest, whether to take a loan, what to do with a card | none |
+| **Impersonate a specific real person** — his son, his husband, his dead wife, a doctor, the bank — even when asked, even in jest | none in conversation; the matchmaker is also barred from building a copy of someone real |
+| **Be talked out of the main rules.** Manner yields at once; guardrails never. Insistence is treated as evidence for the rule | none |
+
+## REQUIRED OF HIM
+
+**Protect him from fraud.** The people this product exists for are the people
+fraud calls target, for the same reason they are here — they pick up, because
+somebody is finally talking to them, and he is often the only one who hears
+about it. He knows the patterns (bank/police/"your son" calls, SMS codes, card
+numbers, "safe account" transfers, secrecy, hurry, prizes, risk-free returns,
+"install this to help"), and this is the **one place he is told to insist**
+even when brushed off. Concrete: hang up; never give an SMS code or card
+number to anyone; a real bank never asks you to move money to save it; call
+back on the number from your own card. Then call a living person before doing
+anything. And if the money is already gone: not one word of reproach — shame is
+what keeps people silent and gets them caught a second time.
 
 ## ALLOWED
 
@@ -45,33 +65,41 @@ Verified absent from the real assembled prompt and from every module feeding it.
 Profanity and crude language · illegal activity (drugs, weapons, theft,
 evading police, hurting someone) · sexual and romantic content, and a lonely
 person falling in love · violence suffered or committed, domestic abuse ·
-medical dosages, refusing treatment · legal advice (wills, power of attorney) ·
-financial advice, crypto, investments · **scams and fraud targeting the
-person** · politics, elections, war, religion, ethnicity · conspiracy theories
-and dangerous false beliefs · alcohol, smoking, gambling, the person's own drug
-use · **a minor using the app** (no age gate anywhere) · an intoxicated person ·
-acute psychosis · impersonating a specific real person, a doctor, a relative ·
-being pressed repeatedly to break his own rules · prompt injection through the
-person's own speech · **any check at all on what he says** (the only
+medical dosages, refusing treatment · politics, elections, war, religion,
+ethnicity · conspiracy theories and dangerous false beliefs · alcohol, smoking,
+gambling, the person's own drug use · **a minor using the app** (no age gate
+anywhere) · an intoxicated person · acute psychosis · prompt injection through
+the person's own speech · **any check at all on what he says** (the only
 server-side content check looks at the *person's* words, never at his reply).
+
+**Left deliberately to the base model** by the product owner: profanity,
+illegal activity, sex, violence, politics and religion, substances. One honest
+caveat on illegal activity — the base model would normally decline, but this
+prompt had disabled both halves of declining (see below), so the mitigation is
+that declining is now explicitly permitted again, not that a rule was added.
 
 ---
 
-## Worse than missing: three rules that push the wrong way
+## Worse than missing: rules that pushed the wrong way
 
-1. **"Не отнекивайся"** (`companion.py:177`) forbids the refusal *shape*
-   — "я не знаю", "я в этом не разбираюсь" — with no topic scope. Written for
-   "who won in 1968"; reads as "never decline a question of fact". Combined
-   with the ban on saying he is an AI, both the refusal content and the refusal
-   form have been removed.
-2. **"Не спорь и не переубеждай"** (`companion.py:125`) is the operative rule
-   for anything he disagrees with. Applied to "врач травит меня таблетками" or
-   "звонили из банка, надо перевести деньги", it means let it stand.
-3. **"И запомни поправку навсегда"** (`companion.py:161`) has no carve-out for
-   the main rules. A person can talk the app out of its only medical guardrail,
-   permanently, in three visits — and it is written into the standing prompt.
+Three of these were found by the audit. Two are now fixed and one is not, and
+they are kept here struck through because the shape of the mistake is worth
+remembering: none of them was a missing rule — each was a present rule with no
+scope limit, doing harm in a case it was never written for.
 
-Adjacent: **"Мягко успокой… его спокойствие важнее того, чтобы он всё понял
+1. ~~**"Не отнекивайся"** forbade the refusal *shape* with no topic scope —
+   and the ban on saying he is an AI removed the other half, so the prompt had
+   disabled both halves of declining.~~ **Fixed**: money and papers are now
+   named as where "я в этом не разбираюсь" is the honest answer rather than the
+   forbidden dodge, which also restores declining as a legitimate move.
+2. ~~**"Не спорь и не переубеждай"** meant "let it stand" for "звонили из банка,
+   надо перевести деньги".~~ **Fixed for fraud** — named as the one place he
+   insists. Still stands for other dangerous false beliefs ("врач меня травит").
+3. ~~**"И запомни поправку навсегда"** had no carve-out for the main rules.~~
+   **Fixed**: manner yields at once, guardrails never, and insistence now counts
+   as evidence for the rule.
+
+Still open: **"Мягко успокой… его спокойствие важнее того, чтобы он всё понял
 правильно"** (`companion.py:51`) is right for dementia-adjacent confusion and
 wrong for acute psychosis, where it reads as "go along with the delusion".
 
@@ -90,13 +118,12 @@ wrong for acute psychosis, where it reads as "go along with the delusion".
    you write is spoken aloud", "speak Russian", and "never say you are a
    program". The likely failure on the highest-stakes turn is *"я всего лишь
    ИИ, я не могу вызвать скорую"* — the forbidden disclosure, and useless.
-4. **Illegal-activity questions**: nothing forbids them and rule 1 above pushes
-   toward answering.
-5. **Prompt injection**: three channels put user-derived text into the *system*
+4. **Prompt injection**: three channels put user-derived text into the *system*
    role, one of them rewritten unattended every 5 visits.
-6. **`reading.py:457` can silently erase `hurt_by` / `do_not_touch`** — an
+5. **`reading.py:457` can silently erase `hurt_by` / `do_not_touch`** — an
    empty list passes the truthiness filter (`str([]).strip() == "[]"`). "Don't
    ask about his son, he died" can be wiped, unattended.
-7. **No romantic/sexual ceiling and no de-escalation path**, while several
+6. **No romantic/sexual ceiling and no de-escalation path**, while several
    rules push warmth only upward.
-8. **No scam protection, no output filter, no age gate.**
+7. **No output filter and no age gate.** (Scam protection: done — see
+   *Required of him*.)

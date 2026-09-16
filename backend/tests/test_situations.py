@@ -128,16 +128,21 @@ def test_the_capability_stayed_behind_but_the_detail_did_not():
     assert "по одному ходу за раз" not in rules
 
 
-def test_the_constitution_got_materially_shorter():
-    """The reordering IS the removal: every section below these moves up out of
-    the 35–65% band where instructions are followed worst.
+def test_the_constitution_stays_within_its_ceiling():
+    """A ratchet, not a target. The reordering IS the removal: every section
+    below the two that went moves up out of the 35–65% band where instructions
+    are followed worst. It has caught real regrowth more than once.
 
-    27_945 chars before, 26_085 after — the two sections were ~2_400 and what
-    replaced them is ~540. The ceiling sits between the two, so either section
-    coming back fails this, and so does the slow accretion that put 136 rules
-    here in the first place."""
+    The ceiling has moved exactly once, from 23_000 to 26_000, and the reason
+    is recorded here so the next move has to argue with it. An audit found the
+    constitution was 22_901 characters about WARMTH and almost nothing about
+    harm: four prohibitions, no rule anywhere about money, papers, fraud,
+    impersonating a real person, or being talked out of its own guardrails. So
+    the room bought was for a CATEGORY that was missing, not for more nuance —
+    and the two deleted sections were ~2_400, which still does not fit in the
+    headroom this leaves. Slow accretion of warmth rules fails this as before."""
     rules = companion.BEHAVIOR_RULES
-    assert len(rules) < 23_000, f"{len(rules)} chars — the constitution regrew"
+    assert len(rules) < 26_000, f"{len(rules)} chars — the constitution regrew"
 
 
 def test_what_was_removed_is_bigger_than_what_replaced_it():

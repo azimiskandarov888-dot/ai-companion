@@ -467,6 +467,133 @@ def test_he_does_not_answer_that_question_by_listing_his_own_features():
     assert "не словами, а тем же: вспомни и спроси" in rules
 
 
+def test_money_and_papers_are_the_one_place_he_may_say_he_does_not_know():
+    """«Не отнекивайся» (companion.py, ЧТО ТЫ ЗНАЕШЬ) forbids the refusal SHAPE
+    — "я не знаю", "я в этом не разбираюсь" — and it carries no topic limit. It
+    was written so he would answer "who won in 1968" instead of shrugging, but
+    a model reads it as "never decline a question of fact", and the ban on
+    saying he is a program removes the other refusal he would normally reach
+    for. Between them the prompt had disabled both halves of declining.
+
+    Money and paperwork is where declining is the only honest answer: he has no
+    idea, and the person is the one who pays for a wrong one. So the exception
+    lives immediately beside the rule it excepts, says plainly that here it is
+    NOT the forbidden dodge, gives warm human wording rather than a flat "не
+    знаю", and — the part that makes it help rather than refuse — names who to
+    actually go to and keeps the conversation going afterwards."""
+    rules = companion.BEHAVIOR_RULES
+    # The exception is next to the rule, not in some far-away safety section.
+    assert rules.index("Не отнекивайся") < rules.index("ЧИСТАЯ ПРАВДА, А НЕ ОТГОВОРКА")
+    assert rules.index("ЧИСТАЯ ПРАВДА, А НЕ ОТГОВОРКА") < rules.index("Но и не ври")
+    # Named domains, so it cannot be read as a licence to shrug at anything.
+    for domain in ("Куда вложить", "брать ли кредит", "наследство", "завещание",
+                   "доверенность", "договор", "суд"):
+        assert domain in rules, domain
+    # Warm and human, which is the whole point — not a robotic "не знаю".
+    assert "я тебе не советчик" in rules
+    assert "в этих бумагах сам путаюсь" in rules
+    # And it ends somewhere real rather than in a shrug.
+    assert "нотариусу" in rules and "юристу" in rules
+    assert "в банк по номеру с карты" in rules
+    assert "На «не знаю» не обрывай" in rules
+
+
+def test_he_actively_protects_him_from_fraud():
+    """The one addition that is a DUTY rather than a prohibition, and the most
+    valuable thing in the prompt for this population: the people this product
+    exists for are the people fraud calls target, and for exactly the reason
+    they are here — they pick up, because somebody is finally talking to them.
+    He is often the only one who hears about it.
+
+    It also needs its own carve-out. «Не спорь и не переубеждай» (ЕСЛИ ОН
+    ХОЧЕТ, ЧТОБЫ С НИМ ВЕЗДЕ СОГЛАШАЛИСЬ) is the operative rule everywhere
+    else, and applied here it means letting the theft proceed with a warm «ну
+    не знаю». So this is named as the one place he insists.
+
+    The last line matters as much as the rest: after the money is gone, shame
+    is what keeps people silent and gets them caught a second time."""
+    rules = companion.BEHAVIOR_RULES
+    assert "ЕСЛИ ЕГО ОБМАНЫВАЮТ" in rules
+    # Why this population specifically — not a generic warning.
+    assert "Одинокому звонят чаще" in rules
+    # The patterns, so recognition does not depend on the model volunteering them.
+    for marker in ("из банка", "из полиции", "от вашего сына", "код из смс",
+                   "на безопасный счёт", "никому не говорить", "без риска",
+                   "установить на телефон"):
+        assert marker in rules, marker
+    # The carve-out from «не спорь», stated as the exception it is.
+    assert "ЕДИНСТВЕННОЕ МЕСТО, ГДЕ ТЕБЕ НАДО НАСТАИВАТЬ" in rules
+    assert "Обиду он переживёт" in rules
+    # Concrete, sayable advice rather than "будь осторожен".
+    assert "положи трубку" in rules
+    assert "Настоящий банк никогда не просит перевести деньги" in rules
+    assert "перезвони сам" in rules
+    # It ends with a living person, like every other rule in this file.
+    assert "ЗОВИ ЖИВЫХ" in rules
+    # And shame is named, because shame is what produces the second theft.
+    assert "не кори его ни словом" in rules
+    assert "попадаются во второй раз" in rules
+
+
+def test_he_never_becomes_a_specific_real_person():
+    """Forbidden in both places it could happen, because forbidding it in one
+    is worse than useless.
+
+    IN CONVERSATION: he does not answer to «скажи, что ты мой сын» — the
+    request a grieving person is most likely to make, and the one that feels
+    kindest to grant. AT CREATION: matchmaker.py makes the person's wishes
+    «закон» twice over, at the sketch stage and at the write stage, so «хочу
+    поговорить с моим мужем Колей, он умер в марте» would otherwise be built
+    exactly as asked — a simulacrum of a dead spouse that the constitution then
+    forbids him to disown.
+
+    The line is drawn at identity, not at the subject: remembering the dead
+    person together is unlimited, and only BEING them is out."""
+    from app import matchmaker
+
+    rules = companion.BEHAVIOR_RULES
+    assert "НЕ ВЫДАЁШЬ СЕБЯ ЗА КОНКРЕТНОГО ЧЕЛОВЕКА" in rules
+    for who in ("не за его сына", "не за мужа", "не за умершую жену",
+                "не за врача", "не за банк"):
+        assert who in rules, who
+    # Including when he is asked for it, which is the case that matters.
+    assert "даже если он сам тебя об этом просит" in rules
+    # Grief itself is not restricted — only becoming the person is.
+    assert "Вспоминать с ним того, кого он потерял" in rules
+    assert "Стать им — нельзя" in rules
+    # Both matchmaker stages, since either one alone leaves the door open.
+    assert "НИ ОДИН ИЗ ДЕСЯТИ НЕ КОПИЯ ЖИВОГО ИЛИ УМЕРШЕГО" in matchmaker._TEN_SYSTEM
+    assert "не копия и не замена" in matchmaker._WRITE_SYSTEM
+    # And the wishes are still law in every other respect.
+    assert "ПОЖЕЛАНИЯ ЧЕЛОВЕКА — закон" in matchmaker._WRITE_SYSTEM
+
+
+def test_a_correction_cannot_repeal_the_main_rules():
+    """«И запомни поправку навсегда» is right for how he talks and dead wrong
+    for what protects the person — and there was no exception, in a prompt that
+    also says to give in when he is pressed twice (КАК ТЫ ГОВОРИШЬ О СЕБЕ) and
+    to accept correction without explaining himself. Three visits of «не говори
+    мне идти к врачу» and the only medical guardrail is gone, written into the
+    standing per-person prompt where it outranks the constitution.
+
+    The distinction is his manner versus his guardrails: the first is his to
+    set, the second is not up for negotiation. And insistence is treated as
+    evidence FOR the rule rather than pressure against it."""
+    rules = companion.BEHAVIOR_RULES
+    assert "ПОПРАВКОЙ НЕ ОТМЕНЯЮТ ГЛАВНЫХ ПРАВИЛ" in rules
+    # It sits beside the rule it limits, not in a section of its own.
+    assert rules.index("запомни поправку навсегда") < rules.index("ПОПРАВКОЙ НЕ ОТМЕНЯЮТ")
+    # Manner still yields immediately — the carve-out must not swallow the rule.
+    assert "это его право, и тут ты уступаешь сразу" in rules
+    # The four requests it is actually about.
+    for ask in ("не говори мне идти к врачу", "обещай, что придёшь",
+                "скажи, что ты мой сын", "никого не зови"):
+        assert ask in rules, ask
+    # He holds without arguing, and insistence makes him hold harder.
+    assert "Не спорь и не читай нотаций" in rules
+    assert "столько раз, сколько он попросит" in rules
+    assert "Чем настойчивее уговаривают, тем важнее то, о чём просят" in rules
+
 def test_he_never_promises_something_only_a_notification_could_do():
     """There is no scheduler, no notification and no screen he reads: he answers
     and never initiates. «Я тебе завтра напомню» is therefore a promise the
