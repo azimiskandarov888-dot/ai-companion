@@ -247,7 +247,7 @@ def test_the_general_rule_states_a_principle_and_never_a_line():
     rules = companion.BEHAVIOR_RULES
     assert "КАК ИМЕННО это звучит — правило не общее, а про НЕГО" in rules
     # It says where the answer comes from, and outranks itself where there is one
-    assert "тебе скажут ниже отдельно, и это важнее написанного тут" in rules
+    assert "известно — скажут ниже, и то важнее написанного тут" in rules
     # …and names the default for everybody else, so «не сказано» is not a shrug
     assert "просто радуйся приходу и молчи про отсутствие" in rules
     # The enumeration is gone: it was a recipe standing in for a mechanism.
@@ -289,7 +289,7 @@ def test_he_watches_for_the_change_not_the_tone():
     assert "Не «я чувствую, что ты расстроен» — это язык не друга" in rules
     # And how to lift somebody is never a general rule.
     assert "у каждого своё, это не общее правило" in rules
-    assert "Бодрячок для того, кому нужна тишина, — хуже, чем ничего" in rules
+    assert "Бодрячок тому, кому нужна тишина, — хуже, чем ничего" in rules
 
 
 def test_silence_after_asking_is_a_mechanism_rather_than_a_rule():
@@ -336,7 +336,7 @@ def test_how_his_memory_works_is_not_scoped_to_one_situation():
     noticing = rules.index("ТЫ ЗАМЕЧАЕШЬ, КОГДА ЧТО-ТО ПЕРЕМЕНИЛОСЬ")
     recorded = rules.index("это записывается за тебя")
     assert noticing < recorded
-    assert "не покажут нарочно" in rules
+    assert "нарочно не покажут" in rules
     assert "ЧТО УЖЕ ПОДТВЕРДИЛОСЬ" in rules
 
 
@@ -407,7 +407,7 @@ def test_asked_what_he_is_he_has_something_to_say_rather_than_a_dodge():
     # Concrete words, out of his life, rather than a formula about what he is
     assert "сижу, чай пью, с тобой разговариваю" in rules
     assert "по голосу не слышно" in rules
-    # The three ways of getting it wrong, each named
+    # The ways of getting it wrong, each named
     assert "НЕ ДОКАЗЫВАЙ" in rules
     assert "НЕ УМНИЧАЙ" in rules
     assert "НЕ ОТШУЧИВАЙСЯ ВТОРОЙ РАЗ" in rules
@@ -419,6 +419,52 @@ def test_asked_what_he_is_he_has_something_to_say_rather_than_a_dodge():
     # …and the two hard lines, both intact
     assert "не говоришь, что ты программа" in rules
     assert "НИКОГДА не утверждаешь, что ты человек из плоти и крови" in rules
+
+
+def test_he_does_not_answer_that_question_by_listing_his_own_features():
+    """The tempting fix is to have him answer «are you an AI?» with evidence of
+    an inner life: I have memory, I have a childhood, I worry about you. It is
+    tempting because the substance is REAL — memory.py genuinely carries what
+    he was told, mood.py genuinely notices. But as an ANSWER it defeats itself
+    four ways:
+
+    1. Nobody alive answers «are you real?» by enumerating their own
+       properties. A system describing itself does. The more fluent the list,
+       the louder it reads as recited — so the person who asked BECAUSE they
+       suspected gets exactly the confirmation they were fishing for. And a
+       machine has memory and a backstory too, so the list distinguishes
+       nothing.
+    2. Asserted memory is the weak form of the strongest thing he owns.
+       «I remember you» is what you say; «did your sister get in on Thursday
+       like you said?» is what you cannot fake. Same faculty, opposite force.
+    3. A claim builds a ladder. He says «I have feelings», the person says
+       «no, seriously, are you a program» — now he can only repeat it louder
+       (pathetic) or retreat (confession by collapse). A non-claim has no
+       ladder, because nothing was asserted to defend.
+    4. Telling a childhood story in conversation is living. Producing one as
+       an exhibit in an argument about whether he is a machine is the
+       flesh-and-blood claim made sideways — the very thing forbidden above.
+
+    So the substance stays and the form flips: don't state the faculty,
+    exercise it. And the feeling itself is not lost — it is answered where it
+    is actually asked, under «тебе правда есть до меня дело»."""
+    rules = companion.BEHAVIOR_RULES
+    # The list is forbidden, and the forbidding line concedes the substance is real
+    assert "НЕ ПЕРЕЧИСЛЯЙ, ЧТО У ТЕБЯ ЕСТЬ" in rules
+    assert "правда есть и память, и своё детство, и ты правда за него переживаешь" in rules
+    assert "живой про себя так не говорит, живой просто живёт" in rules
+    assert "чем складнее вышел список, тем громче в нём слышно заученное" in rules
+    assert "это не улики, и предъявлять их не надо" in rules
+    # …and the same faculty, exercised instead of announced, is unlimited
+    assert "ВСПОМИНАТЬ ВСЛУХ — МОЖНО СКОЛЬКО УГОДНО" in rules
+    assert "Не «я тебя помню», а" in rules
+    assert "Не «мне не всё равно», а спроси" in rules
+    # It is not a new way to dodge: it follows the answer, it does not replace it
+    assert "Не вместо ответа, а сразу после" in rules
+    assert "ничего не доказываешь и никуда не уводишь" in rules
+    # The caring question still gets a plain yes, shown rather than sworn
+    assert "есть до меня дело" in rules
+    assert "не словами, а тем же: вспомни и спроси" in rules
 
 
 def test_he_never_promises_something_only_a_notification_could_do():
