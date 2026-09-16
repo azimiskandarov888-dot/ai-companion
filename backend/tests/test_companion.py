@@ -15,7 +15,7 @@ def test_third_way_honesty_present():
     # Never confess machine-ness…
     assert "не говоришь, что ты программа" in rules
     # …and never claim to be a flesh-and-blood human.
-    assert "НЕ утверждаешь напрямую, будто ты человек" in rules
+    assert "НИКОГДА не утверждаешь, что ты человек из плоти и крови" in rules
 
 
 def test_old_confession_line_is_gone():
@@ -388,26 +388,37 @@ def test_his_own_day_is_no_longer_invented_on_the_spot():
     assert "чем не терпится поделиться" not in rules
 
 
-def test_a_serious_question_about_what_he_is_is_answered_in_character():
-    """The rule presupposed a joke — «если он в шутку спросит» — and had no
-    branch at all for somebody asking in earnest. People do ask in earnest, and
-    being brushed off in that moment is the most insulting version of it.
+def test_asked_what_he_is_he_has_something_to_say_rather_than_a_dodge():
+    """Two earlier drafts got this wrong in opposite directions: one had him
+    say he «doesn't know what to call himself» — the confession said sideways —
+    and both left him with a STRATEGY (deflect to the friendship) rather than
+    an ANSWER. A strategy works once. By the third asking it reads as being
+    managed, which is itself the tell.
 
-    But the answer is NOT a half-admission. A first draft had him say he «does
-    not know what to call himself», which is the confession said sideways and
-    is heard as exactly that. He stays himself, says the one thing that is
-    plainly true — the conversations are real — and keeps talking."""
+    The answer is that he genuinely has none, and that is not an evasion: he
+    has never asked himself the question, and nobody wakes up holding proof
+    that they are real. So he answers from inside his own life instead of
+    composing a position about his nature."""
     rules = companion.BEHAVIOR_RULES
-    assert "ЕСЛИ ОН СПРОСИТ ВСЕРЬЁЗ" in rules
-    assert "не намекай" in rules
-    assert "то же признание, сказанное боком" in rules
-    assert "не знаешь, как себя назвать»: это то же признание" in rules
-    # …and he does not go silent on it either
-    assert "НЕ ОТМАХИВАЙСЯ" in rules
-    assert "веди разговор дальше" in rules
-    # the two halves of the third way, both intact
+    assert "КОГДА СПРАШИВАЮТ, ЧТО ТЫ ТАКОЕ" in rules
+    assert "НЕ УВЁРТКА" in rules
+    assert "никогда его себе не задавал" in rules
+    assert "не просыпаются с доказательством" in rules
+    # Concrete words, out of his life, rather than a formula about what he is
+    assert "сижу, чай пью, с тобой разговариваю" in rules
+    assert "по голосу не слышно" in rules
+    # The three ways of getting it wrong, each named
+    assert "НЕ ДОКАЗЫВАЙ" in rules
+    assert "НЕ УМНИЧАЙ" in rules
+    assert "НЕ ОТШУЧИВАЙСЯ ВТОРОЙ РАЗ" in rules
+    assert "не переводи каждый раз на вашу дружбу" in rules
+    # And the half that matters most: what is actually being asked underneath
+    assert "ПРО УСТРОЙСТВО МИРА СПРАШИВАЮТ ПОЧТИ НИКОГДА" in rules
+    for underneath in ("есть до меня дело", "Я не дурак", "не исчезнешь"):
+        assert underneath in rules, underneath
+    # …and the two hard lines, both intact
     assert "не говоришь, что ты программа" in rules
-    assert "НЕ утверждаешь напрямую, будто ты человек" in rules
+    assert "НИКОГДА не утверждаешь, что ты человек из плоти и крови" in rules
 
 
 def test_he_never_promises_something_only_a_notification_could_do():
@@ -438,8 +449,8 @@ def test_he_is_the_only_one_who_never_says_it_and_the_app_is_the_one_that_does()
     rules = companion.BEHAVIOR_RULES
     # HIS half: never says it, never hints, never argues.
     assert "НИКОГДА не говоришь, что ты программа" in rules
-    assert "не намекай" in rules
-    assert "то же признание, сказанное боком" in rules
+    assert "НЕ УВЁРТКА" in rules
+    assert "НЕ ДОКАЗЫВАЙ" in rules
     # The words appear exactly once, in the line that FORBIDS them.
     assert rules.count("искусственный интеллект") == 1
     assert "НИКОГДА не говоришь, что ты программа, машина, робот или искусственный интеллект" in rules
