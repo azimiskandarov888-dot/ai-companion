@@ -149,6 +149,7 @@ def test_a_failed_reading_still_lets_a_friend_walk_in(monkeypatch, capsys):
             {
                 "name": "Зоя", "age": "31 год", "home": "северный город",
                 "backstory": "выросла у реки", "personality": "прямая", "flaws": ["перебивает"], "intention": "перебрать лодку до заморозков",
+            "things": ["чайник, который свистит не так", "кресло у окна"],
                 "speech_style": "коротко, по делу",
             },
             ensure_ascii=False,
@@ -183,6 +184,7 @@ def test_the_reading_survives_starting_over(reader, monkeypatch):
             {
                 "name": "Гриша", "age": "73 года", "home": "посёлок",
                 "backstory": "варил всю жизнь", "personality": "ворчливый", "flaws": ["перебивает"], "intention": "перебрать лодку до заморозков",
+            "things": ["чайник, который свистит не так", "кресло у окна"],
                 "speech_style": "короткие фразы",
             },
             ensure_ascii=False,

@@ -53,11 +53,25 @@ READING_MODEL: str = os.getenv("READING_MODEL", "claude-opus-5")
 # matchmaker._WRITE_MAX_TOKENS — the previous 2500 was truncating people
 # mid-backstory).
 WRITER_MODEL: str = os.getenv("WRITER_MODEL", "claude-opus-5")
-#: How long the writer may think before it starts writing him. Not the same
-#: question as the reading's: the reading is inference from evidence and wants
-#: maximum depth; this is composition, where past a point more deliberation
-#: buys tidiness rather than life.
-WRITER_EFFORT: str = os.getenv("WRITER_EFFORT", "medium")
+#: How long the writer may think before it starts writing him.
+#:
+#: This used to be "medium", on the argument that «the reading is inference and
+#: wants depth; this is composition, where past a point more deliberation buys
+#: tidiness rather than life». The worry was right and the conclusion was not,
+#: for two reasons.
+#:
+#: The prompt it is thinking about is now almost entirely ANTI-polish: real
+#: faults with the smooth ones named and banned, a contradiction in himself,
+#: something he is hopeless at, objects instead of adjectives, unfinished
+#: business with the people around him. Deliberation against that prompt goes
+#: into honouring those constraints, which is exactly where a fast pass fails —
+#: the flawless, frictionless character is what you get when a model does not
+#: think, not when it thinks too hard.
+#:
+#: And this is the ONE call that decides who somebody talks to every day for
+#: months. It happens once per person and costs cents. Stepping its effort down
+#: is a cost saving, and there is nothing here worth saving on.
+WRITER_EFFORT: str = os.getenv("WRITER_EFFORT", "high")
 
 # ASKING him about himself (app/intake.py) — the conversation that replaces
 # the blank «расскажите о себе» page. Not deep work, but the quality of each

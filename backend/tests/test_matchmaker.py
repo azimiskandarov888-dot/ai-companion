@@ -26,6 +26,7 @@ FRIEND = {
     "home": "город у гор",
     "backstory": "работал архитектором, теперь рисует и гуляет",
     "personality": "спокойный, наблюдательный, с хитрым юмором", "flaws": ["перебивает"], "intention": "перебрать лодку до заморозков",
+            "things": ["чайник, который свистит не так", "кресло у окна"],
     "speech_style": "короткие фразы, любит словечко «стало быть»",
     "likes": ["футбол", "старые фильмы", "архитектура"],
     "dislikes": ["спешку"],
@@ -476,7 +477,12 @@ def test_a_companion_with_no_faults_is_rejected():
 
     # And a written-out one still passes, so the check is about the field and
     # not about the schema having got stricter everywhere.
-    whole = flawless[:-1] + ', "flaws": ["перебивает", "упрям в мелочах"], "intention": "перебрать лодку до заморозков"}'
+    whole = (
+        flawless[:-1]
+        + ', "flaws": ["перебивает", "упрям в мелочах"],'
+        + ' "intention": "перебрать лодку до заморозков",'
+        + ' "things": ["чайник, который свистит не так"]}'
+    )
     assert matchmaker._extract_json(whole)["flaws"]
 
 

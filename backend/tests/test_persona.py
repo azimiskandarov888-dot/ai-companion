@@ -108,6 +108,7 @@ def test_his_faults_reach_the_conversation():
     block = persona.build_persona_block({
         "name": "Фёдор",
         "flaws": ["перебивает", "занудствует про давление"], "intention": "перебрать лодку до заморозков",
+            "things": ["чайник, который свистит не так", "кресло у окна"],
         "contradiction": "ругает город и ездит туда каждый год",
         "wound": "не помирился с братом",
     })
@@ -146,7 +147,8 @@ def test_identity_cannot_be_rewritten_by_a_deepening():
     somebody's friend quietly becomes another person."""
     him = {"name": "Фёдор", "age": "70 лет", "home": "Ростов",
            "backstory": "работал в литейном", "personality": "ворчливый",
-           "speech_style": "коротко", "wound": "брат", "flaws": ["перебивает"], "intention": "перебрать лодку до заморозков"}
+           "speech_style": "коротко", "wound": "брат", "flaws": ["перебивает"], "intention": "перебрать лодку до заморозков",
+            "things": ["чайник, который свистит не так", "кресло у окна"]}
 
     grown = persona.merge_growth(him, {
         "name": "Николай",                 # ← all of this
@@ -260,6 +262,7 @@ def test_he_is_in_the_middle_of_something():
     you ask somebody you know."""
     block = persona.build_persona_block({
         "name": "Пётр", "intention": "перебрать лодку до заморозков",
+            "things": ["чайник, который свистит не так", "кресло у окна"],
     })
     assert "перебрать лодку до заморозков" in block
     # It is background, not an agenda item: a friend who opens every call with
@@ -311,3 +314,70 @@ def test_a_short_list_is_left_alone():
     him = {"name": "Пётр", "flaws": ["перебивает"]}
     grown = persona.merge_growth(him, {"flaws": ["упрям в мелочах"]})
     assert grown["flaws"] == ["перебивает", "упрям в мелочах"]
+
+
+# ── he occupies space, owes people things, and cannot do everything ────────
+
+def test_he_has_things_and_not_only_qualities():
+    """A character made of adjectives lives nowhere, and it is audible the
+    first time somebody asks what he is doing right now: he has nothing to
+    answer with but another adjective. People are made of objects — the kettle
+    that whistles wrong, the chair by the window, her scarf in the glovebox."""
+    from app import matchmaker
+
+    block = persona.build_persona_block({
+        "name": "Пётр",
+        "things": ["чайник, который свистит не так", "кресло у окна"],
+    })
+    assert "чайник, который свистит не так" in block
+    assert "кресло у окна" in block
+    # Required of the write, like flaws and the intention — a model writing a
+    # character will produce qualities all day and never one object.
+    assert "things" in matchmaker._REQUIRED
+    assert "ВЕЩИ И МЕСТА, А НЕ СВОЙСТВА" in matchmaker._WRITE_SYSTEM
+
+
+def test_the_people_around_him_are_ties_and_not_a_census():
+    """«Михалыч — сосед» is a census entry: there is nothing in it to tell.
+    What makes somebody worth mentioning is the unfinished thing between
+    you."""
+    from app import matchmaker
+
+    block = persona.build_persona_block({
+        "name": "Пётр",
+        "cast": [{"name": "Михалыч", "who": "сосед",
+                  "between": "вечно занимает и не отдаёт"}],
+    })
+    assert "Михалыч — сосед — вечно занимает и не отдаёт" in block
+    assert "ЭТО СВЯЗИ, А НЕ СПИСОК" in matchmaker._WRITE_SYSTEM
+
+
+def test_an_old_companion_without_the_tie_still_reads():
+    """Everybody created before this has cast entries with no «between», and
+    none of them should lose their neighbour over it."""
+    block = persona.build_persona_block({
+        "name": "Пётр", "cast": [{"name": "Люба", "who": "фельдшерица"}],
+    })
+    assert "Люба — фельдшерица" in block
+
+
+def test_there_is_something_he_is_no_good_at():
+    """The other side of having one subject he knows cold. Somebody who is
+    knowledgeable about everything is not somebody — and the constitution now
+    permits «я в этом не разбираюсь» for money and papers, which reads as a
+    rule rather than as him unless he was written with a blind spot."""
+    from app import matchmaker
+
+    block = persona.build_persona_block({
+        "name": "Пётр", "hopeless": ["не разбирается в бумагах"],
+    })
+    assert "не разбирается в бумагах" in block
+    assert "ЧЕГО ОН НЕ УМЕЕТ" in matchmaker._WRITE_SYSTEM
+
+
+def test_his_things_grow_with_the_friendship_but_not_without_end():
+    him = {"name": "Пётр", "things": ["чайник", "кресло", "ящик с гайками"]}
+    for i in range(20):
+        him = persona.merge_growth(him, {"things": [f"вещь {i}"]})
+    assert len(him["things"]) == persona._MOST["things"]
+    assert him["things"][:3] == ["чайник", "кресло", "ящик с гайками"]

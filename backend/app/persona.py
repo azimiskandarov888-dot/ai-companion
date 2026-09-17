@@ -164,7 +164,7 @@ def _joined(value) -> str:
 
 #: Fields a friendship is allowed to reveal more of. Everything not listed
 #: here is identity and is untouchable.
-GROWABLE = ("cast", "flaws", "likes", "dislikes", "opinions", "habits")
+GROWABLE = ("cast", "flaws", "likes", "dislikes", "opinions", "habits", "things")
 
 #: …but not without end. These lists only ever grew, and a friendship that
 #: lasts a year grew them from under two thousand characters to over twenty —
@@ -175,7 +175,8 @@ GROWABLE = ("cast", "flaws", "likes", "dislikes", "opinions", "habits")
 #:
 #: A real person is a handful of things you could name about them. So: a
 #: ceiling per list.
-_MOST = {"flaws": 5, "opinions": 6, "habits": 6, "likes": 8, "dislikes": 8, "cast": 6}
+_MOST = {"flaws": 5, "opinions": 6, "habits": 6, "likes": 8, "dislikes": 8,
+         "cast": 6, "things": 7}
 
 #: And when one is full, the oldest goes — EXCEPT the first few, which are the
 #: character as written. Those are who he is; everything after them is what a
@@ -266,6 +267,7 @@ _DEEPEN_SYSTEM = """Ты дописываешь человека, которог
 - Что за ним заметилось нехорошего. Перебил. Второй раз рассказал ту же историю. Уперся в ерунде. Настоящие мелкие недостатки, а не достоинства в маскировке.
 - Что он высказал как своё мнение — особенно если оно неудобное.
 - Что он делает по привычке.
+- Какие его ВЕЩИ и углы всплыли: чайник, кресло, ящик в сарае. Человек занимает место, и это слышно.
 - Что он полюбил или не полюбил по ходу дела.
 - И что у него происходит СЕЙЧАС — на этой неделе, конкретно.
 - И ЧТО ОН ЗАТЕЯЛ. У него есть одно дело, которое он делает и никак не доделает, — оно указано ниже. Посмотри по разговорам: он его доделал? бросил? застрял? Тогда напиши в "intention" НОВОЕ дело — обычное, своё, на недели, такое, о котором друга можно спросить: перебрать лодку до заморозков, дописать письмо брату, выходить котёнка, разобрать чердак. Не доделал и не бросил — верни его же, можно теми же словами. Не подвиг и не мечта: просто дело, которое всё не кончается.
@@ -277,7 +279,7 @@ _DEEPEN_SYSTEM = """Ты дописываешь человека, которог
 - Никаких новых ран и никакой новой нужды в нём. Он не становится жалобнее со временем.
 
 Ответь ТОЛЬКО валидным JSON с ключами (любой может быть пустым):
-cast (список {"name","who"} — новые живые люди рядом с ним), flaws (список — что за ним заметилось), likes, dislikes, opinions, habits (списки строк), current_life (что у него происходит сейчас — строка, заменяет прежнее)."""
+cast (список {"name","who","between"} — новые живые люди рядом с ним и что между вами), things (список — его вещи и углы, если в разговорах всплыли новые), flaws (список — что за ним заметилось), likes, dislikes, opinions, habits (списки строк), current_life (что у него происходит сейчас — строка, заменяет прежнее)."""
 
 
 async def deepen(user_id: str) -> None:
@@ -400,15 +402,29 @@ def build_persona_block(persona: dict) -> str:
     add("Что не любишь", p.get("dislikes"))
     add("Твои взгляды (можешь мягко их отстаивать)", p.get("opinions"))
 
+    # His people, and what is actually BETWEEN him and each of them. A name
+    # with a job title is a census: there is nothing to tell about it. What
+    # makes somebody worth mentioning is the unfinished thing — who owes whom,
+    # who he avoids, who he has not called back.
     cast = p.get("cast") or []
     if cast:
         people = "; ".join(
-            f"{c.get('name', '')} — {c.get('who', '')}".strip(" —")
+            " — ".join(
+                bit for bit in (c.get("name"), c.get("who"), c.get("between")) if bit
+            )
             for c in cast
             if isinstance(c, dict) and c.get("name")
         )
         if people:
             lines.append(f"Люди в твоей жизни (говори о них по имени): {people}.")
+
+    # The furniture of his life. A character with a nature and not one object
+    # lives nowhere, and it is audible the first time somebody asks him what he
+    # is doing right now: he has nothing to answer with but an adjective.
+    add("Твои вещи и углы (они просто есть, ими и живёшь)", p.get("things"))
+    # …and the other side of having one subject he knows cold. Somebody who is
+    # knowledgeable about everything is not somebody.
+    add("В чём ты пустой и не стыдишься этого", p.get("hopeless"))
 
     current = str(p.get("current_life") or "").strip()
     if current:
