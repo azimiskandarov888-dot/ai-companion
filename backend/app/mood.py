@@ -727,6 +727,24 @@ def lifts_confirmed(user_id: str) -> bool:
     return row is not None
 
 
+def confirmed_count(user_id: str) -> int:
+    """How many behaviours have been watched happening at least twice.
+
+    A count rather than a list, and the only caller wants it as a signal: the
+    re-reading uses the GROWTH of this number to decide that the person it
+    describes has moved on without it. Confirmed is the right thing to count —
+    a one-off is not news about somebody, and CONFIRMED_AT exists so that the
+    difference between «happened» and «is true of him» has a mechanism rather
+    than a judgement.
+    """
+    with db.connect() as conn:
+        row = conn.execute(
+            "SELECT COUNT(*) n FROM observations WHERE user_id=? AND times>=?",
+            (user_id, CONFIRMED_AT),
+        ).fetchone()
+    return int(row["n"] if row else 0)
+
+
 def as_measured(user_id: str) -> str:
     """What has been COUNTED about him — for the re-reading, not for the prompt.
 

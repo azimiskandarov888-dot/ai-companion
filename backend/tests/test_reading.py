@@ -14,7 +14,8 @@ import time
 
 import pytest
 
-from app import db, brain, companion, config, identity, matchmaker, persona, reading
+from app import (db, brain, companion, config, identity, matchmaker, memory, mood,
+                 persona, reading)
 
 #: These tests check config.READING_PATH / config.PERSONA_PATH directly, which
 #: are the anonymous user's files — so that is whose reading this is.
@@ -725,9 +726,16 @@ def test_re_reading_is_counted_in_visits_and_not_in_turn_rows():
     conversation, TWICE A DAY — six hundred rewritings a year of the permanent
     document, with KEEP_REVISIONS covering under five days of that year."""
     assert not hasattr(reading, "REREAD_EVERY")
-    assert reading.REREAD_EVERY_VISITS <= 8
-    # eight saved versions must cover more than a token amount of a year
-    assert reading.KEEP_REVISIONS * reading.REREAD_EVERY_VISITS >= 30
+    # Dense while he is a stranger, rare once he is known: at visit two the
+    # thing being replaced is a paragraph written to a machine on install day,
+    # and at visit forty it is weeks of how he really talks.
+    assert reading.every_at(1) == 1 and reading.every_at(3) == 1
+    assert reading.every_at(10) == 3
+    assert reading.every_at(40) == 10
+    assert reading.every_at(5) < reading.every_at(20), "должно РЕДЕТЬ, а не густеть"
+    # The sparse end still has to satisfy the constraint the flat number had:
+    # eight saved versions covering more than a token slice of a year.
+    assert reading.KEEP_REVISIONS * reading.every_at(40) >= 30
 
 
 def test_visits_are_counted_the_same_for_a_talker_and_a_quiet_man(tmp_path, monkeypatch):
@@ -768,3 +776,82 @@ def test_a_pause_inside_one_conversation_is_not_a_second_visit(tmp_path, monkeyp
                 ("u", "user", "x", now - 3600 + offset),
             )
     assert memory.visits_so_far("u") == 1
+
+
+# ── the schedule is a ceiling, not the decision ────────────────────────────
+
+def test_a_person_who_has_changed_is_read_before_the_clock_says_so(tmp_path, monkeypatch):
+    """The whole job of this app is noticing when somebody is not who they
+    were. A fixed schedule cannot do that: a man who has been steady for six
+    months and changes in a week would wait out ten visits holding a
+    description of the person he used to be.
+
+    So the visits are a ceiling and the evidence is the trigger. Three
+    behaviours CONFIRMED since the last reading — six sightings, because
+    mood.CONFIRMED_AT is what separates «happened once» from «is true of him»
+    — and he is read again now rather than on schedule."""
+    monkeypatch.setattr(config, "DB_PATH", str(tmp_path / "t.db"))
+    db.init_db()
+    user = "changed"
+    for i in range(reading.REREAD_MIN_TURNS):
+        memory.log_turn(user, "user" if i % 2 == 0 else "assistant", f"слово {i}")
+
+    reading.save(user, {
+        "register": "просто",
+        "_read_at_visit": memory.visits_so_far(user),
+        "_confirmed_at_read": mood.confirmed_count(user),
+    })
+
+    called = False
+
+    async def fake_reread(*a, **kw):
+        nonlocal called
+        called = True
+        return {"register": "просто"}
+
+    monkeypatch.setattr(reading, "reread", fake_reread)
+
+    # Nothing has changed and the clock has not come round: nothing happens.
+    asyncio.run(reading.keep_reading(user))
+    assert not called, "прочитал, хотя ни расписание, ни перемена не сработали"
+
+    # …and now three behaviours, each watched twice. He is not who it says.
+    for tag in list(mood.TAGS)[: reading.NOTICED_CONFIRMATIONS]:
+        mood.observe(user, tag)
+        mood.observe(user, tag)
+    assert mood.confirmed_count(user) >= reading.NOTICED_CONFIRMATIONS
+
+    asyncio.run(reading.keep_reading(user))
+    assert called, "перемену подтвердили, а он всё ещё ждёт расписания"
+
+
+def test_one_confirmed_thing_is_not_a_changed_person(tmp_path, monkeypatch):
+    """The other half. A trigger that fires on the first confirmation would be
+    a re-reading every other visit, which is the churn the graduated schedule
+    exists to stop — on a document that is REPLACED, not added to."""
+    monkeypatch.setattr(config, "DB_PATH", str(tmp_path / "t.db"))
+    db.init_db()
+    user = "steady"
+    for i in range(reading.REREAD_MIN_TURNS):
+        memory.log_turn(user, "user" if i % 2 == 0 else "assistant", f"слово {i}")
+    reading.save(user, {
+        "register": "просто",
+        "_read_at_visit": memory.visits_so_far(user),
+        "_confirmed_at_read": 0,
+    })
+
+    called = False
+
+    async def fake_reread(*a, **kw):
+        nonlocal called
+        called = True
+        return {"register": "просто"}
+
+    monkeypatch.setattr(reading, "reread", fake_reread)
+    tag = list(mood.TAGS)[0]
+    mood.observe(user, tag)
+    mood.observe(user, tag)
+    assert mood.confirmed_count(user) == 1
+
+    asyncio.run(reading.keep_reading(user))
+    assert not called, "одного подтверждения хватило — это уже не перемена, а шум"

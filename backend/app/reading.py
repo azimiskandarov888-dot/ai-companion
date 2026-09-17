@@ -324,12 +324,43 @@ def load(user_id: str) -> dict | None:
 #: somebody talks for an hour or for five minutes, while «sixty turns» is a
 #: fortnight for one of them and an afternoon for the other.
 #:
-#: Five: about seventy-five re-readings a year for somebody who talks daily
-#: (it was six hundred), and the same five visits for somebody who talks twice a
-#: month. Rare enough that one bad evening is a fifth of the evidence rather
-#: than a third, and it puts KEEP_REVISIONS — eight saved versions — back to
-#: covering over a month of undo instead of under five days.
-REREAD_EVERY_VISITS = 5
+#: …and it is not one number, because the worth of reading somebody again is
+#: not constant. At visit two you are replacing a paragraph written to a
+#: machine on the day the app was installed — almost anything is better than
+#: that. At visit forty you are replacing something already built out of weeks
+#: of how he actually talks, and the gain is mostly churn — churn on a document
+#: that gets REPLACED rather than added to, which is how «не спрашивать про
+#: сына, он умер» quietly stops being written down.
+#:
+#: A flat five was both mistakes at once: too rare in the first fortnight, too
+#: eager ever after. So it is graduated. The sparse end still has to satisfy
+#: the old constraint — one bad evening must stay a small share of the
+#: evidence, and KEEP_REVISIONS (eight saved versions) must cover more than a
+#: token slice of a year. The dense end cannot dilute anything, because
+#: _REREAD_WINDOW covers every turn there has ever been at that point.
+_STRANGER_UNTIL = 5     # while he is still a stranger — every visit
+_SETTLING_UNTIL = 16    # while he is settling in — every third
+_SETTLING_EVERY = 3
+_SETTLED_EVERY = 10     # and once he is known — rarely
+
+
+def every_at(visits: int) -> int:
+    """Visits between readings at this point in the friendship."""
+    if visits < _STRANGER_UNTIL:
+        return 1
+    if visits < _SETTLING_UNTIL:
+        return _SETTLING_EVERY
+    return _SETTLED_EVERY
+
+
+#: A schedule is a ceiling, though, not the decision. Three behaviours
+#: confirmed since the last reading is at least six sightings of things it
+#: never accounted for: he has moved, and sitting out the clock leaves the
+#: companion holding a description of somebody slightly out of date. Confirmed
+#: and not merely seen, because a one-off is not news about a person — that is
+#: what mood.CONFIRMED_AT is for. Where a rule can be replaced by a mechanism,
+#: replace it.
+NOTICED_CONFIRMATIONS = 3
 
 #: Never re-read on a scrap. Below this there is nothing to learn from that
 #: the intake did not already say better.
@@ -405,13 +436,19 @@ async def keep_reading(user_id: str) -> None:
     since = existing.get("_read_at_visit")
     if since is None:
         since = visits if existing.get("_read_at_turn") else 0
-    if visits - int(since) < REREAD_EVERY_VISITS:
+    # Either enough visits have gone by for where this friendship is…
+    due = visits - int(since) >= every_at(visits)
+    # …or enough has been WATCHED about him to make the reading out of date.
+    confirmed = mood.confirmed_count(user_id)
+    learned = confirmed - int(existing.get("_confirmed_at_read") or 0)
+    if not due and learned < NOTICED_CONFIRMATIONS:
         return
 
     try:
         turns = memory.recent_turns(user_id, limit=_REREAD_WINDOW)
         fresh = await reread(user_id, existing, turns)
         fresh["_read_at_visit"] = visits
+        fresh["_confirmed_at_read"] = confirmed
         save(user_id, fresh)
         print(f"  ✎ re-read {user_id[:8]} at visit {visits}", flush=True)
     except Exception as e:  # noqa: BLE001 — a background refinement, never a failure
