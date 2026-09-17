@@ -187,14 +187,70 @@ final class AppState: ObservableObject {
         defaults.removeObject(forKey: Keys.account)
     }
 
-    /// Parting with a friend. Everything HE knew goes with him — but your own
-    /// story stays yours, so starting over means choosing who to meet next
-    /// rather than retelling your whole life to a stranger.
-    func startOver() {
+    /// PARTING WITH A FRIEND. He is now deleted on the SERVER too.
+    ///
+    /// That is the whole change here. This used to clear three keys in
+    /// UserDefaults while the sheet told the person, in writing, that he would
+    /// forget everything and his diary would close forever — and he forgot
+    /// nothing. One phone had forgotten his name; that was all that happened.
+    ///
+    /// What he knew about HIS OWN life goes with him, along with his diary,
+    /// his week and everything the two of them had been through. What they
+    /// told him about THEMSELVES stays true whoever they are talking to, which
+    /// is what makes starting over «choose who to meet next» rather than
+    /// «tell it all again». backend/app/erase.py draws the line.
+    ///
+    /// The phone is cleared even when the server could not be reached. The
+    /// alternative traps somebody with a friend they have decided to leave —
+    /// and it self-heals anyway, because writing the next one erases the last
+    /// one (matchmaker.create_companion → erase.the_companion).
+    func startOver() async {
+        try? await BackendClient(baseURL: AppConfig.shared.backendURL).startOver()
+        forgetCompanionLocally()
+    }
+
+    /// Only this phone's memory of him, with nothing said to the server.
+    ///
+    /// For `reconcileWithServer`, which is reacting to a server that has
+    /// ALREADY said there is nobody. Asking it to delete him again would be
+    /// asking it to delete a stranger, and on a phone pointed at the wrong
+    /// address that stranger is somebody real.
+    func forgetCompanionLocally() {
         for key in [Keys.wishes, Keys.companionName, Keys.hasArrived] {
             defaults.removeObject(forKey: key)
         }
         wishes = ""; companionName = ""; hasArrived = false
+    }
+
+    /// LEAVING. Everything, everywhere, with no way back.
+    ///
+    /// The server goes FIRST and the phone only if the server actually did it,
+    /// which is the opposite of `startOver` above and deliberately so. An app
+    /// that empties itself and says «удалено» while the server still holds a
+    /// person's inner life is a worse falsehood than the one this replaces,
+    /// because it looks like it worked. So it returns false and changes
+    /// nothing, and the sheet says plainly that nothing was deleted.
+    ///
+    /// The Keychain token is deliberately kept. There is nothing to invalidate
+    /// — the server has only ever stored sha256 of it — so after this it
+    /// addresses an empty room, and keeping it is what lets somebody sign up
+    /// again on this phone instead of stranding a second bucket on the server.
+    func deleteEverything() async -> Bool {
+        do {
+            try await BackendClient(baseURL: AppConfig.shared.backendURL).deleteEverything()
+        } catch {
+            Trouble.shared.record(error, url: AppConfig.shared.backendURL)
+            return false
+        }
+        for key in [Keys.account, Keys.subscribed, Keys.story, Keys.wishes,
+                    Keys.country, Keys.companionName, Keys.hasArrived] {
+            defaults.removeObject(forKey: key)
+        }
+        account = nil
+        isSubscribed = false
+        story = ""; wishes = ""; country = ""; companionName = ""
+        hasArrived = false
+        return true
     }
 
     /// The server is the one that actually holds the friend, so it is the one
@@ -237,7 +293,7 @@ final class AppState: ObservableObject {
             hasCompanion == false
         else { return }
 
-        startOver()
+        forgetCompanionLocally()
     }
 
     /// A fallback so a screen never has to say "his name" out loud before he

@@ -81,7 +81,7 @@ import random
 import re
 import sys
 
-from . import brain, config, memory, persona, reading
+from . import brain, config, erase, persona, reading
 
 # ── The spark lexicon ───────────────────────────────────────────────────────
 # Plain, concrete, evocative words from the width of Russian life. They exist
@@ -445,5 +445,13 @@ async def create_companion(
     # Only now, once there is definitely a new friend to replace him with, is
     # the old one erased. Wiping first would mean a failed write leaves this
     # person with nobody at all.
-    memory.forget_companion(user_id)
+    #
+    # Through erase.the_companion rather than by hand, because «Начать заново»
+    # reaches the same function — and a parting that removed one set of things
+    # when you pressed the button and a different set when somebody new was
+    # written is two behaviours wearing one name. That drift was real: his
+    # week, his throat, his mood and everything the pair had been measured on
+    # used to survive being replaced, so a stranger arrived halfway through
+    # another man's cold, on visit forty-one.
+    erase.the_companion(user_id)
     return persona.save_persona(user_id, created)

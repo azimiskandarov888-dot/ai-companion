@@ -6,7 +6,7 @@ import asyncio
 import json
 import time
 
-from app import config, db, embeddings, memory
+from app import config, db, embeddings, erase, memory
 
 #: The person these tests are about. Every memory call names whose it is.
 U = "u1"
@@ -177,7 +177,13 @@ def test_same_words_from_two_people_are_two_memories():
 
 def test_starting_over_touches_only_that_person():
     """«Начать заново» used to be three DELETEs with no WHERE — one person
-    meeting a new friend wiped every conversation on the server."""
+    meeting a new friend wiped every conversation on the server.
+
+    What a parting removes now lives in erase.py, in one place: this used to be
+    memory.forget_companion, and a second function answering the same question
+    slightly differently is how the two ways of parting drifted apart.
+    Everything about the split is unchanged — his own facts go, theirs stay.
+    """
     memory.add_memory(U, "fact", "внучка Настя", owner="elder")
     memory.add_memory(U, "fact", "он плотник", owner="bob")
     memory.log_turn(U, "user", "здравствуй")
@@ -185,7 +191,7 @@ def test_starting_over_touches_only_that_person():
     memory.add_memory(V, "fact", "он вагоновожатый", owner="bob")
     memory.log_turn(V, "user", "привет")
 
-    memory.forget_companion(U)
+    erase.the_companion(U)
 
     # U's friend is gone, and their own history with him.
     assert memory.bob_self_context(U) == ""

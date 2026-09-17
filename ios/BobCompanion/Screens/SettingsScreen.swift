@@ -84,7 +84,7 @@ struct SettingsScreen: View {
         .sheet(isPresented: $showCallHim) { CallHimSheet().environmentObject(app) }
         .sheet(isPresented: $showStartOver) {
             StartOverSheet(name: app.displayName) {
-                app.startOver()
+                await app.startOver()
                 showStartOver = false
                 onClose()
             }
@@ -137,8 +137,12 @@ private struct AboutSheet: View {
 
 private struct StartOverSheet: View {
     let name: String
-    var onConfirm: () -> Void
+    var onConfirm: () async -> Void
     @Environment(\.dismiss) private var dismiss
+    /// The server is being told. It takes a moment, and a sheet that sits there
+    /// unchanged reads as a tap that did not register — so somebody taps again,
+    /// on the one screen where a second tap should never be necessary.
+    @State private var working = false
 
     var body: some View {
         ZStack {
@@ -156,10 +160,16 @@ private struct StartOverSheet: View {
                 VStack(spacing: 12) {
                     // The destructive action is the QUIET one here. Nothing
                     // gold, nothing red — you shouldn't be nudged into it.
-                    AppButton(title: Strings.startOverConfirm(),
+                    AppButton(title: working ? Strings.startOverWorking()
+                                             : Strings.startOverConfirm(),
                               tone: .quiet,
-                              labelColour: Theme.clay) { onConfirm() }
+                              labelColour: Theme.clay) {
+                        guard !working else { return }
+                        working = true
+                        Task { await onConfirm() }
+                    }
                     AppButton(title: Strings.cancel(), tone: .leaf) { dismiss() }
+                        .disabled(working)
                 }
             }
             .padding(.horizontal, Metrics.sideMargin)

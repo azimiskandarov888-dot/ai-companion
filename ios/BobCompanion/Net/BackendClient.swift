@@ -386,6 +386,35 @@ struct BackendClient {
         )
     }
 
+    /// «Начать заново» — he goes, and everything between them goes with him.
+    ///
+    /// NOT deleting an account, and the two must never share a call: what the
+    /// app understands about the PERSON stays, so the next friend does not
+    /// open by asking somebody to tell their whole life again. See
+    /// backend/app/erase.py for exactly what falls on each side.
+    func startOver() async throws {
+        var request = try authorized("api/companion/start-over")
+        request.httpMethod = "POST"
+        request.timeoutInterval = 20
+        let (data, response) = try await URLSession.shared.data(for: request)
+        try Self.check(response, data)
+    }
+
+    /// LEAVING. Every row, every file, no way back.
+    ///
+    /// It throws rather than failing quietly, and the caller must let it: an
+    /// app that clears itself and says «удалено» while the server still holds
+    /// somebody's inner life is exactly the falsehood this endpoint exists to
+    /// end, and it would be a worse one than the original, because it looks
+    /// like it worked.
+    func deleteEverything() async throws {
+        var request = try authorized("api/me")
+        request.httpMethod = "DELETE"
+        request.timeoutInterval = 30
+        let (data, response) = try await URLSession.shared.data(for: request)
+        try Self.check(response, data)
+    }
+
     /// His diary about his friend. Cheap and instant unless his memory has
     /// grown since last time, in which case he rewrites it.
     func diary() async throws -> DiaryResponse {

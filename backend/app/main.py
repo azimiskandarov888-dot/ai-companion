@@ -26,6 +26,9 @@ Endpoints:
     POST /api/say     → text in   → {reply, audio}   (dev only: test brain+memory)
     POST /api/companion/create → the user's story + age/gender/origin → the friend
                         walks in (his name is chosen here, never by the user)
+    POST /api/companion/start-over → he goes and everything between them goes
+                        with him; what is known about the PERSON stays
+    DELETE /api/me    → everything, every table, every file, no way back
     GET  /api/diary   → the companion's handwritten diary about his friend —
                         the ONLY memory users ever see
     GET  /api/memory  → raw distilled memory (internal/dev only — never in the app)
@@ -63,6 +66,7 @@ from . import (
     db,
     diary,
     emergency,
+    erase,
     feeling,
     fit,
     identity,
@@ -978,6 +982,34 @@ async def companion_create(
     finally:
         allowance.spend(user_id, time.monotonic() - started)
     return JSONResponse({"name": p.get("name"), "persona": p})
+
+
+@app.post("/api/companion/start-over")
+async def companion_start_over(user_id: str = Depends(_user)) -> JSONResponse:
+    """«Начать заново» — he goes, and everything between them goes with him.
+
+    This is NOT deleting an account, and the two must never be wired to one
+    button: somebody here wants a different friend, not to leave. What the app
+    understands about them stays, so the next one does not open by asking them
+    to tell their whole life again. See erase.py for what falls on each side.
+
+    Until this existed the button cleared five keys on the phone and the sheet
+    told the person, in writing, that he would forget everything and his diary
+    would close forever. He forgot nothing.
+    """
+    return JSONResponse({"ok": True, "gone": erase.the_companion(user_id)})
+
+
+@app.delete("/api/me")
+async def erase_me(user_id: str = Depends(_user)) -> JSONResponse:
+    """Everything. Every row in every table, every file, no way back.
+
+    Scoped to the caller like every other route here: `user_id` comes from the
+    token and from nowhere else, so there is no shape of request that deletes
+    somebody else. It answers with what went rather than "ok", because a person
+    who has just asked for this is owed more than being told to trust us.
+    """
+    return JSONResponse({"ok": True, "gone": erase.everything(user_id)})
 
 
 @app.get("/api/diary")

@@ -747,23 +747,6 @@ def counts(user_id: str, owner: str = "elder") -> dict[str, int]:
     return {r["kind"]: r["n"] for r in rows}
 
 
-def forget_companion(user_id: str) -> None:
-    """A new friend means a new life — for THIS person and nobody else.
-
-    Erases the previous companion's self-memories, the conversation log, and
-    his diary. Keeps what was learned about the USER — family, birthdays,
-    routine stay true regardless of who they are talking to.
-
-    The `WHERE user_id=?` on all three statements is the whole point. Without
-    it (and it was missing until multi-user landed) one person tapping «начать
-    заново» wipes the conversation of every other person on the server.
-    """
-    with db.connect() as conn:
-        conn.execute("DELETE FROM memories WHERE user_id=? AND owner='bob'", (user_id,))
-        conn.execute("DELETE FROM turns WHERE user_id=?", (user_id,))
-        conn.execute("DELETE FROM diary WHERE user_id=?", (user_id,))
-
-
 # --------------------------------------------------------------------------- #
 # Assemble the memory block for the system prompt
 # --------------------------------------------------------------------------- #

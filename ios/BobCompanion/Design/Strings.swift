@@ -728,11 +728,46 @@ enum Strings {
 
     /// Parting with a friend is serious. This sheet says what will be lost, in
     /// his name, and never hurries.
+    ///
+    /// EVERY LINE HERE HAS TO BE TRUE, and until the server learned how to
+    /// delete him not one of them was. It said he would forget everything and
+    /// his diary would close forever; he forgot nothing, and the only thing
+    /// that happened was that one phone forgot his name.
+    ///
+    /// So it now says what actually happens, including the part people worry
+    /// about most and nobody thought to answer: no, you will not have to tell
+    /// your whole life again.
     static func startOverBody(_ name: String) -> Phrase {
-        Phrase(ru: "\(name) забудет всё, и его дневник закроется навсегда.\n\nЭто нельзя отменить.",
-               en: "\(name) will forget everything, and his diary will close for good.\n\nThis can't be undone.")
+        Phrase(ru: "\(name) уйдёт совсем. Его дневник закроется, и всё, что он рассказывал вам о себе, уйдёт вместе с ним.\n\nВаш рассказ о себе останется — заново рассказывать не придётся.\n\nЭто нельзя отменить.",
+               en: "\(name) will be gone. His diary closes, and everything he told you about his own life goes with him.\n\nWhat you told us about yourself stays — you won't have to tell it again.\n\nThis can't be undone.")
     }
     static let startOverConfirm = Phrase(ru: "Начать заново", en: "Start over")
+    /// While the server is actually doing it. Present tense, not a spinner
+    /// with no words: somebody has just parted with a friend and is owed a
+    /// sentence rather than an animation.
+    static let startOverWorking = Phrase(ru: "Прощаемся…", en: "Saying goodbye…")
+
+    // MARK: - Leaving altogether
+    //
+    // A different thing from «Начать заново», and it lives on a different
+    // screen for that reason: one is choosing a new friend, the other is
+    // leaving. They shared a button once and that is how the app came to
+    // promise a deletion nothing performed.
+
+    static let rowDeleteAccount = Phrase(ru: "Удалить аккаунт", en: "Delete account")
+    static let deleteAccountTitle = Phrase(ru: "Удалить аккаунт", en: "Delete account")
+    static func deleteAccountBody(_ name: String) -> Phrase {
+        Phrase(ru: "С сервера будет стёрто всё: \(name), его дневник, ваш рассказ о себе и всё, что он о вас знал.\n\nНичего не останется, и вернуть будет нечего.",
+               en: "Everything will be erased from the server: \(name), his diary, your own story, and everything he knew about you.\n\nNothing will be left, and there will be nothing to restore.")
+    }
+    static let deleteAccountConfirm = Phrase(ru: "Удалить всё", en: "Delete everything")
+    static let deleteAccountWorking = Phrase(ru: "Удаляем…", en: "Deleting…")
+    /// Said plainly, and it says what is TRUE — that nothing was deleted.
+    /// This is the one screen in the app where a failure may not be softened
+    /// into silence: somebody asked for their life to be erased and it wasn't.
+    static let deleteAccountFailed = Phrase(
+        ru: "Не получилось — сервер сейчас не отвечает.\nНичего не удалено. Попробуйте позже.",
+        en: "It didn't work — the server isn't answering.\nNothing was deleted. Please try again later.")
     static let cancel = Phrase(ru: "Отмена", en: "Cancel")
     /// Under the grabber on every sheet, so leaving one is never a guess.
     static let close = Phrase(ru: "закрыть", en: "close")
