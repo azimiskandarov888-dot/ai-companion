@@ -222,11 +222,30 @@ async def maybe_begin(user_id: str) -> None:
             return                                   # something already is
         if not _quiet_long_enough(user_id) or not _known_long_enough(user_id):
             return
-        if random.random() >= CHANCE_PER_DAY:
+        if not _rolls_today(user_id):
             return
         await _begin(user_id)
     except Exception as e:  # noqa: BLE001 — a life, not a requirement
         print(f"  · life skipped ({e})", flush=True)
+
+
+def _rolls_today(user_id: str) -> bool:
+    """Does something begin today? Asked many times, answered once.
+
+    PER DAY is the whole meaning of CHANCE_PER_DAY, and it was not what the
+    code did: maybe_begin runs after every exchange, so a fresh 0.15 was rolled
+    twenty-five times in a conversation. That is a 98% chance per conversation,
+    which turned «roughly one thing every two and a half weeks» into something
+    beginning on the first day the quiet week was up, every time — a metronome,
+    and precisely the «television programme rather than somebody you know» the
+    note above warns against.
+
+    Seeding on the person and the date makes today's answer the same answer
+    however often it is asked, and keeps it different for the next person and
+    for tomorrow. No state to store and nothing to migrate.
+    """
+    day = time.strftime("%Y-%m-%d", time.localtime())
+    return random.Random(f"{user_id}:{day}").random() < CHANCE_PER_DAY
 
 
 def _known_long_enough(user_id: str) -> bool:

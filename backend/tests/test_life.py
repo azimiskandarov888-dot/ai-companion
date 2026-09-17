@@ -256,7 +256,7 @@ def test_the_writer_is_told_the_arc_must_actually_move():
 async def test_nothing_happens_to_a_stranger(monkeypatch):
     """The first days are for meeting him, not for nursing him."""
     _answers(monkeypatch, COLD)
-    monkeypatch.setattr(life.random, "random", lambda: 0.0)
+    monkeypatch.setattr(life, "_rolls_today", lambda user_id: True)
     _befriended(turns=5)
     await life.maybe_begin(U)
     assert life.current(U) is None
@@ -268,7 +268,7 @@ async def test_nothing_starts_while_something_is_already_on(monkeypatch):
     _befriended()
     _running(days_ago=1)
     _answers(monkeypatch, {"what": "другое", "days": COLD["days"]})
-    monkeypatch.setattr(life.random, "random", lambda: 0.0)
+    monkeypatch.setattr(life, "_rolls_today", lambda user_id: True)
     await life.maybe_begin(U)
     assert life.current(U)["what"] == "простуда"
 
@@ -283,7 +283,7 @@ async def test_nothing_starts_straight_after_something_ended(monkeypatch):
             (U, time.time() - 2 * life.DAY),
         )
     _answers(monkeypatch, COLD)
-    monkeypatch.setattr(life.random, "random", lambda: 0.0)
+    monkeypatch.setattr(life, "_rolls_today", lambda user_id: True)
     await life.maybe_begin(U)
     assert life.current(U) is None
 
@@ -298,7 +298,7 @@ async def test_after_a_quiet_stretch_something_can_start(monkeypatch):
             (U, time.time() - (life.QUIET_DAYS + 1) * life.DAY),
         )
     _answers(monkeypatch, COLD)
-    monkeypatch.setattr(life.random, "random", lambda: 0.0)
+    monkeypatch.setattr(life, "_rolls_today", lambda user_id: True)
     await life.maybe_begin(U)
     assert life.current(U)["what"] == "простуда"
 
@@ -314,7 +314,7 @@ async def test_a_broken_writer_just_means_an_uneventful_week(monkeypatch):
         raise RuntimeError("провайдер прилёг")
 
     monkeypatch.setattr(life.brain, "generate_text", explode)
-    monkeypatch.setattr(life.random, "random", lambda: 0.0)
+    monkeypatch.setattr(life, "_rolls_today", lambda user_id: True)
     _befriended()
     await life.maybe_begin(U)          # must not raise
     assert life.current(U) is None
@@ -393,3 +393,32 @@ def test_his_week_is_not_shared_between_people():
     _running(user="анна", days_ago=1)
     assert life.block("анна") != ""
     assert life.block("борис") == ""
+
+
+# ── his life is not a metronome ────────────────────────────────────────────
+
+def test_the_day_is_rolled_once_however_often_it_is_asked():
+    """CHANCE_PER_DAY means per DAY, and it did not. maybe_begin runs after
+    every exchange, so a fresh 0.15 was rolled twenty-five times in a single
+    conversation — a 98% chance per conversation, which turned «roughly one
+    thing every two and a half weeks» into something starting on the first day
+    the quiet week was up, every single time. A metronome: exactly the
+    «television programme rather than somebody you know» that the constant's
+    own note warns against."""
+    answers = {life._rolls_today("one-man") for _ in range(50)}
+    assert len(answers) == 1, "один день — один ответ, сколько ни спрашивай"
+
+
+def test_the_chance_is_the_chance_it_says_it_is():
+    fired = sum(life._rolls_today(f"person-{i}") for i in range(3000))
+    assert abs(fired / 3000 - life.CHANCE_PER_DAY) < 0.03, (
+        f"{fired / 3000:.1%} против обещанных {life.CHANCE_PER_DAY:.0%}"
+    )
+
+
+def test_two_people_do_not_get_the_same_week():
+    """Seeded on the person as well as the date, or every companion on the
+    server catches a cold on the same Tuesday."""
+    a = [life._rolls_today(f"a{i}") for i in range(200)]
+    b = [life._rolls_today(f"b{i}") for i in range(200)]
+    assert a != b

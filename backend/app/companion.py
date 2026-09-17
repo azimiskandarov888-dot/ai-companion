@@ -285,8 +285,6 @@ def build_system_parts(
         return alert_block.strip(), ""
 
     stable_parts = [BEHAVIOR_RULES]
-    if persona_block.strip():
-        stable_parts.append("\nКТО ТЫ (твоя личность и жизнь):\n" + persona_block.strip())
     # The reading of the person is stable — it's about who they are, not what
     # today holds — so it belongs in the cached half beside who HE is.
     if reading_block.strip():
@@ -302,6 +300,20 @@ def build_system_parts(
     # happened between them. See fit.py.
     if fit_block.strip():
         stable_parts.append("\n" + fit_block.strip())
+
+    # HE GOES LAST IN THIS HALF, and the reason is the order a reader meets
+    # things in. He used to sit first here, immediately after the rules — and
+    # then the person's reading, the register and the fit came between him and
+    # the rest of himself, which arrives at the top of the variable half (his
+    # week, his mood, his throat, what he has already said about himself). So
+    # the model met him as two halves of a man with somebody else's paragraphs
+    # wedged in between.
+    #
+    # Now who he IS ends the cached half and how he IS TODAY begins the next
+    # one, so the two are read together. The cache is untouched by this: the
+    # split between the halves has not moved, only the order inside one of them.
+    if persona_block.strip():
+        stable_parts.append("\nКТО ТЫ (твоя личность и жизнь):\n" + persona_block.strip())
 
     variable_parts: list[str] = []
 

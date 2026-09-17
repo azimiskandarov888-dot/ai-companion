@@ -107,7 +107,7 @@ def test_his_faults_reach_the_conversation():
     fallibility, i.e. none."""
     block = persona.build_persona_block({
         "name": "Фёдор",
-        "flaws": ["перебивает", "занудствует про давление"],
+        "flaws": ["перебивает", "занудствует про давление"], "intention": "перебрать лодку до заморозков",
         "contradiction": "ругает город и ездит туда каждый год",
         "wound": "не помирился с братом",
     })
@@ -146,7 +146,7 @@ def test_identity_cannot_be_rewritten_by_a_deepening():
     somebody's friend quietly becomes another person."""
     him = {"name": "Фёдор", "age": "70 лет", "home": "Ростов",
            "backstory": "работал в литейном", "personality": "ворчливый",
-           "speech_style": "коротко", "wound": "брат", "flaws": ["перебивает"]}
+           "speech_style": "коротко", "wound": "брат", "flaws": ["перебивает"], "intention": "перебрать лодку до заморозков"}
 
     grown = persona.merge_growth(him, {
         "name": "Николай",                 # ← all of this
@@ -156,7 +156,8 @@ def test_identity_cannot_be_rewritten_by_a_deepening():
         "personality": "весёлый",
         "speech_style": "длинно",
         "wound": "ещё одна рана",
-        "flaws": ["упрям в мелочах"],      # ← only this gets in
+        "flaws": ["упрям в мелочах"],      # ← only this and the intention get in
+        "intention": "дописать письмо брату",
     })
 
     assert grown["name"] == "Фёдор"
@@ -167,6 +168,11 @@ def test_identity_cannot_be_rewritten_by_a_deepening():
     assert grown["speech_style"] == "коротко"
     assert grown["wound"] == "брат"        # no accumulating wounds, ever
     assert grown["flaws"] == ["перебивает", "упрям в мелочах"]
+    # …and the one thing he is in the middle of is REPLACED rather than piled
+    # up. An intention that can only accumulate is not an intention: a man who
+    # has been about to mend the same boat for a year is more dead than one who
+    # never meant to.
+    assert grown["intention"] == "дописать письмо брату"
 
 
 def test_what_a_friendship_reveals_accumulates():
@@ -238,3 +244,70 @@ def test_what_is_wrong_with_him_reaches_the_conversation_and_the_write():
         assert f"ЗНАЧ-{field}" in persona.build_persona_block({field: value}), field
         assert field in matchmaker._WRITE_SYSTEM, field
         assert persona.DEFAULT_PERSONA.get(field), field
+
+
+# ── the one field that points forward ──────────────────────────────────────
+
+def test_he_is_in_the_middle_of_something():
+    """The axis this character had nothing for. He has a past (backstory), a
+    present (current_life), a wound and a contradiction — and until now not one
+    field that pointed FORWARD. Things happened to him: a cold, a visiting
+    brother. He never WANTED anything.
+
+    A man to whom things happen is a setting. A man trying to get the boat
+    mended before the frost is a person, and it is also the only thing in him
+    a friend can ask after next week — «ну что, перебрал лодку?» is a question
+    you ask somebody you know."""
+    block = persona.build_persona_block({
+        "name": "Пётр", "intention": "перебрать лодку до заморозков",
+    })
+    assert "перебрать лодку до заморозков" in block
+    # It is background, not an agenda item: a friend who opens every call with
+    # a progress report on his own boat is giving a report.
+    assert "не докладывай об этом сам" in block
+
+
+def test_a_companion_without_one_is_not_finished():
+    """Required of the write, like flaws — and for the same kind of reason.
+    A friend made only of virtues is the failure the schema exists to stop;
+    a friend who wants nothing is the other half of it."""
+    from app import matchmaker
+
+    assert "intention" in matchmaker._REQUIRED
+    assert "intention" in matchmaker._WRITE_SYSTEM
+
+
+def test_the_deepening_can_finish_it_and_start_another():
+    """It has to be able to END. An intention that only accumulates is not one:
+    a man who has been about to mend the same boat for a year is more dead than
+    one who never meant to."""
+    assert "ЧТО ОН ЗАТЕЯЛ" in persona._DEEPEN_SYSTEM
+    assert "доделал? бросил? застрял?" in persona._DEEPEN_SYSTEM
+    # …and replacing is what merge_growth does with it, unlike the lists.
+    assert persona.INTENTION not in persona.GROWABLE
+
+
+def test_he_does_not_dissolve_into_a_list():
+    """These lists only ever grew. A friendship of a year took him from under
+    two thousand characters to over twenty — all of it riding in the cached
+    half of every turn, and the cost is the smaller half of the problem. A man
+    with sixty quirks has no character; he has an inventory, and nothing in an
+    inventory is memorable because everything in it weighs the same."""
+    him = {"name": "Пётр", "flaws": ["перебивает", "упрям", "занудствует про давление"]}
+    for i in range(40):
+        him = persona.merge_growth(him, {"flaws": [f"черта {i}"]})
+
+    assert len(him["flaws"]) == persona._MOST["flaws"]
+    # The character as WRITTEN survives — those are who he is. What a
+    # friendship revealed is what ages out, newest kept.
+    assert him["flaws"][:3] == ["перебивает", "упрям", "занудствует про давление"]
+    assert "черта 39" in him["flaws"]
+    assert "черта 0" not in him["flaws"]
+
+
+def test_a_short_list_is_left_alone():
+    """The ceiling must not become a target: most people are a handful of
+    things, and nothing here should be padding him up to five."""
+    him = {"name": "Пётр", "flaws": ["перебивает"]}
+    grown = persona.merge_growth(him, {"flaws": ["упрям в мелочах"]})
+    assert grown["flaws"] == ["перебивает", "упрям в мелочах"]

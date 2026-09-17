@@ -118,6 +118,17 @@ _EXTRACTION_SYSTEM = """Ты ведёшь память для тёплого д�
 ПОЧТИ ВСЕГДА ЗДЕСЬ ПУСТОЙ СПИСОК. Люди не меняют свою жизнь каждый вечер.
 Больше пяти номеров за один обмен репликами не бывает никогда.
 
+И ЕГО СОБСТВЕННОЕ ТОЖЕ ПРОНУМЕРОВАНО — тем же полем и теми же номерами.
+
+Это записано из его же слов, и ему же потом возвращают со словами «держись этого, не противоречь себе». Значит одна оговорка, которую нечем убрать, остаётся у него навсегда, и он будет её держаться.
+
+Если он сказал о себе два раза по-разному так, что оба разом быть правдой не могут, — отмени СТАРОЕ. Не новое. Новое человек только что слышал своими ушами, и жить дальше придётся с ним; вернуться к тому, чего человек не слышал, — значит поспорить с его памятью.
+
+- сначала «кот Тишка», потом «кот Мурзик» → отмени «кот Тишка»
+- сначала «брат в Мурманске», потом «двоюродный брат в Мурманске» → отмени первое
+
+НЕ ТРОГАЙ его прошлое и его характер: «тридцать лет водил лесовозы», «не любит спешку» — это он сам, а не сегодняшний день. И если противоречия нет — не ищи его. Два разных знакомых по имени Миша бывают у кого угодно.
+
 ПОЛЕ "bob" — ЭТО ПРО САМОГО БОБА, А НЕ ПРО ЧЕЛОВЕКА
 
 И это НЕ его настроение, а СДВИГ: что этот обмен СДЕЛАЛ с Бобом. От -2 до +2.
@@ -279,10 +290,20 @@ async def _extract(user_id: str, said: str) -> dict:
     # able to POINT at a fact to retire it, and pointing by text is how the
     # wrong «дочь» gets retired when there are two of them.
     #
-    # Deliberately only the ELDER's facts carry numbers. Bob's own life is
-    # invented rather than reported, so there is nothing there a person could
-    # contradict — and leaving it unnumbered means the model has no id to
-    # retire his biography with even if it wanted to.
+    # HIS OWN are numbered too now, and the reason they were not is worth
+    # keeping because it was wrong in an instructive way. It read: «Bob's life
+    # is invented rather than reported, so there is nothing a person could
+    # contradict.» True — and beside the point. The contradictor was never the
+    # person. It is HIM: owner='bob' rows are written out of his OWN replies,
+    # and then handed back to him under «держись этого, не противоречь себе».
+    # So one slip — a cat that changes its name, a brother who becomes a
+    # cousin — became permanent canon that nothing could ever take out, and he
+    # was instructed to keep faith with it. A character who cannot be wrong
+    # about himself cannot stay himself; he can only accumulate.
+    #
+    # And it cannot damage his biography, which was the fear: the biography is
+    # persona.py, a separate JSON document that this never touches. What is
+    # numbered here is only what he has said out loud.
     known_elder = memory.believes(user_id, "elder") or "(пока ничего)"
     # Topics already named for this person. The observations row is keyed on the
     # subject TEXT, so «война» and «про войну» are two separate truths that each
@@ -290,7 +311,7 @@ async def _extract(user_id: str, said: str) -> dict:
     # valuable things the register holds. Showing what exists is the only thing
     # that fixes wording; see mood.subjects_seen.
     topics = mood.subjects_seen(user_id)
-    known_bob = memory.bob_self_context(user_id) or "(пока ничего)"
+    known_bob = memory.believes(user_id, "bob") or "(пока ничего)"
     prompt = (
         f"Что уже известно о ЧЕЛОВЕКЕ (не повторяй это):\n{known_elder}\n\n"
         f"Что уже известно о БОБЕ (не повторяй это):\n{known_bob}\n\n"

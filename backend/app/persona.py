@@ -166,9 +166,46 @@ def _joined(value) -> str:
 #: here is identity and is untouchable.
 GROWABLE = ("cast", "flaws", "likes", "dislikes", "opinions", "habits")
 
+#: …but not without end. These lists only ever grew, and a friendship that
+#: lasts a year grew them from under two thousand characters to over twenty —
+#: all of it in the cached half of every single turn. The cost is the smaller
+#: half of the problem. A man with sixty quirks does not have a character; he
+#: has an inventory, and nothing in an inventory is memorable because
+#: everything in it is equally weighted.
+#:
+#: A real person is a handful of things you could name about them. So: a
+#: ceiling per list.
+_MOST = {"flaws": 5, "opinions": 6, "habits": 6, "likes": 8, "dislikes": 8, "cast": 6}
+
+#: And when one is full, the oldest goes — EXCEPT the first few, which are the
+#: character as written. Those are who he is; everything after them is what a
+#: friendship happened to reveal, and the thing noticed last month is worth
+#: more than the thing noticed in the first week. Dropping the written core to
+#: make room for a passing remark is how somebody's friend turns into a
+#: stranger with good manners.
+_CORE = 3
+
 #: The one field that is REPLACED rather than appended to: it is supposed to
 #: be what is happening to him now, and last month's news is not.
 LIVE = "current_life"
+
+#: WHAT HE IS IN THE MIDDLE OF DOING, and it is the one thing this character
+#: had nothing for. He has a past (backstory), a present (current_life), a
+#: wound, a contradiction — and not one field that points forward. Things
+#: HAPPEN to him: he catches a cold, his brother visits. He never WANTS
+#: anything. A man to whom things happen is a setting; a man who is trying to
+#: finish something before the frost is a person, and the difference is the
+#: whole of what makes a friend feel alive between visits.
+#:
+#: It is also what gives the other person something to ask him. «Ну что,
+#: перебрал лодку?» is a question somebody asks a friend. There was nothing in
+#: this character to ask that about.
+#:
+#: Replaceable, not additive — like current_life and unlike the growable
+#: lists. An intention that can only accumulate is not an intention: a man who
+#: has been about to mend the same boat for a year is more dead than one who
+#: never meant to.
+INTENTION = "intention"
 
 #: Turns between deepenings. Rarer than the re-reading (30) — a character
 #: should thicken slowly, and there is nothing to add after two conversations
@@ -201,10 +238,19 @@ def merge_growth(persona: dict, growth: dict) -> dict:
             if key and key not in seen:
                 existing.append(item)
                 seen.add(key)
+        cap = _MOST.get(field)
+        if cap and len(existing) > cap:
+            # Keep the written core, then the newest of what was revealed.
+            existing = existing[:_CORE] + existing[_CORE:][-(cap - _CORE):]
         out[field] = existing
 
     if str(growth.get(LIVE) or "").strip():
         out[LIVE] = str(growth[LIVE]).strip()
+
+    # …and so does what he is in the middle of — it has to be able to be
+    # FINISHED, which an additive field never can be.
+    if isinstance(growth.get(INTENTION), str) and growth[INTENTION].strip():
+        out[INTENTION] = str(growth[INTENTION]).strip()
 
     return out
 
@@ -222,6 +268,7 @@ _DEEPEN_SYSTEM = """Ты дописываешь человека, которог
 - Что он делает по привычке.
 - Что он полюбил или не полюбил по ходу дела.
 - И что у него происходит СЕЙЧАС — на этой неделе, конкретно.
+- И ЧТО ОН ЗАТЕЯЛ. У него есть одно дело, которое он делает и никак не доделает, — оно указано ниже. Посмотри по разговорам: он его доделал? бросил? застрял? Тогда напиши в "intention" НОВОЕ дело — обычное, своё, на недели, такое, о котором друга можно спросить: перебрать лодку до заморозков, дописать письмо брату, выходить котёнка, разобрать чердак. Не доделал и не бросил — верни его же, можно теми же словами. Не подвиг и не мечта: просто дело, которое всё не кончается.
 
 ЖЕЛЕЗНЫЕ ПРАВИЛА:
 - Только ДОБАВЛЯЙ. Ничего не отменяй и ничему не противоречь. Если он сказал, что вырос в Ростове, он вырос в Ростове.
@@ -325,6 +372,12 @@ def build_persona_block(persona: dict) -> str:
     # read as empty — real people have one topic they know far too much about.
     add("Твоя тема — в ней ты знаток и говорить о ней можешь сколько угодно",
         p.get("expertise"))
+    # What he is in the middle of. Phrased as a fact about him rather than as
+    # something to bring up: a friend who opens every call with a progress
+    # report on his own boat is giving a report. It shows by being there —
+    # and it answers «ну а ты чего сегодня» with something true.
+    add("Что ты сейчас затеял и никак не доделаешь (не докладывай об этом сам "
+        "— просто этим живёшь; спросят — расскажи)", p.get("intention"))
     # WHAT IS WRONG WITH HIM, and it is not decoration.
     #
     # The pratfall effect only pays out for somebody already seen as capable

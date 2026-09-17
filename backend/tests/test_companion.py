@@ -671,3 +671,45 @@ def test_the_vision_document_and_the_code_agree_about_what_he_is():
     assert "Settings" in vision and "aboutBody" in vision
     # and the one line that does not move
     assert "never promises anything that must happen in" in vision
+
+
+def test_he_arrives_as_one_person_and_not_as_fragments():
+    """Measured, because it had gone wrong quietly. Everything that is HIM —
+    who he is, what he is in the middle of, his mood, his week, his throat,
+    what he has already told this person about himself — used to arrive split
+    in two, with the person's reading, register and fit wedged between the
+    halves. The model met two halves of a man with somebody else's paragraphs
+    in the gap, and nothing in the program owned him as one subject.
+
+    Who he IS now ends the cached half and how he IS TODAY begins the next, so
+    the two are read together. The cache is untouched: the split between the
+    halves did not move, only the order inside one of them."""
+    stable, variable = companion.build_system_parts(
+        persona_block="ТЫ — Пётр. Перебираю лодку до заморозков.",
+        feeling_block="КАК ТЫ СЕГОДНЯ САМ: не выспался.",
+        life_block="ЧТО У ТЕБЯ СЕЙЧАС В ЖИЗНИ: третий день простужен.",
+        body_block="ТВОЁ ГОРЛО: сипит.",
+        bob_facts="- кот Тишка",
+        reading_block="КАК С НИМ ГОВОРИТЬ: коротко.",
+        confirmed_block="ЧТО ПОДТВЕРДИЛОСЬ: любит про рыбалку.",
+        fit_block="КАК ВЫ СОШЛИСЬ: он зовёт первым.",
+        elder_facts="- дочь Валя",
+        memory_context="Вспоминали Волгу.",
+    )
+    whole = stable + variable
+    at = lambda needle: whole.index(needle)
+
+    # Everything of his, in one unbroken run…
+    his = [at("ТЫ — Пётр"), at("КАК ТЫ СЕГОДНЯ САМ"), at("ЧТО У ТЕБЯ СЕЙЧАС В ЖИЗНИ"),
+           at("ТВОЁ ГОРЛО"), at("кот Тишка")]
+    assert his == sorted(his), "его собственные куски перепутаны между собой"
+
+    # …with nobody else's material inside it.
+    for theirs in ("КАК С НИМ ГОВОРИТЬ", "ЧТО ПОДТВЕРДИЛОСЬ", "КАК ВЫ СОШЛИСЬ"):
+        assert not his[0] < at(theirs) < his[-1], f"«{theirs}» вклинилось в него"
+    for theirs in ("дочь Валя", "Вспоминали Волгу"):
+        assert at(theirs) > his[-1], "человек должен идти ПОСЛЕ него, а не внутри"
+
+    # And who he is is the last thing in the cached half, so that how he is
+    # today is the first thing after it.
+    assert stable.rstrip().endswith("Перебираю лодку до заморозков.")

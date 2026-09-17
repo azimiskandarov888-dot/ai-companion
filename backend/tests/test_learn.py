@@ -282,3 +282,50 @@ def test_a_failed_extraction_keeps_the_batch_for_the_next_turn(monkeypatch):
     monkeypatch.setattr(learn, "_get_client", lambda: _Boom())
     asyncio.run(learn.learn_from_conversation(user))
     assert len(learn.unread(user)) == learn.BATCH_EXCHANGES * 2, "пачка потеряна"
+
+
+# ── he is allowed to be wrong about himself ────────────────────────────────
+
+def test_his_own_slip_can_be_taken_back(monkeypatch):
+    """The worst thing that could happen to a character, and it was by design.
+
+    owner='bob' rows are written out of HIS OWN replies, and then handed back
+    to him under «держись этого, не противоречь себе». They carried no id, so
+    nothing could ever retire one — and the stated reason was that «his life is
+    invented, there is nothing a person could contradict». True, and beside the
+    point: the contradictor was never the person. It was him. One slip — a cat
+    that changes its name — became permanent canon he was then instructed to
+    keep faith with. A character who cannot be wrong about himself cannot stay
+    himself; he can only accumulate."""
+    user = "slips"
+    memory.add_memory(user, "fact", "кот Тишка", owner="bob", importance=2)
+    numbered = memory.believes(user, "bob")
+    assert "[" in numbered, "его собственное должно быть пронумеровано"
+    fact_id = int(numbered[numbered.index("[") + 1 : numbered.index("]")])
+
+    _answers(monkeypatch, {"no_longer_true": [{"id": fact_id, "because": "назвал кота Мурзиком"}]})
+    _learn(user, "а как кота твоего зовут?", "Мурзик. Спит вон, на печке.")
+
+    assert "Тишка" not in (memory.bob_self_context(user) or "")
+
+
+def test_the_extractor_is_shown_his_own_words_numbered(monkeypatch):
+    """It cannot point at what it cannot see a number for."""
+    user = "numbered"
+    memory.add_memory(user, "fact", "брат в Мурманске", owner="bob", importance=2)
+    seen = _answers(monkeypatch, {})
+    _learn(user)
+    prompt = seen["messages"][0]["content"]
+    assert "брат в Мурманске" in prompt
+    assert "[" in prompt.split("брат в Мурманске")[0].rsplit("\n", 1)[-1]
+
+
+def test_his_biography_is_out_of_reach(monkeypatch):
+    """The fear behind the old design was real and is still answered: the
+    thing that must never be edited by an extractor is his history and his
+    character, and neither has ever lived in this table. They are persona.py,
+    a separate document this code does not touch."""
+    assert "НЕ ТРОГАЙ его прошлое и его характер" in learn._EXTRACTION_SYSTEM
+    assert "отмени СТАРОЕ" in learn._EXTRACTION_SYSTEM
+    # And the reason the newest wins is the person's own ears.
+    assert "только что слышал своими ушами" in learn._EXTRACTION_SYSTEM

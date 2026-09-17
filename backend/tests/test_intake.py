@@ -229,7 +229,7 @@ def test_the_conversation_becomes_the_story_a_friend_is_built_from(monkeypatch):
     async def fake_think(system_prompt, user_text, **kwargs):
         return json.dumps({
             "name": "Зоя", "age": "31 год", "home": "северный город",
-            "backstory": "выросла у реки", "personality": "прямая", "flaws": ["перебивает"],
+            "backstory": "выросла у реки", "personality": "прямая", "flaws": ["перебивает"], "intention": "перебрать лодку до заморозков",
             "speech_style": "коротко",
         }, ensure_ascii=False)
 
@@ -277,7 +277,7 @@ def test_free_writing_still_works(monkeypatch):
     async def fake_think(system_prompt, user_text, **kwargs):
         return json.dumps({
             "name": "Гриша", "age": "73 года", "home": "посёлок",
-            "backstory": "варил всю жизнь", "personality": "ворчливый", "flaws": ["перебивает"],
+            "backstory": "варил всю жизнь", "personality": "ворчливый", "flaws": ["перебивает"], "intention": "перебрать лодку до заморозков",
             "speech_style": "коротко",
         }, ensure_ascii=False)
 
