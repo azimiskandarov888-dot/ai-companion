@@ -67,7 +67,8 @@ def asker(monkeypatch):
     seen = _Seen()
     seen.timeouts = []
 
-    async def fake_generate(system_prompt, user_text, max_tokens=1500, model=None, timeout=None):
+    async def fake_generate(system_prompt, user_text, max_tokens=1500, model=None,
+                            timeout=None, effort=None):
         seen.append(user_text)
         seen.timeouts.append(timeout)
         return json.dumps({"reaction": "Река — хорошо.",
@@ -221,7 +222,8 @@ def test_the_conversation_becomes_the_story_a_friend_is_built_from(monkeypatch):
         read.append(about)
         return {"register": "коротко", "would_reach_them": "спокойно"}
 
-    async def fake_generate(system_prompt, user_text, max_tokens=1500, model=None, timeout=None):
+    async def fake_generate(system_prompt, user_text, max_tokens=1500, model=None,
+                            timeout=None, effort=None):
         return "1. Зоя, 31, север, крановщица.\n2. Пётр, 44, село, пасечник."
 
     async def fake_think(system_prompt, user_text, **kwargs):
@@ -268,7 +270,8 @@ def test_free_writing_still_works(monkeypatch):
     async def fake_read(about, wishes=""):
         return {"register": "коротко", "would_reach_them": "спокойно"}
 
-    async def fake_generate(system_prompt, user_text, max_tokens=1500, model=None, timeout=None):
+    async def fake_generate(system_prompt, user_text, max_tokens=1500, model=None,
+                            timeout=None, effort=None):
         return "1. Гриша, 73, посёлок, сварщик.\n2. Нина, 52, горы, фельдшер."
 
     async def fake_think(system_prompt, user_text, **kwargs):

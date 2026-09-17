@@ -35,7 +35,7 @@ def client(monkeypatch):
     monkeypatch.setattr(tts, "synthesize", fake_tts)
     monkeypatch.setattr(tts, "configured", lambda: True)  # simulate a real voice
     monkeypatch.setattr(stt, "transcribe", fake_stt)
-    monkeypatch.setattr(learn, "learn_from_exchange", fake_learn)
+    monkeypatch.setattr(learn, "learn_from_conversation", fake_learn)
 
     with TestClient(main.app) as c:
         yield c
@@ -120,6 +120,6 @@ def test_all_three_passes_run_on_every_reply(monkeypatch):
     monkeypatch.setattr(main.memory, "log_turn", lambda *a, **kw: None)
     main._remember("u", "сказал", "ответил", Fake())
 
-    assert "learn.learn_from_exchange" in queued   # what he knows about them
+    assert "learn.learn_from_conversation" in queued   # what he knows about them
     assert "reading.keep_reading" in queued        # how to be with them
     assert "persona.deepen" in queued              # who he is

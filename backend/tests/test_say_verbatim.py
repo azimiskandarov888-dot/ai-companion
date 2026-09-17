@@ -58,7 +58,7 @@ def test_verbatim_does_not_become_a_memory(monkeypatch):
     async def fake_learn(*args, **kwargs):
         learned.append(args)
 
-    monkeypatch.setattr(main.learn, "learn_from_exchange", fake_learn)
+    monkeypatch.setattr(main.learn, "learn_from_conversation", fake_learn)
 
     with TestClient(main.app) as client:
         client.post(

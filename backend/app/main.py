@@ -338,7 +338,13 @@ def _remember(
     time (memory.broke_off_last_time).
     """
     memory.log_turn(user_id, "assistant", reply, farewell=farewell)
-    background_tasks.add_task(learn.learn_from_exchange, user_id, user_text, reply)
+    # In batches, not on every exchange. It used to run on each one, which was
+    # about a third of what a whole conversation cost — and it was also the
+    # worst extraction available, because one exchange is almost nothing to
+    # judge from. A goodbye always closes the batch; see learn.unread().
+    background_tasks.add_task(
+        learn.learn_from_conversation, user_id, farewell=farewell
+    )
     # AND, every so often, read the person again. The first reading was made
     # from a few minutes of somebody talking to a machine they had never met;
     # everything since is better evidence. It decides for itself whether

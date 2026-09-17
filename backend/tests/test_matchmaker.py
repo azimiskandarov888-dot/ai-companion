@@ -13,7 +13,7 @@ import json
 import pytest
 from fastapi.testclient import TestClient
 
-from app import brain, identity, main, matchmaker, memory, persona
+from app import brain, config, identity, main, matchmaker, memory, persona
 
 #: The endpoint tests post with no token, so the created friend belongs to the
 #: anonymous user — the same one the direct calls below use.
@@ -69,7 +69,8 @@ def pen(monkeypatch):
     (think, wrapped in prose + code fences — the messy case)."""
     calls: list[str] = []
 
-    async def fake_generate(system_prompt, user_text, max_tokens=1500, model=None, timeout=None):
+    async def fake_generate(system_prompt, user_text, max_tokens=1500, model=None,
+                            timeout=None, effort=None):
         calls.append(user_text)
         return TEN
 
@@ -214,7 +215,8 @@ def test_new_friend_starts_with_a_clean_slate(pen):
 
 
 def test_unparseable_reply_fails_gently(monkeypatch):
-    async def fake_generate(system_prompt, user_text, max_tokens=1500, model=None, timeout=None):
+    async def fake_generate(system_prompt, user_text, max_tokens=1500, model=None,
+                            timeout=None, effort=None):
         return TEN
 
     async def fake_think(system_prompt, user_text, **kwargs):
@@ -232,7 +234,8 @@ def test_half_a_person_is_refused(monkeypatch):
     """A character missing its core isn't a person yet — and the holes must
     never again be filled from the template. Rejecting is the only honest
     option left, so it has to actually happen."""
-    async def fake_generate(system_prompt, user_text, max_tokens=1500, model=None, timeout=None):
+    async def fake_generate(system_prompt, user_text, max_tokens=1500, model=None,
+                            timeout=None, effort=None):
         return TEN
 
     async def fake_think(system_prompt, user_text, **kwargs):
@@ -322,7 +325,8 @@ def test_the_ten_strangers_and_deep_write_calls_are_both_bounded(monkeypatch):
     sketch: dict = {}
     write: dict = {}
 
-    async def fake_generate(system_prompt, user_text, max_tokens=1500, model=None, timeout=None):
+    async def fake_generate(system_prompt, user_text, max_tokens=1500, model=None,
+                            timeout=None, effort=None):
         sketch.update(timeout=timeout, model=model)
         return TEN
 
@@ -348,7 +352,8 @@ def test_the_character_is_written_by_the_best_model_with_thinking_time(monkeypat
     diary — which can be rewritten any time and which nobody depends on."""
     write: dict = {}
 
-    async def fake_generate(system_prompt, user_text, max_tokens=1500, model=None, timeout=None):
+    async def fake_generate(system_prompt, user_text, max_tokens=1500, model=None,
+                            timeout=None, effort=None):
         return TEN
 
     async def fake_think(system_prompt, user_text, *, model=None, effort="high",
@@ -380,7 +385,8 @@ def test_a_bad_first_reply_gets_one_retry_before_giving_up(monkeypatch):
     failure mode of the model itself, and asking again routinely fixes it."""
     write_calls = 0
 
-    async def fake_generate(system_prompt, user_text, max_tokens=1500, model=None, timeout=None):
+    async def fake_generate(system_prompt, user_text, max_tokens=1500, model=None,
+                            timeout=None, effort=None):
         return TEN
 
     async def fake_think(system_prompt, user_text, **kwargs):
@@ -405,7 +411,8 @@ def test_two_bad_replies_in_a_row_still_fails_and_says_so(monkeypatch, capsys):
     keeps spending money while someone stares at an arriving screen."""
     write_calls = 0
 
-    async def fake_generate(system_prompt, user_text, max_tokens=1500, model=None, timeout=None):
+    async def fake_generate(system_prompt, user_text, max_tokens=1500, model=None,
+                            timeout=None, effort=None):
         return TEN
 
     async def fake_think(system_prompt, user_text, **kwargs):
@@ -496,3 +503,37 @@ def test_how_the_friend_addresses_him_is_decided_rather_than_defaulted():
     assert "заметно старше" in spec
     # and the same asymmetry the intake uses, for the same reason
     assert "лишняя вежливость поправима" in spec
+
+
+def test_the_ten_sketches_are_not_drawn_by_the_fast_model(monkeypatch):
+    """The stage exists for ONE reason, and this module's own opening says it:
+    ask a model to invent a person and it returns the same warm old man by the
+    sea every time. Ten sketches are how that mode gets broken — the dice can
+    only pick variety out of a list that has some, and the deep write
+    downstream cannot put back what was never sketched.
+
+    It ran on the chat model, on the argument that «sketching breadth is cheap,
+    and someone is watching the arriving screen». Breadth is exactly what a
+    small model has least of, and the screen is already waiting on the reading
+    and the write either side of this. So: the writer's model, at LOW effort —
+    ten one-paragraph strangers want imagination, not deliberation."""
+    picked: dict = {}
+
+    async def fake_generate(system_prompt, user_text, max_tokens=1500, model=None,
+                            timeout=None, effort=None):
+        if "придумываешь людей" in system_prompt:
+            picked.update(model=model, effort=effort)
+        return TEN
+
+    async def fake_think(system_prompt, user_text, **kwargs):
+        if not _is_the_write(system_prompt):
+            raise RuntimeError("no reading in this test")
+        return json.dumps(FRIEND, ensure_ascii=False)
+
+    monkeypatch.setattr(brain, "generate_text", fake_generate)
+    monkeypatch.setattr(brain, "think", fake_think)
+    asyncio.run(matchmaker.create_companion(U, "Мне восемьдесят, живу одна."))
+
+    assert picked["model"] == config.WRITER_MODEL
+    assert picked["model"] != config.CHAT_MODEL, "десятка снова на быстрой модели"
+    assert picked["effort"] == "low", "низкое усилие — это то, что держит экран честным"

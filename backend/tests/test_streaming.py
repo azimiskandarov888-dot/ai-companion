@@ -113,18 +113,18 @@ def client(monkeypatch):
     async def heard(*a, **k):
         return "доброе утро"
 
-    async def fake_learn(user_id, user_text, reply):
-        LEARNED.append((user_id, user_text, reply))
+    async def fake_learn(user_id, *, farewell=False):
+        LEARNED.append((user_id, farewell))
 
     LEARNED.clear()
     monkeypatch.setattr(stt, "transcribe", heard)
-    monkeypatch.setattr(learn, "learn_from_exchange", fake_learn)
+    monkeypatch.setattr(learn, "learn_from_conversation", fake_learn)
     with TestClient(main.app) as c:
         yield c
 
 
 #: What the background learner was handed, so the tests can check it ran at all.
-LEARNED: list[tuple[str, str, str]] = []
+LEARNED: list[tuple[str, bool]] = []
 
 
 def _talk(client, headers):
@@ -176,7 +176,7 @@ def test_the_whole_exchange_is_remembered_once(client):
     # added to the task list from inside the generator, which is late enough
     # to be worth pinning: get this wrong and he stops learning entirely, in
     # complete silence.
-    assert LEARNED == [(UID, "доброе утро", REPLY)]
+    assert LEARNED == [(UID, False)]
 
 
 def test_a_client_that_did_not_ask_for_a_stream_gets_the_old_shape(client, monkeypatch):

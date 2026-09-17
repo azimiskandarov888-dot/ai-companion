@@ -26,10 +26,11 @@ from __future__ import annotations
 
 import json
 import sys
+import time
 
 from anthropic import AsyncAnthropic
 
-from . import config, embeddings, emergency, feeling, memory, mood
+from . import config, db, embeddings, emergency, feeling, memory, mood
 
 _client: AsyncAnthropic | None = None
 
@@ -175,10 +176,66 @@ _EXTRACTION_SYSTEM = """Ты ведёшь память для тёплого д�
 Записывай настоящее, не выдумывай. Пропускай только пустую болтовню («да», «хорошо», «ага»). Всё значимое о человеке — сохраняй, но коротко."""
 
 
-async def learn_from_exchange(
-    user_id: str, user_text: str, assistant_text: str
-) -> None:
-    """Distil one exchange into ONE person's memory.
+#: Exchanges per extraction. This used to run on EVERY one, and at roughly a
+#: third of the whole cost of a conversation it was the most expensive thing
+#: in it — while also being the worst extraction available, because a model
+#: asked what is worth remembering from one exchange has almost nothing to
+#: look at. Reading five at a time is cheaper AND sees more.
+BATCH_EXCHANGES = 5
+
+#: But it cannot be a count alone. Each run also writes ONE mood reading, and
+#: mood._visits cuts readings into visits wherever two of them fall more than
+#: mood.CONVERSATION_GAP apart — so a slow talker whose five exchanges spanned
+#: eleven minutes would have one visit counted as two, and the visit is the
+#: unit the entire baseline is built on. The batch therefore closes on
+#: whichever comes first, five exchanges or half that gap.
+BATCH_SECONDS = mood.CONVERSATION_GAP / 2
+
+#: A ceiling for the pathological case — a provider down for an hour, nothing
+#: being marked read, and the prompt growing without bound behind it.
+_MOST = 40
+
+
+def unread(user_id: str, *, farewell: bool = False) -> list[dict]:
+    """The turns this run should read, oldest first. Empty until it is time.
+
+    A goodbye always closes the batch: whatever was said is read now, because
+    there may be no next turn to close it on.
+    """
+    with db.connect() as conn:
+        rows = [
+            dict(r)
+            for r in conn.execute(
+                "SELECT id, role, content, ts FROM turns"
+                " WHERE user_id=? AND read_ts IS NULL ORDER BY id LIMIT ?",
+                (user_id, _MOST),
+            ).fetchall()
+        ]
+    if not rows:
+        return []
+    if farewell or len(rows) >= _MOST:
+        return rows
+    if sum(1 for r in rows if r["role"] == "user") >= BATCH_EXCHANGES:
+        return rows
+    if time.time() - (rows[0]["ts"] or 0.0) >= BATCH_SECONDS:
+        return rows
+    return []
+
+
+def mark_read(user_id: str, rows: list[dict]) -> None:
+    """Stamp a batch as read, so the next one starts after it."""
+    if not rows:
+        return
+    now = time.time()
+    with db.connect() as conn:
+        conn.executemany(
+            "UPDATE turns SET read_ts=? WHERE id=? AND user_id=?",
+            [(now, r["id"], user_id) for r in rows],
+        )
+
+
+async def learn_from_conversation(user_id: str, *, farewell: bool = False) -> None:
+    """Distil what has been said since the last time into ONE person's memory.
 
     This runs as a background task, after the reply has already been sent, so
     nothing here can be traced back to a request. `user_id` is carried in
@@ -187,19 +244,35 @@ async def learn_from_exchange(
     """
     if not config.ANTHROPIC_API_KEY:
         return
+    rows = unread(user_id, farewell=farewell)
+    if not rows:
+        return
+    said = "\n".join(
+        f"{'ЧЕЛОВЕК' if r['role'] == 'user' else 'БОБ'}: {r['content']}" for r in rows
+    ).strip()
+    if not said:
+        mark_read(user_id, rows)
+        return
+
     try:
-        data = await _extract(user_id, user_text, assistant_text)
+        data = await _extract(user_id, said)
     except Exception as e:  # never let learning crash the request lifecycle
+        # NOT marked read: a provider having a bad minute should cost nothing
+        # but a delay, and the next turn picks the same batch back up.
         print(f"[learn] extraction failed: {e}", file=sys.stderr)
         return
 
+    # Marked read once the model has answered, not once storing has finished.
+    # A half-stored batch re-read would write its facts twice; a batch that is
+    # never marked grows until it hits _MOST and then silently loses its head.
+    mark_read(user_id, rows)
     try:
         await _store(user_id, data)
     except Exception as e:
         print(f"[learn] storing failed: {e}", file=sys.stderr)
 
 
-async def _extract(user_id: str, user_text: str, assistant_text: str) -> dict:
+async def _extract(user_id: str, said: str) -> dict:
     client = _get_client()
     # Numbered, and only here. The companion never sees an id — he would have
     # no idea what it was and might say one out loud — but something has to be
@@ -227,9 +300,7 @@ async def _extract(user_id: str, user_text: str, assistant_text: str) -> dict:
             "буква в букву. Иначе это посчитается как другая тема и не сойдётся.\n\n"
             if topics else ""
         )
-        + f"Последний обмен репликами:\n"
-        f"ЧЕЛОВЕК: {user_text}\n"
-        f"БОБ: {assistant_text}\n\n"
+        + f"Что было сказано с прошлого раза:\n{said}\n\n"
         "Выпиши новое, что стоит запомнить, в требуемом JSON."
     )
     message = await client.messages.create(

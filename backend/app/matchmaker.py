@@ -369,15 +369,25 @@ async def create_companion(
 
     context = story + ("\n\n" + brief if brief else "")
 
-    # Ten strangers, one call — the fast model: sketching breadth is cheap,
-    # and someone is watching the arriving screen while this runs.
+    # Ten strangers, one call. This used to run on the fast model, on the
+    # argument that «sketching breadth is cheap, and someone is watching the
+    # arriving screen» — and that is the assumption to distrust. Breadth is
+    # precisely what a small model does not have: asked for ten people it
+    # returns one person ten times, which is the mode this whole stage exists
+    # to break. The dice cannot pick variety out of a list that has none, and
+    # the deep write downstream cannot put back what was never sketched.
+    #
+    # So the writer's model, at LOW effort. Low because this is breadth rather
+    # than depth — ten one-paragraph strangers do not repay deliberation — and
+    # low is also what keeps the waiting screen honest, in a signup flow that
+    # already spends minutes on the reading and the write either side of it.
     sketch_prompt = (
         context + "\n\nСЛУЧАЙНЫЕ ИСКРЫ (толчки воображению): "
         + ", ".join(_roll_sparks(rng))
     )
     ten = await brain.generate_text(
-        _TEN_SYSTEM, sketch_prompt, max_tokens=1400, model=config.CHAT_MODEL,
-        timeout=_STAGE_TIMEOUT,
+        _TEN_SYSTEM, sketch_prompt, max_tokens=1400,
+        model=config.WRITER_MODEL, effort="low", timeout=_STAGE_TIMEOUT,
     )
 
     # The dice choose — never the model. Asked to choose, it would pick its

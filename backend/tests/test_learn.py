@@ -71,7 +71,12 @@ def _answers(monkeypatch, payload) -> dict:
 
 
 def _learn(user, said="я вчера ходил к врачу", replied="и как, что сказал?"):
-    asyncio.run(learn.learn_from_exchange(user, said, replied))
+    """One exchange, read now. A goodbye closes the batch whatever its size,
+    which is what lets every test below stay about extraction rather than
+    about when the batch happens to fill."""
+    memory.log_turn(user, "user", said)
+    memory.log_turn(user, "assistant", replied)
+    asyncio.run(learn.learn_from_conversation(user, farewell=True))
 
 
 def test_a_whole_exchange_lands_in_memory(monkeypatch):
@@ -191,3 +196,89 @@ def test_two_people_never_share_what_was_learned(monkeypatch):
     _learn("анна")
     assert "внук Саша" in memory.facts_context("анна")
     assert memory.facts_context("борис") == ""
+
+
+# ── when the batch closes ──────────────────────────────────────────────────
+
+def _say(user, n: int) -> None:
+    for i in range(n):
+        memory.log_turn(user, "user", f"реплика {i}")
+        memory.log_turn(user, "assistant", f"ответ {i}")
+
+
+def test_a_batch_does_not_close_before_it_is_full(monkeypatch):
+    """The whole point: the extractor stops running on every single exchange.
+    At about a third of what a conversation costs it was the most expensive
+    thing in one, and it was also the worst extraction available — one
+    exchange is almost nothing to judge what is worth remembering from."""
+    _answers(monkeypatch, {})
+    user = "batch-a"
+    _say(user, learn.BATCH_EXCHANGES - 1)
+    assert learn.unread(user) == []
+
+
+def test_a_full_batch_closes(monkeypatch):
+    _answers(monkeypatch, {})
+    user = "batch-b"
+    _say(user, learn.BATCH_EXCHANGES)
+    rows = learn.unread(user)
+    assert len(rows) == learn.BATCH_EXCHANGES * 2
+    assert rows[0]["content"] == "реплика 0", "старейшее первым — это порядок чтения"
+
+
+def test_a_goodbye_closes_a_batch_of_any_size(monkeypatch):
+    """There may be no next turn to close it on. Everything said in a short
+    visit would otherwise be learned only if he happened to come back."""
+    _answers(monkeypatch, {})
+    user = "batch-c"
+    _say(user, 1)
+    assert learn.unread(user) == []
+    assert len(learn.unread(user, farewell=True)) == 2
+
+
+def test_a_slow_talker_does_not_have_his_visit_cut_in_half(monkeypatch):
+    """The batch cannot be a count alone. Each run writes ONE mood reading,
+    and mood._visits cuts readings into visits wherever two fall more than
+    CONVERSATION_GAP apart — so five exchanges spanning eleven minutes would
+    have one visit counted as two, and the visit is the unit the whole
+    baseline rests on. Time closes the batch before that can happen."""
+    _answers(monkeypatch, {})
+    user = "batch-d"
+    _say(user, 2)
+    assert learn.unread(user) == [], "рано"
+
+    with db.connect() as conn:                      # два обмена, но давно
+        conn.execute(
+            "UPDATE turns SET ts = ts - ? WHERE user_id=?",
+            (learn.BATCH_SECONDS + 1, user),
+        )
+    assert len(learn.unread(user)) == 4
+    assert learn.BATCH_SECONDS < mood.CONVERSATION_GAP, "иначе визит всё равно порвётся"
+
+
+def test_a_batch_is_read_once_and_never_again(monkeypatch):
+    _answers(monkeypatch, {"facts": [{"category": "семья", "value": "дочь Валя"}]})
+    user = "batch-e"
+    _say(user, learn.BATCH_EXCHANGES)
+    asyncio.run(learn.learn_from_conversation(user))
+    assert learn.unread(user, farewell=True) == [], "пачка прочитана дважды"
+
+    # …and the next exchange starts a fresh one rather than re-reading.
+    _say(user, 1)
+    assert len(learn.unread(user, farewell=True)) == 2
+
+
+def test_a_failed_extraction_keeps_the_batch_for_the_next_turn(monkeypatch):
+    """A provider having a bad minute must cost a delay, never a memory."""
+    user = "batch-f"
+    _say(user, learn.BATCH_EXCHANGES)
+
+    class _Boom:
+        class messages:
+            @staticmethod
+            async def create(**kw):
+                raise RuntimeError("провайдер лёг")
+
+    monkeypatch.setattr(learn, "_get_client", lambda: _Boom())
+    asyncio.run(learn.learn_from_conversation(user))
+    assert len(learn.unread(user)) == learn.BATCH_EXCHANGES * 2, "пачка потеряна"

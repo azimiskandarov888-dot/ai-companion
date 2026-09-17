@@ -24,7 +24,7 @@ def pen(monkeypatch):
     """Replace the AI writer with a fake pen that counts its uses."""
     calls: list[tuple[str, str]] = []
 
-    async def fake_generate(system_prompt, user_text, max_tokens=1500):
+    async def fake_generate(system_prompt, user_text, max_tokens=1500, effort=None):
         calls.append((system_prompt, user_text))
         return "Красивая запись о моём друге."
 

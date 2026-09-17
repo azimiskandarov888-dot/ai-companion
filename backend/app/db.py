@@ -50,7 +50,13 @@ CREATE TABLE IF NOT EXISTS turns (
     -- as far as this table — it is stripped before anything is spoken or
     -- stored — so THIS is the only record that a conversation was closed
     -- properly rather than abandoned. memory.broke_off_last_time() reads it.
-    farewell    INTEGER NOT NULL DEFAULT 0
+    farewell    INTEGER NOT NULL DEFAULT 0,
+    -- When the learner read this turn; NULL means it has not. The extractor
+    -- used to run on every single exchange, which was the most expensive thing
+    -- in a conversation by a wide margin and gave the worst extraction, since
+    -- it saw one exchange at a time. It reads in batches now, and this is how
+    -- a batch knows where it starts — see learn.unread().
+    read_ts     REAL
 );
 
 CREATE TABLE IF NOT EXISTS memories (
@@ -250,6 +256,14 @@ def _migrate(conn: sqlite3.Connection) -> None:
     # about this one yet, and the next turn picks it up — see safety.carried().
     # `kind` splits a heart attack from «не хочу больше жить»: the same words
     # are wrong for both, and before this column there was only one message.
+    turn_cols = _columns(conn, "turns")
+    if turn_cols and "read_ts" not in turn_cols:
+        # Everything said before the batching existed was read one exchange at
+        # a time, as it happened. Stamping it read is the truth, and leaving it
+        # NULL would hand the first batch the entire history of the friendship.
+        conn.execute("ALTER TABLE turns ADD COLUMN read_ts REAL")
+        conn.execute("UPDATE turns SET read_ts = ts WHERE read_ts IS NULL")
+
     alert_cols = _columns(conn, "alerts")
     if alert_cols and "told_ts" not in alert_cols:
         conn.execute("ALTER TABLE alerts ADD COLUMN told_ts REAL")

@@ -276,6 +276,7 @@ async def generate_text(
     max_tokens: int = 1500,
     model: str | None = None,
     timeout: float | None = None,
+    effort: str | None = None,
 ) -> str:
     """One-shot writing call (no tools, no history).
 
@@ -284,6 +285,12 @@ async def generate_text(
     nobody is waiting mid-sentence — but `model` lets a caller pick the fast
     one for work that is broad rather than deep (sketching ten strangers),
     which keeps the arriving screen short.
+
+    `effort` is how much deliberation the model may spend before answering, and
+    it exists for the case where the best MODEL is wanted without the waiting
+    that its default depth would cost — ten one-paragraph strangers need a good
+    imagination, not a long think (matchmaker). Omitted entirely when not
+    given, so every existing caller keeps the model's own default.
 
     `timeout` is None by default, meaning the SDK's own generous read timeout
     — so creating a friend or rewriting the diary is never cut short (see
@@ -301,6 +308,8 @@ async def generate_text(
     """
     client = _get_client()
     extra = {"timeout": timeout} if timeout is not None else {}
+    if effort:
+        extra["output_config"] = {"effort": effort}
     async with client.messages.stream(
         model=model or config.BRAIN_MODEL,
         max_tokens=max_tokens,
