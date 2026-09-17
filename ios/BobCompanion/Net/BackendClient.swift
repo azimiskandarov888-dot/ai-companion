@@ -6,6 +6,31 @@
 import Combine      // ObservableObject / @Published live here, not in Foundation
 import Foundation
 
+/// The watcher broke in, and this is the half of an emergency that a sentence
+/// cannot do on its own.
+///
+/// He says the number out loud — that is the right thing for him to say. But
+/// hearing a number, holding on to it, leaving the app and typing it correctly
+/// is a great deal to ask of somebody who is frightened or on the floor. This
+/// is the same number, of this person's own country, as something to press.
+struct EmergencyAlarm: Decodable, Equatable {
+    /// "body" — an ambulance, now. "self" — he stays with them instead, and
+    /// fetching the family is the standard contraindication when the family is
+    /// the reason. The two are not the same emergency and must not look alike.
+    let danger: String?
+    /// This person's country's number first, then the one that always works.
+    let numbers: [String]?
+
+    var isAboutHimself: Bool { danger == "self" }
+
+    /// Never empty. A panel with no number on it is worse than no panel, so a
+    /// malformed or truncated line still leaves something that reaches somebody.
+    var dialable: [String] {
+        let live = (numbers ?? []).filter { !$0.isEmpty }
+        return live.isEmpty ? ["112"] : live
+    }
+}
+
 /// The shape of the backend's /api/talk reply (see backend/app/main.py).
 struct TalkResponse: Decodable {
     let transcript: String
@@ -27,9 +52,14 @@ struct TalkResponse: Decodable {
     /// which fires on «пока не знаю», but by the model judging that the person
     /// is actually leaving. Once he has finished the sentence, stop listening.
     let farewell: Bool?
+    /// Set on the very rare turn where the danger watcher broke in. Carried on
+    /// the response rather than on its own callback so there is exactly one
+    /// place in the app that can get an emergency wrong: it arrives while the
+    /// alarm he speaks is still coming out of the speaker.
+    var alarm: EmergencyAlarm? = nil
 
     enum CodingKeys: String, CodingKey {
-        case transcript, reply, note, state, farewell
+        case transcript, reply, note, state, farewell, alarm
         case audioBase64 = "audio_base64"
         case audioMime = "audio_mime"
         case secondsLeft = "seconds_left"
@@ -47,9 +77,10 @@ private struct TalkEvent: Decodable {
     let detail: String?
     let secondsLeft: Int?
     let farewell: Bool?
+    let alarm: EmergencyAlarm?
 
     enum CodingKeys: String, CodingKey {
-        case kind, transcript, text, reply, detail, farewell
+        case kind, transcript, text, reply, detail, farewell, alarm
         case audioBase64 = "audio_base64"
         case secondsLeft = "seconds_left"
     }
@@ -237,6 +268,7 @@ struct BackendClient {
         var trouble: String?
         var spoke = false
         var saidGoodbye = false
+        var alarm: EmergencyAlarm?
 
         for try await line in stream.lines {
             guard
@@ -254,6 +286,8 @@ struct BackendClient {
                     await onPiece(audio)
                     spoke = true
                 }
+            case "alarm":
+                alarm = event.alarm
             case "trouble":
                 trouble = event.detail
             case "done":
@@ -281,7 +315,8 @@ struct BackendClient {
             state: nil,
             secondsLeft: secondsLeft,
             spokenAsHeThought: spoke,
-            farewell: saidGoodbye
+            farewell: saidGoodbye,
+            alarm: alarm
         )
     }
 

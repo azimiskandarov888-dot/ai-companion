@@ -224,13 +224,32 @@ def known(user_id: str) -> bool:
     return country(user_id) in _BY_COUNTRY
 
 
+def _local(user_id: str) -> str:
+    return _BY_COUNTRY.get(country(user_id)) or config.EMERGENCY_NUMBER
+
+
 def numbers(user_id: str) -> str:
     """What to say out loud: the local number, then the one that always works.
 
     Never returns just one. A man in a panic may misremember which he was told,
     and 112 reaching somebody is worth more than the answer being tidy.
     """
-    local = _BY_COUNTRY.get(country(user_id)) or config.EMERGENCY_NUMBER
+    local = _local(user_id)
     if local == UNIVERSAL:
         return UNIVERSAL
     return f"{local} или {UNIVERSAL}"
+
+
+def dialable(user_id: str = "") -> list[str]:
+    """The same answer, as something a phone can put under a button.
+
+    `numbers()` is prose, to be read aloud. This is for DIALLING, and the
+    difference matters: telling somebody a number is asking a frightened person
+    to hear it, hold it, leave the app and type it correctly. A button does
+    none of that — and it is the difference between a friend who says what to
+    do and a friend who helps you do it.
+
+    Local first, then the one that is never wrong, and never the same twice.
+    """
+    local = _local(user_id) if user_id else config.EMERGENCY_NUMBER
+    return [local] if local == UNIVERSAL else [local, UNIVERSAL]

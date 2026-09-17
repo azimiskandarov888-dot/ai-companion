@@ -268,6 +268,34 @@ enum Strings {
         en: "I need to be able to hear you.")
     static let openSettings = Phrase(ru: "Открыть настройки", en: "Open Settings")
 
+    // MARK: - When something is actually wrong
+    //
+    // The only words in the app that are allowed to be an instruction to press
+    // something. Everything else here is him; this is not, and it must not
+    // pretend to be — a friendly line at this moment costs seconds and reads
+    // as though nobody understood what was just said.
+    //
+    // Two messages, because there are two emergencies (backend/app/safety.py).
+    // For the body: an ambulance, now. For himself: not that — fetching the
+    // family is the standard contraindication when the family is the reason,
+    // and somebody who has just said they don't want to live needs a person to
+    // stay, not a number and a goodbye. So the second one says he is staying.
+    //
+    // Short, because it is read by somebody who is frightened, and plain,
+    // because that is the only register that survives being frightened.
+    static let helpNowBody = Phrase(
+        ru: "Нажмите — телефон наберёт сам.",
+        en: "Tap and the phone will dial for you.")
+    static let helpNowSelf = Phrase(
+        ru: "Я никуда не денусь. Там снимут трубку\nв любое время суток — нажмите, наберётся само.",
+        en: "I'm not going anywhere. They answer at any hour —\ntap and it dials itself.")
+    static func helpNowCall(_ number: String) -> Phrase {
+        Phrase(ru: "Позвонить \(number)", en: "Call \(number)")
+    }
+    /// Never «Отмена». Nothing is being cancelled, and there is nothing here to
+    /// be sorry about having opened.
+    static let helpNowPutAway = Phrase(ru: "Убрать", en: "Put away")
+
     // MARK: - Navigation (the three words that rise from the brass ring)
 
     static let navDiary    = Phrase(ru: "Дневник",  en: "Diary")

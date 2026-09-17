@@ -263,3 +263,33 @@ def test_creating_without_saying_where_changes_nothing(monkeypatch):
 
     assert _created({"about": "Люблю тишину."}, monkeypatch).status_code == 200
     assert emergency.known(identity.ANONYMOUS) is False
+
+
+# ── the numbers, as something to press ──────────────────────────────────────
+
+
+def test_what_can_be_dialled_is_the_local_number_then_the_universal_one():
+    emergency.remember(U, "Канада")
+    assert emergency.dialable(U) == ["911", emergency.UNIVERSAL]
+
+
+def test_a_country_where_112_is_the_number_is_offered_once():
+    """Two identical buttons is a worse screen than one, and in a panic it
+    reads as a choice to make."""
+    emergency.remember(U, "Германия")
+    assert emergency.dialable(U) == [emergency.UNIVERSAL]
+
+
+def test_there_is_always_something_to_dial_even_knowing_nothing():
+    for numbers in (emergency.dialable(U), emergency.dialable()):
+        assert numbers
+        assert emergency.UNIVERSAL in numbers or numbers == [emergency.UNIVERSAL]
+
+
+def test_what_is_said_and_what_is_dialled_agree():
+    """One of them is prose and the other is for a button, and they are built
+    from the same row — a screen that offered a number he did not say out loud
+    would make him sound as though he were reading off something else."""
+    emergency.remember(U, "Израиль")
+    for number in emergency.dialable(U):
+        assert number in emergency.numbers(U)

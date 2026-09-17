@@ -16,6 +16,7 @@ import SwiftUI
 struct CompanionScreen: View {
     @ObservedObject var conversation: ConversationController
     @EnvironmentObject private var app: AppState
+    @Environment(\.openURL) private var openURL
 
     var onDiary: () -> Void
     var onAccount: () -> Void
@@ -146,6 +147,16 @@ struct CompanionScreen: View {
                         .transition(.opacity)
                 }
 
+                // LAST IN THE STACK, so it is on top of everything including
+                // him. It is the only thing on this screen that can ever matter
+                // more than he does.
+                if let alarm = conversation.emergency {
+                    helpNow(alarm)
+                        .padding(.horizontal, Metrics.sideMargin)
+                        .position(x: geo.size.width / 2, y: h * 0.58)
+                        .transition(.opacity)
+                }
+
                 VStack {
                     Spacer()
                     BrassRing(isOpen: $navOpen,
@@ -230,6 +241,54 @@ struct CompanionScreen: View {
         }
         .padding(22)
         .panel()
+    }
+
+    /// THE ONE PLACE IN THE APP THAT IS ALLOWED TO BE A BUTTON.
+    ///
+    /// Everything else on this screen is him — you touch him and he listens.
+    /// This is not him, and it does not pretend to be: it is the emergency
+    /// number of THIS person's country under something to press, at the one
+    /// moment when hearing a number, holding it, leaving the app and typing it
+    /// correctly is more than anybody should be asked to manage.
+    ///
+    /// It goes nowhere on a timer, unlike every other thing that appears here.
+    /// Somebody who has just fallen does not get to a button in nine seconds,
+    /// and the conversation carrying on is not evidence that anything is
+    /// better. It leaves when it has been used or put away, and not before.
+    private func helpNow(_ alarm: EmergencyAlarm) -> some View {
+        VStack(spacing: 14) {
+            Text(alarm.isAboutHimself ? Strings.helpNowSelf() : Strings.helpNowBody())
+                .appFont(AppType.body, leading: AppType.bodyLeading)
+                .foregroundStyle(Theme.linen)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+
+            // Usually one; two where the local number and 112 differ. Both are
+            // offered because a person in a panic may misremember which he was
+            // told, and 112 reaching somebody is worth more than a tidy screen.
+            ForEach(alarm.dialable, id: \.self) { number in
+                AppButton(title: Strings.helpNowCall(number)(), tone: .sun) {
+                    dial(number)
+                }
+            }
+
+            AppButton(title: Strings.helpNowPutAway(), tone: .quiet) {
+                withAnimation(.easeInOut(duration: 0.4)) {
+                    conversation.dismissEmergency()
+                }
+            }
+        }
+        .padding(22)
+        .panel()
+    }
+
+    /// Opens the dialler with the number already in it. iOS puts the call
+    /// itself behind one more confirmation, which is the right place for it —
+    /// the app must never be able to place a call nobody asked for.
+    private func dial(_ number: String) {
+        let digits = number.filter(\.isNumber)
+        guard !digits.isEmpty, let url = URL(string: "tel://\(digits)") else { return }
+        openURL(url)
     }
 
     /// What he's saying about himself right now, if anything. His own words

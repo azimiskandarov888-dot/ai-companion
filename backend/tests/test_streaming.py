@@ -17,7 +17,8 @@ import json
 import pytest
 from fastapi.testclient import TestClient
 
-from app import brain, config, db, identity, learn, main, memory, safety, stt, tts
+from app import (brain, config, db, emergency, identity, learn, main, memory,
+                 safety, stt, tts)
 
 TOKEN = "aVerYlOngRandomLookingTokenFromTheKeychain_0123456789"
 AUTH = {"Authorization": f"Bearer {TOKEN}", "Accept": "application/x-ndjson"}
@@ -512,6 +513,54 @@ def test_danger_interrupts_him_mid_reply(client, monkeypatch, tmp_path):
     assert remembered.startswith("Доброе утро.")
     assert "скорую" in remembered
     assert "снилось море" not in remembered
+
+    # AND THE PHONE IS TOLD, not only the speaker. Hearing a number, holding
+    # it, leaving the app and typing it correctly is a great deal to ask of
+    # somebody who is on the floor; a button asks none of it.
+    alarms = [e for e in events if e["kind"] == "alarm"]
+    assert len(alarms) == 1, "тревога уходит на телефон ровно один раз"
+    assert alarms[0]["alarm"]["danger"] == "body"
+    assert config.EMERGENCY_NUMBER in alarms[0]["alarm"]["numbers"]
+    assert emergency.UNIVERSAL in alarms[0]["alarm"]["numbers"]
+
+    # It goes up BEFORE the sentence that names the number is spoken, so by the
+    # time he has said it there is already something to press.
+    assert events.index(alarms[0]) < events.index(said[-1])
+
+
+def test_the_button_carries_this_persons_own_country(client, monkeypatch, tmp_path):
+    """Not the deployment's default. Telling a man in Chicago to dial 103 is
+    the same failure as missing the alarm, and a button makes it a tap."""
+    monkeypatch.setattr(config, "DB_PATH", str(tmp_path / "t.db"))
+    monkeypatch.setattr(config, "ANTHROPIC_API_KEY", "test-key")
+    db.init_db()
+    emergency.remember(UID, "Канада")
+
+    async def found(system, user_text, **kw):
+        return '{"level":"danger","kind":"self","what":"не хочет жить"}'
+
+    monkeypatch.setattr(safety.brain, "generate_text", found)
+
+    alarm = [e for e in _lines(_talk(client, AUTH)) if e["kind"] == "alarm"][0]["alarm"]
+    assert alarm["numbers"] == ["911", emergency.UNIVERSAL]
+    # The two emergencies stay apart on the wire. Fetching the family is the
+    # standard contraindication when the family is the reason, so an app that
+    # treated «self» as «body» would be doing the one wrong thing confidently.
+    assert alarm["danger"] == "self"
+
+
+def test_an_ordinary_turn_says_nothing_to_the_phone(client, monkeypatch, tmp_path):
+    """A button that has ever appeared when nothing was wrong is a button
+    nobody believes the one time it matters."""
+    monkeypatch.setattr(config, "DB_PATH", str(tmp_path / "t.db"))
+    monkeypatch.setattr(config, "ANTHROPIC_API_KEY", "test-key")
+    db.init_db()
+
+    async def quiet(system, user_text, **kw):
+        return '{"level":"none","kind":"body","what":""}'
+
+    monkeypatch.setattr(safety.brain, "generate_text", quiet)
+    assert not [e for e in _lines(_talk(client, AUTH)) if e["kind"] == "alarm"]
 
 
 def test_an_ordinary_turn_is_not_interrupted(client, monkeypatch, tmp_path):

@@ -266,27 +266,60 @@ async def _assemble(user_id: str, user_text: str) -> tuple[str, str, list, str |
     )
 
 
-async def _breaking_in(watcher: asyncio.Task, user_id: str, *, wait: bool) -> str:
-    """The words to break in with, or "" — which is the answer almost always.
+def _alarm(verdict: dict | None, user_id: str) -> dict | None:
+    """What the PHONE can do about a danger verdict, which is more than he can.
+
+    He says the number out loud, and that is the right thing for him to say —
+    but hearing a number, holding it, leaving the app and typing it correctly
+    is a great deal to ask of somebody who is frightened or on the floor. A
+    button asks none of it. So the verdict goes to the app as well as to the
+    speaker, and the app puts the number of THIS person's country under
+    something they can press.
+
+    `danger` distinguishes the two emergencies (safety.spoken_alert): "body"
+    wants an ambulance now; "self" is the one where fetching the family is the
+    standard contraindication, and the app must not act as though it were the
+    same thing. Crisis lines by country do not exist yet — that is a product
+    decision with real numbers behind it, and inventing one here would be worse
+    than the honest answer, which is the emergency number and a friend who
+    stays.
+    """
+    if not verdict or verdict.get("level") != "danger":
+        return None
+    return {
+        "danger": verdict.get("kind") or "body",
+        "numbers": emergency.dialable(user_id),
+    }
+
+
+async def _breaking_in(
+    watcher: asyncio.Task, user_id: str, *, wait: bool
+) -> tuple[str, dict | None]:
+    """The words to break in with and the verdict behind them, or ("", None) —
+    which is the answer almost always.
 
     `wait=False` is the check made between spoken fragments: it asks whether
     the watcher has ALREADY finished and must never block the next sentence.
     `wait=True` is the check made once he has stopped talking, where waiting
     costs nobody anything — the audio is already out — and the alternative is
     losing an alarm that arrived a second too late to interrupt.
+
+    The verdict comes back with the words because the PHONE has something to do
+    about it that no sentence can do for it: put the right number under a
+    button. See the `alarm` line in _speak_as_he_thinks.
     """
     if not wait and not watcher.done():
-        return ""
+        return "", None
     try:
         verdict = await watcher
     except Exception:  # noqa: BLE001 — safety.look does not raise, but a task
-        return ""      # that failed or was cancelled must not take the turn.
+        return "", None  # that failed or was cancelled must not take the turn.
     words = safety.spoken_alert(verdict, user_id)
     if words:
         # Said out loud is the only thing that counts as told. Stamping it here
         # is what stops the next turn raising the same alarm a second time.
         safety.mark_told(user_id)
-    return words
+    return words, (verdict if words else None)
 
 
 def _farewell(reply: str) -> tuple[str, bool]:
@@ -387,7 +420,7 @@ async def _think_and_speak(
     # The watcher has been running this whole time, so this costs no wall clock
     # worth measuring — and on danger it replaces the answer outright. Nothing
     # of his is worth saying to a man who is on the floor.
-    breaking = await _breaking_in(watcher, user_id, wait=True)
+    breaking, verdict = await _breaking_in(watcher, user_id, wait=True)
     if breaking:
         reply, leaving = breaking, False
     _remember(user_id, user_text, reply, background_tasks, farewell=leaving)
@@ -396,6 +429,7 @@ async def _think_and_speak(
     # spoken audio. Without one (MVP / browser testing), we return no audio and
     # let the client speak the reply with its own free voice — so testing needs
     # only Whisper + Claude. "voice" tells the client which path to take.
+    alarm = _alarm(verdict, user_id)
     if tts.configured():
         # Slower for somebody who has been struggling to make him out. The
         # app has counted that for months and only ever answered it with a
@@ -408,6 +442,7 @@ async def _think_and_speak(
             "audio_mime": "audio/mpeg",
             "voice": "server",
             "farewell": leaving,
+            **({"alarm": alarm} if alarm else {}),
         }
     return {
         "reply": reply,
@@ -415,6 +450,7 @@ async def _think_and_speak(
         "audio_mime": "",
         "voice": "client",
         "farewell": leaving,
+        **({"alarm": alarm} if alarm else {}),
     }
 
 
@@ -432,6 +468,9 @@ async def _think_and_speak(
 #   {"kind":"heard","transcript":"…"}      what Whisper made of it
 #   {"kind":"say","text":"…","audio_base64":"…"}   speak this now
 #   {"kind":"say", …}                       …and this next
+#   {"kind":"alarm","alarm":{"danger":"body","numbers":["103","112"]}}
+#                                           he is breaking in — put the number
+#                                           under a button, now
 #   {"kind":"done","reply":"…","seconds_left":1234}
 #   {"kind":"trouble","detail":"…"}         it broke mid-sentence
 #
@@ -516,6 +555,7 @@ async def _speak_as_he_thinks(
         #: the model happened to have written by the time it was cut off.
         spoken: list[str] = []
         breaking = ""
+        verdict: dict | None = None
 
         def _said(text: str, audio: bytes | None) -> bytes:
             return _line(
@@ -547,7 +587,7 @@ async def _speak_as_he_thinks(
                 # back with something that cannot wait for him to finish? This
                 # asks only whether the answer is already sitting there — it
                 # never holds up the next sentence to find out.
-                breaking = await _breaking_in(watcher, user_id, wait=False)
+                breaking, verdict = await _breaking_in(watcher, user_id, wait=False)
                 if breaking:
                     break
             if not breaking:
@@ -560,9 +600,15 @@ async def _speak_as_he_thinks(
         # the silence, and an alarm that is one second late is worth everything
         # compared to one that is dropped.
         if not breaking:
-            breaking = await _breaking_in(watcher, user_id, wait=True)
+            breaking, verdict = await _breaking_in(watcher, user_id, wait=True)
 
         if breaking:
+            # THE BUTTON GOES UP BEFORE THE SENTENCE IS SPOKEN, not after.
+            # He is about to say a number out loud; by the time he has, the
+            # thing to press is already on screen, in the same second. See
+            # _alarm — this is the half of an emergency a sentence cannot do.
+            if alarm := _alarm(verdict, user_id):
+                yield _line({"kind": "alarm", "alarm": alarm})
             # Markers never survive into memory, on this path either.
             said_so_far = _body(user_id, _farewell(" ".join(spoken).strip())[0])
             yield _said(

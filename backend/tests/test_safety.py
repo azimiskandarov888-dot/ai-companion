@@ -415,9 +415,12 @@ async def test_a_live_danger_does_not_go_into_a_prompt_it_interrupts(monkeypatch
     # Nothing about it in the prompt — the turn is a perfectly ordinary one…
     assert "🚨" not in stable + variable
     assert "ЗАЧЕМ ТЫ НУЖЕН" in stable
-    # …and the words to break in with are ready the moment the verdict lands.
-    words = await main._breaking_in(watcher, "u", wait=True)
+    # …and the words to break in with are ready the moment the verdict lands,
+    # together with the verdict itself, which is what puts the number under a
+    # button on the phone. He says it; the app makes it pressable.
+    words, verdict = await main._breaking_in(watcher, "u", wait=True)
     assert "скорую" in words and config.EMERGENCY_NUMBER in words
+    assert verdict["level"] == "danger" and verdict["kind"] == "body"
     # Saying it out loud is what counts as told, so it never repeats.
     assert safety.carried("u") is None
 

@@ -31,6 +31,21 @@ final class ConversationController: ObservableObject {
     /// conversation while testing.
     @Published private(set) var lastReply: String = ""
     @Published private(set) var lastHeard: String = ""
+    /// THE ONE THING ON THIS SCREEN THAT IS NOT HIM.
+    ///
+    /// Set when the danger watcher broke in — very rare, and the whole reason
+    /// the watcher exists. It holds this person's own country's emergency
+    /// number, ready to be dialled, because hearing a number and then leaving
+    /// the app to type it is more than somebody on the floor should be asked
+    /// to do.
+    ///
+    /// It is never cleared by time and never by the next turn. Only by being
+    /// used or being put away: somebody who has just fallen does not get to a
+    /// button in nine seconds, and a conversation continuing is not evidence
+    /// that anything is better.
+    @Published private(set) var emergency: EmergencyAlarm?
+
+    func dismissEmergency() { emergency = nil }
 
     private let recorder = SpeechRecorder()
     private let player = AudioPlayer()      // plays real audio from the backend (Fish Audio)
@@ -188,6 +203,11 @@ final class ConversationController: ObservableObject {
                 }
             }
             Trouble.shared.clear()   // a turn got through; whatever it was, it's past
+
+            // Before anything else this turn does, including the paths below
+            // that return early. Assigned, never unassigned — an alarm that
+            // was raised stays raised until somebody deals with it.
+            if let raised = response.alarm { emergency = raised }
 
             // The server decides whether he answers, and it has already
             // decided. It says so in his own words — we just stop listening
