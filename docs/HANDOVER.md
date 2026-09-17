@@ -2,8 +2,9 @@
 
 Everything a new session needs to work on this project without re-deriving it
 or re-litigating decisions that are already made. Written 2026-09-17 on branch
-`claude/gallant-bardeen-0l6ff0`, and accurate as of the commit that added it.
-**743 tests pass.** Every number below was measured by running the code, not
+`claude/gallant-bardeen-0l6ff0` and revised the same day on
+`claude/awesome-planck-wdj4hu`, where must-fix items 1–5 and 8 were done.
+**808 tests pass.** Every number below was measured by running the code, not
 estimated; where something is an estimate it says so.
 
 Where this document and any other document disagree, **this one is right** —
@@ -208,6 +209,12 @@ There are **two** of them, because there are two emergencies: `kind: "body"`
 whether they are alone, he does not close it — fetching the family is the
 standard contraindication when the family is the cause).
 
+**And the phone is told, not only the speaker.** A `danger` verdict now also
+streams `{"kind": "alarm", "alarm": {"danger": …, "numbers": […]}}` — this
+person's own country's number, ready to dial — and the app puts it under a
+button that goes nowhere on a timer. Hearing a number, holding it, leaving the
+app and typing it correctly is a great deal to ask of somebody on the floor.
+
 ### In the background (nobody is waiting)
 
 | | Part | Model | Cadence |
@@ -245,6 +252,10 @@ with least breadth; it is on Opus 5 at low effort now.
    collect a form: it is to get the person talking in **natural, unguarded
    language**, because that is what the reading needs. It stops itself when it
    has enough (`enough: true`) rather than filling a quota.
+   The app's local warm-up is eleven questions; the fourth, «А живёте где — в
+   какой стране?», is asked outright and its answer is sent separately, because
+   it decides which emergency number he is told to dial and the first
+   conversation is exactly when nothing else is known yet.
 2. **Reading** — `reading.py`, Opus 5 with real thinking. Infers HOW this
    person needs to be spoken to from *how they wrote*, not just what they
    wrote. Everything downstream is built on this.
@@ -308,7 +319,8 @@ Three things worth knowing:
 | `feeling.py` | His mood, which fades within a day |
 | `body.py` | His throat and tiredness; cough/yawn/sneeze markers |
 | `safety.py` | The danger watcher — outside the character, deliberately |
-| `emergency.py` | Which number to dial, by country |
+| `emergency.py` | Which number to dial, by country; `resolve` reads it out of free text, `dialable` hands it to a button |
+| `erase.py` | The ONE definition of what a parting removes — a friend leaving, or a person |
 | `situations.py` | Rules that apply only to this turn (games, news) |
 | `occasions.py` | What day it is, and whose birthday |
 | `allowance.py` | Daily spend per person; dozing |
@@ -324,13 +336,15 @@ has ever been run in this environment**, so treat any Swift change as unproven.
 - `Design/Strings.swift` — all copy, RU and EN. `aboutBody` is the disclosure.
 - `Screens/SettingsScreen.swift` — «О приложении» opens `AboutSheet`.
 - `App/AppFlow.swift` — onboarding → intake → conversation. **No age gate.**
-- `BackendClient.swift` — `createCompanion` posts only `{about, wishes}`, so
-  the server's `conversation/age/gender/origin` fields are dead on the real
-  client and `intake.as_story` is bypassed by a separately-maintained Swift
-  copy. Worth unifying.
-- `Stores.swift` → `startOver()` clears **UserDefaults only** — no server call
-  — while the confirmation text promises «\(name) забудет всё… Это нельзя
-  отменить.» That is a user-facing falsehood; see must-fix 9.
+- `BackendClient.swift` — `createCompanion` posts `{about, wishes, country}`,
+  so the server's `conversation/age/gender/origin` fields are still dead on the
+  real client and `intake.as_story` is bypassed by a separately-maintained
+  Swift copy. Worth unifying.
+- `Stores.swift` → `startOver()` now calls the server and then clears the
+  phone; `deleteEverything()` calls the server FIRST and clears the phone only
+  if it worked. `forgetCompanionLocally()` is the phone-only one, used by
+  `reconcileWithServer`, which is reacting to a server that has already said
+  there is nobody.
 
 ---
 
@@ -345,20 +359,31 @@ the full independent audit with `file:line` evidence behind it.
 
 ## 10. Must fix before shipping, in order
 
-1. **The `danger` block was written for a stroke and is applied verbatim to
-   suicide** — partially addressed (`kind` now splits the spoken words), but
-   **there is still no crisis-line table**: `emergency.py` maps countries to
-   ambulance numbers only. This needs a product decision and real numbers.
-2. **A `danger` verdict notifies nobody.** It writes a row and prints to
-   stderr. No push, no family contact, no escalation. `/api/alerts` is
-   "internal inspection only" by its own docstring.
+Items 1–5 and 8 were done on `claude/awesome-planck-wdj4hu`; what is left is
+below them. The done ones are kept, struck through, because what was wrong is
+the reason the tests that now hold them exist.
+
+1. ~~**The `danger` block was written for a stroke and applied verbatim to
+   suicide.**~~ Split by `kind`, and the phone now gets the number under a
+   button (`emergency.dialable`, the `alarm` stream line, `CompanionScreen
+   .helpNow`). **The crisis-line table is still open** — `emergency.py` maps
+   countries to ambulance numbers only, and that needs the owner's decision
+   and real numbers. Until it exists, `kind: "self"` says the emergency number
+   and, more importantly, that he is staying.
+2. ~~**A `danger` verdict notifies nobody.**~~ Partly: it now reaches the
+   PERSON as something to press. **Nobody ELSE is notified** — no push, no
+   family contact, no escalation. Still open, still question 3 below.
 3. **Prompt injection** — three channels put user-derived text into the
    *system* role, one of them (`reading.standing_block`) rewritten unattended
    every few visits. A hostile reading was assembled and landed verbatim.
-4. **`reading.py:457` can silently erase `hurt_by` / `do_not_touch`** — an
-   empty list passes the truthiness filter (`str([]).strip() == "[]"`).
-   "Don't ask about his son, he died" can be wiped, unattended. **Confirmed by
-   running it.**
+   **The owner has deferred this deliberately** («поговорим об этом позже»).
+4. ~~**`reading.py:457` can silently erase `hurt_by` / `do_not_touch`.**~~
+   Fixed. `str([])` is `"[]"` and `str(None)` is `"None"`, so an empty answer
+   passed the presence test and replaced «про сына не спрашивать». Emptiness is
+   decided on the value now, and those two fields can only be added to
+   (`reading.NEVER_SHRINKS`). Both halves are pinned by tests.
+   Alongside it, the owner's rule: `do_not_touch` means «never take him there
+   yourself», never «never go there». If he opens it, the friend goes with him.
 5. **No romantic/sexual ceiling and no de-escalation path**, while several
    rules push warmth only upward and forbid ever cooling.
 6. **No output filter and no age gate.** The only server-side content check
@@ -367,20 +392,24 @@ the full independent audit with `file:line` evidence behind it.
    `COMPANION_LANGUAGE` exists — and the constitution opens «Ты говоришь
    по-русски», the extractor demands «Все значения — по-русски». English is not
    supported, whatever the settings screen says.
-8. **`CHAT_MODEL` carries a stale dated id** — `claude-haiku-4-5-20251001`
-   should be `claude-haiku-4-5`.
-9. **Nothing deletes a person's data, and the app says otherwise.** There is no
-   delete endpoint; `memory.supersede` retires but never deletes; the diary
-   deliberately keeps retired rows; `startOver()` clears the phone only. The UI
-   promises the opposite, in writing. Settings also offers «Данные · выгрузить»
-   with no export endpoint behind it. There is no retention policy and no
-   expiry, and `learn.py` is instructed to store health notes and contacts.
+8. ~~**`CHAT_MODEL` carries a stale dated id.**~~ Fixed, and a test now fails
+   the build on any dated `*_MODEL` id: a pinned snapshot keeps answering in
+   the voice of the day it was written and then stops answering at all,
+   mid-turn, in front of somebody who cannot tell that from their friend
+   having gone.
+9. ~~**Nothing deletes a person's data, and the app says otherwise.**~~ Fixed.
+   `erase.py` is the one definition of what a parting removes, and both ways of
+   parting reach it. `DELETE /api/me` erases every row in every table with a
+   `user_id` — asked of the schema, not listed — and every file.
+   `POST /api/companion/start-over` removes him and everything between them,
+   keeping the person. The sheets now say what actually happens.
+   **Still open:** there is no retention policy and no expiry, and there is no
+   export endpoint (nothing in the app promises one any more — the «Данные ·
+   выгрузить» row is gone — but a person is arguably owed it).
 10. **Persona growth rides in the cached half.** Bounded now (`persona._MOST`),
     but it is still user-varying content inside the half that must stay
     byte-identical — worth re-checking after any change there, because a silent
     cache miss costs money on every turn of every conversation.
-
----
 
 ## 11. Deliberately NOT done, and why
 
@@ -418,10 +447,13 @@ the full independent audit with `file:line` evidence behind it.
   Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
   Claude-Session: https://claude.ai/code/session_018PiV38FZMupJ19foghBRZm
   ```
-- **Tests:** `cd backend && python -m pytest -q`. 743 pass. The suite is the
+- **Tests:** `cd backend && python -m pytest -q`. 808 pass. The suite is the
   design record — test docstrings carry the *reasoning*, including what went
   wrong before. Read the docstring before changing an assertion; several tests
   exist because a previous fix was subtly wrong.
+  `pip install -r requirements.txt -r requirements-dev.txt` first — the suite
+  needs `pytest-asyncio`, which was missing from requirements-dev.txt and made
+  63 tests look like failures rather than like a missing plugin.
 - **The constitution has a ceiling** (`test_the_constitution_stays_within_its_ceiling`,
   26,000 chars, currently 25,756). It has caught real regrowth more than once.
   It has moved exactly once, deliberately, and the reason is recorded in the
@@ -438,7 +470,10 @@ the full independent audit with `file:line` evidence behind it.
    generation, or both — and measured how?
 2. **Crisis lines.** Real numbers per country for `kind: "self"`, or a single
    international one?
-3. **Who gets notified on `danger`**, and how? Nothing is built.
+3. **Who ELSE gets notified on `danger`**, and how? The person now gets the
+   number under a button. A family contact, a push, any escalation beyond the
+   person themselves — none of it is built, and it needs a product decision
+   before it is.
 4. **English.** Is it a real target? If yes, the prompts need to be
    language-parameterised, which is a substantial piece of work.
 5. **Speech-to-speech** (GPT Realtime ~0.82 s, Grok Voice ~0.78 s) would be
