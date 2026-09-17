@@ -1,10 +1,17 @@
 # Voice Companion 👴🎙️
 
-A warm, talking friend for my great-grandad — in **Russian**, **voice only**.
-He speaks, it listens, and it speaks back in a gentle Russian voice. It
-remembers his stories and can start a conversation on its own.
+A warm, talking friend for lonely people — of **any age**, in **Russian**,
+**voice only**. The person speaks, it listens, and it speaks back in a gentle
+voice. It remembers their stories, notices when something has changed, and has
+a life of its own to talk about.
 
-> **Complete build blueprint** (start here): **[docs/BUILD-PLAN.md](./docs/BUILD-PLAN.md)**
+It does **not** start conversations. There is no scheduler, no push and no
+outbound call anywhere in the codebase, and he is forbidden to promise anything
+that would need one — a friend who says «я тебе завтра напомню» and cannot is
+worse than no friend.
+
+> **START HERE — everything a new session needs:** **[docs/HANDOVER.md](./docs/HANDOVER.md)**
+> **Complete build blueprint:** **[docs/BUILD-PLAN.md](./docs/BUILD-PLAN.md)**
 > **Who Bob is** (his life, story & soul): **[docs/BOB-PERSONA.md](./docs/BOB-PERSONA.md)**
 > **How the companion behaves** (character & guardrails): **[docs/VISION.md](./docs/VISION.md)**
 > **Always-on listening design** (iOS research): **[docs/ALWAYS-ON.md](./docs/ALWAYS-ON.md)**
@@ -17,8 +24,11 @@ remembers his stories and can start a conversation on its own.
 
 | Part | Job | Powered by |
 | ---- | --- | ---------- |
-| 🧠 **Brain** | thinks, remembers, replies warmly | **Claude** (`claude-opus-4-8`) |
-| 👂 **Ears** | hears messy, elderly Russian | **Whisper** (OpenAI) |
+| 🧠 **Voice** | the companion speaking — fast, because somebody is waiting | **Claude Haiku 4.5** |
+| 🧩 **Brain** | web search, intake, distilling memory, his week | **Claude Sonnet 5** |
+| ✍️ **Reader & writer** | reads the person, invents the companion | **Claude Opus 5** |
+| 🚨 **Watchman** | is this person in danger right now | **Claude Haiku 4.5**, outside the character |
+| 👂 **Ears** | hears messy, accented speech | **Whisper** (OpenAI) — due for replacement |
 | 🗣️ **Mouth** | warm Russian voice | **Fish Audio** (default; ElevenLabs optional) |
 | 📔 **Memory** | remembers stories, family, routine | file-based now → Postgres + pgvector later |
 
