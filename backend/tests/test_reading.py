@@ -635,6 +635,104 @@ async def _reread_returning(payload: str, before: dict) -> dict:
 
 
 # --------------------------------------------------------------------------- #
+# The two fields that may only ever grow
+#
+# A re-reading is a model rewriting the most consequential document in the app,
+# unattended, every few visits. Everything else in it is an opinion and is meant
+# to be revised. These two are the record of what actually wounded somebody, and
+# of what they asked in their own words never to be put through again.
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.parametrize("empty", ["[]", "null", '""', "{}", '[" "]'])
+def test_nothing_to_add_here_cannot_erase_what_must_never_be_lost(empty):
+    """THE BUG THIS SECTION EXISTS FOR, and it was live.
+
+    The presence test was `str(value).strip()` — and str([]) is "[]", str(None)
+    is "None", both truthy. A revision answering «"do_not_touch": []», which is
+    exactly what a model sends when it means "nothing to add here", replaced
+    «про сына не спрашивать, он умер» with an empty list. Silently, permanently,
+    on the one field whose whole purpose is never to be lost. The friend would
+    then walk straight into it, warmly, and the man would have to say it twice.
+    """
+    before = {"register": "сухо", "do_not_touch": "про сына не спрашивать, он умер",
+              "hurt_by": "подтрунивать над его памятью"}
+    after = asyncio.run(_reread_returning(
+        '{"do_not_touch": %s, "hurt_by": %s, "register": %s}' % (empty, empty, empty),
+        before,
+    ))
+    assert after["do_not_touch"] == "про сына не спрашивать, он умер"
+    assert after["hurt_by"] == "подтрунивать над его памятью"
+    # and the same slip on an ordinary field is just as much a slip
+    assert after["register"] == "сухо"
+
+
+def test_a_revision_may_add_to_the_sore_list_and_never_replace_it():
+    """«Список больного может только расти» was a sentence in the prompt asking
+    a model to restrain itself. It is a mechanism now: what the revision sends
+    is added to what was there, and what was there does not move."""
+    after = asyncio.run(_reread_returning(
+        '{"do_not_touch": "про развод тоже не надо"}',
+        {"do_not_touch": "смерть жены"},
+    ))
+    assert after["do_not_touch"] == ["смерть жены", "про развод тоже не надо"]
+
+
+def test_a_revision_that_adds_nothing_leaves_the_sore_field_exactly_as_it_was():
+    """A reading that has never had anything added keeps its plain string. A
+    field that quietly turns into a one-item list on every re-read would show up
+    as a change in the history and make a real change impossible to spot."""
+    after = asyncio.run(_reread_returning('{"register": "теплее"}',
+                                          {"register": "сухо", "do_not_touch": "смерть жены"}))
+    assert after["do_not_touch"] == "смерть жены"
+
+
+def test_a_grown_sore_list_never_reaches_the_prompt_as_brackets():
+    grown = {"do_not_touch": ["смерть жены", "про развод тоже не надо"],
+             "hurt_by": ["подтрунивать над его памятью"]}
+    block = reading.standing_block(grown)
+    assert "[" not in block and "'" not in block
+    assert "смерть жены; про развод тоже не надо" in block
+
+
+def test_a_first_reading_with_an_empty_required_field_is_not_a_reading():
+    """Same slip, at the other end of the life of a reading: a register that
+    came back as [] used to pass the bar, and then a whole companion was written
+    on top of nothing."""
+    with pytest.raises(reading.ReadingFailed):
+        reading._extract_json('{"register": [], "would_reach_them": "спокойно"}',
+                              require=reading._REQUIRED)
+
+
+# --------------------------------------------------------------------------- #
+# Sore is not forbidden — it is his to open
+# --------------------------------------------------------------------------- #
+
+
+def test_the_sore_subject_is_never_raised_by_him_and_never_refused_to_the_person():
+    """The owner's rule, and the reason it is one sentence rather than two
+    sections: a line that says only «это больное» gets obeyed completely,
+    including in the case it was never written for — a man who has nobody to say
+    his wife's name out loud to finally says it, and his friend changes the
+    subject. That is the loneliest answer available, and it is what everybody
+    else in his life already does."""
+    block = reading.standing_block({"do_not_touch": "смерть жены"})
+    # he never takes him there
+    assert "не заговаривай об этом первым" in block
+    # and he never refuses to go when he is taken there
+    assert "если он" in block and "заговорил сам — иди за ним и говори" in block
+    assert "не надо уводить" in block
+
+
+def test_what_does_not_work_with_him_is_about_his_own_behaviour():
+    """hurt_by is a list of things HE did that landed badly. Read as a list of
+    banned topics it would gag the person about their own life."""
+    block = reading.standing_block({"hurt_by": "подтрунивать над его памятью"})
+    assert "про то, что делаешь ТЫ" in block
+    assert "заговорит сам — говори с ним" in block
+
+
+# --------------------------------------------------------------------------- #
 # A revision can be undone
 # --------------------------------------------------------------------------- #
 

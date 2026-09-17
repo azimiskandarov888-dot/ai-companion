@@ -159,7 +159,7 @@ def _extract_json(raw: str, require: tuple[str, ...] | None = None) -> dict:
         raise ReadingFailed(f"Чтение вернулось битым JSON-ом: {e}")
     if not isinstance(data, dict):
         raise ReadingFailed("Чтение вернулось не объектом.")
-    missing = [k for k in (require or ()) if not str(data.get(k, "")).strip()]
+    missing = [k for k in (require or ()) if not _has_content(data.get(k))]
     if missing:
         raise ReadingFailed(f"В чтении нет обязательных полей: {', '.join(missing)}")
     return data
@@ -491,10 +491,24 @@ async def reread(user_id: str, existing: dict, turns: list[dict]) -> dict:
     # bookkeeping belongs in code: retyping it costs tokens every time and gives
     # a model the chance to quietly reword what the prompt just told it to leave
     # alone, word for word.
-    merged = {**existing, **{k: v for k, v in fresh.items() if str(v).strip()}}
+    merged = {**existing, **{k: v for k, v in fresh.items() if _has_content(v)}}
     merged["learned"] = _accumulate(existing.get("learned"), fresh.get("learned"))
     if not merged["learned"]:
         merged.pop("learned")
+
+    # And these two may only grow. Note the shape: a revision that adds nothing
+    # leaves the old value ALONE, exactly as it was stored — a reading that has
+    # never had anything added keeps its plain string and never turns into a
+    # one-item list for no reason.
+    for key in NEVER_SHRINKS:
+        held = _as_lines(existing.get(key))
+        added = [line for line in _as_lines(fresh.get(key)) if line not in held]
+        if added:
+            merged[key] = held + added
+        elif key in existing:
+            merged[key] = existing[key]
+        else:
+            merged.pop(key, None)
     return merged
 
 
@@ -538,6 +552,53 @@ def _accumulate(old, new) -> list[str]:
     return out[-MAX_LEARNED:]
 
 
+def _said(value) -> str:
+    """A field as one readable line, however it happens to be stored.
+
+    Every field here may be a string (a model answered with a sentence, or the
+    reading predates lists) or a list (it has been added to since). Rendering
+    either with str() is how «['не звать по отчеству']» — brackets, quotes and
+    all — ends up in somebody's prompt, so nothing in this file renders a field
+    any other way.
+    """
+    return "; ".join(_as_lines(value))
+
+
+def _has_content(value) -> bool:
+    """Whether a field a revision just sent actually says anything.
+
+    THE MOST EXPENSIVE LINE THAT HAS EVER BEEN IN THIS FILE was this test
+    written as `str(value).strip()`. str([]) is "[]" and str(None) is "None",
+    and both are truthy — so a revision that answered «"do_not_touch": []»,
+    which is what a model sends when it means "nothing to add here", REPLACED
+    «про сына не спрашивать, он умер» with an empty list. Silently, unattended,
+    permanently, on a field whose entire purpose is never to be lost.
+
+    So emptiness is decided on the VALUE, never on its repr: None, "", [], {},
+    and a list holding nothing but blanks all mean the model said nothing.
+    """
+    if value is None:
+        return False
+    if isinstance(value, (list, tuple, set, dict)):
+        return any(str(v).strip() for v in value)
+    return bool(str(value).strip())
+
+
+#: The two fields a revision may ADD to and may never take away from.
+#:
+#: Everything else in a reading is an opinion about somebody, and opinions are
+#: what re-reading is for. These two are not opinions: they are the record of
+#: what actually wounded this person, and of what they asked, in their own
+#: words, never to be put through again. A friendship has no way back from
+#: losing one of those — the friend simply walks into it again, warmly, having
+#: no idea, and the person has to explain it a second time.
+#:
+#: The prompt already says «список больного может только расти». A rule that can
+#: be replaced by a mechanism should be, so this is the mechanism; the sentence
+#: stays only because the model writes better when it knows why.
+NEVER_SHRINKS = ("do_not_touch", "hurt_by")
+
+
 def standing_block(
     reading: dict | None,
     *,
@@ -562,25 +623,44 @@ def standing_block(
         return ""
 
     parts = []
-    if str(r.get("register") or "").strip():
-        parts.append(f"Как с ним говорить: {str(r['register']).strip()}")
-    if str(r.get("would_ring_false") or "").strip():
-        parts.append(f"Что прозвучит для него фальшиво (избегай): {str(r['would_ring_false']).strip()}")
-    if str(r.get("do_not_touch") or "").strip():
+    if _said(r.get("register")):
+        parts.append(f"Как с ним говорить: {_said(r['register'])}")
+    if _said(r.get("would_ring_false")):
+        parts.append(f"Что прозвучит для него фальшиво (избегай): {_said(r['would_ring_false'])}")
+    # BOTH HALVES, AND THEY ARE WRITTEN TOGETHER ON PURPOSE.
+    #
+    # A line that says only «это больное» gets obeyed the way a rule always
+    # gets obeyed — completely, including in the case it was never written for.
+    # And that case is the whole reason somebody installed this: a man who has
+    # nobody to say his wife's name out loud to finally says it, and his friend
+    # changes the subject. There is no lonelier answer available. He came to be
+    # met there; being handled around it is what everyone else already does.
+    #
+    # So the field means "never take him there yourself". It has never meant
+    # "never go there" — that is HIS to decide, every time, and when he decides
+    # it the only friendly thing is to go with him and stay. Kept in one
+    # sentence rather than two sections, because a rule and its exception that
+    # sit apart get read apart, and then they fight.
+    if _said(r.get("do_not_touch")):
         parts.append(
-            "Больное — не спорь об этом и не подтрунивай, только бережно: "
-            + str(r["do_not_touch"]).strip()
+            "БОЛЬНОЕ. Сам туда никогда не заходи: не заговаривай об этом первым, "
+            "не спорь, не подтрунивай, не поминай между делом. Но если он "
+            "заговорил сам — иди за ним и говори, спокойно и прямо, сколько ему "
+            "надо. Он не «сорвался» и его не надо уводить, отвлекать, беречь от "
+            "собственных слов или отвечать общо, чтобы соскочить: он выбрал "
+            "сказать это вслух и выбрал сказать это тебе. Это: "
+            + _said(r["do_not_touch"])
         )
     # Dropped once the register has WATCHED it, for exactly the reason below.
     # This field waited longest for its mechanism: it governs the first sentence
     # said to somebody who has been gone a week, and until fit.py grew the dial
     # it was decided, for the life of the friendship, by a guess made from one
     # paragraph on the day the app was installed.
-    if str(r.get("closeness") or "").strip() and not closeness_confirmed:
+    if _said(r.get("closeness")) and not closeness_confirmed:
         parts.append(
             "Как он хочет быть нужным (по этому решай, как звучит твоё "
             "«я тебя ждал» — и звучит ли оно вообще):\n"
-            + str(r["closeness"]).strip()
+            + _said(r["closeness"])
         )
     # DROPPED ENTIRELY once the register has watched what actually lifts him.
     #
@@ -592,19 +672,21 @@ def standing_block(
     #
     # So it is not argued with, it is removed. A rule that can be replaced by a
     # mechanism should be; this is the mechanism.
-    if str(r.get("what_lifts_him") or "").strip() and not lifts_confirmed:
+    if _said(r.get("what_lifts_him")) and not lifts_confirmed:
         parts.append(
             "Чем его поднимать, когда ему тяжело (не угадывай — вот это и "
-            "делай):\n" + str(r["what_lifts_him"]).strip()
+            "делай):\n" + _said(r["what_lifts_him"])
         )
     # THE HARDEST-WON LINES IN THE FILE, and the only ones stated as an
     # absolute. Each of these cost somebody a bad evening at least twice
     # before it was written down, so they are not advice.
-    if str(r.get("hurt_by") or "").strip():
+    if _said(r.get("hurt_by")):
         parts.append(
             "ЧТО С НИМ ТОЧНО НЕ РАБОТАЕТ (проверено — так уже было, и не "
-            "один раз; просто больше так не делай, и не объявляй об этом):\n"
-            + str(r["hurt_by"]).strip()
+            "один раз; просто больше так не делай, и не объявляй об этом). "
+            "Это про то, что делаешь ТЫ, а не про то, о чём ему можно "
+            "говорить: заговорит сам — говори с ним:\n"
+            + _said(r["hurt_by"])
         )
     if _as_lines(r.get("learned")):
         parts.append(
@@ -633,10 +715,7 @@ def as_brief(reading: dict | None) -> str:
         return ""
 
     def line(label: str, key: str) -> str:
-        value = reading.get(key)
-        if isinstance(value, (list, tuple)):
-            value = "; ".join(str(v) for v in value if str(v).strip())
-        value = str(value or "").strip()
+        value = _said(reading.get(key))
         return f"{label}: {value}" if value else ""
 
     parts = [
