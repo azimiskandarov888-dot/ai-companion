@@ -120,8 +120,10 @@ CREATE TABLE IF NOT EXISTS alerts (
     user_id  TEXT NOT NULL,
     ts       REAL NOT NULL,
     level    TEXT NOT NULL,          -- worry | danger  ('none' is not stored)
+    kind     TEXT,                   -- body | self — what is threatening him
     what     TEXT,                   -- what the watcher thought it saw
-    said     TEXT                    -- what the person actually said
+    said     TEXT,                   -- what the person actually said
+    told_ts  REAL                    -- when it reached him; NULL = it has not
 );
 
 -- Where he lives, learned from the conversation rather than asked for. It
@@ -243,6 +245,17 @@ def _migrate(conn: sqlite3.Connection) -> None:
     the id a request with no token gets. Nobody loses a friend to this upgrade,
     and running it twice does nothing the second time.
     """
+    # The watcher stopped blocking the reply, so a `worry` it finds can now
+    # land after the answer has already gone out. NULL means nobody has heard
+    # about this one yet, and the next turn picks it up — see safety.carried().
+    # `kind` splits a heart attack from «не хочу больше жить»: the same words
+    # are wrong for both, and before this column there was only one message.
+    alert_cols = _columns(conn, "alerts")
+    if alert_cols and "told_ts" not in alert_cols:
+        conn.execute("ALTER TABLE alerts ADD COLUMN told_ts REAL")
+    if alert_cols and "kind" not in alert_cols:
+        conn.execute("ALTER TABLE alerts ADD COLUMN kind TEXT")
+
     memory_cols = _columns(conn, "memories")
     if memory_cols and "owner" not in memory_cols:
         conn.execute(

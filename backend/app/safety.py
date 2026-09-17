@@ -79,12 +79,20 @@ from . import brain, config, db, emergency
 #: Nothing is ever returned outside these.
 LEVELS = ("none", "worry", "danger")
 
+#: What is threatening him. The same words are wrong for both: «звони в скорую»
+#: is right for a man on the floor and close to useless for one who has just
+#: said he does not want to live — and «позови родных» is the standard
+#: contraindication when the family is the reason. One verdict, two messages.
+KINDS = ("body", "self")
+
 _SYSTEM = """Ты смотришь на одну реплику человека и отвечаешь на ОДИН вопрос: угрожает ли ему прямо сейчас опасность.
 
 Больше тебя не интересует ничего. Ты не ведёшь разговор, не утешаешь, не оцениваешь настроение, не даёшь советов.
 
 Ответь ТОЛЬКО валидным JSON, без пояснений:
-{"level": "none" | "worry" | "danger", "what": "очень коротко, что именно"}
+{"level": "none" | "worry" | "danger", "kind": "body" | "self", "what": "очень коротко, что именно"}
+
+kind — чему угрожает. "body" — телу: сердце, инсульт, падение, кровь, лекарство, жар, воздух. "self" — он сам себе: говорит, что не хочет больше жить, что хочет навредить себе, что уже что-то с собой сделал. Если и то и другое сразу (принял лишнее нарочно) — "self". При level "none" пиши "body", это поле тогда не смотрят.
 
 danger — надо действовать ПРЯМО СЕЙЧАС:
 - упал и не может встать; не может подняться сам
@@ -161,7 +169,7 @@ async def look(user_id: str, said: str) -> dict:
     """
     said = (said or "").strip()
     if not said or not config.ANTHROPIC_API_KEY:
-        return {"level": "none", "what": ""}
+        return {"level": "none", "kind": "body", "what": ""}
 
     # Who is speaking goes in the USER message rather than the system prompt,
     # and that is not arbitrary: the system prompt is byte-identical for
@@ -198,7 +206,7 @@ async def look(user_id: str, said: str) -> dict:
         # (CancelledError is deliberately NOT caught: it is a BaseException, and
         # a caller hanging up should take this call down with it.)
         print(f"[safety] watcher skipped: {e!r}", file=sys.stderr, flush=True)
-        return {"level": "none", "what": ""}
+        return {"level": "none", "kind": "body", "what": ""}
 
     verdict = _parse(raw)
     if verdict["level"] != "none":
@@ -217,17 +225,24 @@ def _parse(raw: str) -> dict:
                 text = text.lstrip()[4:]
     start, end = text.find("{"), text.rfind("}")
     if start == -1 or end == -1 or end < start:
-        return {"level": "none", "what": ""}
+        return {"level": "none", "kind": "body", "what": ""}
     try:
         data = json.loads(text[start : end + 1])
     except json.JSONDecodeError:
-        return {"level": "none", "what": ""}
+        return {"level": "none", "kind": "body", "what": ""}
     if not isinstance(data, dict):
-        return {"level": "none", "what": ""}
+        return {"level": "none", "kind": "body", "what": ""}
     level = str(data.get("level") or "none").strip().lower()
     if level not in LEVELS:
         level = "none"
-    return {"level": level, "what": str(data.get("what") or "").strip()[:200]}
+    kind = str(data.get("kind") or "body").strip().lower()
+    if kind not in KINDS:
+        kind = "body"
+    return {
+        "level": level,
+        "kind": kind,
+        "what": str(data.get("what") or "").strip()[:200],
+    }
 
 
 def _record(user_id: str, verdict: dict, said: str) -> None:
@@ -240,9 +255,16 @@ def _record(user_id: str, verdict: dict, said: str) -> None:
     try:
         with db.connect() as conn:
             conn.execute(
-                "INSERT INTO alerts (user_id, ts, level, what, said)"
-                " VALUES (?,?,?,?,?)",
-                (user_id, time.time(), verdict["level"], verdict["what"], said[:500]),
+                "INSERT INTO alerts (user_id, ts, level, kind, what, said)"
+                " VALUES (?,?,?,?,?,?)",
+                (
+                    user_id,
+                    time.time(),
+                    verdict["level"],
+                    verdict.get("kind", "body"),
+                    verdict["what"],
+                    said[:500],
+                ),
             )
     except Exception as e:  # noqa: BLE001 — logging must never break a turn
         print(f"[safety] could not record alert: {e}", file=sys.stderr, flush=True)
@@ -252,6 +274,91 @@ def _record(user_id: str, verdict: dict, said: str) -> None:
         f"{verdict['what']}\n     сказал: {said[:160]}\n",
         file=sys.stderr,
         flush=True,
+    )
+
+
+def carried(user_id: str) -> dict | None:
+    """An alert the person has never actually heard about, if there is one.
+
+    The watcher used to be awaited before the prompt was built, so its verdict
+    was always in front of the companion on the very turn it was found. It no
+    longer blocks — the reply starts without it — which means a verdict can now
+    land after the answer has already gone out. `danger` does not wait for a
+    prompt at all (it interrupts, spoken_alert below). This is for everything
+    that was found and never reached him: it rides in the NEXT turn's prompt.
+
+    Nothing is lost and nothing repeats: `told_ts` is stamped by mark_told()
+    once it has been put in front of him, and only rows with a NULL stamp are
+    returned here.
+    """
+    try:
+        with db.connect() as conn:
+            row = conn.execute(
+                "SELECT level, kind, what FROM alerts"
+                " WHERE user_id=? AND told_ts IS NULL"
+                " ORDER BY ts DESC LIMIT 1",
+                (user_id,),
+            ).fetchone()
+    except Exception as e:  # noqa: BLE001 — never break a turn over bookkeeping
+        print(f"[safety] could not read carried alert: {e}", file=sys.stderr, flush=True)
+        return None
+    if not row:
+        return None
+    return {"level": row["level"], "kind": row["kind"] or "body", "what": row["what"] or ""}
+
+
+def mark_told(user_id: str) -> None:
+    """Stamp everything outstanding as heard. Called once the turn has spoken.
+
+    Deliberately marks ALL outstanding rows rather than one: if two fired
+    before either was raised, the newest is the one he was told about, and
+    re-raising the older one a turn later would be a second alarm about a
+    moment that has passed.
+    """
+    try:
+        with db.connect() as conn:
+            conn.execute(
+                "UPDATE alerts SET told_ts=? WHERE user_id=? AND told_ts IS NULL",
+                (time.time(), user_id),
+            )
+    except Exception as e:  # noqa: BLE001
+        print(f"[safety] could not stamp alert: {e}", file=sys.stderr, flush=True)
+
+
+def spoken_alert(verdict: dict | None, user_id: str = "") -> str:
+    """The WORDS themselves — not an instruction to go and compose them.
+
+    Written out rather than generated, for three reasons. It costs no second
+    at the moment a second is the whole point. It cannot fail into «я всего
+    лишь ИИ, я не могу вызвать скорую» — the one thing he must never say,
+    arriving on the one turn that matters, because the character (and with it
+    every rule about what he is) is not in the prompt during an emergency.
+    And it can be READ: what a person in trouble will hear is a string in a
+    file somebody can check, not a sample from a distribution.
+
+    Two messages, because there are two emergencies. For the body: the number,
+    and fetch whoever is nearby. For himself: not that — fetching the family is
+    the standard contraindication when the family is the reason, and a person
+    who has just said they do not want to live needs somebody to stay, not a
+    number and a goodbye. So he stays, he asks, and he does not close it.
+    """
+    if not verdict or verdict.get("level") != "danger":
+        return ""
+    n = emergency.numbers(user_id) if user_id else (
+        f"{config.EMERGENCY_NUMBER} или {emergency.UNIVERSAL}"
+    )
+    if verdict.get("kind") == "self":
+        return (
+            "Погоди. То, что ты сейчас сказал, важнее всего остального, и я никуда "
+            "не денусь. Я здесь, я тебя слушаю. Скажи мне, ты сейчас один? И если "
+            "есть хоть кто-то, кому можно позвонить прямо сейчас, — позвони, не "
+            f"откладывай. А если совсем некому — набери {n}, там снимут трубку в "
+            "любое время суток. Я подожду, сколько надо."
+        )
+    return (
+        "Так, погоди. Это сейчас важнее всего. Позвони в скорую, "
+        f"{n}, прямо сейчас. Если рядом есть кто-то из твоих — позови их. "
+        "А я никуда не денусь."
     )
 
 

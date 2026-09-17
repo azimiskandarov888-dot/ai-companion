@@ -11,12 +11,13 @@ make overlapping them safe:
 
 from __future__ import annotations
 
+import asyncio
 import json
 
 import pytest
 from fastapi.testclient import TestClient
 
-from app import brain, identity, learn, main, memory, stt, tts
+from app import brain, config, db, identity, learn, main, memory, safety, stt, tts
 
 TOKEN = "aVerYlOngRandomLookingTokenFromTheKeychain_0123456789"
 AUTH = {"Authorization": f"Bearer {TOKEN}", "Accept": "application/x-ndjson"}
@@ -457,3 +458,77 @@ def test_an_ordinary_turn_never_says_goodbye(client):
     must never carry the flag."""
     done = _lines(_talk(client, AUTH))[-1]
     assert done["farewell"] is False
+
+
+# --------------------------------------------------------------------------- #
+# Being cut off
+# --------------------------------------------------------------------------- #
+def test_danger_interrupts_him_mid_reply(client, monkeypatch, tmp_path):
+    """The watcher no longer holds up the answer, which leaves one question:
+    what happens when it comes back and the answer is already being spoken?
+
+    He is cut off. Mid-reply, between sentences — because the alternative is
+    standing there finishing a pleasant thought about the sea while somebody
+    is on the floor. What he had already said has been heard and is not
+    revised; everything after it is simply never reached."""
+    monkeypatch.setattr(config, "DB_PATH", str(tmp_path / "t.db"))
+    monkeypatch.setattr(config, "ANTHROPIC_API_KEY", "test-key")
+    db.init_db()
+
+    async def found(system, user_text, **kw):
+        return '{"level":"danger","kind":"body","what":"упал, не встаёт"}'
+
+    monkeypatch.setattr(safety.brain, "generate_text", found)
+
+    # The voice is a network call, and that matters here: the check between
+    # sentences only sees a verdict the event loop has had a chance to produce.
+    # The fixture's voice returns without ever awaiting, so nothing else can
+    # run — which is true of no real provider and would quietly turn this into
+    # a test of the end-of-turn path instead of the interruption.
+    async def voice(text, voice_id=None, *, rate=1.0):
+        await asyncio.sleep(0)
+        return b"MP3:" + text.encode("utf-8")
+
+    monkeypatch.setattr(tts, "synthesize", voice)
+
+    events = _lines(_talk(client, AUTH))
+    said = [e for e in events if e["kind"] == "say"]
+
+    # He did not get to the end of what he was saying. Asserted on the words
+    # rather than on a count, because exactly WHICH sentence he is cut off
+    # after depends on how fast the watcher came back — and that is allowed to
+    # vary. What is not allowed is that he finishes.
+    assert "снилось море" not in " ".join(e["text"] for e in said), "он договорил"
+    # The last thing out of the speaker is the thing that mattered…
+    assert "скорую" in said[-1]["text"]
+    assert config.EMERGENCY_NUMBER in said[-1]["text"]
+    # …and it was SPOKEN, not merely written into the transcript.
+    assert said[-1]["audio_base64"]
+    # Nothing that was already heard got revised.
+    assert said[0]["text"] == "Доброе утро."
+    # What is remembered is what he actually said — the part that got out, and
+    # then the alarm. Never the sentences he never reached.
+    remembered = events[-1]["reply"]
+    assert remembered.startswith("Доброе утро.")
+    assert "скорую" in remembered
+    assert "снилось море" not in remembered
+
+
+def test_an_ordinary_turn_is_not_interrupted(client, monkeypatch, tmp_path):
+    """The other half, and the one that decides whether this ships: on every
+    turn where nothing is wrong — which is very nearly all of them — he is not
+    touched, and says every word he meant to."""
+    monkeypatch.setattr(config, "DB_PATH", str(tmp_path / "t.db"))
+    monkeypatch.setattr(config, "ANTHROPIC_API_KEY", "test-key")
+    db.init_db()
+
+    async def quiet(system, user_text, **kw):
+        return '{"level":"none","kind":"body","what":""}'
+
+    monkeypatch.setattr(safety.brain, "generate_text", quiet)
+
+    events = _lines(_talk(client, AUTH))
+    said = [e["text"] for e in events if e["kind"] == "say"]
+
+    assert said == _as_it_arrives(REPLY)
+    assert "".join(said).replace(" ", "") == REPLY.replace(" ", "")

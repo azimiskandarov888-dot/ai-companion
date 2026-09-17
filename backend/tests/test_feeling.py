@@ -348,7 +348,8 @@ async def test_a_real_turn_carries_his_weather_to_the_model(monkeypatch):
     monkeypatch.setattr(config, "ANTHROPIC_API_KEY", None)  # no watcher
     feeling.record(U, {"valence": -2, "arousal": -2, "note": "не спалось"})
 
-    _stable, variable, _turns, _voice = await main._assemble(U, "здравствуй")
+    _stable, variable, _turns, _voice, watcher = await main._assemble(U, "здравствуй")
+    await watcher
 
     assert "КАК ТЫ СЕГОДНЯ САМ" in variable
     assert "не спалось" in variable
@@ -356,16 +357,26 @@ async def test_a_real_turn_carries_his_weather_to_the_model(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_a_real_emergency_turn_leaves_his_weather_out(monkeypatch):
+    """A live danger no longer reaches a prompt at all — it interrupts. But one
+    the interrupt could not deliver rides the next turn, and THERE it is still
+    the whole prompt: on the turn a man is on the floor, how the companion
+    slept is not one of the things competing for the model's attention."""
     monkeypatch.setattr(embeddings, "available", lambda: False)
     monkeypatch.setattr(config, "ANTHROPIC_API_KEY", "test-key")
     feeling.record(U, {"valence": -2, "arousal": -2, "note": "не спалось"})
 
-    async def watcher(system, user_text, **kw):
-        return '{"level":"danger","what":"упал, не встаёт"}'
+    async def found(system, user_text, **kw):
+        return '{"level":"danger","kind":"body","what":"упал, не встаёт"}'
 
-    monkeypatch.setattr(safety.brain, "generate_text", watcher)
+    monkeypatch.setattr(safety.brain, "generate_text", found)
+    await safety.look(U, "я упал")          # найдено, но он этого не слышал
 
-    stable, variable, _turns, _voice = await main._assemble(U, "я упал")
+    async def quiet(system, user_text, **kw):
+        return '{"level":"none","kind":"body","what":""}'
+
+    monkeypatch.setattr(safety.brain, "generate_text", quiet)
+    stable, variable, _turns, _voice, watcher = await main._assemble(U, "ты слышишь?")
+    await watcher
 
     whole = stable + variable
     assert "упал, не встаёт" in whole

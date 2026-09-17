@@ -187,14 +187,21 @@ async def _assemble(user_id: str, user_text: str) -> tuple[str, str, list, str |
     persona_block = persona.build_persona_block(who)
     elder_facts = memory.facts_context(user_id, "elder")
     bob_facts = memory.bob_self_context(user_id)
-    # The watcher runs BESIDE the memory work rather than before it. Both are
-    # network-bound and neither needs the other, so the danger check normally
-    # costs no wall time at all — and a person who is fine never waits on a
-    # question that was about somebody else. It cannot raise; see safety.py.
-    mem_ctx, alert = await asyncio.gather(
-        memory.build_memory_context(user_id, user_text),
-        safety.look(user_id, user_text),
-    )
+    # THE WATCHER NO LONGER HOLDS UP THE ANSWER. It used to be awaited here,
+    # beside the memory work, and the prompt could not be assembled until its
+    # verdict came back — so a person who was perfectly fine waited, every
+    # single turn, on a question that turned out to be about somebody else.
+    #
+    # It is a task now, and the reply races it. `danger` does not need to be in
+    # a prompt to do its job: it INTERRUPTS, mid-sentence, with words that are
+    # written down rather than generated (_breaking_in / safety.spoken_alert).
+    # Anything found too late to interrupt is not lost either — it rides in the
+    # next turn's prompt, once, via safety.carried(). It cannot raise.
+    watcher = asyncio.create_task(safety.look(user_id, user_text))
+    mem_ctx = await memory.build_memory_context(user_id, user_text)
+    # What the watcher found on some earlier turn and he never got to hear.
+    # Empty on virtually every turn, and a live `danger` never arrives here.
+    carried = safety.carried(user_id)
 
     # WHAT DAY IT IS. He did not know — not the date, not the weekday — which
     # meant «дочь Валя, день рождения 3 мая» could sit in his memory for a year
@@ -224,9 +231,9 @@ async def _assemble(user_id: str, user_text: str) -> tuple[str, str, list, str |
         fit_block=fit.block(user_id),
         # Empty on virtually every turn. The one thing allowed to override the
         # character, so it is placed before everything else — see safety.py.
-        alert_block=safety.block(alert, user_id),
+        alert_block=safety.block(carried, user_id),
         # On danger the alert IS the prompt — see build_system_parts.
-        alert_level=alert.get("level", ""),
+        alert_level=(carried or {}).get("level", ""),
         # How HE is today, carried over from their last exchange and fading on
         # its own since. The one thing in the prompt that is not about her.
         feeling_block=feeling.block(user_id),
@@ -249,7 +256,36 @@ async def _assemble(user_id: str, user_text: str) -> tuple[str, str, list, str |
         acquaintance=acquaintance,
     )
 
-    return system_stable, system_variable, memory.recent_turns(user_id), tts.voice_for(who)
+    return (
+        system_stable,
+        system_variable,
+        memory.recent_turns(user_id),
+        tts.voice_for(who),
+        watcher,
+    )
+
+
+async def _breaking_in(watcher: asyncio.Task, user_id: str, *, wait: bool) -> str:
+    """The words to break in with, or "" — which is the answer almost always.
+
+    `wait=False` is the check made between spoken fragments: it asks whether
+    the watcher has ALREADY finished and must never block the next sentence.
+    `wait=True` is the check made once he has stopped talking, where waiting
+    costs nobody anything — the audio is already out — and the alternative is
+    losing an alarm that arrived a second too late to interrupt.
+    """
+    if not wait and not watcher.done():
+        return ""
+    try:
+        verdict = await watcher
+    except Exception:  # noqa: BLE001 — safety.look does not raise, but a task
+        return ""      # that failed or was cancelled must not take the turn.
+    words = safety.spoken_alert(verdict, user_id)
+    if words:
+        # Said out loud is the only thing that counts as told. Stamping it here
+        # is what stops the next turn raising the same alarm a second time.
+        safety.mark_told(user_id)
+    return words
 
 
 def _farewell(reply: str) -> tuple[str, bool]:
@@ -326,7 +362,9 @@ async def _think_and_speak(
     Used for clients that don't ask for a stream, and for the turns that can't
     be streamed honestly (web search — see brain.stream_reply).
     """
-    system_stable, system_variable, history, voice = await _assemble(user_id, user_text)
+    system_stable, system_variable, history, voice, watcher = await _assemble(
+        user_id, user_text
+    )
     reply = await brain.generate_reply(
         history,
         system_stable,
@@ -339,6 +377,12 @@ async def _think_and_speak(
 
     reply, leaving = _farewell(reply)
     reply = _body(user_id, reply)
+    # The watcher has been running this whole time, so this costs no wall clock
+    # worth measuring — and on danger it replaces the answer outright. Nothing
+    # of his is worth saying to a man who is on the floor.
+    breaking = await _breaking_in(watcher, user_id, wait=True)
+    if breaking:
+        reply, leaving = breaking, False
     _remember(user_id, user_text, reply, background_tasks, farewell=leaving)
 
     # The mouth is optional. With a voice provider configured we return warm
@@ -412,7 +456,9 @@ async def _speak_as_he_thinks(
     reply = ""
     leaving = False
     try:
-        system_stable, system_variable, history, voice = await _assemble(user_id, transcript)
+        system_stable, system_variable, history, voice, watcher = await _assemble(
+            user_id, transcript
+        )
         speak = tts.configured()
         # Read once per turn rather than per fragment: it is a database hit,
         # and it cannot change in the middle of one reply.
@@ -458,34 +504,71 @@ async def _speak_as_he_thinks(
                 await fragments.put(None)
 
         writer = asyncio.create_task(write())
+        #: What actually left the speaker, sentence by sentence. Needed because
+        #: an interrupted turn must be remembered as what he SAID, not as what
+        #: the model happened to have written by the time it was cut off.
+        spoken: list[str] = []
+        breaking = ""
+
+        def _said(text: str, audio: bytes | None) -> bytes:
+            return _line(
+                {
+                    "kind": "say",
+                    "text": text,
+                    "audio_base64": (
+                        base64.b64encode(audio).decode("ascii") if audio else ""
+                    ),
+                    **({"audio_mime": "audio/mpeg"} if audio else {}),
+                }
+            )
+
         try:
             while True:
                 fragment = await fragments.get()
                 if fragment is None:
                     break
                 if not speak:
-                    yield _line({"kind": "say", "text": fragment, "audio_base64": ""})
-                    continue
+                    yield _said(fragment, None)
+                    spoken.append(fragment)
                 # A fragment that is nothing BUT a stage direction («*пауза*»)
                 # has nothing left once it's cleaned, and asking the voice to
                 # say nothing is an error. Skip it rather than break the turn.
-                if not tts.spoken(fragment):
-                    continue
-                audio = await tts.synthesize(fragment, voice, rate=rate)
-                yield _line(
-                    {
-                        "kind": "say",
-                        "text": fragment,
-                        "audio_base64": base64.b64encode(audio).decode("ascii"),
-                        "audio_mime": "audio/mpeg",
-                    }
-                )
-            await writer  # re-raise whatever went wrong while writing
+                elif tts.spoken(fragment):
+                    yield _said(fragment, await tts.synthesize(fragment, voice, rate=rate))
+                    spoken.append(fragment)
+                # BETWEEN SENTENCES, never before one: has the watcher come
+                # back with something that cannot wait for him to finish? This
+                # asks only whether the answer is already sitting there — it
+                # never holds up the next sentence to find out.
+                breaking = await _breaking_in(watcher, user_id, wait=False)
+                if breaking:
+                    break
+            if not breaking:
+                await writer  # re-raise whatever went wrong while writing
         finally:
             writer.cancel()
 
-        reply, leaving = _farewell(reply.strip())
-        reply = _body(user_id, reply)
+        # He has stopped talking. If the watcher still has not answered, wait
+        # for it NOW — the audio is already out, so nobody is sitting through
+        # the silence, and an alarm that is one second late is worth everything
+        # compared to one that is dropped.
+        if not breaking:
+            breaking = await _breaking_in(watcher, user_id, wait=True)
+
+        if breaking:
+            # Markers never survive into memory, on this path either.
+            said_so_far = _body(user_id, _farewell(" ".join(spoken).strip())[0])
+            yield _said(
+                breaking,
+                await tts.synthesize(breaking, voice, rate=rate) if speak else None,
+            )
+            # What he said this turn is what got out before he was cut off, and
+            # then the thing that mattered. A danger turn is never a goodbye.
+            reply, leaving = f"{said_so_far} {breaking}".strip(), False
+        else:
+            reply, leaving = _farewell(reply.strip())
+            reply = _body(user_id, reply)
+
         if reply:
             _remember(user_id, transcript, reply, background_tasks, farewell=leaving)
 

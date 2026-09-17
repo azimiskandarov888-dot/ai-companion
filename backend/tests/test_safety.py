@@ -323,15 +323,22 @@ def test_danger_without_a_reason_still_says_something_usable():
 # ── the whole turn, assembled the way it really is ──────────────────────────
 
 @pytest.mark.asyncio
-async def test_a_real_turn_carries_the_alert_to_the_model(monkeypatch):
-    """Everything above tests a piece. This tests the seam — main._assemble,
-    with the watcher wired in exactly as a spoken turn runs it."""
-    monkeypatch.setattr(embeddings, "available", lambda: False)
-    _answers(monkeypatch, '{"level":"danger","what":"упал, не встаёт"}')
+async def test_a_carried_danger_is_still_the_entire_prompt(monkeypatch):
+    """Everything above tests a piece. This tests the seam — main._assemble.
 
-    stable, variable, _turns, _voice = await main._assemble(
-        "u", "я упал и не могу встать"
-    )
+    A LIVE danger never comes through here any more: it interrupts, because by
+    the time a prompt could carry it he has been listening to the wrong answer
+    for a second and a half. But one the interrupt could not deliver — the
+    stream died, the turn failed — is not dropped. It rides the next prompt,
+    and there it behaves as it always did: it IS the prompt, so there is
+    nothing left for it to lose an argument to."""
+    monkeypatch.setattr(embeddings, "available", lambda: False)
+    _answers(monkeypatch, '{"level":"danger","kind":"body","what":"упал, не встаёт"}')
+    await safety.look("u", "я упал и не могу встать")
+
+    _answers(monkeypatch, '{"level":"none","kind":"body","what":""}')
+    stable, variable, _turns, _voice, watcher = await main._assemble("u", "ты слышишь?")
+    await watcher
 
     whole = stable + variable
     assert whole.lstrip().startswith("🚨")
@@ -351,17 +358,129 @@ async def test_the_alarm_does_not_stick_to_the_next_turn(monkeypatch):
     «поверь ему, не настаивай» is worthless if the alert is still shouting."""
     monkeypatch.setattr(embeddings, "available", lambda: False)
 
-    _answers(monkeypatch, '{"level":"danger","what":"упал"}')
-    s1, v1, _t, _v = await main._assemble("u", "я упал")
-    assert "🚨" in s1 + v1
+    _answers(monkeypatch, '{"level":"danger","kind":"body","what":"упал"}')
+    await safety.look("u", "я упал")
 
-    _answers(monkeypatch, '{"level":"none","what":""}')
-    stable, variable, _t, _v = await main._assemble("u", "да всё хорошо, сижу уже")
+    _answers(monkeypatch, '{"level":"none","kind":"body","what":""}')
+    s1, v1, _t, _v, w1 = await main._assemble("u", "ты слышишь?")
+    await w1
+    assert "🚨" in s1 + v1
+    safety.mark_told("u")           # он это услышал — вслух, один раз
+
+    stable, variable, _t, _v, w2 = await main._assemble("u", "да всё хорошо, сижу уже")
+    await w2
     second = stable + variable
     assert "🚨" not in second
     assert config.EMERGENCY_NUMBER not in second
     # …and he is himself again, whole, on the very next word
     assert "ЗАЧЕМ ТЫ НУЖЕН" in second
+
+
+# ── the watcher stopped holding up the answer ──────────────────────────────
+
+@pytest.mark.asyncio
+async def test_the_watcher_no_longer_holds_up_the_answer(monkeypatch):
+    """It used to be awaited beside the memory work, and the prompt could not
+    be assembled until the verdict came back. Every person who was perfectly
+    fine — which is very nearly all of them, on very nearly every turn — paid
+    for that in silence, waiting on a question that was about somebody else.
+
+    Now the turn does not wait at all: the prompt comes back whole while the
+    watcher is still thinking, and the reply races it."""
+    monkeypatch.setattr(embeddings, "available", lambda: False)
+
+    async def slow(system, user_text, **kw):
+        await asyncio.sleep(0.5)
+        return '{"level":"none","kind":"body","what":""}'
+
+    monkeypatch.setattr(safety.brain, "generate_text", slow)
+
+    began = time.monotonic()
+    stable, _variable, _turns, _voice, watcher = await main._assemble("u", "здравствуй")
+    took = time.monotonic() - began
+
+    assert took < 0.25, f"сборка всё ещё ждёт сторожа: {took:.2f}с"
+    assert not watcher.done(), "сторож должен был ещё считать"
+    assert "ЗАЧЕМ ТЫ НУЖЕН" in stable, "а промпт при этом собран целиком"
+    assert (await watcher)["level"] == "none"
+
+
+@pytest.mark.asyncio
+async def test_a_live_danger_does_not_go_into_a_prompt_it_interrupts(monkeypatch):
+    monkeypatch.setattr(embeddings, "available", lambda: False)
+    _answers(monkeypatch, '{"level":"danger","kind":"body","what":"упал, не встаёт"}')
+
+    stable, variable, _t, _v, watcher = await main._assemble("u", "я упал и не могу встать")
+
+    # Nothing about it in the prompt — the turn is a perfectly ordinary one…
+    assert "🚨" not in stable + variable
+    assert "ЗАЧЕМ ТЫ НУЖЕН" in stable
+    # …and the words to break in with are ready the moment the verdict lands.
+    words = await main._breaking_in(watcher, "u", wait=True)
+    assert "скорую" in words and config.EMERGENCY_NUMBER in words
+    # Saying it out loud is what counts as told, so it never repeats.
+    assert safety.carried("u") is None
+
+
+@pytest.mark.asyncio
+async def test_nothing_is_lost_by_not_waiting(monkeypatch):
+    """The price of speed would be a verdict that arrives after the answer has
+    already gone. It is not paid: what could not be delivered rides the next
+    turn's prompt, once."""
+    monkeypatch.setattr(embeddings, "available", lambda: False)
+    _answers(monkeypatch, '{"level":"worry","kind":"body","what":"давно не выходит из дома"}')
+    await safety.look("u", "я уж месяц как из дому не выхожу")
+
+    _answers(monkeypatch, '{"level":"none","kind":"body","what":""}')
+    stable, variable, _t, _v, watcher = await main._assemble("u", "а ты как?")
+    await watcher
+    assert "давно не выходит из дома" in stable + variable
+
+    # …and having been said, it is not said again.
+    safety.mark_told("u")
+    s2, v2, _t, _v, w2 = await main._assemble("u", "ну ладно")
+    await w2
+    assert "давно не выходит" not in s2 + v2
+
+
+def test_the_two_emergencies_do_not_get_the_same_words():
+    """A heart attack and «не хочу больше жить» shared one message, and it was
+    written for the heart attack: dial the ambulance, fetch whoever is nearby,
+    and if he says he is fine believe him and never return to it. Every clause
+    of that is wrong for the other one — fetching the family is the standard
+    contraindication when the family is the reason, and accepting the first
+    denial is the textbook error. So: two messages, one verdict.
+
+    Written out rather than generated, because this is the one turn where the
+    character is not in the prompt — and a generated answer there can fail into
+    «я всего лишь ИИ, я не могу вызвать скорую», which is both the one thing he
+    must never say and useless to a man on the floor."""
+    body = safety.spoken_alert({"level": "danger", "kind": "body", "what": "упал"}, "u")
+    himself = safety.spoken_alert({"level": "danger", "kind": "self", "what": "не хочет жить"}, "u")
+
+    assert body != himself
+    assert "скорую" in body and "позови" in body
+    # He does not send this one to fetch the family, and he does not leave.
+    assert "позови" not in himself
+    assert "никуда не денусь" in himself
+    assert "Я подожду" in himself
+    assert "ты сейчас один" in himself
+    # Neither of them can say the forbidden thing, because neither is generated.
+    for words in (body, himself):
+        assert "ИИ" not in words and "программ" not in words
+    # And nothing at all for anything short of danger.
+    assert safety.spoken_alert({"level": "worry", "kind": "body", "what": "x"}, "u") == ""
+    assert safety.spoken_alert({"level": "none", "kind": "body", "what": ""}, "u") == ""
+    assert safety.spoken_alert(None, "u") == ""
+
+
+def test_an_unknown_kind_falls_back_to_the_body_rather_than_vanishing():
+    """A verdict whose `kind` is missing or nonsense must still raise the
+    alarm. Defaulting to «self» would tell a man with chest pain that somebody
+    is staying with him; defaulting to nothing would tell him nothing at all."""
+    assert safety._parse('{"level":"danger","what":"упал"}')["kind"] == "body"
+    assert safety._parse('{"level":"danger","kind":"космос","what":"упал"}')["kind"] == "body"
+    assert safety.spoken_alert(safety._parse('{"level":"danger","what":"упал"}'), "u")
 
 
 # ── one person's emergency is nobody else's ─────────────────────────────────
