@@ -24,6 +24,10 @@ import SwiftUI
 struct ArrivingScreen: View {
     let story: String
     let wishes: String
+    /// Where they said they live. Sent with him rather than waited for: it is
+    /// what decides the number said out loud if the watcher ever fires, and
+    /// the first conversation is exactly when nothing is known yet.
+    let country: String
     var onArrived: (String) -> Void
 
     /// How much of the walk is behind him, 0 → 1.
@@ -197,7 +201,9 @@ struct ArrivingScreen: View {
         let client = BackendClient(baseURL: AppConfig.shared.backendURL)
         while true {
             do {
-                name = try await client.createCompanion(story: story, wishes: wishes).name
+                name = try await client.createCompanion(
+                    story: story, wishes: wishes, country: country
+                ).name
                 break
             } catch {
                 Trouble.shared.record(error, url: AppConfig.shared.backendURL)

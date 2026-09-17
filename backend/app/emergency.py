@@ -31,6 +31,7 @@ are, today, mostly in one place — and the moment he says «да я всю жи
 
 from __future__ import annotations
 
+import re
 import time
 
 from . import config, db
@@ -118,8 +119,78 @@ _BY_COUNTRY: dict[str, str] = {
 }
 
 
-def _normalise(country: str) -> str:
-    return (country or "").strip().lower().strip(".,!?«»\"'")
+#: Acronyms. Said as written or not at all: «рф» with an ending allowed would
+#: reach «рука», and a wrong country here is a wrong ambulance number.
+_ACRONYM = 3
+
+#: A name's last letter decides how it bends. Anything else is a consonant.
+_SOFT_LAST = "аеёиоуыэюяьй"
+
+#: The endings a country's name actually takes in the answer to «где живёте?».
+#: Kept as an exact set rather than "a couple of letters longer", because that
+#: looser rule reads «Даниил» as «Дания» — same stem, one letter apart.
+_ENDINGS_SOFT = frozenset((
+    "", "а", "е", "и", "й", "о", "у", "ы", "ь", "э", "ю", "я",
+    "ам", "ах", "ей", "ем", "ею", "ов", "ой", "ом", "ью", "ям", "ях", "ами", "ями",
+))
+_ENDINGS_HARD = frozenset(("", "а", "е", "у", "ы", "ов", "ом", "ам", "ах", "ами"))
+#: «новая зеландия» → «в новой зеландии». Only ever reached as half of a
+#: two-word name, so a loose adjective cannot match a country on its own.
+_ENDINGS_ADJ = frozenset(("ая", "ой", "ую", "ое", "ые", "ым", "ым и"))
+
+
+def _words(text) -> list[str]:
+    return [w for w in re.split(r"[^\w-]+", str(text or "").lower()) if w]
+
+
+def _same(word: str, name: str) -> bool:
+    """Whether this word is that country, in whatever case it was said in.
+
+    The table stores «Израиль»; a person says «в Израиле», and what they
+    actually type is «Живу в Израиле, в Хайфе». So the names have to survive
+    Russian case endings — but this is deliberately NOT morphology. It is the
+    smallest rule that covers the handful of forms a country's name takes in
+    the answer to one question: stem plus an ending off a list.
+
+    Matching is on whole words, never on substrings. That is the same failure
+    as everything else here: «Индия» found inside «Индианаполис» is a wrong
+    country, and a wrong country is a man in Chicago being told to dial 103
+    while he is on the floor.
+    """
+    if word == name:
+        return True
+    if len(name) <= _ACRONYM:
+        return False
+    if name.endswith("ая"):                          # «новая», «южная»
+        stem, endings = name[:-2], _ENDINGS_ADJ
+    elif name[-1] in _SOFT_LAST:
+        stem, endings = name[:-1], _ENDINGS_SOFT
+    else:
+        stem, endings = name, _ENDINGS_HARD
+    return word.startswith(stem) and word[len(stem):] in endings
+
+
+def resolve(text) -> str:
+    """The country named in what somebody just said, or "" if none is.
+
+    Takes free text rather than a tidy name, because that is what arrives: the
+    extractor writes «Израиль», but the person answering the intake question
+    writes «в Израиле уже двадцать лет». Two-word names are tried before
+    one-word ones at every position, so «южная корея» is never read as «корея».
+    """
+    words = _words(text)
+    for i in range(len(words)):
+        for span in (2, 1):
+            window = words[i : i + span]
+            if len(window) < span:
+                continue
+            for name in _BY_COUNTRY:
+                parts = name.split()
+                if len(parts) == span and all(
+                    _same(w, p) for w, p in zip(window, parts)
+                ):
+                    return name
+    return ""
 
 
 def remember(user_id: str, country: str) -> None:
@@ -129,8 +200,8 @@ def remember(user_id: str, country: str) -> None:
     make `known()` true while `numbers()` still fell back, which reads as
     "we know where he is" to anybody debugging a wrong number later.
     """
-    key = _normalise(country)
-    if key not in _BY_COUNTRY:
+    key = resolve(country)
+    if not key:
         return
     with db.connect() as conn:
         conn.execute(

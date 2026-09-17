@@ -50,6 +50,9 @@ struct ScrollScreen: View {
     /// ONE photograph behind both and passes `false` here. Nothing about the
     /// land may change when the second scroll is brought out.
     var drawsBackground: Bool = true
+    /// Where they said they live, in their own words. Screen 4 never asks, and
+    /// neither does reopening «Моя история», so it defaults to doing nothing.
+    var onCountry: (String) -> Void = { _ in }
     var onConfirm: () -> Void
 
     @StateObject private var keyboard = KeyboardObserver()
@@ -65,10 +68,12 @@ struct ScrollScreen: View {
     init(kind: Kind,
          text: Binding<String>,
          drawsBackground: Bool = true,
+         onCountry: @escaping (String) -> Void = { _ in },
          onConfirm: @escaping () -> Void) {
         self.kind = kind
         self._text = text
         self.drawsBackground = drawsBackground
+        self.onCountry = onCountry
         self.onConfirm = onConfirm
         self._winding = State(initialValue: kind == .meet ? 1 : 0)
     }
@@ -85,6 +90,7 @@ struct ScrollScreen: View {
         if kind == .story {
             IntakeConversation(story: $text,
                                drawsBackground: drawsBackground,
+                               onCountry: onCountry,
                                onDone: onConfirm)
         } else {
             scrollBody
@@ -362,6 +368,7 @@ struct ScrollScreen: View {
 private struct IntakeConversation: View {
     @Binding var story: String
     var drawsBackground: Bool = true
+    var onCountry: (String) -> Void = { _ in }
     var onDone: () -> Void
 
     @State private var preamble = ""
@@ -641,6 +648,10 @@ private struct IntakeConversation: View {
         var reactions: [String: String] = [:]
         /// Shown before the next question regardless of what they answered.
         var reaction: String = ""
+        /// The one step whose answer is also sent to the server on its own.
+        /// Marked on the step rather than held as an index, so reordering the
+        /// warm-up can never quietly send the wrong answer.
+        var asksCountry: Bool = false
     }
 
     // WRITTEN TO BE SPOKEN, NOT READ. Every line here should sound like
@@ -655,6 +666,21 @@ private struct IntakeConversation: View {
         Step(say: "Как вас зовут?"),
         Step(say: "Ну, как сегодня день?"),
         Step(say: "А чем обычно занимаетесь?"),
+        // ASKED PLAINLY, AND ASKED EARLY, FOR TWO REASONS.
+        //
+        // The one that cannot wait: it decides which number he is told to dial.
+        // Until now the country was only ever picked up by the extractor, some
+        // exchanges into the friendship, if it happened to come up — so the
+        // first conversation, which is the one where somebody is likeliest to
+        // say something frightening to a stranger, ran on a default. Telling a
+        // man in Chicago to dial 103 while he is on the floor is not a smaller
+        // failure than missing the alarm; it is the same failure.
+        //
+        // And the ordinary one: where somebody lives says a great deal about
+        // them, and this is a question people like being asked. It sits here,
+        // among the getting-to-know-you half, because that is what it is —
+        // «а живёте где?» is what anybody would ask third.
+        Step(say: "А живёте где — в какой стране?", asksCountry: true),
         Step(say: "Сколько вам лет, если не секрет?",
              reaction: "Спасибо."),
         // Asked plainly, and asked at all — nothing downstream was being told
@@ -694,6 +720,7 @@ private struct IntakeConversation: View {
         Step(say: "What's your name?"),
         Step(say: "So how's your day been?"),
         Step(say: "And what do you usually get up to?"),
+        Step(say: "And whereabouts do you live — which country?", asksCountry: true),
         Step(say: "How old are you, if you don't mind me asking?",
              reaction: "Thank you."),
         Step(say: "Are you a man or a woman?",
@@ -772,7 +799,22 @@ private struct IntakeConversation: View {
         guard !finished else { return }
         finished = true
         rebuildStory()
+        onCountry(countrySaid)
         onDone()
+    }
+
+    /// What they answered to the one question that asks it outright.
+    ///
+    /// It also sits inside the story, where the reading will make its own use
+    /// of it — but the story is prose, and which country somebody lives in is
+    /// not something to be guessed back out of prose when the answer decides
+    /// which emergency number is said out loud. The app asked the question, so
+    /// the app knows which answer it was.
+    private var countrySaid: String {
+        guard let step = Self.warmUp.firstIndex(where: { $0.asksCountry }),
+              step < turns.count
+        else { return "" }
+        return turns[step].a
     }
 
     /// Their words, in the shape the reading expects: the question as quiet

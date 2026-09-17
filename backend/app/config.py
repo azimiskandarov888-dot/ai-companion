@@ -30,8 +30,15 @@ ANTHROPIC_API_KEY: str | None = os.getenv("ANTHROPIC_API_KEY")
 # persona to inhabit (it plays the character; it doesn't have to invent one),
 # the warmth survives. If a Mac and budget can take it, CHAT_MODEL=claude-sonnet-5
 # in .env brings the bigger brain back to every turn.
+#
+# EVERY MODEL ID HERE IS THE UNDATED ALIAS, and that is a rule, not a
+# preference. A dated id pins this app to one snapshot: it keeps answering in
+# the voice of the day it was written until somebody happens to notice, and
+# when that snapshot is retired it stops answering at all — on the turn, in
+# front of the person, with no way for them to tell it from the friend having
+# gone. The alias moves; the friend keeps talking.
 BRAIN_MODEL: str = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-5")
-CHAT_MODEL: str = os.getenv("CHAT_MODEL", "claude-haiku-4-5-20251001")
+CHAT_MODEL: str = os.getenv("CHAT_MODEL", "claude-haiku-4-5")
 
 # READING him — once, before he even exists. The deepest work the app does:
 # understanding a person from HOW they wrote, not just what they wrote (see

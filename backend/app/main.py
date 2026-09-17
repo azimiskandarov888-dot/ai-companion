@@ -62,6 +62,7 @@ from . import (
     config,
     db,
     diary,
+    emergency,
     feeling,
     fit,
     identity,
@@ -862,6 +863,12 @@ class CreateCompanionRequest(BaseModel):
     age: str = Field("", max_length=_MAX_CHIP)  # the optional chips that screen offers…
     gender: str = Field("", max_length=_MAX_CHIP)
     origin: str = Field("", max_length=_MAX_CHIP)  # …never a name: he arrives with his own.
+    #: WHERE HE LIVES, in his own words — «в Израиле», «Казахстан», «в Хайфе».
+    #: The app asks it outright during the warm-up, so this is one specific
+    #: answer rather than something to be dug out of the story, and it is free
+    #: text rather than a code because nobody is filling in a form (see
+    #: emergency.resolve). It decides the number he is told to dial.
+    country: str = Field("", max_length=_MAX_CHIP)
 
     def story(self) -> str:
         spoken = intake.as_story([t.model_dump() for t in self.conversation])
@@ -895,6 +902,20 @@ async def companion_create(
     verdict = allowance.check(user_id)
     if not verdict.allowed:
         raise HTTPException(status_code=429, detail=verdict.reason)
+
+    # WHERE HE LIVES, WRITTEN DOWN BEFORE HE SAYS A WORD TO ANYBODY.
+    #
+    # Until now this was only ever learned by the extractor, several exchanges
+    # into the friendship, if he happened to mention it — so the first
+    # conversation, which is the one where somebody is most likely to say
+    # something frightening to a stranger, ran on the deployment's default
+    # number. Now it is asked outright at the warm-up and stored here, first
+    # thing: before the minute spent writing him, so that a failure to write
+    # him does not also lose the one fact that matters in an emergency.
+    #
+    # Anywhere unrecognised is simply not stored, and 112 still answers.
+    if req.country.strip():
+        emergency.remember(user_id, req.country)
 
     started = time.monotonic()
     try:

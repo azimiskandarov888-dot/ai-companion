@@ -79,10 +79,10 @@ MIN_TURNS = 4
 #: stop. Someone enjoying themselves can keep going by saying more; someone
 #: tiring should never be held longer.
 #:
-#: The app's local warm-up is ten of these (five greeting — name, day, what
-#: they do, age, whether they're a man or a woman — then five tapped), so this
-#: leaves the backend seven or eight: enough to ask about a life, the people
-#: in it, and then one real question, without any of it feeling rushed.
+#: The app's local warm-up is eleven of these (six greeting — name, day, what
+#: they do, WHERE THEY LIVE, age, whether they're a man or a woman — then five
+#: tapped), so this leaves the backend seven: enough to ask about a life, the
+#: people in it, and then one real question, without any of it feeling rushed.
 MAX_TURNS = 18
 
 #: The first question is never generated, and it has TWO jobs, not one.
@@ -122,7 +122,9 @@ PREAMBLE = (
 
 _ASK_SYSTEM = """Ты продолжаешь разговор с человеком о нём самом — по одному вопросу за раз, — чтобы потом из его ответов создать ему друга.
 
-ГДЕ МЫ СЕЙЧАС. Разговор уже идёт и уже тёплый. Человек назвал имя, рассказал, как прошёл день и чем занимается, сказал, сколько ему лет, и между делом ответил на пару лёгких (горы или море, чай или кофе). Он расположен говорить.
+ГДЕ МЫ СЕЙЧАС. Разговор уже идёт и уже тёплый. Человек назвал имя, рассказал, как прошёл день и чем занимается, СКАЗАЛ, ГДЕ ЖИВЁТ, сказал, сколько ему лет, и между делом ответил на пару лёгких (горы или море, чай или кофе). Он расположен говорить.
+
+Про это уже спросили — второй раз не спрашивай. «А откуда вы?», «а где живёте?», «а кем работаете?» человек уже слышал, и повторный вопрос читается одинаково у всех: его не слушали. Зато за сказанное можно зацепиться: он назвал место — спроси про само место, а не про факт.
 
 Дальше — твоя часть, и она идёт только вверх. Вниз не спускайся: после того, как человек рассказал про мать, спросить «чай или кофе?» — значит обесценить сказанное. И не начинай заново («расскажите о себе») — он уже рассказал.
 

@@ -180,7 +180,8 @@ struct AppFlow: View {
                 PhotoBackground(place: .story, treatment: .scrim)
 
                 if screen == .story {
-                    ScrollScreen(kind: .story, text: $story, drawsBackground: false) {
+                    ScrollScreen(kind: .story, text: $story, drawsBackground: false,
+                                 onCountry: { app.saveCountry($0) }) {
                         app.saveStory(story)
                         go(.meet)
                     }
@@ -195,7 +196,8 @@ struct AppFlow: View {
             }
 
         case .arriving:
-            ArrivingScreen(story: app.story, wishes: app.wishes) { name in
+            ArrivingScreen(story: app.story, wishes: app.wishes,
+                           country: app.country) { name in
                 if !name.isEmpty { app.remember(companionName: name) }
                 app.markArrived()
                 go(.companion)

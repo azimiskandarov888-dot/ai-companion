@@ -132,3 +132,134 @@ def test_the_extractor_is_told_to_only_report_what_he_said():
     """A guessed country is worse than none: it would be stored as known and
     silently decide what he is told to dial."""
     assert "ТОЛЬКО если он сам об этом сказал" in learn._EXTRACTION_SYSTEM
+
+
+# ── saying it in a sentence, in whatever case ───────────────────────────────
+#
+# The extractor writes a tidy «Израиль». A person answering «в какой стране вы
+# живёте?» writes «Живу в Израиле, в Хайфе». Both have to land on the same row.
+
+
+@pytest.mark.parametrize(
+    "said,expected",
+    [
+        ("Россия", "россия"),
+        ("в России", "россия"),
+        ("Живу в Израиле, в Хайфе", "израиль"),
+        ("в Казахстане", "казахстан"),
+        ("в Германии уже двадцать лет", "германия"),
+        ("в США", "сша"),
+        ("в штате Техас", "штаты"),
+        ("в Беларуси", "беларусь"),
+        ("на Кипре", "кипр"),
+        ("в Нидерландах", "нидерланды"),
+    ],
+)
+def test_where_he_lives_is_understood_however_he_puts_it(said, expected):
+    assert emergency.resolve(said) == expected
+
+
+@pytest.mark.parametrize(
+    "said,expected",
+    [
+        ("Новая Зеландия", "новая зеландия"),
+        ("в Новой Зеландии", "новая зеландия"),
+        ("в Южной Корее", "южная корея"),
+        ("Корея", "корея"),
+    ],
+)
+def test_a_two_word_country_is_never_read_as_its_last_word(said, expected):
+    """«южная корея» dials 119 and so does «корея», so this one costs nothing
+    today — but a table where they differed would be silently wrong, and the
+    order of the scan is the only thing standing between the two."""
+    assert emergency.resolve(said) == expected
+
+
+@pytest.mark.parametrize(
+    "said",
+    ["Нарния", "Даниил", "Индианаполис", "рука", "Москва", "в деревне",
+     "я кореец", "не скажу", "", "   ", None, 42],
+)
+def test_something_that_is_not_a_country_is_not_read_as_one(said):
+    """Every one of these is a real near-miss for a name in the table — «Даниил»
+    shares a stem with «Дания», «Индианаполис» contains «Индия», «рука» is two
+    letters from «РФ». A wrong country is a man in Chicago being told to dial
+    103 while he is on the floor, so near-misses have to miss."""
+    assert emergency.resolve(said) == ""
+
+
+def test_a_city_alone_leaves_the_country_unknown():
+    """«Москва» is not «Россия» to this module, and pretending otherwise would
+    start it down the road of being a geography database. Unknown falls back to
+    the configured default plus 112, which is the honest answer."""
+    emergency.remember(U, "Москва")
+    assert emergency.known(U) is False
+
+
+# ── asked at the door, not waited for ───────────────────────────────────────
+
+
+def _created(json_body, monkeypatch, think=None):
+    """POST /api/companion/create with the model calls faked out.
+
+    `think` replaces the deep call, so a test can make writing him fail.
+    """
+    import json as _json
+
+    from fastapi.testclient import TestClient
+
+    from app import brain, main, reading as _reading
+
+    async def fake_read(about, wishes=""):
+        return {"register": "коротко", "would_reach_them": "спокойно"}
+
+    async def fake_generate(system_prompt, user_text, max_tokens=1500, model=None,
+                            timeout=None, effort=None):
+        return "1. Гриша, 73, посёлок, сварщик.\n2. Нина, 52, горы, фельдшер."
+
+    async def fake_think(system_prompt, user_text, **kwargs):
+        return _json.dumps({
+            "name": "Гриша", "age": "73 года", "home": "посёлок",
+            "backstory": "варил всю жизнь", "personality": "ворчливый",
+            "flaws": ["перебивает"], "intention": "перебрать лодку",
+            "things": ["чайник"], "speech_style": "коротко",
+        }, ensure_ascii=False)
+
+    monkeypatch.setattr(_reading, "read_person", fake_read)
+    monkeypatch.setattr(brain, "generate_text", fake_generate)
+    monkeypatch.setattr(brain, "think", think or fake_think)
+    with TestClient(main.app) as client:
+        return client.post("/api/companion/create", json=json_body)
+
+
+def test_he_knows_where_the_person_lives_before_the_first_word(monkeypatch):
+    """It used to be learned only by the extractor, several exchanges in — so
+    the FIRST conversation, the one where somebody is most likely to say
+    something frightening to a stranger, ran on the deployment's default."""
+    from app import identity
+
+    r = _created({"about": "Люблю тишину.", "country": "в Израиле"}, monkeypatch)
+    assert r.status_code == 200
+    assert "101" in emergency.numbers(identity.ANONYMOUS)
+
+
+def test_where_he_lives_is_written_down_before_the_minute_spent_writing_him(monkeypatch):
+    """Stored first, on purpose. Writing a companion is the one place the app
+    spends a minute on the deepest model, and it is the likeliest thing in the
+    request to fail — a failure there must not also lose the one fact that
+    matters if the watcher fires."""
+    from app import identity
+
+    async def boom(*a, **kw):
+        raise RuntimeError("модель не ответила")
+
+    r = _created({"about": "Люблю тишину.", "country": "Канада"}, monkeypatch, think=boom)
+    assert r.status_code == 503
+    assert "911" in emergency.numbers(identity.ANONYMOUS)
+
+
+def test_creating_without_saying_where_changes_nothing(monkeypatch):
+    from app import identity
+
+    assert _created({"about": "Люблю тишину."}, monkeypatch).status_code == 200
+    assert emergency.known(identity.ANONYMOUS) is False

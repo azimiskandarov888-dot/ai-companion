@@ -338,10 +338,15 @@ struct BackendClient {
     /// the right answer. `test_the_creation_budget_actually_fits_under_the_
     /// phones_ceiling` fails the build if the NORMAL path ever loses that
     /// race again.
-    func createCompanion(story: String, wishes: String) async throws -> CreateCompanionResponse {
+    /// `country` is their own answer to «в какой стране живёте?», passed
+    /// through as written. The server resolves it (emergency.resolve) and
+    /// ignores anywhere it doesn't recognise, so an odd answer costs nothing.
+    func createCompanion(story: String,
+                         wishes: String,
+                         country: String = "") async throws -> CreateCompanionResponse {
         try await postJSON(
             "api/companion/create",
-            body: ["about": story, "wishes": wishes],
+            body: ["about": story, "wishes": wishes, "country": country],
             timeout: 260
         )
     }

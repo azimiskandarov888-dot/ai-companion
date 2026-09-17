@@ -254,3 +254,33 @@ def test_persona_lives_in_the_stable_half():
     assert "рыбалке" not in stable
     assert "Аня" in variable
     assert "рыбалке" in variable
+
+
+# --------------------------------------------------------------------------- #
+# The model ids themselves
+# --------------------------------------------------------------------------- #
+
+
+def test_no_model_is_pinned_to_a_dated_snapshot():
+    """CHAT_MODEL sat on claude-haiku-4-5-20251001 for months.
+
+    A dated id is a slow failure with a loud ending: the app keeps answering in
+    the voice of the day it was written, and then that snapshot is retired and
+    it stops answering at all — mid-turn, in front of somebody who has no way to
+    tell a retired model from their friend having gone. The undated alias moves
+    on its own, so this is checked rather than remembered.
+    """
+    import re
+
+    from app import config
+
+    dated = re.compile(r"-20\d{6}$")
+    pinned = {
+        name: value
+        for name, value in vars(config).items()
+        if name.endswith("_MODEL")
+        and isinstance(value, str)
+        and value.startswith("claude-")
+        and dated.search(value)
+    }
+    assert not pinned, f"дата в id модели: {pinned}"

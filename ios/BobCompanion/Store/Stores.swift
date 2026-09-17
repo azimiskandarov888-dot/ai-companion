@@ -89,6 +89,11 @@ final class AppState: ObservableObject {
     @Published var story: String
     /// What they asked for on screen 4. May be empty — that's a fine answer.
     @Published var wishes: String
+    /// Where they said they live, in their own words («в Израиле», «Канада»).
+    /// Sent once, when he is created, and it decides which emergency number he
+    /// is told to dial. A fact about the PERSON, not about the friend, so
+    /// «Начать заново» leaves it alone.
+    @Published var country: String
     /// His name, once he has arrived. Empty until the server creates him.
     @Published private(set) var companionName: String
     /// Whether onboarding is FINISHED. Kept separately from his name on
@@ -106,6 +111,7 @@ final class AppState: ObservableObject {
         static let subscribed = "isSubscribed"
         static let story = "story"
         static let wishes = "wishes"
+        static let country = "country"
         static let companionName = "companionName"
         static let hasArrived = "hasArrived"
     }
@@ -117,6 +123,7 @@ final class AppState: ObservableObject {
         self.isSubscribed   = defaults.bool(forKey: Keys.subscribed)
         self.story          = defaults.string(forKey: Keys.story) ?? ""
         self.wishes         = defaults.string(forKey: Keys.wishes) ?? ""
+        self.country        = defaults.string(forKey: Keys.country) ?? ""
         self.companionName  = defaults.string(forKey: Keys.companionName) ?? ""
         self.hasArrived     = defaults.bool(forKey: Keys.hasArrived)
         if let data = defaults.data(forKey: Keys.account) {
@@ -156,6 +163,11 @@ final class AppState: ObservableObject {
     func saveWishes(_ text: String) {
         wishes = text
         defaults.set(text, forKey: Keys.wishes)
+    }
+
+    func saveCountry(_ text: String) {
+        country = text
+        defaults.set(text, forKey: Keys.country)
     }
 
     func remember(companionName name: String) {
