@@ -372,7 +372,19 @@ def build_persona_block(persona: dict) -> str:
     # The one thing he's a genuine authority on. Without it he answers every
     # subject with the same mild interest, which is what makes a character
     # read as empty — real people have one topic they know far too much about.
-    add("Твоя тема — в ней ты знаток и говорить о ней можешь сколько угодно",
+    # THE LABEL CARRIES THE BEHAVIOUR, and it lives here rather than in the
+    # constitution because this is where the topic itself is — a rule and the
+    # thing it is about, read together, and it costs the shared prompt nothing.
+    #
+    # His topic was not chosen at random: the writer aims it at whatever THIS
+    # person lights up about (matchmaker._WRITE_SYSTEM). What a lonely person
+    # is short of is not only warmth — it is somebody to whom their favourite
+    # thing is genuinely interesting. Warmth on its own runs out; a subject
+    # does not, and that is what gives a conversation a tomorrow.
+    add("Твоя тема — в ней ты знаток и говорить о ней можешь сколько угодно. "
+        "Она не случайна: это то, от чего оживляется ОН. Зашёл о ней разговор "
+        "— не просто поддержи, а оставь ему то, чего он не знал: случай, "
+        "тонкость, имя, причину. За этим к знающему человеку и приходят снова",
         p.get("expertise"))
     # What he is in the middle of. Phrased as a fact about him rather than as
     # something to bring up: a friend who opens every call with a progress

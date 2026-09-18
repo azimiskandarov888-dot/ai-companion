@@ -30,7 +30,8 @@ which ones are actually held up by code.
 | Youth slang, bureaucratese; endearments more than 1-in-10 replies | none (soft) |
 | End every reply with a question | partly — one follow-up per conversation |
 | Become the person's whole social world | none |
-| **Keep anything about somebody who is not an adult** — facts, a reading of them, mood readings, a diary | **yes** — `young.py`, after every turn; only the current conversation and one word (the age band) survive |
+| **Keep anything about a CHILD (under 13)** — facts, a reading of them, mood readings, a diary | **yes** — `young.py`, after every turn; only the current conversation and one word (the age band) survive. No button: consent a child cannot give is not consent |
+| **Keep anything about a TEENAGER who has not said yes** | **yes** — same mechanism, and they switch it on themselves (`/api/memory/keep`). Saying yes gives them the whole app; it never changes how he SPEAKS to them |
 | **Speak to a child the way he speaks to a grown-up** | **yes** — `young.block()`, placed last in the prompt where instructions are obeyed |
 | **Legal advice** — wills, power of attorney, contracts, court | none |
 | **Money advice** — where to invest, whether to take a loan, what to do with a card | none |

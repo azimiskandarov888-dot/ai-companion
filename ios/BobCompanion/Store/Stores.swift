@@ -99,6 +99,9 @@ final class AppState: ObservableObject {
     /// see young.py. There is no age screen anywhere in this app: the warm-up
     /// asks the way a friend asks, and that is the whole mechanism.
     @Published var age: String
+    /// A teenager's own answer about being remembered. Mirrored here only so
+    /// Settings can show it; the SERVER is where it actually decides anything.
+    @Published private(set) var remembersMe: Bool
     /// His name, once he has arrived. Empty until the server creates him.
     @Published private(set) var companionName: String
     /// Whether onboarding is FINISHED. Kept separately from his name on
@@ -118,6 +121,7 @@ final class AppState: ObservableObject {
         static let wishes = "wishes"
         static let country = "country"
         static let age = "age"
+        static let remembersMe = "remembersMe"
         static let companionName = "companionName"
         static let hasArrived = "hasArrived"
     }
@@ -131,6 +135,7 @@ final class AppState: ObservableObject {
         self.wishes         = defaults.string(forKey: Keys.wishes) ?? ""
         self.country        = defaults.string(forKey: Keys.country) ?? ""
         self.age            = defaults.string(forKey: Keys.age) ?? ""
+        self.remembersMe    = defaults.bool(forKey: Keys.remembersMe)
         self.companionName  = defaults.string(forKey: Keys.companionName) ?? ""
         self.hasArrived     = defaults.bool(forKey: Keys.hasArrived)
         if let data = defaults.data(forKey: Keys.account) {
@@ -180,6 +185,33 @@ final class AppState: ObservableObject {
     func saveAge(_ text: String) {
         age = text
         defaults.set(text, forKey: Keys.age)
+    }
+
+    /// WHETHER TO ASK THIS PERSON ABOUT MEMORY AT ALL.
+    ///
+    /// A deliberate second copy of young.band, and it is allowed to be one:
+    /// the SERVER decides what is kept, always, and both ways of drifting fail
+    /// safe. Drift low and the question goes unasked, so memory stays off.
+    /// Drift high and it is asked of somebody whose answer the server simply
+    /// refuses — young.allow takes a teenager's and nobody else's.
+    var isTeenager: Bool {
+        guard let digits = age.split(whereSeparator: { !$0.isNumber }).first,
+              let years = Int(digits)
+        else { return false }
+        return (13...17).contains(years)
+    }
+
+    /// Their answer. The server first; the phone only if it took.
+    func setRemembersMe(_ yes: Bool) async {
+        do {
+            try await BackendClient(baseURL: AppConfig.shared.backendURL)
+                .keepMemory(yes)
+        } catch {
+            Trouble.shared.record(error, url: AppConfig.shared.backendURL)
+            return
+        }
+        remembersMe = yes
+        defaults.set(yes, forKey: Keys.remembersMe)
     }
 
     func remember(companionName name: String) {
@@ -255,12 +287,14 @@ final class AppState: ObservableObject {
             return false
         }
         for key in [Keys.account, Keys.subscribed, Keys.story, Keys.wishes,
-                    Keys.country, Keys.age, Keys.companionName, Keys.hasArrived] {
+                    Keys.country, Keys.age, Keys.remembersMe,
+                    Keys.companionName, Keys.hasArrived] {
             defaults.removeObject(forKey: key)
         }
         account = nil
         isSubscribed = false
         story = ""; wishes = ""; country = ""; age = ""; companionName = ""
+        remembersMe = false
         hasArrived = false
         return true
     }

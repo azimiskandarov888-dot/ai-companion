@@ -185,11 +185,11 @@ def _rows(table: str) -> int:
         ).fetchone()["n"]
 
 
-def test_no_profile_is_ever_built_for_a_young_person(client):
+def test_no_profile_is_ever_built_for_a_child(client):
     """The scribe distils somebody into facts, the reader reads them, the
     register measures them. For a child none of it runs — so there is no
     dossier to leak, to subpoena, or to have to delete later."""
-    young.remember(U, "14")
+    young.remember(U, "9")
     _say(client)
 
     assert SCRIBE_RAN == [], "писарь разбирал ребёнка на факты"
@@ -295,3 +295,100 @@ def test_a_child_gets_a_friend_and_leaves_no_reading_behind(monkeypatch):
     # …and the band is the only thing left behind.
     assert young.of(U) == young.CHILD
     assert not identity.reading_path(U).exists()
+
+
+# --------------------------------------------------------------------------- #
+# A teenager gets the full app — and decides about the memory themselves
+#
+# Owner's decision, 2026-09-18: loneliness peaks in adolescence, and teenagers
+# are the second group this is for after the old. So they get a friend their
+# OWN age, who remembers them — and the remembering is theirs to switch on.
+# --------------------------------------------------------------------------- #
+
+
+def test_a_teenager_is_not_remembered_until_they_say_so(client):
+    """Off to begin with, and off is not a lesser product — it is a question
+    that has not been asked yet."""
+    young.remember(U, "15")
+    assert young.keeps_nothing(U) is True
+
+    _say(client)
+    assert SCRIBE_RAN == []
+
+
+def test_a_teenager_who_says_yes_gets_the_whole_thing(client):
+    """The full app. Not a stripped one: the same friend, the same memory, the
+    same diary — the only difference is that they were asked first."""
+    young.remember(U, "15")
+    assert young.allow(U, True) is True
+    assert young.keeps_nothing(U) is False
+
+    _say(client)
+    assert SCRIBE_RAN == [U]
+
+
+def test_a_teenager_can_change_their_mind_back(client):
+    young.remember(U, "15")
+    young.allow(U, True)
+    young.allow(U, False)
+
+    assert young.keeps_nothing(U) is True
+    _say(client)
+    assert SCRIBE_RAN == []
+
+
+def test_a_child_has_no_such_button(client):
+    """Consent somebody cannot give is not consent. A button that pretended
+    otherwise would be worse than none at all — it would look like a choice,
+    and it would be the one thing COPPA's parental-consent rule is actually
+    about rather than a technicality in it."""
+    young.remember(U, "9")
+    assert young.allow(U, True) is False
+    assert young.keeps_nothing(U) is True
+
+    _say(client)
+    assert SCRIBE_RAN == []
+
+
+def test_an_adult_has_nothing_to_answer(client):
+    """Their friend has always remembered them, and no button appears."""
+    assert young.allow(U, True) is False
+    assert young.keeps_nothing(U) is False
+
+
+def test_how_he_speaks_and_what_is_kept_are_two_decisions():
+    """The easiest thing here to collapse into one flag, and it would be wrong:
+    a sixteen-year-old who switches memory on is still sixteen, and is still
+    spoken to accordingly."""
+    young.remember(U, "16")
+    young.allow(U, True)
+
+    assert young.keeps_nothing(U) is False        # remembered…
+    assert young.is_young(U) is True              # …and still a teenager
+    assert "НЕТ ВОСЕМНАДЦАТИ" in young.block(U)
+
+
+def test_the_answer_reaches_the_server_over_the_wire(client):
+    young.remember(U, "15")
+    r = client.post("/api/memory/keep", json={"allow": True}, headers=AUTH)
+    assert r.status_code == 200 and r.json()["keeps"] is True
+    assert young.allowed(U) is True
+
+    r = client.post("/api/memory/keep", json={"allow": False}, headers=AUTH)
+    assert r.json()["keeps"] is False
+    assert young.allowed(U) is False
+
+
+def test_a_teenager_gets_a_friend_their_own_age():
+    """Without this the ten sketches span «от двадцати с лишним до восьмидесяти
+    с лишним» by construction, and no roll of the dice can find a peer in a list
+    that has none. Said in the block that is «закон» at every stage, so both the
+    sketches and the deep write get it."""
+    from app import matchmaker
+
+    story = matchmaker._their_story("люблю рисовать", "", "15", "", "", band=young.TEEN)
+    assert "РОВЕСНИКОМ" in story
+    assert "закон" in story
+
+    grown = matchmaker._their_story("люблю рыбалку", "", "70", "", "", band="")
+    assert "РОВЕСНИКОМ" not in grown

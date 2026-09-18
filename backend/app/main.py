@@ -391,8 +391,8 @@ def _remember(
     # There is no door anywhere in this app and there will not be one. The fix
     # is not who gets in, it is what is kept, which is also the only part
     # Google actually had to change after the YouTube settlement.
-    if young.is_young(user_id):
-        young.keep_nothing(user_id)
+    if young.keeps_nothing(user_id):
+        young.forget(user_id)
         # His week and his own character still grow: those are HIS, not theirs.
         background_tasks.add_task(life.maybe_begin, user_id)
         return
@@ -1039,6 +1039,10 @@ async def companion_create(
             req.about,
             wishes=req.wishes.strip(),
             age=req.age.strip(),
+            # A teenager gets somebody their own age. Without this the ten
+            # sketches are all grown-ups by construction, and no roll of the
+            # dice can produce a peer out of a list that has none.
+            band=young.of(user_id),
             gender=req.gender.strip(),
             origin=req.origin.strip(),
         )
@@ -1051,8 +1055,8 @@ async def companion_create(
     # Here rather than on the first turn, because otherwise the most private
     # document this app produces would sit on disk from the moment somebody
     # signs up until the moment they say their first word.
-    if young.is_young(user_id):
-        young.keep_nothing(user_id)
+    if young.keeps_nothing(user_id):
+        young.forget(user_id)
     return JSONResponse({"name": p.get("name"), "persona": p})
 
 
@@ -1082,6 +1086,24 @@ async def erase_me(user_id: str = Depends(_user)) -> JSONResponse:
     who has just asked for this is owed more than being told to trust us.
     """
     return JSONResponse({"ok": True, "gone": erase.everything(user_id)})
+
+
+class MemoryChoice(BaseModel):
+    allow: bool
+
+
+@app.post("/api/memory/keep")
+async def memory_keep(
+    req: MemoryChoice, user_id: str = Depends(_user)
+) -> JSONResponse:
+    """A teenager's own answer to «можно тебя помнить?».
+
+    Only theirs. A child's is not taken — consent somebody cannot give is not
+    consent, and a button that pretended otherwise would be worse than none,
+    because it would look like a choice. An adult has nothing to answer: their
+    friend has always remembered them. See young.allow.
+    """
+    return JSONResponse({"ok": True, "keeps": young.allow(user_id, req.allow)})
 
 
 @app.get("/api/diary")

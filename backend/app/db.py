@@ -152,6 +152,7 @@ CREATE TABLE IF NOT EXISTS places (
 CREATE TABLE IF NOT EXISTS ages (
     user_id  TEXT PRIMARY KEY,
     band     TEXT NOT NULL,          -- child (<13) | teen (13-17)
+    keeps    INTEGER,                -- a teenager's own answer: NULL not asked
     ts       REAL NOT NULL
 );
 
@@ -276,6 +277,12 @@ def _migrate(conn: sqlite3.Connection) -> None:
         # NULL would hand the first batch the entire history of the friendship.
         conn.execute("ALTER TABLE turns ADD COLUMN read_ts REAL")
         conn.execute("UPDATE turns SET read_ts = ts WHERE read_ts IS NULL")
+
+    # `ages` gained the teenager's own answer about memory a day after it was
+    # added, so a database from in between has the table and not the column.
+    age_cols = _columns(conn, "ages")
+    if age_cols and "keeps" not in age_cols:
+        conn.execute("ALTER TABLE ages ADD COLUMN keeps INTEGER")
 
     alert_cols = _columns(conn, "alerts")
     if alert_cols and "told_ts" not in alert_cols:

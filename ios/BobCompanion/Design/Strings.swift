@@ -333,6 +333,9 @@ enum Strings {
     static let rowLanguage    = Phrase(ru: "Язык",        en: "Language")
     static let rowPrivacy     = Phrase(ru: "Данные",      en: "Privacy & data")
     static let rowPrivacyHint = Phrase(ru: "выгрузить ›", en: "export ›")
+    static let rowRemember    = Phrase(ru: "Пусть он меня помнит", en: "Let him remember me")
+    static let rowRememberYes = Phrase(ru: "да ›",  en: "yes ›")
+    static let rowRememberNo  = Phrase(ru: "нет ›", en: "no ›")
     static let rowStartOver   = Phrase(ru: "Начать заново", en: "Start over")
     static let rowAbout       = Phrase(ru: "О приложении", en: "About")
 
@@ -403,6 +406,21 @@ enum Strings {
                en: "So you've met.\n\(name). Yes, I knew.")
     }
     static let callHimOfferYes  = Phrase(ru: "Звать по имени", en: "Use his name")
+
+    /// ASKED ONCE, OF SOMEBODY WHO IS NOT YET GROWN, AND ASKED PLAINLY.
+    ///
+    /// A teenager gets the whole app, and the memory is the one part of it
+    /// that is theirs to switch on. So it is put as what it actually costs and
+    /// what it actually buys — not as a privacy notice, and not as a favour.
+    ///
+    /// Never after the first conversation, always after one has ENDED: nothing
+    /// in this app is worth interrupting time spent with him.
+    static func rememberOffer(_ name: String) -> Phrase {
+        Phrase(ru: "Пусть \(name) тебя помнит?\nТогда завтра не придётся рассказывать заново.",
+               en: "Shall \(name) remember you?\nThen you won't have to start over tomorrow.")
+    }
+    static let rememberOfferYes = Phrase(ru: "Пусть помнит", en: "Let him")
+    static let rememberOfferNo  = Phrase(ru: "Не надо",      en: "No, thanks")
     static let callHimOfferLater = Phrase(ru: "Потом",         en: "Later")
 
     // MARK: - The setup robot

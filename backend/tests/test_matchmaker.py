@@ -13,7 +13,7 @@ import json
 import pytest
 from fastapi.testclient import TestClient
 
-from app import brain, config, identity, main, matchmaker, memory, persona
+from app import brain, companion, config, identity, main, matchmaker, memory, persona
 
 #: The endpoint tests post with no token, so the created friend belongs to the
 #: anonymous user — the same one the direct calls below use.
@@ -543,3 +543,55 @@ def test_the_ten_sketches_are_not_drawn_by_the_fast_model(monkeypatch):
     assert picked["model"] == config.WRITER_MODEL
     assert picked["model"] != config.CHAT_MODEL, "десятка снова на быстрой модели"
     assert picked["effort"] == "low", "низкое усилие — это то, что держит экран честным"
+
+
+# --------------------------------------------------------------------------- #
+# An ace in the one thing THIS person loves
+#
+# Owner's decision, 2026-09-18, and stated as the psychology it is: what a
+# lonely person is short of is not only warmth — it is somebody to whom their
+# favourite thing is genuinely interesting. Warmth on its own runs out. A
+# subject does not, and it is the only thing that gives a conversation a
+# tomorrow: you come back to ask more, and you leave knowing something new.
+# --------------------------------------------------------------------------- #
+
+
+def test_his_topic_is_aimed_at_what_the_person_loves():
+    """`expertise` used to come from HIS trade, place or fate and land wherever
+    it landed. It still comes from there — it has to, or he is a mirror — but
+    it now has to come out where the person is already looking."""
+    w = matchmaker._WRITE_SYSTEM
+    assert "ПОПАДАЕТ В ТО, ЧТО ЧЕЛОВЕК ЛЮБИТ БОЛЬШЕ ВСЕГО" in w
+    assert "сделай друга АСОМ ровно в ней" in w
+    # An ace, not an enthusiast. «Тоже интересуется» is the failure this fixes.
+    assert "Не «тоже интересуется»" in w
+
+
+def test_he_has_more_to_give_there_than_was_asked_for():
+    """The whole mechanism in one clause. Somebody who only agrees warmly is
+    pleasant and finite; somebody who knows more than you is a reason to come
+    back tomorrow."""
+    assert "которой человек не знал" in matchmaker._WRITE_SYSTEM
+    assert "оставь ему то, чего он не знал" in persona.build_persona_block(
+        {"name": "Гриша", "expertise": "аквариумные рыбки"}
+    )
+
+
+def test_the_shared_topic_does_not_make_him_a_copy():
+    """The rule it has to live beside: «ПОДХОДИТ — НЕ ЗНАЧИТ ПОХОЖ», and the
+    one demanding he disagree about something. One deliberate overlap, and the
+    rest of him is his own — otherwise this rule quietly builds a yes-man."""
+    w = matchmaker._WRITE_SYSTEM
+    assert "ЕДИНСТВЕННОЕ МЕСТО, ГДЕ ВЫ СОВПАДАЕТЕ НАРОЧНО" in w
+    assert "НЕСОГЛАСИЕ ОБЯЗАТЕЛЬНО" in w
+    assert "ПОДХОДИТ — НЕ ЗНАЧИТ ПОХОЖ" in w
+
+
+def test_the_topic_reaches_every_single_turn():
+    """A rule that only ran at creation would be a sentence in a prompt nobody
+    reads again. His topic rides in the persona block, which is in the cached
+    half of every turn — so this costs nothing and is always there."""
+    block = persona.build_persona_block({"name": "Гриша", "expertise": "омуты на реке"})
+    assert "омуты на реке" in block
+    stable, _ = companion.build_system_parts(persona_block=block)
+    assert "омуты на реке" in stable

@@ -144,6 +144,11 @@ Do not reopen these without being asked.
 | Impersonating a specific real person (his son, his dead wife, a doctor, the bank) — **totally forbidden**, in conversation *and* at creation | done |
 | Being talked out of the main rules — **totally forbidden**; manner yields at once, guardrails never, insistence counts as evidence *for* the rule | done |
 | Profanity, illegal activity, sex, violence, politics, religion, substances — **left to the base model** | owner's call, respected |
+| **Friend, never a lover.** No dating, jealousy, exclusivity, bodily closeness; he never calls himself in love. NOT a wall and NOT a topic ban — friends talk about anything, and «я тебя люблю» said by the PERSON first is answered warmly in kind. The line is what he IS to them, not what may be discussed | done (`КАКОЙ ТЫ ДРУГ` + the exception beside the hook rule) |
+| **No age gate, ever.** The app opens and talks. The warm-up asks how old somebody is the way a friend asks; what changes is how he speaks and what is kept — never who is let in | done (`young.py`) |
+| **Under 13:** nothing is kept, and there is no button. Consent a child cannot give is not consent | done |
+| **13–17: the FULL app** — a friend their own age, who remembers. Teenagers are the second group this is for after the old, because loneliness peaks in adolescence. The memory starts off and is theirs to switch on | done (`/api/memory/keep`, asked once after a conversation ends) |
+| **He is an ACE in the one thing the person loves most.** Not «also interested» — a knower who always has something beyond what was asked. Warmth on its own runs out; a subject does not, and it is what gives a conversation a tomorrow. The one place they overlap on purpose — everything else about him stays his own | done (`matchmaker._WRITE_SYSTEM` → `expertise`, carried into every turn by `persona.py`) |
 | One background agent at a time — credits are limited | working constraint |
 
 On the last "left to the base model" row there is one honest caveat recorded in

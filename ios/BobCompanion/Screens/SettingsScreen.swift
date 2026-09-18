@@ -53,6 +53,20 @@ struct SettingsScreen: View {
                                     showsDivider: false) { showServer = true }
                         }
 
+                        // Only a teenager sees this: an adult's friend has
+                        // always remembered them, and a child's never does —
+                        // an answer they cannot give is not one to ask for.
+                        if app.isTeenager {
+                            ListGroup {
+                                ListRow(label: Strings.rowRemember(),
+                                        value: app.remembersMe ? Strings.rowRememberYes()
+                                                               : Strings.rowRememberNo(),
+                                        showsDivider: false) {
+                                    Task { await app.setRemembersMe(!app.remembersMe) }
+                                }
+                            }
+                        }
+
                         // Parting, and the version
                         ListGroup {
                             ListRow(label: Strings.rowStartOver(),

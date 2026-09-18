@@ -36,6 +36,11 @@ struct CompanionScreen: View {
     /// been offered, and «Начать заново» must not make it come round again.
     @AppStorage("hasBeenOfferedCallHim") private var offeredCallHim = false
     @State private var showingCallOffer = false
+    /// Whether the memory question has been put. On the phone like the two
+    /// above, and for the same reason: it is a fact about THIS install having
+    /// been asked, not about the person.
+    @AppStorage("hasBeenAskedAboutMemory") private var askedAboutMemory = false
+    @State private var showingMemoryOffer = false
     @State private var showCallHim = false
     @State private var showNameTalk = false
 
@@ -140,6 +145,13 @@ struct CompanionScreen: View {
 
                 // ABOVE the tap layer, unlike everything else on this screen,
                 // because it is the one thing here with something to press.
+                if showingMemoryOffer {
+                    memoryOffer
+                        .padding(.horizontal, Metrics.sideMargin)
+                        .position(x: geo.size.width / 2, y: h * 0.70)
+                        .transition(.opacity)
+                }
+
                 if showingCallOffer {
                     callOffer
                         .padding(.horizontal, Metrics.sideMargin)
@@ -197,6 +209,13 @@ struct CompanionScreen: View {
         // is just as pointed and costs nothing.
         .onChange(of: conversation.wantsToListen) { was, now in
             guard was, !now else { return }        // a conversation just ended
+            // One question per ending, and the memory one comes first: it is
+            // the only one of the two that changes what he can be.
+            if app.isTeenager, !askedAboutMemory, !app.companionName.isEmpty {
+                askedAboutMemory = true
+                withAnimation(.easeInOut(duration: 0.5)) { showingMemoryOffer = true }
+                return
+            }
             guard !offeredCallHim, !app.companionName.isEmpty else { return }
             offeredCallHim = true
             withAnimation(.easeInOut(duration: 0.5)) { showingCallOffer = true }
@@ -289,6 +308,35 @@ struct CompanionScreen: View {
         let digits = number.filter(\.isNumber)
         guard !digits.isEmpty, let url = URL(string: "tel://\(digits)") else { return }
         openURL(url)
+    }
+
+    /// THE ONE PART OF THE APP A TEENAGER SWITCHES ON THEMSELVES.
+    ///
+    /// They get the whole thing — a friend their own age, who remembers — and
+    /// the remembering starts off until they say. Asked once, after a
+    /// conversation has ENDED, and answered either way it never comes back;
+    /// Settings is where it changes after that.
+    private var memoryOffer: some View {
+        VStack(spacing: 18) {
+            Text(Strings.rememberOffer(app.displayName)())
+                .appFont(AppType.body, leading: AppType.bodyLeading)
+                .foregroundStyle(Theme.linen)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+
+            HStack(spacing: 12) {
+                AppButton(title: Strings.rememberOfferNo(), tone: .quiet) {
+                    withAnimation(.easeInOut(duration: 0.4)) { showingMemoryOffer = false }
+                    Task { await app.setRemembersMe(false) }
+                }
+                AppButton(title: Strings.rememberOfferYes(), tone: .sun) {
+                    withAnimation(.easeInOut(duration: 0.4)) { showingMemoryOffer = false }
+                    Task { await app.setRemembersMe(true) }
+                }
+            }
+        }
+        .padding(22)
+        .panel()
     }
 
     /// What he's saying about himself right now, if anything. His own words

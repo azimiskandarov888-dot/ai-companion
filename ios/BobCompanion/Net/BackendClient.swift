@@ -418,6 +418,20 @@ struct BackendClient {
         try Self.check(response, data)
     }
 
+    /// A teenager's own answer to «можно тебя помнить?».
+    ///
+    /// Only a teenager's is taken; the server refuses everybody else's, so a
+    /// mistake on this side cannot turn memory on for a child. See young.allow.
+    func keepMemory(_ allow: Bool) async throws {
+        var request = try authorized("api/memory/keep")
+        request.httpMethod = "POST"
+        request.timeoutInterval = 15
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONEncoder().encode(["allow": allow])
+        let (data, response) = try await URLSession.shared.data(for: request)
+        try Self.check(response, data)
+    }
+
     /// His diary about his friend. Cheap and instant unless his memory has
     /// grown since last time, in which case he rewrites it.
     func diary() async throws -> DiaryResponse {

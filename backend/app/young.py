@@ -13,10 +13,20 @@ So this file is not a gate. It is two things:
      Which is also what the law that names this product type asks for: SB 243
      does not require turning minors away — it requires duties towards them.
 
-  2. NOTHING IS KEPT. No distilled facts, no reading of them, no mood
-     register, no diary. The conversation happening right now survives, because
-     a friend who forgets the last sentence is not a friend; everything older
-     than it goes.
+  2. NOTHING IS KEPT — unless a teenager says it may be.
+
+     A CHILD, always: no distilled facts, no reading of them, no mood register,
+     no diary. There is no button, and that is not an oversight. A nine-year-old
+     cannot consent to a company storing their inner life; that is the whole
+     substance of COPPA's verifiable-parental-consent rule rather than a
+     technicality in it.
+
+     A TEENAGER gets the full app — a friend their OWN age, who remembers —
+     because loneliness peaks in adolescence and they are who this is for as
+     much as anybody. But the memory starts off and is theirs to switch on.
+
+     Either way the conversation happening right now survives, because a friend
+     who forgets the last sentence is not a friend; everything older goes.
 
 ── THE ONE THING THAT IS KEPT, AND WHY ─────────────────────────────────────
 
@@ -111,10 +121,51 @@ def of(user_id: str) -> str:
 
 
 def is_young(user_id: str) -> bool:
+    """Not an adult. Decides how he SPEAKS — never what is kept."""
     return of(user_id) in (CHILD, TEEN)
 
 
-def keep_nothing(user_id: str) -> None:
+def allowed(user_id: str) -> bool:
+    """Whether a teenager has said their friend may remember them."""
+    with db.connect() as conn:
+        row = conn.execute(
+            "SELECT keeps FROM ages WHERE user_id=?", (user_id,)
+        ).fetchone()
+    return bool(row and row["keeps"])
+
+
+def allow(user_id: str, yes: bool) -> bool:
+    """A teenager's own answer. Returns what is now true.
+
+    A CHILD's answer is not taken, and that is deliberate: consent that the
+    person cannot give is not consent, and a button that pretended otherwise
+    would be worse than no button at all — it would look like a choice.
+    """
+    if of(user_id) != TEEN:
+        return False
+    with db.connect() as conn:
+        conn.execute(
+            "UPDATE ages SET keeps=? WHERE user_id=?", (1 if yes else 0, user_id)
+        )
+    return bool(yes)
+
+
+def keeps_nothing(user_id: str) -> bool:
+    """Whether nothing at all may be kept about this person right now.
+
+    Note how different this is from `is_young`, and how easily they could have
+    been one function: how he speaks and what is stored are two decisions, and
+    a teenager who switches memory on still gets spoken to like a teenager.
+    """
+    band = of(user_id)
+    if band == CHILD:
+        return True
+    if band == TEEN:
+        return not allowed(user_id)
+    return False
+
+
+def forget(user_id: str) -> None:
     """Forget everything about this person except that they are young.
 
     Called after every turn, which sounds wasteful and is not: these are a
