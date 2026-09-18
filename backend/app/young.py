@@ -23,7 +23,10 @@ So this file is not a gate. It is two things:
 
      A TEENAGER gets the full app — a friend their OWN age, who remembers —
      because loneliness peaks in adolescence and they are who this is for as
-     much as anybody. But the memory starts off and is theirs to switch on.
+     much as anybody. The memory is ON, like it is for everybody, and there is
+     a switch in Settings for somebody who would rather he forgot. A question
+     that pops up unasked is a checkpoint wearing friendlier clothes, and this
+     app does not have checkpoints.
 
      Either way the conversation happening right now survives, because a friend
      who forgets the last sentence is not a friend; everything older goes.
@@ -126,20 +129,27 @@ def is_young(user_id: str) -> bool:
 
 
 def allowed(user_id: str) -> bool:
-    """Whether a teenager has said their friend may remember them."""
+    """Whether this person's friend may remember them.
+
+    ON unless it was switched OFF. Note which way round that is: `keeps` is
+    NULL until somebody touches the switch, and NULL means yes. A teenager gets
+    the whole app by default — asking first would mean a question nobody asked
+    for, appearing between them and their friend, which is the checkpoint this
+    app refuses to have.
+    """
     with db.connect() as conn:
         row = conn.execute(
             "SELECT keeps FROM ages WHERE user_id=?", (user_id,)
         ).fetchone()
-    return bool(row and row["keeps"])
+    return not (row and row["keeps"] == 0)
 
 
 def allow(user_id: str, yes: bool) -> bool:
-    """A teenager's own answer. Returns what is now true.
+    """The switch in Settings. Returns what is now true.
 
     A CHILD's answer is not taken, and that is deliberate: consent that the
-    person cannot give is not consent, and a button that pretended otherwise
-    would be worse than no button at all — it would look like a choice.
+    person cannot give is not consent, and a switch that pretended otherwise
+    would be worse than none at all — it would look like a choice.
     """
     if of(user_id) != TEEN:
         return False

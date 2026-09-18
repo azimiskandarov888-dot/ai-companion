@@ -99,8 +99,10 @@ final class AppState: ObservableObject {
     /// see young.py. There is no age screen anywhere in this app: the warm-up
     /// asks the way a friend asks, and that is the whole mechanism.
     @Published var age: String
-    /// A teenager's own answer about being remembered. Mirrored here only so
-    /// Settings can show it; the SERVER is where it actually decides anything.
+    /// Whether their friend remembers them between conversations. ON, like it
+    /// is for everybody — a teenager gets the whole app — and Settings is where
+    /// it goes off. Mirrored here only so the row can show it; the SERVER is
+    /// where it actually decides anything.
     @Published private(set) var remembersMe: Bool
     /// His name, once he has arrived. Empty until the server creates him.
     @Published private(set) var companionName: String
@@ -135,7 +137,9 @@ final class AppState: ObservableObject {
         self.wishes         = defaults.string(forKey: Keys.wishes) ?? ""
         self.country        = defaults.string(forKey: Keys.country) ?? ""
         self.age            = defaults.string(forKey: Keys.age) ?? ""
-        self.remembersMe    = defaults.bool(forKey: Keys.remembersMe)
+        // `object(forKey:)`, not `bool(forKey:)`: an absent key has to mean ON
+        // here, and bool() would quietly read «never touched» as «switched off».
+        self.remembersMe    = defaults.object(forKey: Keys.remembersMe) as? Bool ?? true
         self.companionName  = defaults.string(forKey: Keys.companionName) ?? ""
         self.hasArrived     = defaults.bool(forKey: Keys.hasArrived)
         if let data = defaults.data(forKey: Keys.account) {
@@ -294,7 +298,7 @@ final class AppState: ObservableObject {
         account = nil
         isSubscribed = false
         story = ""; wishes = ""; country = ""; age = ""; companionName = ""
-        remembersMe = false
+        remembersMe = true
         hasArrived = false
         return true
     }
