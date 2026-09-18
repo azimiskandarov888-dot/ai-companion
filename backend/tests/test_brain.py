@@ -25,10 +25,17 @@ class _Block:
         self.text = text
 
 
+class _Usage:
+    def __init__(self, read: int = 0, wrote: int = 0):
+        self.cache_read_input_tokens = read
+        self.cache_creation_input_tokens = wrote
+
+
 class _Message:
-    def __init__(self, text: str, stop_reason: str = "end_turn"):
+    def __init__(self, text: str, stop_reason: str = "end_turn", usage=None):
         self.content = [_Block(text)]
         self.stop_reason = stop_reason
+        self.usage = usage
 
 
 class _FakeStream:
@@ -284,3 +291,70 @@ def test_no_model_is_pinned_to_a_dated_snapshot():
         and dated.search(value)
     }
     assert not pinned, f"дата в id модели: {pinned}"
+
+
+# --------------------------------------------------------------------------- #
+# The cache is measured, not assumed
+#
+# The cached head is ~10,600 tokens. A read costs a tenth of an input token, a
+# write costs a quarter more than one — twelve and a half times apart, on the
+# largest thing the app sends. And there is a known way to land on the wrong
+# side of it without noticing: the scribe writes `observations` from a
+# background task every five exchanges, and `mood.standing_block` reads that
+# table back INSIDE the cached head. So these tests are not about logging;
+# they are about being able to see that happen at all.
+# --------------------------------------------------------------------------- #
+def test_a_rewrite_of_the_cached_head_is_reported(monkeypatch, capsys):
+    """The turn we need to be able to see: the head was written, not read."""
+    fake = _FakeClient(message=_Message("Привет.", usage=_Usage(read=0, wrote=10600)))
+    monkeypatch.setattr(brain, "_get_client", lambda: fake)
+
+    asyncio.run(brain.generate_reply([{"role": "user", "content": "привет"}], "КТО ТЫ"))
+
+    said = capsys.readouterr().out
+    assert "[кэш]" in said
+    assert "10600" in said
+
+
+def test_a_healthy_turn_says_nothing(monkeypatch, capsys):
+    """A line every turn is noise, and noise is how a real signal gets missed."""
+    fake = _FakeClient(message=_Message("Привет.", usage=_Usage(read=10600, wrote=0)))
+    monkeypatch.setattr(brain, "_get_client", lambda: fake)
+
+    asyncio.run(brain.generate_reply([{"role": "user", "content": "привет"}], "КТО ТЫ"))
+
+    assert "[кэш]" not in capsys.readouterr().out
+
+
+def test_the_streaming_path_is_watched_too(monkeypatch, capsys):
+    """Nearly every real turn goes down the streaming path — a measurement that
+    skipped it would be measuring the rare case and calling it the rule."""
+    fake = _FakeClient(
+        message=_Message("Привет", usage=_Usage(read=0, wrote=10600)),
+        events=[_Block("При"), _Block("вет")],
+    )
+    monkeypatch.setattr(brain, "_get_client", lambda: fake)
+
+    async def _drain():
+        async for _ in brain.stream_reply([{"role": "user", "content": "привет"}], "КТО ТЫ"):
+            pass
+
+    asyncio.run(_drain())
+
+    assert "10600" in capsys.readouterr().out
+
+
+def test_measuring_never_costs_anybody_their_reply(monkeypatch):
+    """A provider that stops reporting usage, or an SDK that changes the field
+    names, must cost a log line and nothing else. Somebody is mid-sentence."""
+    fake = _FakeClient(message=_Message("Привет.", usage=None), events=[_Block("Привет")])
+    monkeypatch.setattr(brain, "_get_client", lambda: fake)
+
+    said = asyncio.run(
+        brain.generate_reply([{"role": "user", "content": "привет"}], "КТО ТЫ")
+    )
+    assert said == "Привет."
+
+    # And the same with no usage attribute on the message at all.
+    brain._note_cache(object())
+    brain._note_cache(None)

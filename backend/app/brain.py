@@ -15,9 +15,15 @@ Two further speed decisions live here:
     turns are rare and inherently slow anyway.
 
   · The system prompt's stable head (behavior rules + persona) is marked for
-    provider-side caching. It is identical every turn, so Claude re-reads it
-    from cache instead of re-processing ~3k tokens of character each time —
-    faster and about 10× cheaper for that part.
+    provider-side caching. It is meant to be identical every turn, so Claude
+    re-reads it from cache instead of re-processing ~10,600 tokens of character
+    each time — faster, and ten times cheaper for that part.
+
+    «Meant to be» is doing real work in that sentence, which is why
+    `_note_cache` below exists. A cache read costs a tenth of an input token
+    and a cache write costs a quarter more than one; the distance between them
+    is twelve and a half times, on the largest thing the app sends. Whether we
+    are on the right side of it is a measurement, not an opinion.
 """
 
 from __future__ import annotations
@@ -150,6 +156,38 @@ def _system_blocks(stable: str, variable: str) -> list[dict]:
     return blocks
 
 
+def _note_cache(message) -> None:
+    """Say it out loud whenever the cached head had to be written again.
+
+    A write on the FIRST turn of a conversation is correct — nothing was warm
+    yet. A write on any LATER turn means something upstream of the breakpoint
+    moved its bytes, and the whole character was re-processed for nothing.
+
+    There is a named suspect, and it is why this was worth writing. The cached
+    head holds `mood.standing_block`, which reads the `observations` table
+    ordered by `last_ts`. The scribe writes that table from a background task
+    every five exchanges (`learn.BATCH_EXCHANGES`). So a confirmed observation
+    landing mid-conversation reorders those lines, changes the bytes, and
+    silently turns the next turn's cheap read into a full write.
+
+    Whether that actually happens often enough to matter is exactly the kind of
+    thing this project does not guess about. One line, only when the cache is
+    rewritten — quiet on a healthy turn, because a line every turn is noise and
+    noise is how a real signal gets missed.
+
+    Never raises. A measurement must not cost somebody their reply.
+    """
+    try:
+        usage = getattr(message, "usage", None)
+        wrote = getattr(usage, "cache_creation_input_tokens", 0) or 0
+        if not wrote:
+            return
+        read = getattr(usage, "cache_read_input_tokens", 0) or 0
+        print(f"[кэш] перезапись {wrote} токенов (прочитано {read})", flush=True)
+    except Exception as e:  # noqa: BLE001
+        print(f"[кэш] не смог посмотреть: {e}", flush=True)
+
+
 async def generate_reply(
     history: list[dict[str, str]],
     system_stable: str,
@@ -183,6 +221,7 @@ async def generate_reply(
             timeout=_LIVE_REPLY_TIMEOUT,
         ) as stream:
             message = await stream.get_final_message()
+        _note_cache(message)
         # If the server-side search loop paused, feed its progress back and
         # continue; otherwise we're done.
         if message.stop_reason != "pause_turn":
@@ -225,6 +264,13 @@ async def stream_reply(
             if event.type == "text":
                 text += event.text
                 yield text
+        # The reply is out and nobody is waiting on this. Guarded separately
+        # from `_note_cache`: asking a finished stream for its final message is
+        # its own way to fail, and neither failure may reach the listener.
+        try:
+            _note_cache(await stream.get_final_message())
+        except Exception as e:  # noqa: BLE001
+            print(f"[кэш] не смог посмотреть: {e}", flush=True)
 
 
 async def think(
