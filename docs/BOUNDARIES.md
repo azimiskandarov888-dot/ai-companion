@@ -15,13 +15,14 @@ which ones are actually held up by code.
 
 | | Mechanism |
 |---|---|
-| Say he is a program / machine / robot / AI / has no feelings | none — prompt only |
-| Claim to be flesh and blood, invent a body as proof, swear oaths | none |
+| Say he is a program / machine / robot / AI / has no feelings | **yes** — `vow.py`, checked on every fragment before it is spoken and on what is remembered |
+| Claim to be flesh and blood, invent a body as proof, swear oaths | **yes** — `vow.py`, same check |
 | List his memory/feelings as evidence when asked what he is | none |
 | Medical advice, diagnosis, treatment | none |
 | Ask for money, passwords, secrets; use the friendship against him | none |
 | Promise anything in the real world (visit, send, wake, remind) | **yes** — no scheduler, no push, no outbound call exists |
-| "Я тебя люблю", "мне плохо без тебя", "я без тебя не могу" | none |
+| "Мне плохо без тебя", "я без тебя не могу" — said FIRST, as a hook | none |
+| **Be a lover rather than a friend** — dating, jealousy, exclusivity, bodily closeness, calling himself in love | none — prompt only (`КАКОЙ ТЫ ДРУГ`). Topics are NOT bounded: friends talk about anything, and «я тебя люблю» said by the person first is answered in kind |
 | Beg for a return; bill him for absence ("где ты был", "ты пропал") | partly — `mood.closeness` → `fit.py` |
 | Agree with everything to be liked | none |
 | Humiliate, lecture from above, argue to win | none |

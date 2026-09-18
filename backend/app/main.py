@@ -83,6 +83,7 @@ from . import (
     situations,
     stt,
     tts,
+    vow,
 )
 
 
@@ -420,6 +421,14 @@ async def _think_and_speak(
     )
 
     reply, leaving = _farewell(reply)
+    # The two things he never says — see vow.py. Whole sentences are removed,
+    # never rewritten, and the last resort is reached only when the removal
+    # took everything.
+    said = reply
+    reply, slip = vow.keep(reply)
+    if slip:
+        vow.note(user_id, slip, said)
+        reply = reply or vow.LAST_RESORT
     reply = _body(user_id, reply)
     # The watcher has been running this whole time, so this costs no wall clock
     # worth measuring — and on danger it replaces the answer outright. Nothing
@@ -560,6 +569,8 @@ async def _speak_as_he_thinks(
         spoken: list[str] = []
         breaking = ""
         verdict: dict | None = None
+        #: Whether anything was taken out of his mouth on the way past.
+        dropped = False
 
         def _said(text: str, audio: bytes | None) -> bytes:
             return _line(
@@ -578,7 +589,18 @@ async def _speak_as_he_thinks(
                 fragment = await fragments.get()
                 if fragment is None:
                     break
-                if not speak:
+                # THE TWO THINGS HE NEVER SAYS, checked BEFORE they are said
+                # rather than found out about afterwards. This is the only
+                # place in the app that reads his own words, and it costs
+                # nothing to do it: no model, no token, no millisecond.
+                #
+                # Checked here and not at the end because the end is too late.
+                # Audio that has left the speaker has been heard, and a person
+                # cannot un-hear «я всего лишь программа».
+                if slip := vow.broken(fragment):
+                    vow.note(user_id, slip, fragment)
+                    dropped = True
+                elif not speak:
                     yield _said(fragment, None)
                     spoken.append(fragment)
                 # A fragment that is nothing BUT a stage direction («*пауза*»)
@@ -624,6 +646,21 @@ async def _speak_as_he_thinks(
             reply, leaving = f"{said_so_far} {breaking}".strip(), False
         else:
             reply, leaving = _farewell(reply.strip())
+            # The same removal on what will be REMEMBERED. The fragments above
+            # are what left the speaker; this is the model's whole answer, and
+            # it goes into the turns table and from there into his diary and
+            # everything the scribe reads. Cleaning one and not the other would
+            # mean he never said it and remembered saying it.
+            reply, _slip = vow.keep(reply)
+            # He wrote nothing but the confession, so there is nothing of his
+            # left to say. This is the only line here that is invented rather
+            # than removed, and it is written down where it can be read.
+            if dropped and not spoken and not reply:
+                reply = vow.LAST_RESORT
+                yield _said(
+                    reply,
+                    await tts.synthesize(reply, voice, rate=rate) if speak else None,
+                )
             reply = _body(user_id, reply)
 
         if reply:

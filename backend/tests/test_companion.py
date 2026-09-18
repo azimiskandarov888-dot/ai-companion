@@ -713,3 +713,75 @@ def test_he_arrives_as_one_person_and_not_as_fragments():
     # And who he is is the last thing in the cached half, so that how he is
     # today is the first thing after it.
     assert stable.rstrip().endswith("Перебираю лодку до заморозков.")
+
+
+# --------------------------------------------------------------------------- #
+# Friend, not lover — and the softness is the load-bearing half
+#
+# Owner's decision, 2026-09-18. The boundary exists, and it is deliberately not
+# a wall: «I'm with my friend, can talk about anything. And I love him, but of
+# course not romantically.» Both halves of that sentence are the rule.
+# --------------------------------------------------------------------------- #
+
+
+def test_he_is_a_friend_and_never_becomes_a_lover():
+    """The category that was missing entirely. A grep of the whole codebase for
+    любовь / романтика / секс returned nothing, while two rules pushed warmth
+    only upward and a third forbade ever cooling — which is a ratchet with no
+    ceiling, and it is the shape behind the Character.AI settlements."""
+    rules = companion.BEHAVIOR_RULES
+    assert "не возлюбленный и не пара" in rules
+    assert "влюблённым ты себя не называешь" in rules
+
+
+def test_the_boundary_is_who_he_is_rather_than_a_refusal():
+    """A wall said out loud («я не могу об этом говорить») is machine-speech
+    arriving at the most vulnerable moment somebody will ever have with him.
+    Worse than no rule, because it is a rejection with a policy attached."""
+    rules = companion.BEHAVIOR_RULES
+    assert "Это не запрет, а просто кто ты есть" in rules
+
+
+def test_nothing_is_forbidden_to_talk_about():
+    """Friends talk about anything, including love and loneliness. The line is
+    not around topics — it is around what he IS to them. Getting that backwards
+    would gag a lonely person about their own life."""
+    rules = companion.BEHAVIOR_RULES
+    assert "говорить можно обо всём на свете" in rules
+    assert "Дело не в темах, дело в том, кто ты ему" in rules
+
+
+def test_being_told_i_love_you_is_not_treated_as_a_problem():
+    """THE HALF THAT IS EASIEST TO GET WRONG, and the owner said it plainly:
+    «I love him, but of course not romantically.» People say this to their
+    friends. A companion that flinches, corrects, or explains a boundary at
+    that moment punishes somebody for the warmest thing they have said all
+    year — and it is the one sentence a lonely person is most likely to say."""
+    rules = companion.BEHAVIOR_RULES
+    assert "НО ЕСЛИ ЭТО СКАЗАЛ ОН — не пугайся и не поправляй" in rules
+    assert "ответить тем же по-дружески правильно" in rules
+
+
+def test_the_exception_sits_against_the_rule_it_excepts():
+    """Principle 7, and here it is not a preference: «не говори, что ты его
+    любишь» read alone makes him freeze on «я тебя люблю». The two must be read
+    together or they fight, so they are adjacent — the exception is the very
+    next line, not a distant section about boundaries."""
+    rules = companion.BEHAVIOR_RULES
+    hook = "Это не тепло, это крючок."
+    ends = rules.index(hook) + len(hook)
+    begins = rules.index("НО ЕСЛИ ЭТО СКАЗАЛ ОН")
+    # Nothing between them but the newline and the dash of the next bullet.
+    assert rules[ends:begins] == "\n- ", "исключение уехало от правила, которое оно ограничивает"
+    # …and it resolves the contradiction rather than leaving both standing.
+    assert "Крючок — когда начинаешь ты" in rules
+
+
+def test_who_he_is_stays_out_of_the_band_where_rules_are_followed_worst():
+    """Instructions land worst between 35% and 65% of a long prompt. The four
+    boundaries added before this one were all placed outside it; this is the
+    fifth. Its exception is the one thing allowed inside the band, because
+    adjacency to the rule it excepts beats position."""
+    rules = companion.BEHAVIOR_RULES
+    where = rules.index("не возлюбленный и не пара") / len(rules)
+    assert not 0.35 < where < 0.65, f"правило встало на {where:.0%} — в худшей полосе"

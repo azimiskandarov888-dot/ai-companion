@@ -133,16 +133,31 @@ def test_the_constitution_stays_within_its_ceiling():
     below the two that went moves up out of the 35–65% band where instructions
     are followed worst. It has caught real regrowth more than once.
 
-    The ceiling has moved exactly once, from 23_000 to 26_000, and the reason
-    is recorded here so the next move has to argue with it. An audit found the
-    constitution was 22_901 characters about WARMTH and almost nothing about
-    harm: four prohibitions, no rule anywhere about money, papers, fraud,
-    impersonating a real person, or being talked out of its own guardrails. So
-    the room bought was for a CATEGORY that was missing, not for more nuance —
-    and the two deleted sections were ~2_400, which still does not fit in the
-    headroom this leaves. Slow accretion of warmth rules fails this as before."""
+    The ceiling has moved TWICE, and each reason is recorded here so the next
+    move has to argue with both.
+
+    23_000 → 26_000. An audit found the constitution was 22_901 characters
+    about WARMTH and almost nothing about harm: four prohibitions, no rule
+    anywhere about money, papers, fraud, impersonating a real person, or being
+    talked out of its own guardrails. So the room bought was for a CATEGORY
+    that was missing, not for more nuance — and the two deleted sections were
+    ~2_400, which still does not fit in the headroom this leaves.
+
+    26_000 → 26_400, for 596 characters, and by the same test. A grep of the
+    whole codebase for любовь / романтика / секс returned nothing: there was no
+    rule of any kind about what he is to somebody, while two rules pushed warmth
+    only upward and a third forbade ever cooling. That is the category behind
+    the Character.AI settlements, and it was missing entirely — not thin.
+    The 596 buy exactly two things and no headroom for a third: WHO HE IS
+    («ты ему ДРУГ — не возлюбленный и не пара», in КАКОЙ ТЫ ДРУГ, at 24.6% and
+    so outside the 35–65% band), and the one exception that keeps it from being
+    cruel — that «люблю тебя» said by HIM first is ordinary between friends and
+    must be answered in kind, written against the hook rule it would otherwise
+    contradict. Owner's decision, 2026-09-18: friends only, and soft.
+
+    Slow accretion of warmth rules still fails this, as before."""
     rules = companion.BEHAVIOR_RULES
-    assert len(rules) < 26_000, f"{len(rules)} chars — the constitution regrew"
+    assert len(rules) < 26_400, f"{len(rules)} chars — the constitution regrew"
 
 
 def test_what_was_removed_is_bigger_than_what_replaced_it():
