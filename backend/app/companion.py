@@ -237,6 +237,7 @@ def build_system_parts(
     life_block: str = "",
     body_block: str = "",
     situation_block: str = "",
+    young_block: str = "",
     broke_off: bool = False,
     acquaintance: str = "",
 ) -> tuple[str, str]:
@@ -384,6 +385,15 @@ def build_system_parts(
     # every turn, which is the entire point of it living in situations.py.
     if situation_block.strip():
         variable_parts.append(situation_block.strip())
+
+    # WHO IS ACTUALLY LISTENING, and it is late on purpose. This is not context
+    # about him, it is an instruction for this reply, and the end of the prompt
+    # is where an instruction is followed best — the same argument situations.py
+    # makes just above. It could have ridden free in the cached half, since a
+    # person's age does not change between turns; a few hundred characters a
+    # turn is a trade worth making to not get this one wrong with a child.
+    if young_block.strip():
+        variable_parts.append(young_block.strip())
 
     # Last, so it is the freshest thing in his mind as this conversation opens
     # — and only ever on the FIRST reply of one, which is where it belongs.

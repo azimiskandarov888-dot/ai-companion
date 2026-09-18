@@ -373,15 +373,18 @@ struct BackendClient {
     /// the right answer. `test_the_creation_budget_actually_fits_under_the_
     /// phones_ceiling` fails the build if the NORMAL path ever loses that
     /// race again.
-    /// `country` is their own answer to «в какой стране живёте?», passed
-    /// through as written. The server resolves it (emergency.resolve) and
-    /// ignores anywhere it doesn't recognise, so an odd answer costs nothing.
+    /// `country` and `age` are their own answers to two of the warm-up
+    /// questions, passed through as written. The server resolves each and
+    /// ignores what it doesn't recognise, so an odd answer costs nothing:
+    /// an unknown country falls back to 112, and an unreadable age is read as
+    /// an adult's — see emergency.resolve and young.band.
     func createCompanion(story: String,
                          wishes: String,
-                         country: String = "") async throws -> CreateCompanionResponse {
+                         country: String = "",
+                         age: String = "") async throws -> CreateCompanionResponse {
         try await postJSON(
             "api/companion/create",
-            body: ["about": story, "wishes": wishes, "country": country],
+            body: ["about": story, "wishes": wishes, "country": country, "age": age],
             timeout: 260
         )
     }

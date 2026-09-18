@@ -142,6 +142,19 @@ CREATE TABLE IF NOT EXISTS places (
     ts       REAL NOT NULL
 );
 
+-- WHETHER THE PERSON IS A GROWN-UP. One word per person, and it is the ONLY
+-- thing kept about somebody who is not: see young.py. It has to be kept, or
+-- the app forgets it is talking to a child between one sentence and the next
+-- and the careful behaviour lasts exactly one reply.
+--
+-- A row here means «not an adult». Adults have no row, so absence and presence
+-- say two different things and neither of them is a guess.
+CREATE TABLE IF NOT EXISTS ages (
+    user_id  TEXT PRIMARY KEY,
+    band     TEXT NOT NULL,          -- child (<13) | teen (13-17)
+    ts       REAL NOT NULL
+);
+
 -- WHAT IS HAPPENING TO HIM THIS WEEK. One row per friendship, holding at most
 -- one thing at a time — a man with three simultaneous dramas is a soap opera.
 -- `arc` is the whole course, day by day, written once by the model that knows

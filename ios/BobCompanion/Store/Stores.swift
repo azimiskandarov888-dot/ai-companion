@@ -94,6 +94,11 @@ final class AppState: ObservableObject {
     /// is told to dial. A fact about the PERSON, not about the friend, so
     /// «Начать заново» leaves it alone.
     @Published var country: String
+    /// How old they said they are, in their own words. Sent once, and the
+    /// server keeps only a BAND from it and only when it is not an adult's —
+    /// see young.py. There is no age screen anywhere in this app: the warm-up
+    /// asks the way a friend asks, and that is the whole mechanism.
+    @Published var age: String
     /// His name, once he has arrived. Empty until the server creates him.
     @Published private(set) var companionName: String
     /// Whether onboarding is FINISHED. Kept separately from his name on
@@ -112,6 +117,7 @@ final class AppState: ObservableObject {
         static let story = "story"
         static let wishes = "wishes"
         static let country = "country"
+        static let age = "age"
         static let companionName = "companionName"
         static let hasArrived = "hasArrived"
     }
@@ -124,6 +130,7 @@ final class AppState: ObservableObject {
         self.story          = defaults.string(forKey: Keys.story) ?? ""
         self.wishes         = defaults.string(forKey: Keys.wishes) ?? ""
         self.country        = defaults.string(forKey: Keys.country) ?? ""
+        self.age            = defaults.string(forKey: Keys.age) ?? ""
         self.companionName  = defaults.string(forKey: Keys.companionName) ?? ""
         self.hasArrived     = defaults.bool(forKey: Keys.hasArrived)
         if let data = defaults.data(forKey: Keys.account) {
@@ -168,6 +175,11 @@ final class AppState: ObservableObject {
     func saveCountry(_ text: String) {
         country = text
         defaults.set(text, forKey: Keys.country)
+    }
+
+    func saveAge(_ text: String) {
+        age = text
+        defaults.set(text, forKey: Keys.age)
     }
 
     func remember(companionName name: String) {
@@ -243,12 +255,12 @@ final class AppState: ObservableObject {
             return false
         }
         for key in [Keys.account, Keys.subscribed, Keys.story, Keys.wishes,
-                    Keys.country, Keys.companionName, Keys.hasArrived] {
+                    Keys.country, Keys.age, Keys.companionName, Keys.hasArrived] {
             defaults.removeObject(forKey: key)
         }
         account = nil
         isSubscribed = false
-        story = ""; wishes = ""; country = ""; companionName = ""
+        story = ""; wishes = ""; country = ""; age = ""; companionName = ""
         hasArrived = false
         return true
     }

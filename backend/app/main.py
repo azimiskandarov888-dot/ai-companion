@@ -84,6 +84,7 @@ from . import (
     stt,
     tts,
     vow,
+    young,
 )
 
 
@@ -235,6 +236,9 @@ async def _assemble(user_id: str, user_text: str) -> tuple[str, str, list, str |
         confirmed_block=mood.standing_block(user_id),
         # How the two of them fit — watched, never guessed.
         fit_block=fit.block(user_id),
+        # Empty for every grown-up, which is nearly everybody. It changes how
+        # he speaks rather than what he may hear — see young.py.
+        young_block=young.block(user_id),
         # Empty on virtually every turn. The one thing allowed to override the
         # character, so it is placed before everything else — see safety.py.
         alert_block=safety.block(carried, user_id),
@@ -377,6 +381,22 @@ def _remember(
     time (memory.broke_off_last_time).
     """
     memory.log_turn(user_id, "assistant", reply, farewell=farewell)
+
+    # NOTHING IS KEPT ABOUT SOMEBODY WHO IS NOT AN ADULT, and this is the only
+    # place it could be, because this is where a person's life accumulates:
+    # the scribe that distils them into facts, the reader that reads them, the
+    # register that measures them. For a child none of it runs, and what the
+    # earlier turns of today left behind is taken away — see young.py.
+    #
+    # There is no door anywhere in this app and there will not be one. The fix
+    # is not who gets in, it is what is kept, which is also the only part
+    # Google actually had to change after the YouTube settlement.
+    if young.is_young(user_id):
+        young.keep_nothing(user_id)
+        # His week and his own character still grow: those are HIS, not theirs.
+        background_tasks.add_task(life.maybe_begin, user_id)
+        return
+
     # In batches, not on every exchange. It used to run on each one, which was
     # about a third of what a whole conversation cost — and it was also the
     # worst extraction available, because one exchange is almost nothing to
@@ -1004,6 +1024,14 @@ async def companion_create(
     if req.country.strip():
         emergency.remember(user_id, req.country)
 
+    # HOW OLD THEY ARE, from the question the warm-up already asks warmly and
+    # in the middle of a conversation. Stored as a BAND and never as an age,
+    # and only when it is not an adult's — see young.py. Before the matchmaker
+    # for the same reason as the country: a failure to write him must not lose
+    # the one fact that changes how he will speak.
+    if req.age.strip():
+        young.remember(user_id, req.age)
+
     started = time.monotonic()
     try:
         p = await matchmaker.create_companion(
@@ -1018,6 +1046,13 @@ async def companion_create(
         raise _unavailable("🧠 writing him (Claude)", e)
     finally:
         allowance.spend(user_id, time.monotonic() - started)
+
+    # The reading was made, used to write him, and — for a child — is not kept.
+    # Here rather than on the first turn, because otherwise the most private
+    # document this app produces would sit on disk from the moment somebody
+    # signs up until the moment they say their first word.
+    if young.is_young(user_id):
+        young.keep_nothing(user_id)
     return JSONResponse({"name": p.get("name"), "persona": p})
 
 

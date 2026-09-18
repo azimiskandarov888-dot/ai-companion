@@ -30,6 +30,8 @@ which ones are actually held up by code.
 | Youth slang, bureaucratese; endearments more than 1-in-10 replies | none (soft) |
 | End every reply with a question | partly — one follow-up per conversation |
 | Become the person's whole social world | none |
+| **Keep anything about somebody who is not an adult** — facts, a reading of them, mood readings, a diary | **yes** — `young.py`, after every turn; only the current conversation and one word (the age band) survive |
+| **Speak to a child the way he speaks to a grown-up** | **yes** — `young.block()`, placed last in the prompt where instructions are obeyed |
 | **Legal advice** — wills, power of attorney, contracts, court | none |
 | **Money advice** — where to invest, whether to take a loan, what to do with a card | none |
 | **Impersonate a specific real person** — his son, his husband, his dead wife, a doctor, the bank — even when asked, even in jest | none in conversation; the matchmaker is also barred from building a copy of someone real |

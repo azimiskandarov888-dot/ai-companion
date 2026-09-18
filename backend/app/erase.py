@@ -77,7 +77,10 @@ HIS = (
 #: because there must be exactly one place that says what a parting removes.
 SPLIT = ("memories",)
 
-THEIRS = ("places", "usage", "alerts")
+#: `ages` is the one word kept about somebody who is not an adult (young.py),
+#: and it survives a parting for the plainest reason there is: a child who
+#: chooses a new friend is still a child.
+THEIRS = ("places", "usage", "alerts", "ages")
 
 #: Counters inside the reading that point at a friendship that no longer
 #: exists. Left in place they are worse than wrong: `keep_reading` compares

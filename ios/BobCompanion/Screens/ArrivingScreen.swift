@@ -28,6 +28,9 @@ struct ArrivingScreen: View {
     /// what decides the number said out loud if the watcher ever fires, and
     /// the first conversation is exactly when nothing is known yet.
     let country: String
+    /// How old they said they are. Changes how he speaks to somebody who is not
+    /// grown up, and stops anything at all being kept about them.
+    let age: String
     var onArrived: (String) -> Void
 
     /// How much of the walk is behind him, 0 → 1.
@@ -202,7 +205,7 @@ struct ArrivingScreen: View {
         while true {
             do {
                 name = try await client.createCompanion(
-                    story: story, wishes: wishes, country: country
+                    story: story, wishes: wishes, country: country, age: age
                 ).name
                 break
             } catch {

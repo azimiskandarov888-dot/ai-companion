@@ -181,7 +181,7 @@ struct AppFlow: View {
 
                 if screen == .story {
                     ScrollScreen(kind: .story, text: $story, drawsBackground: false,
-                                 onCountry: { app.saveCountry($0) }) {
+                                 onFacts: { app.saveCountry($0); app.saveAge($1) }) {
                         app.saveStory(story)
                         go(.meet)
                     }
@@ -197,7 +197,7 @@ struct AppFlow: View {
 
         case .arriving:
             ArrivingScreen(story: app.story, wishes: app.wishes,
-                           country: app.country) { name in
+                           country: app.country, age: app.age) { name in
                 if !name.isEmpty { app.remember(companionName: name) }
                 app.markArrived()
                 go(.companion)

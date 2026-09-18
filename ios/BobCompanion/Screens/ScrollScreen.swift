@@ -50,9 +50,10 @@ struct ScrollScreen: View {
     /// ONE photograph behind both and passes `false` here. Nothing about the
     /// land may change when the second scroll is brought out.
     var drawsBackground: Bool = true
-    /// Where they said they live, in their own words. Screen 4 never asks, and
-    /// neither does reopening «Моя история», so it defaults to doing nothing.
-    var onCountry: (String) -> Void = { _ in }
+    /// The two warm-up answers the server also needs on their own — where they
+    /// live, and how old they are. Screen 4 never asks either, and neither does
+    /// reopening «Моя история», so it defaults to doing nothing.
+    var onFacts: (_ country: String, _ age: String) -> Void = { _, _ in }
     var onConfirm: () -> Void
 
     @StateObject private var keyboard = KeyboardObserver()
@@ -68,12 +69,12 @@ struct ScrollScreen: View {
     init(kind: Kind,
          text: Binding<String>,
          drawsBackground: Bool = true,
-         onCountry: @escaping (String) -> Void = { _ in },
+         onFacts: @escaping (_ country: String, _ age: String) -> Void = { _, _ in },
          onConfirm: @escaping () -> Void) {
         self.kind = kind
         self._text = text
         self.drawsBackground = drawsBackground
-        self.onCountry = onCountry
+        self.onFacts = onFacts
         self.onConfirm = onConfirm
         self._winding = State(initialValue: kind == .meet ? 1 : 0)
     }
@@ -90,7 +91,7 @@ struct ScrollScreen: View {
         if kind == .story {
             IntakeConversation(story: $text,
                                drawsBackground: drawsBackground,
-                               onCountry: onCountry,
+                               onFacts: onFacts,
                                onDone: onConfirm)
         } else {
             scrollBody
@@ -368,7 +369,7 @@ struct ScrollScreen: View {
 private struct IntakeConversation: View {
     @Binding var story: String
     var drawsBackground: Bool = true
-    var onCountry: (String) -> Void = { _ in }
+    var onFacts: (_ country: String, _ age: String) -> Void = { _, _ in }
     var onDone: () -> Void
 
     @State private var preamble = ""
@@ -648,10 +649,11 @@ private struct IntakeConversation: View {
         var reactions: [String: String] = [:]
         /// Shown before the next question regardless of what they answered.
         var reaction: String = ""
-        /// The one step whose answer is also sent to the server on its own.
-        /// Marked on the step rather than held as an index, so reordering the
-        /// warm-up can never quietly send the wrong answer.
+        /// The two steps whose answers are also sent to the server on their
+        /// own. Marked on the step rather than held as an index, so reordering
+        /// the warm-up can never quietly send the wrong answer.
         var asksCountry: Bool = false
+        var asksAge: Bool = false
     }
 
     // WRITTEN TO BE SPOKEN, NOT READ. Every line here should sound like
@@ -681,8 +683,13 @@ private struct IntakeConversation: View {
         // among the getting-to-know-you half, because that is what it is —
         // «а живёте где?» is what anybody would ask third.
         Step(say: "А живёте где — в какой стране?", asksCountry: true),
+        // ASKED THE WAY A FRIEND ASKS, and that is the whole design of it.
+        // There is no age screen in this app and there will not be one: it has
+        // to feel free to open and talk. But the answer changes how he speaks
+        // and what is kept about somebody who is not grown up (young.py), so it
+        // is sent on its own as well as living in the story.
         Step(say: "Сколько вам лет, если не секрет?",
-             reaction: "Спасибо."),
+             reaction: "Спасибо.", asksAge: true),
         // Asked plainly, and asked at all — nothing downstream was being told
         // whether it was writing for a man or a woman. Not a chip-quiz
         // question like the ones below: it sits here, in the ordinary
@@ -722,7 +729,7 @@ private struct IntakeConversation: View {
         Step(say: "And what do you usually get up to?"),
         Step(say: "And whereabouts do you live — which country?", asksCountry: true),
         Step(say: "How old are you, if you don't mind me asking?",
-             reaction: "Thank you."),
+             reaction: "Thank you.", asksAge: true),
         Step(say: "Are you a man or a woman?",
              options: ["A man", "A woman", "Neither"]),
 
@@ -799,19 +806,19 @@ private struct IntakeConversation: View {
         guard !finished else { return }
         finished = true
         rebuildStory()
-        onCountry(countrySaid)
+        onFacts(answer { $0.asksCountry }, answer { $0.asksAge })
         onDone()
     }
 
-    /// What they answered to the one question that asks it outright.
+    /// What they answered to one of the questions that asks outright.
     ///
-    /// It also sits inside the story, where the reading will make its own use
-    /// of it — but the story is prose, and which country somebody lives in is
-    /// not something to be guessed back out of prose when the answer decides
-    /// which emergency number is said out loud. The app asked the question, so
-    /// the app knows which answer it was.
-    private var countrySaid: String {
-        guard let step = Self.warmUp.firstIndex(where: { $0.asksCountry }),
+    /// Both answers also sit inside the story, where the reading makes its own
+    /// use of them — but the story is prose, and neither «which country» nor
+    /// «how old» is something to guess back out of prose when one decides which
+    /// emergency number is said out loud and the other decides how he speaks
+    /// and what is kept. The app asked the questions, so it knows the answers.
+    private func answer(to mark: (Step) -> Bool) -> String {
+        guard let step = Self.warmUp.firstIndex(where: mark),
               step < turns.count
         else { return "" }
         return turns[step].a
