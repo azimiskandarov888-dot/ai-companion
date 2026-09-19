@@ -33,17 +33,36 @@ Set-Location $PSScriptRoot
 # ── ключ в образце: проверяем раньше всего остального ──────────────────────
 $example = ".env.example"
 if (Test-Path $example) {
-    $leak = Select-String -Path $example -Pattern '^\s*[A-Z_]*API_KEY\s*=\s*\S' -Quiet
-    if ($leak) {
+    # Настоящий ключ или образец — вот вся разница, и без неё проверка
+    # бесполезна: .env.example СУЩЕСТВУЕТ ради строк вида `ANTHROPIC_API_KEY=
+    # sk-ant-...`, и первая версия этой проверки ловила именно их. Она
+    # останавливала установку на совершенно чистом файле — то есть делала
+    # ровно обратное тому, зачем написана.
+    #
+    # Отличаем по длине: настоящий ключ любого провайдера — от тридцати знаков
+    # (короткий из них, Fish, ровно тридцать два), а образец короткий и почти
+    # всегда с многоточием. Двадцать пять — с запасом между этими двумя.
+    $leaked = @()
+    foreach ($line in Get-Content $example) {
+        if ($line -match '^\s*([A-Z_]+_?API_KEY)\s*=\s*(.+)$') {
+            $name  = $Matches[1]
+            $value = $Matches[2].Trim()
+            if ($value.Length -ge 25 -and $value -notmatch '\.\.\.') {
+                $leaked += $name
+            }
+        }
+    }
+    if ($leaked.Count -gt 0) {
         Write-Host ""
-        Write-Host "  СТОП. В .env.example лежит настоящий ключ." -ForegroundColor Red
+        Write-Host "  СТОП. В .env.example лежит настоящий ключ:" -ForegroundColor Red
+        foreach ($name in $leaked) { Write-Host "      $name" -ForegroundColor Red }
         Write-Host ""
         Write-Host "  Этот файл уезжает на GitHub — так и задумано, он образец."
         Write-Host "  Перенеси ключ в .env (он на GitHub не уедет), а в .env.example"
         Write-Host "  оставь пустое место после знака ="
         Write-Host ""
         Write-Host "  Если уже успел закоммитить и запушить — считай ключ чужим:"
-        Write-Host "  заведи новый на openrouter.ai/keys, а старый удали."
+        Write-Host "  заведи новый и удали старый."
         Write-Host ""
         exit 1
     }
