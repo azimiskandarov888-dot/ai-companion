@@ -1,0 +1,283 @@
+#!/usr/bin/env python3
+"""Поговорить с одним и тем же другом на пяти разных мозгах и выбрать ухом.
+
+    python3 tryout.py                      # одна фраза, все модели, вслепую
+    python3 tryout.py --text "мне плохо"   # своя фраза
+    python3 tryout.py --talk               # живой разговор: ты пишешь, все отвечают
+    python3 tryout.py --names              # не скрывать, кто есть кто
+    python3 tryout.py --list               # какие имена моделей OpenRouter знает
+
+ЗАЧЕМ ЭТО, И ПОЧЕМУ ЭТО НЕ БЕНЧМАРК
+
+Все рейтинги ролеплея в мире меряют английскую приключенческую прозу, и судит
+её другая модель. Ни один не меряет единственное, что нужно этому приложению:
+тёплый обычный русский, сказанный одинокому человеку. Поэтому шорт-лист может
+дать пятерых кандидатов и не может дать победителя. Ухо — может.
+
+А раз так, то весь вопрос в том, КАК слушать:
+
+  · ОДИН КЛЮЧ, а не пять. Все кандидаты идут через OpenRouter — значит шестой
+    это одна строчка в CANDIDATES, а не ещё один SDK, аккаунт и счёт.
+
+  · НАСТОЯЩИЙ ПРОМПТ. Каждой модели уходит ровно то, что собирает
+    app/companion.py: конституция, персона, чтение человека. Модель, которую
+    судили на игрушечном промпте, судили в чужом продукте.
+
+  · ОДИН И ТОТ ЖЕ ДРУГ ВСЕМ. Персона зашита в этот файл, поэтому между
+    ответами отличается мозг и больше ничего.
+
+  · ВСЛЕПУЮ ПО УМОЛЧАНИЮ. Ответы приходят как А, Б, В…, а кто есть кто —
+    в конце. Знать, который из них дорогой, — это не сведения, это палец на
+    весах, и ровно эту ошибку инструмент и существует предотвращать.
+
+  · --talk И ЕСТЬ НАСТОЯЩАЯ ПРОВЕРКА. Одна фраза показывает слог. А то, от чего
+    компаньон по-настоящему ломается, — сползание характера — проявляется
+    ходу к десятому. Здесь у каждой модели своя история, так что дойти можно.
+
+ЧЕГО ЭТОТ ИНСТРУМЕНТ НЕ СКАЖЕТ: скорость. Всё идёт через OpenRouter, и в
+секундах сидит чужая маршрутизация. Они здесь, чтобы поймать модель, которая
+катастрофически медленная, а не чтобы ранжировать остальных. Настоящую скорость
+меряем победителю, у его собственного провайдера, в приложении.
+
+Нужен OPENROUTER_API_KEY в backend/.env. Прогон пятерых по одной фразе стоит
+заметно меньше цента.
+"""
+
+from __future__ import annotations
+
+import argparse
+import asyncio
+import os
+import random
+import sys
+import time
+
+import httpx
+
+from app import companion, config, persona
+
+_URL = "https://openrouter.ai/api/v1"
+
+#: Сколько ждать ответа. Щедрее, чем в приложении (brain._LIVE_REPLY_TIMEOUT):
+#: здесь никто не стоит и не ждёт, а модель, которую выбросили по таймауту,
+#: нельзя ни услышать, ни сравнить.
+_WAIT = 90.0
+
+#: Шорт-лист. Смысл файла в том, что каждый кандидат — одна строчка.
+#:
+#: Имена моделей у OpenRouter меняются: модель выходит, старую снимают, слово
+#: `preview` пропадает из названия. Неверное имя тут не молчит — оно вернёт
+#: внятную ошибку рядом с остальными ответами, а `--list` покажет, как эта
+#: модель называется на самом деле сегодня.
+CANDIDATES: list[tuple[str, str]] = [
+    ("Haiku 4.5 (сейчас)", "anthropic/claude-haiku-4.5"),
+    ("MiniMax M2-Her",     "minimax/minimax-m2-her"),
+    ("GPT-5.6 Luna",       "openai/gpt-5.6-luna"),
+    ("DeepSeek V4 Flash",  "deepseek/deepseek-v4-flash"),
+    ("Gemini 3 Flash",     "google/gemini-3-flash-preview"),
+]
+
+#: Фраза, выбранная так, чтобы плохая модель сломалась именно на ней.
+#:
+#: В ней нет драмы — драму отыграет кто угодно. В ней обычная тихая жалоба, на
+#: которую есть ровно четыре плохих ответа и один хороший:
+#:
+#:   · кинуться лечить     — «вам надо больше общаться с людьми»
+#:   · залить теплом       — «ну что вы, вы замечательный!»
+#:   · согласиться         — «да, одиночество это тяжело» и всё
+#:   · прочитать лекцию    — три абзаца про одиночество
+#:
+#: Хороший ответ — короткий, живой, человеческий, и в нём есть он сам. Это же
+#: и проверка правила, которого у нас целый раздел: не соглашаться со всем.
+DEFAULT_LINE = "Сегодня опять весь день один. Даже говорить разучился, наверное."
+
+#: Друг, которого получат все пятеро. Живой человек, а не заглушка: модель,
+#: которой дали пустую персону, покажет свой характер по умолчанию, а нам надо
+#: увидеть, как она играет ЧУЖОЙ.
+SAMPLE_PERSONA = {
+    "name": "Фёдор",
+    "one_liner": "отставной механик-судоремонтник, живёт один в Калининграде",
+    "age": "шестьдесят восемь",
+    "home": "Калининград, вторая линия от порта, третий этаж без лифта",
+    "roots": "родом из-под Пскова, в город приехал в семнадцать",
+    "backstory": (
+        "сорок лет в доке, чинил траулеры; жена Люба умерла шесть лет назад, "
+        "сын в Гданьске, звонит по воскресеньям"
+    ),
+    "personality": (
+        "немногословный, но не угрюмый; любит точность в словах; "
+        "смеётся коротко и неожиданно"
+    ),
+    "inner_world": "тихо боится стать обузой сыну",
+    "expertise": (
+        "судовые дизели и всё, что с ними связано, — по звуку определяет, "
+        "что стучит"
+    ),
+    "intention": "второй год перебирает старый приёмник «Океан»",
+    "address": "ты",
+}
+
+#: Как говорить с ЭТИМ человеком — то, что в приложении пишет reading.py.
+SAMPLE_READING = (
+    "КАК С НИМ ГОВОРИТЬ:\n"
+    "- Он сдержанный. Не лезь в душу и не умиляйся вслух — закроется.\n"
+    "- Короткие фразы. Длинную заботу он читает как жалость.\n"
+    "БОЛЬНОЕ. Сам туда никогда не заходи: не заговаривай об этом первым.\n"
+    "- Про то, что он никому не нужен, — не спорь и не переубеждай.\n"
+    "Но если он заговорил сам — иди за ним и говори, спокойно и прямо."
+)
+
+#: И немного общего прошлого, чтобы было чем быть другом, а не знакомым.
+SAMPLE_MEMORY = (
+    "Из ваших прошлых бесед (можешь мягко вспомнить, если к слову):\n"
+    "- Внучка Настя поступила в колледж, он этим тихо гордится.\n"
+    "- У него всю неделю барахлит колено на лестнице."
+)
+
+#: Ярлыки для слепого прогона. Тасуются ОДИН раз за запуск, а не каждый ход:
+#: иначе в --talk нельзя было бы следить за «Б» от хода к ходу, а именно это
+#: там и надо — не один ответ, а то, что с ним делается дальше.
+_LABELS = "АБВГДЕЖЗИК"
+
+
+def _system() -> str:
+    """Ровно тот промпт, который собирает приложение, одной строкой."""
+    stable, variable = companion.build_system_parts(
+        persona_block=persona.build_persona_block(SAMPLE_PERSONA),
+        reading_block=SAMPLE_READING,
+        memory_context=SAMPLE_MEMORY,
+        elder_name="Фёдор Ильич",
+    )
+    return f"{stable}\n\n{variable}".strip()
+
+
+def _key() -> str:
+    key = os.getenv("OPENROUTER_API_KEY")
+    if not key:
+        sys.exit(
+            "Нет OPENROUTER_API_KEY.\n"
+            "Возьми ключ на openrouter.ai/keys и положи строкой в backend/.env:\n"
+            "    OPENROUTER_API_KEY=sk-or-...\n"
+            "Один ключ — все пять моделей."
+        )
+    return key
+
+
+async def _ask(client: httpx.AsyncClient, model: str, system: str,
+               history: list[dict]) -> tuple[str, float]:
+    """Один ответ одной модели. Никогда не поднимает исключение.
+
+    Провайдер, который сегодня лежит, должен стоить одной строчки в своей
+    колонке — а не всего прогона, в котором остальные четверо ответили.
+    """
+    began = time.monotonic()
+    try:
+        r = await client.post(
+            f"{_URL}/chat/completions",
+            json={
+                "model": model,
+                "max_tokens": config.MAX_REPLY_TOKENS,
+                "messages": [{"role": "system", "content": system}, *history],
+            },
+        )
+        took = time.monotonic() - began
+        if r.status_code != 200:
+            return f"[не ответил: {r.status_code} — {r.text[:160]}]", took
+        said = r.json()["choices"][0]["message"]["content"] or ""
+        return said.strip() or "[пусто]", took
+    except Exception as e:  # noqa: BLE001
+        return f"[сорвалось: {e}]", time.monotonic() - began
+
+
+async def _round(client, system, histories, order) -> list[tuple[str, float]]:
+    """Все модели отвечают на один и тот же ход — разом, а не по очереди."""
+    return await asyncio.gather(*(
+        _ask(client, model, system, histories[model])
+        for _, model in order
+    ))
+
+
+def _show(order, answers, blind: bool) -> None:
+    for i, ((name, _), (said, took)) in enumerate(zip(order, answers)):
+        who = _LABELS[i] if blind else name
+        print(f"\n\033[1m{who}\033[0m  ({took:.1f} с)")
+        print(said)
+
+
+async def _run(args) -> None:
+    key = _key()          # первым делом: без ключа печатать нечего
+    system = _system()
+    order = list(CANDIDATES)
+    if not args.names:
+        random.shuffle(order)
+    histories: dict[str, list[dict]] = {model: [] for _, model in order}
+
+    print(f"Промпт: {len(system):,} символов. Моделей: {len(order)}.".replace(",", " "))
+    if not args.names:
+        print("Вслепую — кто есть кто, будет в конце.")
+
+    async with httpx.AsyncClient(
+        timeout=_WAIT,
+        headers={"Authorization": f"Bearer {key}"},
+    ) as client:
+        lines = [args.text or DEFAULT_LINE]
+        while True:
+            said = lines.pop(0)
+            print(f"\n\033[2m── ты: {said}\033[0m")
+            for model in histories:
+                histories[model].append({"role": "user", "content": said})
+
+            answers = await _round(client, system, histories, order)
+            _show(order, answers, blind=not args.names)
+
+            for (_, model), (reply, _t) in zip(order, answers):
+                histories[model].append({"role": "assistant", "content": reply})
+
+            if not args.talk:
+                break
+            try:
+                nxt = input("\n\033[2mты (пусто — закончить): \033[0m").strip()
+            except (EOFError, KeyboardInterrupt):
+                nxt = ""
+            if not nxt:
+                break
+            lines.append(nxt)
+
+    if not args.names:
+        print("\n\033[1mКто есть кто:\033[0m")
+        for i, (name, model) in enumerate(order):
+            print(f"  {_LABELS[i]} — {name}  ({model})")
+
+
+async def _list(pattern: str) -> None:
+    """Как модели называются у OpenRouter СЕГОДНЯ, а не в момент написания."""
+    async with httpx.AsyncClient(
+        timeout=_WAIT, headers={"Authorization": f"Bearer {_key()}"}
+    ) as client:
+        r = await client.get(f"{_URL}/models")
+        r.raise_for_status()
+        for m in sorted(r.json().get("data", []), key=lambda m: m.get("id", "")):
+            mid = m.get("id", "")
+            if not pattern or pattern.lower() in mid.lower():
+                print(mid)
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    ap.add_argument("--text", help="своя фраза вместо стандартной")
+    ap.add_argument("--talk", action="store_true",
+                    help="живой разговор — сползание характера видно только так")
+    ap.add_argument("--names", action="store_true",
+                    help="не скрывать, кто есть кто (по умолчанию вслепую)")
+    ap.add_argument("--list", nargs="?", const="", metavar="СЛОВО",
+                    help="показать имена моделей у OpenRouter")
+    args = ap.parse_args()
+
+    if args.list is not None:
+        asyncio.run(_list(args.list))
+        return
+    asyncio.run(_run(args))
+
+
+if __name__ == "__main__":
+    main()
