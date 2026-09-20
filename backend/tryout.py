@@ -34,6 +34,11 @@
     компаньон по-настоящему ломается, — сползание характера — проявляется
     ходу к десятому. Здесь у каждой модели своя история, так что дойти можно.
 
+  · КАЖДАЯ СТРОКА СРАЗУ НА ДИСК. Разговор ложится в data/tryouts/ по мере
+    того, как говорится, а имена — в отдельный файл рядом, чтобы сам разговор
+    остался слепым и к нему можно было вернуться завтра. Закрытое окно больше
+    ничего не стоит: первый настоящий прогон был потерян именно так.
+
 ЧЕГО ЭТОТ ИНСТРУМЕНТ НЕ СКАЖЕТ: скорость. Всё идёт через OpenRouter, и в
 секундах сидит чужая маршрутизация. Они здесь, чтобы поймать модель, которая
 катастрофически медленная, а не чтобы ранжировать остальных. Настоящую скорость
@@ -57,6 +62,13 @@ import httpx
 from app import companion, config, persona
 
 _URL = "https://openrouter.ai/api/v1"
+
+#: Куда ложится каждый прогон. Ровно та же причина, по которой audition.py
+#: хранит свои файлы: сравнивать вслух хорошо, а помнить третий ответ через
+#: полчаса нельзя. Плюс одна, узнанная дорого: владелец закрыл терминал и
+#: потерял весь первый прогон целиком. Строка пишется на диск сразу, как
+#: сказана, а не в конце разговора, — закрытое окно больше ничего не стоит.
+OUT_DIR = config.DATA_DIR / "tryouts"
 
 #: Сколько ждать ответа. Щедрее, чем в приложении (brain._LIVE_REPLY_TIMEOUT):
 #: здесь никто не стоит и не ждёт, а модель, которую выбросили по таймауту,
@@ -163,6 +175,29 @@ def _key() -> str:
     return key
 
 
+def _plain(status: int, body: str) -> str:
+    """Ответ провайдера на языке, на котором понятно, что делать дальше.
+
+    Каждый из этих трёх встретился при первом же настоящем прогоне, и каждый
+    из них своим родным текстом отправляет читать не туда. 402 особенно: он
+    называется «Prompt tokens limit exceeded» и выглядит как «наш промпт
+    слишком длинный», хотя промпт нормальный, а кончились деньги — OpenRouter
+    на пустом счету режет допустимую длину, и порог едет вместе с балансом.
+    Человек, которому показали голый текст, пойдёт сокращать промпт.
+    """
+    if status == 402:
+        return (
+            "[кончились деньги на OpenRouter. Он режет длину промпта, когда "
+            "счёт пуст, — дело не в промпте. Пополни на openrouter.ai/credits, "
+            "пяти долларов хватит надолго]"
+        )
+    if status == 404:
+        return "[такой модели у OpenRouter нет. Посмотри `--list` — имена меняются]"
+    if status == 429:
+        return "[слишком часто. Подожди минуту и повтори]"
+    return f"[не ответил: {status} — {body[:200]}]"
+
+
 async def _ask(client: httpx.AsyncClient, model: str, system: str,
                history: list[dict]) -> tuple[str, float]:
     """Один ответ одной модели. Никогда не поднимает исключение.
@@ -182,9 +217,20 @@ async def _ask(client: httpx.AsyncClient, model: str, system: str,
         )
         took = time.monotonic() - began
         if r.status_code != 200:
-            return f"[не ответил: {r.status_code} — {r.text[:160]}]", took
-        said = r.json()["choices"][0]["message"]["content"] or ""
-        return said.strip() or "[пусто]", took
+            return _plain(r.status_code, r.text), took
+
+        choice = (r.json().get("choices") or [{}])[0]
+        message = choice.get("message") or {}
+        said = (message.get("content") or "").strip()
+        # Рассуждающая модель иногда кладёт весь ответ в reasoning и оставляет
+        # content пустым. Молча показать «пусто» значило бы выбросить кандидата
+        # за то, чего он не делал.
+        if not said:
+            said = (message.get("reasoning") or "").strip()
+        if not said:
+            why = choice.get("finish_reason") or "не сказано"
+            said = f"[пусто. Провайдер закончил так: {why}]"
+        return said, took
     except Exception as e:  # noqa: BLE001
         return f"[сорвалось: {e}]", time.monotonic() - began
 
@@ -197,11 +243,14 @@ async def _round(client, system, histories, order) -> list[tuple[str, float]]:
     ))
 
 
-def _show(order, answers, blind: bool) -> None:
+def _show(order, answers, blind: bool, paper) -> None:
+    """Напечатать и тут же записать. Одним действием, чтобы нельзя было забыть."""
     for i, ((name, _), (said, took)) in enumerate(zip(order, answers)):
         who = _LABELS[i] if blind else name
         print(f"\n\033[1m{who}\033[0m  ({took:.1f} с)")
         print(said)
+        paper.write(f"\n**{who}**  ({took:.1f} с)\n\n{said}\n")
+    paper.flush()
 
 
 async def _run(args) -> None:
@@ -212,9 +261,29 @@ async def _run(args) -> None:
         random.shuffle(order)
     histories: dict[str, list[dict]] = {model: [] for _, model in order}
 
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    stamp = time.strftime("%Y-%m-%d-%H%M%S")
+    paper_at = OUT_DIR / f"{stamp}.md"
+    whois_at = OUT_DIR / f"{stamp}-whois.txt"
+
+    # Ключ пишется ПЕРВЫМ делом и в отдельный файл. Первым — чтобы он пережил
+    # любое закрытое окно; в отдельный — чтобы разговор остался слепым: в него
+    # можно вернуться завтра и судить заново, не зная имён.
+    whois_at.write_text(
+        "\n".join(f"{_LABELS[i]} — {name}  ({model})"
+                  for i, (name, model) in enumerate(order)),
+        encoding="utf-8",
+    )
+
     print(f"Промпт: {len(system):,} символов. Моделей: {len(order)}.".replace(",", " "))
+    print(f"Разговор пишется сюда: {paper_at}")
+    print(f"Кто есть кто:          {whois_at}")
     if not args.names:
-        print("Вслепую — кто есть кто, будет в конце.")
+        print("Вслепую — кто есть кто, покажу в конце.")
+
+    paper = open(paper_at, "w", encoding="utf-8")
+    paper.write(f"# Прослушивание {stamp}\n\n")
+    paper.flush()
 
     async with httpx.AsyncClient(
         timeout=_WAIT,
@@ -224,11 +293,12 @@ async def _run(args) -> None:
         while True:
             said = lines.pop(0)
             print(f"\n\033[2m── ты: {said}\033[0m")
+            paper.write(f"\n---\n\n## Ты: {said}\n")
             for model in histories:
                 histories[model].append({"role": "user", "content": said})
 
             answers = await _round(client, system, histories, order)
-            _show(order, answers, blind=not args.names)
+            _show(order, answers, blind=not args.names, paper=paper)
 
             for (_, model), (reply, _t) in zip(order, answers):
                 histories[model].append({"role": "assistant", "content": reply})
@@ -243,10 +313,12 @@ async def _run(args) -> None:
                 break
             lines.append(nxt)
 
+    paper.close()
+
     if not args.names:
         print("\n\033[1mКто есть кто:\033[0m")
-        for i, (name, model) in enumerate(order):
-            print(f"  {_LABELS[i]} — {name}  ({model})")
+        print(whois_at.read_text(encoding="utf-8"))
+    print(f"\nРазговор сохранён: {paper_at}")
 
 
 async def _list(pattern: str) -> None:
