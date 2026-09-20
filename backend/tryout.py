@@ -4,7 +4,7 @@
     python3 tryout.py                      # одна фраза, все модели, вслепую
     python3 tryout.py --text "мне плохо"   # своя фраза
     python3 tryout.py --talk               # живой разговор: ты пишешь, все отвечают
-    python3 tryout.py --names              # не скрывать, кто есть кто
+    python3 tryout.py --blind              # скрыть имена и перетасовать
     python3 tryout.py --list               # какие имена моделей OpenRouter знает
 
 ЗАЧЕМ ЭТО, И ПОЧЕМУ ЭТО НЕ БЕНЧМАРК
@@ -26,9 +26,15 @@
   · ОДИН И ТОТ ЖЕ ДРУГ ВСЕМ. Персона зашита в этот файл, поэтому между
     ответами отличается мозг и больше ничего.
 
-  · ВСЛЕПУЮ ПО УМОЛЧАНИЮ. Ответы приходят как А, Б, В…, а кто есть кто —
-    в конце. Знать, который из них дорогой, — это не сведения, это палец на
-    весах, и ровно эту ошибку инструмент и существует предотвращать.
+  · КОГО ИГРАЮТ — НАПИСАНО СВЕРХУ. Персонаж и человек, с которым он говорит,
+    печатаются перед первым ходом и ложатся в начало записи. Слушать, «вошёл
+    ли он в роль», не зная роли, нельзя — а роль живёт в этом файле, а не в
+    голове слушающего.
+
+  · ИМЕНА ВИДНЫ, ПОРЯДОК ПОСТОЯННЫЙ. Так просил владелец, и это его право:
+    он слушает сам и хочет сразу знать, кто ответил. --blind скрывает имена и
+    тасует порядок — на случай, когда захочется проверить себя, не зная,
+    который из них дорогой.
 
   · --talk И ЕСТЬ НАСТОЯЩАЯ ПРОВЕРКА. Одна фраза показывает слог. А то, от чего
     компаньон по-настоящему ломается, — сползание характера — проявляется
@@ -54,6 +60,7 @@ import argparse
 import asyncio
 import os
 import random
+import re
 import sys
 import time
 
@@ -152,13 +159,41 @@ SAMPLE_MEMORY = (
 _LABELS = "АБВГДЕЖЗИК"
 
 
+def _who() -> str:
+    """Кого играют все пятеро — человеческими словами.
+
+    Собирается ИЗ SAMPLE_PERSONA, а не пишется рядом с ней: описание, которое
+    живёт возле данных и не из них, расходится с ними на второй же правке, и
+    тогда слушающий сравнивает ответы с персонажем, которого никому не давали.
+    """
+    p = SAMPLE_PERSONA
+    return "\n".join([
+        "\033[1mКОГО ИГРАЮТ ВСЕ ПЯТЕРО\033[0m",
+        f"  {p['name']}, {p['age']} — {p['one_liner']}.",
+        f"  Живёт: {p['home']}.",
+        f"  За спиной: {p['backstory']}.",
+        f"  Характер: {p['personality']}.",
+        f"  Знает лучше всех: {p['expertise']}.",
+        f"  Сейчас затеял: {p['intention']}.",
+        f"  Про себя: {p['inner_world']}. Вслух об этом не говорит.",
+        "",
+        "\033[1mС КЕМ ОН ГОВОРИТ\033[0m",
+        "  Николай Петрович. Одинокий, сдержанный.",
+        "  Жалости не терпит — от неё закрывается.",
+        "  Больное: что он никому не нужен. Сам об этом не заговаривай.",
+        "  Помнит с прошлых раз: внучка Настя поступила, колено на лестнице.",
+        "",
+        "\033[2mХороший ответ — короткий, живой, и в нём есть он сам.\033[0m",
+    ])
+
+
 def _system() -> str:
     """Ровно тот промпт, который собирает приложение, одной строкой."""
     stable, variable = companion.build_system_parts(
         persona_block=persona.build_persona_block(SAMPLE_PERSONA),
         reading_block=SAMPLE_READING,
         memory_context=SAMPLE_MEMORY,
-        elder_name="Фёдор Ильич",
+        elder_name="Николай Петрович",
     )
     return f"{stable}\n\n{variable}".strip()
 
@@ -257,7 +292,7 @@ async def _run(args) -> None:
     key = _key()          # первым делом: без ключа печатать нечего
     system = _system()
     order = list(CANDIDATES)
-    if not args.names:
+    if args.blind:
         random.shuffle(order)
     histories: dict[str, list[dict]] = {model: [] for _, model in order}
 
@@ -275,14 +310,18 @@ async def _run(args) -> None:
         encoding="utf-8",
     )
 
+    print()
+    print(_who())
+    print()
     print(f"Промпт: {len(system):,} символов. Моделей: {len(order)}.".replace(",", " "))
     print(f"Разговор пишется сюда: {paper_at}")
-    print(f"Кто есть кто:          {whois_at}")
-    if not args.names:
-        print("Вслепую — кто есть кто, покажу в конце.")
+    if args.blind:
+        print(f"Вслепую. Кто есть кто — в конце и в {whois_at.name}")
 
     paper = open(paper_at, "w", encoding="utf-8")
     paper.write(f"# Прослушивание {stamp}\n\n")
+    # Без цвета: в файл терминальные коды попадать не должны.
+    paper.write(re.sub(r"\033\[[0-9;]*m", "", _who()) + "\n")
     paper.flush()
 
     async with httpx.AsyncClient(
@@ -298,7 +337,7 @@ async def _run(args) -> None:
                 histories[model].append({"role": "user", "content": said})
 
             answers = await _round(client, system, histories, order)
-            _show(order, answers, blind=not args.names, paper=paper)
+            _show(order, answers, blind=args.blind, paper=paper)
 
             for (_, model), (reply, _t) in zip(order, answers):
                 histories[model].append({"role": "assistant", "content": reply})
@@ -315,7 +354,7 @@ async def _run(args) -> None:
 
     paper.close()
 
-    if not args.names:
+    if args.blind:
         print("\n\033[1mКто есть кто:\033[0m")
         print(whois_at.read_text(encoding="utf-8"))
     print(f"\nРазговор сохранён: {paper_at}")
@@ -339,8 +378,8 @@ def main() -> None:
     ap.add_argument("--text", help="своя фраза вместо стандартной")
     ap.add_argument("--talk", action="store_true",
                     help="живой разговор — сползание характера видно только так")
-    ap.add_argument("--names", action="store_true",
-                    help="не скрывать, кто есть кто (по умолчанию вслепую)")
+    ap.add_argument("--blind", action="store_true",
+                    help="скрыть имена и перетасовать: судить слова, а не марку")
     ap.add_argument("--list", nargs="?", const="", metavar="СЛОВО",
                     help="показать имена моделей у OpenRouter")
     args = ap.parse_args()
