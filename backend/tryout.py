@@ -108,7 +108,7 @@ CANDIDATES: list[tuple[str, str]] = [
     ("GPT-5.6 Luna",       "openai/gpt-5.6-luna"),
     ("DeepSeek V4 Flash",  "deepseek/deepseek-v4-flash"),
     ("Gemini 3 Flash",     "google/gemini-3-flash-preview"),
-    ("Qwen 3.5",           "qwen/qwen3.5-27b-instruct"),
+    ("Qwen 3.5",           "qwen/qwen3.5-27b"),
 ]
 
 #: Фраза, выбранная так, чтобы плохая модель сломалась именно на ней.

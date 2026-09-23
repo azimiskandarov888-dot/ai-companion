@@ -402,7 +402,7 @@ day, after the constitution is cut, with caching as the app really does it):
 | GPT-5.6 Luna | $0.44 | #1 by real roleplay usage on OpenRouter |
 | DeepSeek V4 Flash | $0.39 | #2 by real usage |
 | Gemini 3 Flash-Lite | $0.21 | fastest and cheapest; per-request safety thresholds |
-| Qwen 3.5 | ~$0.4 | **model id is wrong in the file** — `--list qwen` gives the real one |
+| Qwen 3.5 | ~$0.4 | 27B; id fixed 2026-09-23 to `qwen/qwen3.5-27b` (there is no `-instruct`) |
 
 Claude Haiku 4.5, the incumbent, was $2.12 and is out (§4). Sonnet 5 at $4.23
 is the fallback if all five read flat.
