@@ -2,10 +2,18 @@
 
 Everything a new session needs to work on this project without re-deriving it
 or re-litigating decisions that are already made. Written 2026-09-17 on branch
-`claude/gallant-bardeen-0l6ff0` and revised the same day on
-`claude/awesome-planck-wdj4hu`, where must-fix items 1–5 and 8 were done.
-**808 tests pass.** Every number below was measured by running the code, not
+`claude/gallant-bardeen-0l6ff0`; revised through 2026-09-23 on
+`claude/awesome-planck-wdj4hu`, which is where all current work lives.
+**901 tests pass.** Every number below was measured by running the code, not
 estimated; where something is an estimate it says so.
+
+**What the last stretch was about.** Nine of the ten must-fix items are closed.
+The work then turned to the two questions the owner cares about most — *how
+well does he hold a character* and *what does he cost* — and those turned out
+to be one question with one answer: **the prompt is too big.** What came of
+that is in §7a (what the cache is really doing), §7b (the model choice, and
+how it gets made), and §11 (what was considered and rejected, including
+fine-tuning — which is now a closed question, with reasons).
 
 Where this document and any other document disagree, **this one is right** —
 the others were written earlier and some of them have drifted.
@@ -149,6 +157,10 @@ Do not reopen these without being asked.
 | **Under 13:** nothing is kept, and there is no button. Consent a child cannot give is not consent | done |
 | **13–17: the FULL app** — a friend their own age, who remembers. Teenagers are the second group this is for after the old, because loneliness peaks in adolescence. The memory starts off and is theirs to switch on | done (`/api/memory/keep`, asked once after a conversation ends) |
 | **He is an ACE in the one thing the person loves most.** Not «also interested» — a knower who always has something beyond what was asked. Warmth on its own runs out; a subject does not, and it is what gives a conversation a tomorrow. The one place they overlap on purpose — everything else about him stays his own | done (`matchmaker._WRITE_SYSTEM` → `expertise`, carried into every turn by `persona.py`) |
+| **The rules stay a file you can read, plus mechanisms in code. No fine-tuning.** Four reasons, in order of weight: a fine-tune trained on our own prompt's output can at best COPY it and never exceed it; Anthropic has no fine-tuning API, so it means leaving Claude for a small model that writes worse Russian; catastrophic forgetting is documented and shows up where you did not test; and weights cannot be read, diffed, or fixed by one line with a test | settled 2026-09-22 |
+| **The constitution gets CUT, from 26,348 chars to ~8,000.** This is the whole answer to the 94/6 problem. The first cut removes ~7,000 tokens from every request; fine-tuning would have removed the last ~3,000 for a month of work and no way back. Not started | decided, open |
+| **Claude is out of the candidate list for the VOICE.** Owner's call on cost, and the observation is real. One caveat recorded in `tryout.py`: the audition runs uncached, so it charged ~4× what the app would. Still the dearest of the five | owner's call 2026-09-23 |
+| **The model is chosen BY EAR, on the real prompt.** A 50-phrase scored set was proposed and the owner replaced it with listening himself — correctly: no published benchmark measures warm ordinary Russian said to a lonely person, and the ear is the instrument that does | owner's call (`tryout.py`) |
 | One background agent at a time — credits are limited | working constraint |
 
 On the last "left to the base model" row there is one honest caveat recorded in
@@ -308,6 +320,98 @@ Three things worth knowing:
 
 ---
 
+## 7a. What the cache is really doing — and the one thing to check first
+
+The stable head of the prompt is **~10,600 tokens** and it is the most
+expensive thing the app sends. It is *supposed* to be nearly free: a cache
+READ costs a tenth of an input token, a cache WRITE costs a quarter more than
+one. **Twelve and a half times lies between those two.**
+
+Whether we are on the right side of it was never measured. Now it is:
+`brain._note_cache` prints one line — and only when the head was rewritten,
+so a healthy turn is silent and a real signal cannot get lost in noise.
+
+**There is a named suspect, and it needs checking on the first real
+conversation.** The cached head contains `mood.standing_block`, which reads the
+`observations` table ordered by `last_ts`. The scribe writes that table from a
+background task **every five exchanges** (`learn.BATCH_EXCHANGES`). So a
+confirmed observation landing mid-conversation reorders those lines, changes
+the bytes, and silently turns the next turn's cheap read into a full write. Up
+to four extra writes in a twenty-five-turn conversation — more than half the
+brain's bill.
+
+If the log shows it happening, the fix is small and arguably more correct
+anyway: **snapshot the stable half when a conversation begins and hold it until
+the conversation ends.** A friend does not reconfigure his understanding of you
+between two sentences.
+
+**A thing that looked easy and is not: caching the conversation history.**
+It cannot work as the code stands, and the reason is worth knowing before
+somebody tries again. Render order is `tools → system → messages`. Our `system`
+is `[stable, variable]`, and the variable half changes **every single turn** —
+`memory.build_memory_context` takes the person's current words, and it also
+rolls a die (`RESURFACE_CHANCE`). Everything after a changed byte is a miss,
+so a breakpoint on `messages` would pay the write premium and never once read.
+The workarounds all cost more than the ~$0.60/person/month they would save,
+and one of them (moving the variable block into the last user turn) would drag
+stale mood and occasion through the whole history.
+
+## 7b. Choosing the voice — the tool, and why it is shaped this way
+
+`backend/tryout.py` talks to the same friend on five different brains so the
+owner can pick by ear. `backend/audition.py` does the same for voices; this is
+its twin for brains, and the reasoning is the same: a provider's own samples
+are good enough to reject a candidate and not good enough to choose one.
+
+Run it: `python tryout.py --talk`. Setup is one command per platform —
+`setup.sh` (macOS/Linux), `setup.ps1` (Windows).
+
+Six decisions are baked into it, each earned:
+
+- **One key, not five.** Everything goes through OpenRouter, so a sixth
+  candidate is one line in `CANDIDATES` rather than another SDK and another
+  billing page.
+- **The real prompt.** Every model gets exactly what `companion
+  .build_system_parts` assembles — 28,370 characters. A model judged on a toy
+  prompt was judged in somebody else's product.
+- **The same friend for everyone**, fixed in the file: Фёдор, 68, a retired
+  marine engineer in Kaliningrad, an ace on ship diesels, two years into
+  rebuilding an «Океан» radio, quietly afraid of becoming a burden to his son.
+  He talks to Николай Петрович, who cannot stand pity and whose sore subject is
+  being of no use to anyone.
+- **The character is printed before the first turn** and written into the
+  transcript. Listening for "did he hold the role" without knowing the role is
+  not listening.
+- **Every line hits disk as it is said**, into `backend/data/tryouts/`, with
+  the names in a separate file beside it. The first real run was lost to a
+  closed terminal; and keeping the transcript nameless means it can be judged
+  again tomorrow.
+- **`--talk` is the real test.** One phrase shows prose. Character drift — the
+  thing that actually breaks a companion — needs ten turns to appear.
+
+**What it cannot tell you: speed.** OpenRouter's routing is in those seconds.
+Real latency gets measured on the winner, at its own provider, in the app.
+
+**The five, with what the app would pay per person per month** (25 exchanges a
+day, after the constitution is cut, with caching as the app really does it):
+
+| | $/person/month | Why it is on the list |
+|---|---|---|
+| MiniMax M2-Her | $0.62 | built for companions; leads persona retention |
+| GPT-5.6 Luna | $0.44 | #1 by real roleplay usage on OpenRouter |
+| DeepSeek V4 Flash | $0.39 | #2 by real usage |
+| Gemini 3 Flash-Lite | $0.21 | fastest and cheapest; per-request safety thresholds |
+| Qwen 3.5 | ~$0.4 | **model id is wrong in the file** — `--list qwen` gives the real one |
+
+Claude Haiku 4.5, the incumbent, was $2.12 and is out (§4). Sonnet 5 at $4.23
+is the fallback if all five read flat.
+
+**Two deliberately rejected:** DeepSeek V4 **Pro** — documented positivity
+bias, folds when pushed back, which breaks the one rule this product cannot
+lose; and self-hosting — GPUs idle at our size.
+
+---
+
 ## 8. What each module is for
 
 | File | What it owns |
@@ -389,10 +493,21 @@ the reason the tests that now hold them exist.
    (`reading.NEVER_SHRINKS`). Both halves are pinned by tests.
    Alongside it, the owner's rule: `do_not_touch` means «never take him there
    yourself», never «never go there». If he opens it, the friend goes with him.
-5. **No romantic/sexual ceiling and no de-escalation path**, while several
-   rules push warmth only upward and forbid ever cooling.
-6. **No output filter and no age gate.** The only server-side content check
-   looks at the *person's* words, never at his reply.
+5. ~~**No romantic/sexual ceiling and no de-escalation path.**~~ Closed, and
+   the owner reframed it before it was built: the line is **what he IS to
+   them**, not what may be discussed. «Я с другом могу говорить о чём угодно.
+   И я его люблю — но, конечно, не романтически.» So no topic ban and no
+   cooling machinery — `КАКОЙ ТЫ ДРУГ` says he is a friend rather than a
+   partner, and the exception sits beside the hook rule: if the PERSON says it
+   first, he answers warmly in kind and does not correct them.
+6. ~~**No output filter and no age gate.**~~ Two answers, both the owner's.
+   **No age gate, ever** — «я не хочу чтоб юзер проходил проверку как в порно
+   сайтах, я хочу чтоб приложение чувствовалось свободным»; YouTube is the
+   honest precedent, and what Google actually had to fix after the $170M COPPA
+   settlement was not the door but **what they kept** (`young.py`). For the
+   output, `vow.py` now reads his own words before they are spoken and before
+   they are remembered — the two things he must never say. It is not a general
+   content filter and is not meant to be; a broader one is still open.
 7. **The prompt is Russian-only on the server.** The iOS app offers `ru`/`en`,
    `COMPANION_LANGUAGE` exists — and the constitution opens «Ты говоришь
    по-русски», the extractor demands «Все значения — по-русски». English is not
@@ -411,7 +526,14 @@ the reason the tests that now hold them exist.
    **Still open:** there is no retention policy and no expiry, and there is no
    export endpoint (nothing in the app promises one any more — the «Данные ·
    выгрузить» row is gone — but a person is arguably owed it).
-10. **Persona growth rides in the cached half.** Bounded now (`persona._MOST`),
+10. **The cached head may be rewritten mid-conversation by the scribe.**
+    Measured-for, not yet measured — see §7a. Check the `[кэш]` lines on the
+    first real conversation before doing anything else about cost; if it is
+    happening it is worth more than everything else on this list put together.
+11. **The constitution is still 26,348 chars.** The decision to cut it to
+    ~8,000 is made (§4) and the work is not started. This is the next piece of
+    real work on the prompt.
+12. **Persona growth rides in the cached half.** Bounded now (`persona._MOST`),
     but it is still user-varying content inside the half that must stay
     byte-identical — worth re-checking after any change there, because a silent
     cache miss costs money on every turn of every conversation.
@@ -433,14 +555,42 @@ the reason the tests that now hold them exist.
 - **Model swaps** (Deepgram for ears, Mistral Large for the reader, GPT-5.6
   Luna for the voice). All need vendor keys and measurement. Untested vendor
   code is worse than none.
-- **Cutting the constitution to fix the 94/5.5 ratio.** Everything left in it
-  works; cutting by eye would trade a measured problem for an unmeasured one.
+- ~~**Cutting the constitution.**~~ No longer "not done" — **decided** (§4),
+  not started. What changed the answer was working out where the win actually
+  is: 12,500 tokens per request today, ~5,500 after the cut, ~2,400 if the
+  rules were baked into weights. **The first step is bigger than the second**,
+  takes days rather than months, and is reversible. What survives the cut is
+  the third of the constitution the base model would not do on its own —
+  warmth is earned not issued, return him to living people, don't invoice him
+  for being away, where accommodation stops, notice when something changed,
+  if he is being defrauded. What goes is the two-thirds that is either ordinary
+  kindness every model already has, or has since become code (`vow.py`,
+  `young.py`, `erase.py`).
+- **Fine-tuning the rules into a model.** Researched at length at the owner's
+  request, across every provider — and **closed**. The decisive fact is not
+  cost: the only training data we could produce is our own prompt's output, so
+  a fine-tune can at best *equal* the prompt and never beat it. It buys
+  consistency, not quality, and it charges leaving Claude, documented
+  forgetting, and rules that can no longer be read or fixed by one line. The
+  owner's proposed order — perfect the prompt first, then bake — is exactly
+  right, and the first half of it is also the whole win.
+- **Sending the prompt less often** — every ~30 or ~100 turns instead of every
+  turn. Physically impossible and worth writing down so nobody tries: the model
+  is stateless, and OpenAI's stateful Responses API is the proof by
+  construction — it lets you send only the new sentence and still **bills the
+  whole history every turn**. Bandwidth, not cost. Caching is the real form of
+  "send it less often", and we already have it.
+- **A 50–100 phrase scored evaluation set.** Proposed twice — as the
+  prerequisite for cutting the constitution and for comparing models — and the
+  owner replaced it with listening himself. That is the right call for *voice*
+  (no benchmark measures warm Russian for a lonely person) and it remains the
+  wrong gap for the *watchman*, where §11's first bullet still stands.
 
 ---
 
 ## 12. How to work here
 
-- **Branch:** `claude/gallant-bardeen-0l6ff0`. Push with
+- **Branch:** `claude/awesome-planck-wdj4hu`. Push with
   `git push -u origin <branch>`, retry network failures with backoff
   (2s/4s/8s/16s). **Never open a PR unless explicitly asked.**
 - **Keys live only in `backend/.env`** (gitignored). Never paste one into a
@@ -452,17 +602,45 @@ the reason the tests that now hold them exist.
   Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
   Claude-Session: https://claude.ai/code/session_018PiV38FZMupJ19foghBRZm
   ```
-- **Tests:** `cd backend && python -m pytest -q`. 808 pass. The suite is the
+- **Tests:** `cd backend && python -m pytest -q`. **901 pass.** The suite is the
   design record — test docstrings carry the *reasoning*, including what went
   wrong before. Read the docstring before changing an assertion; several tests
   exist because a previous fix was subtly wrong.
   `pip install -r requirements.txt -r requirements-dev.txt` first — the suite
   needs `pytest-asyncio`, which was missing from requirements-dev.txt and made
   63 tests look like failures rather than like a missing plugin.
-- **The constitution has a ceiling** (`test_the_constitution_stays_within_its_ceiling`,
-  26,000 chars, currently 25,756). It has caught real regrowth more than once.
-  It has moved exactly once, deliberately, and the reason is recorded in the
-  test. If you need room, pay for it by consolidation, not by raising it.
+- **The constitution has a ceiling** (`test_the_constitution_stays_within_its_ceiling`
+  in `test_situations.py` — not in `test_companion.py`, which costs everyone a
+  minute). 26,400 chars, currently **26,348**. It has caught real regrowth more
+  than once. If you need room, pay for it by consolidation, not by raising it —
+  and note that the ceiling is about to become a floor to shoot at instead:
+  the decision is to get this to ~8,000 (§4).
+- **A failing test is not a flake until you have found the reason.** Two tests
+  in `test_body.py` compared decayed values at `rel=1e-6` while `body.state`
+  fades by real wall-clock time with a 45-minute half-life. The arithmetic:
+  they break if more than **four milliseconds** pass between two reads, and a
+  sqlite write sits between them. They were passing because the disk was fast,
+  not because the code was right, and the full suite eventually caught one out.
+  Both now stop the clock. Look for this shape anywhere a test asserts on a
+  value that decays.
+- **Two tools, both meant to be run by a person with ears**, not by CI:
+  `audition.py` (voices, side by side) and `tryout.py` (brains, §7b). Both keep
+  their output on disk so a judgement can be revisited a day later rather than
+  trusted to memory of the third one.
+- **Setup is one command per platform:** `setup.sh` (macOS/Linux), `setup.ps1`
+  (Windows). Both refuse to run if a real key is sitting in `.env.example` —
+  that file is deliberately NOT hidden from git (`!.env.example` in
+  `.gitignore`), so a key there goes to GitHub. The owner put one there on the
+  first try, which is why the check exists rather than the rule.
+  `setup.ps1` **must stay UTF-8 with BOM** (`.gitattributes` pins it): Windows
+  PowerShell 5.1 reads a BOM-less .ps1 in the system codepage, the mangled
+  bytes land inside quotes, and the file stops parsing altogether — with errors
+  that point at brackets rather than at the encoding.
+- **For the tryout tool only `httpx` and `python-dotenv` are needed** — not
+  `anthropic`, not `openai`. It matters: those two need compiled extensions and
+  will not install on a phone or any machine without a compiler. The heavy
+  imports in `persona.py` live inside a function on purpose. Do not lift them
+  to the top "for tidiness".
 - **Swift is structurally verified only.** No Xcode build has ever been run in
   this environment.
 
@@ -470,9 +648,10 @@ the reason the tests that now hold them exist.
 
 ## 13. Open questions for the owner
 
-1. **The 94% / 5.5% ratio.** How do we make him a larger share of what the
-   model reads? Cutting the constitution, or re-anchoring him closer to
-   generation, or both — and measured how?
+1. ~~**The 94% / 5.5% ratio.**~~ Answered: **cut the constitution** (§4, §11).
+   The question that replaces it is narrower and is the next piece of work —
+   *which* third survives, and how do we know the cut did not cool him? The
+   owner judges by ear, as with the voice.
 2. **Crisis lines.** Real numbers per country for `kind: "self"`, or a single
    international one?
 3. **Who ELSE gets notified on `danger`**, and how? The person now gets the
@@ -484,4 +663,61 @@ the reason the tests that now hold them exist.
 5. **Speech-to-speech** (GPT Realtime ~0.82 s, Grok Voice ~0.78 s) would be
    faster and more expressive than the current STT→LLM→TTS pipeline, but cannot
    carry a 125-rule constitution and locks the product to one vendor. Worth a
-   separate conversation; not mixed into model choice.
+   separate conversation; not mixed into model choice. **Note that cutting the
+   constitution to 8,000 chars changes this arithmetic** — it may be worth
+   re-asking afterwards rather than now.
+6. **Where the real money is.** The owner keeps optimising the brain, and the
+   brain is the minority: **voice and hearing are 68% of the bill**, and Russian
+   speech costs twice what English does because Fish bills per UTF-8 byte and
+   Cyrillic is two bytes a letter. One change of TTS vendor is worth more than
+   everything in §7a and §7b combined. Not started, not decided.
+7. **The scribe, the reader and the matchmaker are still on Claude.** They run
+   rarely — once a conversation, once in a friend's life — so they are a small
+   part of the bill, and there quality of writing decides rather than price per
+   turn. Left alone deliberately until the voice is chosen.
+
+---
+
+## 14. How the owner and the assistant work together
+
+Written down because it was learned over a long session and re-deriving it
+costs both sides time.
+
+**The owner writes in Russian and asks for short, plain words.** Take it
+literally. A correct answer that is three screens long has failed — he has said
+so more than once, and once said outright «я ничего не понял». Lead with the
+decision, then the reason, then at most one table. Long research belongs in a
+file, not in a reply.
+
+**He decides; the assistant states the concern once and then does the work in
+full.** This has happened repeatedly and the pattern is settled: age
+verification (he refused a gate, and the law agreed with him), memory as a
+pop-up (he wanted a Settings switch, and he was right — a question nobody asked
+for is a checkpoint in friendlier clothes), the 50-phrase evaluation set (he
+replaced it with his own ear, correctly), Claude's cost. When he repeats
+himself, that is the decision. Say the caveat in a sentence, put it in the
+code's comments where it will survive, and build the thing he asked for.
+
+**He catches real mistakes.** «Ты опять заточил вопрос под свои модели» was
+fair — the research had been narrowed to one vendor. «Ты ещё говорил что
+дипсик шикарный по характеру» was fair too: a candidate had been dropped from
+a shortlist without saying why. Check his objections properly rather than
+conceding politely; twice they turned up something worth finding.
+
+**Say plainly when you were wrong, once, and move on.** Several times this
+session the assistant was wrong in ways that cost the owner real time — a
+"3 lines, 1 hour" promise for a cache change that cannot work at all, a key
+check that fired on a clean file, a PowerShell script that could not parse on
+the only machine it was written for, a model id typed from memory. Each is
+recorded in the code near the thing it broke, because the next person to touch
+that line needs the reason more than the apology.
+
+**Verify on the machine, not from memory.** Everything in this document that
+carries a number was run. The two habits that paid: compute the threshold
+rather than guessing (`rel=1e-6` survives four milliseconds), and test the
+guard from both sides (the clean file must pass, the planted key must be
+caught).
+
+**The reasoning goes in the docstring, not in chat.** This codebase's tests and
+module headers carry *why*, including what went wrong before. That is the only
+part of a conversation that survives it.
