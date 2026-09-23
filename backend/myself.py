@@ -377,10 +377,17 @@ async def read(args) -> None:
     )
     record = {"stage": "read", "entries": entries}
     _save("read", record)
-    at = _paper("read", "Чтения тебя — вслепую", entries, reading.as_brief)
+    at = _paper("read", "Чтения тебя — вслепую", entries, _as_reading)
     print(f"\nПрочитай спокойно: {at}")
     _judge("read", "Какое из чтений правдивее про тебя?", record)
     print("Дальше: python3 myself.py sketch")
+
+
+def _as_reading(r: dict) -> str:
+    """Чтение — и во что оно обойдётся: писателю один раз, голосу каждый ход."""
+    brief, every = reading.as_brief(r), reading.standing_block(r)
+    return (f"*{len(brief)} знаков писателю · {len(every)} — в каждую реплику "
+            f"разговора*\n\n{brief}")
 
 
 # ── 3 · наброски ────────────────────────────────────────────────────────────
@@ -469,8 +476,9 @@ async def talk(args) -> None:
     tryout.SAMPLE_NAME = me.get("name", "")
     tryout.LISTENER = (f"{who} — это ты сам.",
                        "Суди не «хорошо ли написано», а «живой ли он со мной».")
-    if young.band(me.get("age", "")):
-        print("\033[2mВ приложении к промпту добавился бы блок для младших — здесь его нет.\033[0m")
+    # Как в приложении: младшему в конец промпта ложится блок о том, как с ним
+    # говорить. Без него голос проверялся бы не на том промпте, что услышит он.
+    tryout.SAMPLE_YOUNG = young.for_band(young.band(me.get("age", "")))
     try:
         first = input("\nЧто скажешь ему первым? ").strip()
     except (EOFError, KeyboardInterrupt):

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 import time
 
 import pytest
@@ -270,8 +271,13 @@ def test_how_they_want_to_matter_is_its_own_axis():
     needed, to another it is a weight, to a third it is a reproach."""
     assert "closeness" in reading._READING_SYSTEM
     assert "КАК ЭТОТ ЧЕЛОВЕК ХОЧЕТ БЫТЬ НУЖНЫМ" in reading._READING_SYSTEM
-    # It must refuse to guess rather than pick a middle.
-    assert "если из текста не видно — так и напиши, что не видно" in reading._READING_SYSTEM
+    # It must refuse to guess rather than pick a middle — and refuse by
+    # leaving it EMPTY. It used to say «так и напиши, что не видно», and a
+    # written «не видно» is not nothing: standing_block wraps it in an
+    # instruction and it rides into every turn of every conversation, a
+    # paragraph telling him how this person wants to matter that says nothing.
+    assert "если из текста не видно — оставь пустым" in reading._READING_SYSTEM
+    assert "так и напиши, что не видно" not in reading._READING_SYSTEM
 
 
 def test_closeness_reaches_every_single_turn():
@@ -393,7 +399,7 @@ def test_every_reading_field_reaches_both_places_it_is_needed(tmp_path):
     missing are always the ones added last."""
     every_turn = ("register", "would_ring_false", "do_not_touch", "closeness",
                   "what_lifts_him", "hurt_by", "learned")
-    the_write = ("register", "carrying", "longing", "absent", "self_image",
+    the_write = ("verdict", "register", "carrying", "longing", "absent", "self_image",
                  "would_ring_false", "would_reach_them", "needs_pushback_on",
                  "closeness", "what_lifts_him", "hurt_by", "do_not_touch",
                  "common_ground_seeds")
@@ -402,6 +408,46 @@ def test_every_reading_field_reaches_both_places_it_is_needed(tmp_path):
         assert f"ЗНАЧ-{field}" in reading.standing_block({field: f"ЗНАЧ-{field}"}), field
     for field in the_write:
         assert f"ЗНАЧ-{field}" in reading.as_brief({field: f"ЗНАЧ-{field}"}), field
+
+
+def test_nothing_is_asked_of_the_reader_that_nobody_reads():
+    """The other direction of the test above, and the one that was missing.
+
+    Four fields lived here for months that nothing downstream ever read —
+    `surface` (a retelling of what he had just said), `beneath` and
+    `evidence` (quotes), `confidence` — and they were most of what the owner
+    saw when he tested it on himself: «они просто пересказали своими словами
+    всё, что я сказал». Each of them was paid for on every reading and did
+    nothing but make the reading longer than the person's own words, which
+    is how a reading of 1,341 characters of answers came back at 8,000."""
+    spec = reading._READING_SYSTEM.split("с ключами:", 1)[1]
+    asked = re.findall(r"(?m)^([a-z_]+) — ", spec)
+    assert len(asked) >= 10, asked
+    for field in asked:
+        probe = {field: f"ЗНАЧ-{field}"}
+        read = reading.as_brief(probe) + reading.standing_block(probe)
+        assert f"ЗНАЧ-{field}" in read, f"{field}: просим, но никто не читает"
+    for dead in ("surface", "beneath", "evidence", "confidence"):
+        assert dead not in asked
+
+
+def test_the_reading_is_written_for_the_models_that_read_it():
+    """Nobody human reads it. A model writes a friend from it, and another
+    holds part of it on every turn — and a model cannot skip what it was
+    given, even when it can see that it is irrelevant. So: a conclusion
+    rather than a retelling, a norm of one or two sentences with its break
+    condition, no quotes (a model handed somebody's own phrases hands them
+    back to him), and an empty field where the text shows nothing."""
+    rules = reading._READING_SYSTEM
+    assert "Пиши вывод, а не то, из чего он сделан. Не пересказывай его ответы." in rules
+    assert "одно-два коротких предложения. Это норма, а не потолок" in rules
+    assert "В ответ их не выписывай" in rules
+    assert "Мало текста — мало чтения" in rules
+    # The verdict comes first where the writer reads it.
+    assert reading.as_brief({"verdict": "В", "register": "Р"}).index("Главное: В") < \
+        reading.as_brief({"verdict": "В", "register": "Р"}).index("Р")
+    # The re-read keeps the same discipline.
+    assert "вывод, а не пересказ, и без его цитат" in reading._REREAD_SYSTEM
 
 
 # --------------------------------------------------------------------------- #

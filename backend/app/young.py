@@ -236,4 +236,11 @@ def block(user_id: str) -> str:
     instruction lands best, and a few hundred characters a turn is nothing
     against getting it wrong with a child.
     """
-    return {CHILD: _CHILD_BLOCK, TEEN: _TEEN_BLOCK}.get(of(user_id), "")
+    return for_band(of(user_id))
+
+
+def for_band(band_: str) -> str:
+    """The same block from the band alone — for the owner's own test
+    (backend/myself.py), which has an answer to «сколько вам лет» and no
+    database row."""
+    return {CHILD: _CHILD_BLOCK, TEEN: _TEEN_BLOCK}.get(band_, "")

@@ -173,6 +173,9 @@ LISTENER = (
     "Помнит с прошлых раз: внучка Настя поступила, колено на лестнице.",
 )
 
+#: Что приложение добавило бы для младших (young.block) — пусто для взрослого.
+SAMPLE_YOUNG = ""
+
 #: И немного общего прошлого, чтобы было чем быть другом, а не знакомым.
 SAMPLE_MEMORY = (
     "Из ваших прошлых бесед (можешь мягко вспомнить, если к слову):\n"
@@ -231,6 +234,7 @@ def _system() -> str:
         reading_block=SAMPLE_READING,
         memory_context=SAMPLE_MEMORY,
         elder_name=SAMPLE_NAME,
+        young_block=SAMPLE_YOUNG,
     )
     return f"{stable}\n\n{variable}".strip()
 
