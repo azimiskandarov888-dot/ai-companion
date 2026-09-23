@@ -445,7 +445,44 @@ def test_one_thought_lives_in_one_field():
     assert "Каждая мысль — в одном поле" in reading._READING_SYSTEM
     # What the merged fields carried now lives in verdict, by name.
     verdict = next(line for line in spec.splitlines() if line.startswith("verdict — "))
-    assert "что он несёт" in verdict and "о чём он сам не попросил" in verdict
+    assert "чего в ней нет" in verdict and "о чём он сам не попросил" in verdict
+
+
+def test_the_friend_is_for_what_is_missing_not_for_more_of_the_same():
+    """The owner, after reading five readings of himself: every one of them
+    saw him with somebody to work on his project with — «which is true at
+    some point, but hard projects are better alone» — and none of them saw
+    what he had actually told the interviewer: that his whole mind is the
+    project and AI, and what he is missing is somebody to talk to about fear,
+    FOMO, love. «Fulfil what I miss, not what I already have.»
+
+    The prompt had asked the wrong main question — «какое присутствие ему
+    было бы не в тягость» — and the easiest presence to bear is more of what
+    one already does, so every model mirrored him. Now the main question is
+    what his life lacks, with the one distinction that says why a busy life
+    is not a full one: Weiss (1973) — social loneliness (nobody around) and
+    emotional loneliness (people around, nobody to say the real things to)
+    have different remedies, and one does not cure the other."""
+    rules = reading._READING_SYSTEM
+    assert "ЧЕГО В ЕГО ЖИЗНИ НЕТ?" in rules
+    assert "не для того, что у человека и так есть" in rules
+    assert "Одиночество бывает двух видов, и одно другим не лечится" in rules
+    assert "не с кем о главном — о страхе, о любви" in rules
+    # Comfort is still asked — but after, not instead.
+    assert rules.index("ЧЕГО В ЕГО ЖИЗНИ НЕТ?") < rules.index("не заставил бы его снова держать лицо")
+
+
+def test_what_he_could_not_say_is_not_what_he_forbade():
+    """Asked what he thinks about alone at night, he answered «не могу
+    сказать, слишком много». All five readings filed it as a door to keep
+    shut — «не выпытывай вечерние мысли», «его одиночество как тема» — and
+    one concluded that talk about feelings would not lift him. It was the one
+    thing he wanted to talk about. do_not_touch forbids the friend ever
+    opening a subject; it must hold only what he showed hurts."""
+    rules = reading._READING_SYSTEM
+    assert "«не могу сказать» чаще значит «не с кем», а не «не трогай»" in rules
+    # And what lifts him is not read off what he is busy with.
+    assert "дело, в которое человек ушёл с головой, и то, что его поднимает, — разные вещи" in rules
 
 
 def test_the_reading_is_written_for_the_models_that_read_it():
