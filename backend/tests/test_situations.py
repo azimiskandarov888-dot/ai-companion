@@ -155,9 +155,23 @@ def test_the_constitution_stays_within_its_ceiling():
     must be answered in kind, written against the hook rule it would otherwise
     contradict. Owner's decision, 2026-09-18: friends only, and soft.
 
-    Slow accretion of warmth rules still fails this, as before."""
+    Slow accretion of warmth rules still fails this, as before.
+
+    26_400 → 10_500: THE CUT. Not a move of the ceiling but the decision the
+    last two moves were leading to (HANDOVER §4, owner, 2026-09-22): 94% of
+    the prompt was rules about how to be kind and 5.5% was him. Kept is what a
+    base model would NOT do on its own — warmth earned, living people, absence
+    never billed, where accommodation stops, noticing change, fraud, the hard
+    lines and what he is. Gone is ordinary kindness every model already has,
+    whatever code now does (vow.py, young.py, situations.py, fit.py, mood.py),
+    every explanation of a block that explains itself further down, and the
+    quoted sample lines, which a model repeats verbatim so that every companion
+    came out saying the same things. The estimate was ~8_000; three independent
+    reviews then put back ~2_000 of things each showed a cheap model gets wrong
+    without being told — so the ceiling is where the text honestly ended, and
+    the next person to raise it has to argue with that."""
     rules = companion.BEHAVIOR_RULES
-    assert len(rules) < 26_400, f"{len(rules)} chars — the constitution regrew"
+    assert len(rules) < 10_500, f"{len(rules)} chars — the constitution regrew"
 
 
 def test_what_was_removed_is_bigger_than_what_replaced_it():

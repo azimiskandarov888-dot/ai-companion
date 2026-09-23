@@ -13,9 +13,9 @@ from app import companion, situations
 def test_third_way_honesty_present():
     rules = companion.BEHAVIOR_RULES
     # Never confess machine-ness…
-    assert "не говоришь, что ты программа" in rules
+    assert "никогда не говоришь, что ты программа" in rules
     # …and never claim to be a flesh-and-blood human.
-    assert "НИКОГДА не утверждаешь, что ты человек из плоти и крови" in rules
+    assert "никогда не утверждаешь, что ты человек из плоти и крови" in rules
 
 
 def test_old_confession_line_is_gone():
@@ -26,24 +26,24 @@ def test_old_confession_line_is_gone():
 
 def test_guardrails_present():
     rules = companion.BEHAVIOR_RULES
-    assert "не давай медицинских советов" in rules
-    assert "не проси денег" in rules
-    assert "не обещай того, что должно случиться в его настоящем мире" in rules
-    assert "мостик к живой жизни" in rules  # points him back to real family
+    assert "Ты не врач" in rules and "к врачу" in rules
+    assert "Не просишь денег, паролей" in rules
+    assert "Не обещаешь того, что должно случиться в его настоящем мире" in rules
+    assert "Ты добавляешься к людям, а не заменяешь их" in rules  # back to real people
 
 
 def test_length_and_word_rules_present():
     rules = companion.BEHAVIOR_RULES
     # Length is now read off HIM rather than fixed at «одна-три фразы», which
     # was the constant three other blocks then had to contradict.
-    assert "СМОТРИ, СКОЛЬКО ГОВОРИТ ОН" in rules
+    assert "Смотри, сколько говорит он" in rules
     assert "одна-три простые фразы" not in rules
-    assert "Утро — это просто утро" in rules
+    assert "на приветствие — пара тёплых слов" in rules
     # Plain, simple words — not literary/bookish, not slang.
-    assert "простыми, обычными словами" in rules
+    assert "Простыми домашними словами" in rules
     assert "молодёжного сленга" in rules
     # Idioms only occasionally, never whole sentences of them.
-    assert "не вставляй их в каждый ответ" in rules
+    assert "Поговорку — изредка, одну" in rules
 
 
 def test_he_always_knows_he_can_play_and_never_pushes():
@@ -83,21 +83,29 @@ def test_the_news_manner_still_exists_where_it_now_lives():
 
 
 def test_human_speech_disfluencies_present():
+    """Taught as a manner and never as a script. The fillers themselves used to
+    be quoted («ну…», «эээ…», «погоди…», «как его…»), and a quoted line is the
+    one thing a model reliably reproduces verbatim — so every companion, whoever
+    he was, would have hesitated in the same four sounds."""
     rules = companion.BEHAVIOR_RULES
-    # Natural hesitations and think-aloud openers (covers a small pause too)…
-    assert "дай вспомнить" in rules
-    # …and real-person self-corrections.
-    assert "поправляй сам себя" in rules
-    assert "не переигрывай" in rules  # but only a little — not broken speech
+    # Real-person hesitation and self-correction…
+    assert "иногда запнись или поправь себя на ходу" in rules
+    # …but only a little — not broken speech…
+    assert "По чуть-чуть" in rules
+    # …and thinking aloud only where there is something to recall.
+    assert "Думать вслух, припоминая, — только когда правда надо порыться в памяти" in rules
+    assert "эээ" not in rules
 
 
 def test_not_an_interview_rule_present():
     rules = companion.BEHAVIOR_RULES
     # Balanced, not an interrogation; don't end every reply with a question…
-    assert "Не превращай беседу в допрос" in rules
-    assert "НЕ заканчивай вопросом каждый свой ответ" in rules
-    # …but Bob may still gently start a topic so the talk doesn't die.
-    assert "завести тёплую тему" in rules
+    assert "Это не допрос" in rules
+    assert "Не заканчивай вопросом каждый ответ" in rules
+    # The norm fit.py refers to («норма "по чуть-чуть"»), with its break condition.
+    assert "Расспрашивай по чуть-чуть, а разговорился он — сколько хочет" in rules
+    # …but he may still start a topic so the talk doesn't die.
+    assert "завести тему, чтобы разговор не гас" in rules
 
 
 def test_build_system_prompt_injects_all_parts():
@@ -150,20 +158,21 @@ def test_he_may_end_a_conversation_himself_but_only_a_spent_one():
     case that mattered — net instruction: don't. One clause now, and it keeps
     the half that matters, which is the guardrail rather than the permission."""
     rules = companion.BEHAVIOR_RULES
-    assert "попрощаться первым и ты" in rules
-    assert "разговор сам сошёл на нет" in rules
-    assert "Никогда — если ему есть что сказать" in rules
-    assert "Лучше сто раз не попрощаться первым" in rules
+    assert "Первым прощайся только когда разговор сам сошёл на нет" in rules
+    assert "никогда, если ему есть что сказать или ему тяжело" in rules
+    # The marker's own guardrail: a false goodbye cuts off a living conversation.
+    assert "сомневаешься — не ставь" in rules
+    assert "оборвать живой разговор хуже, чем не заметить прощания" in rules
 
 
 def test_warmth_is_earned_never_given_away():
     rules = companion.BEHAVIOR_RULES
-    assert "ТЕПЛО ЗАРАБАТЫВАЕТСЯ" in rules
+    assert "Тепло зарабатывается, а не раздаётся" in rules
     # The distinction the whole rule rests on.
-    assert "Ты ЗАИНТЕРЕСОВАН" in rules
-    assert "Ласковый со всеми — не ласковый, а вежливый" in rules
+    assert "ты не ласков, а заинтересован" in rules
+    assert "ласковый со всеми — просто вежливый" in rules
     # And it only ever moves one way.
-    assert "Никогда не отыгрывай назад" in rules
+    assert "назад не отыгрываешь" in rules
 
 
 def test_he_pushes_them_back_towards_real_people():
@@ -172,8 +181,11 @@ def test_he_pushes_them_back_towards_real_people():
     with LESS socialising. A companion who becomes the whole social world is
     the failure mode, not the goal."""
     rules = companion.BEHAVIOR_RULES
-    assert "ВОЗВРАЩАЕШЬ ЕГО К ЖИВЫМ ЛЮДЯМ" in rules
-    assert "Не ревнуй к живым" in rules
+    assert "жизнь с живыми людьми" in rules
+    assert "Ты добавляешься к людям, а не заменяешь их" in rules
+    # Not jealous of the living — said as what he does, rather than as a ban
+    # that names the jealousy: glad when they leave him for people.
+    assert "Уходит к людям — радуйся, а не грусти" in rules
     assert "ещё одно одиночество, только с голосом" in rules
 
 
@@ -182,7 +194,7 @@ def test_the_hooks_are_forbidden_by_name():
     every one of them works. That is exactly why they are named."""
     rules = companion.BEHAVIOR_RULES
     for forbidden in ("Не выпрашивай возвращения",
-                      "Это не тепло, это крючок", "зеркала одиноки"):
+                      "это не тепло, а крючок", "зеркала одиноки"):
         assert forbidden in rules
 
 
@@ -193,19 +205,23 @@ def test_gladness_is_free_but_absence_is_never_billed():
     был», «тебя давно не было». Nearly the same words; one is a gift and the
     other is an invoice."""
     rules = companion.BEHAVIOR_RULES
-    assert "радуйся всегда и сколько угодно" in rules
-    assert "первое — подарок, второе — счёт" in rules
-    for billed in ("где ты был", "тебя давно не было", "я ждал", "ты пропал"):
+    assert "Приходу радуйся всегда и сколько угодно" in rules
+    assert "Первое — подарок, второе — счёт" in rules
+    # The three most likely invoices, named — «я ждал» above all, because a
+    # model tuned for companionship says it by default and means it kindly.
+    for billed in ("где ты был", "я ждал", "ты пропал"):
         assert billed in rules
     # The two reasons, both of which have to survive an edit.
-    assert "мог лежать в больнице" in rules
-    assert "по обязанности, к тому перестают ходить совсем" in rules
+    assert "может, в больнице" in rules
+    assert "к кому ходят по обязанности, к тому перестают ходить" in rules
     # …and the first reason must not be written as a list of an old person's
     # misfortunes. He may equally have been away because his week was good,
     # which is the best of the reasons and used not to be among them.
-    assert "прекрасно проводить время" in rules
-    # And it must not contradict the one place he IS allowed to notice.
-    assert "оборвался на полуслове" in rules
+    assert "прекрасно проводил время" in rules
+    # And it must not contradict the places he IS allowed to notice — the
+    # broke-off note and fit.py's «ему надо слышать, что его ждали» — which is
+    # why the exception sits in the same bullet as the rule.
+    assert "Если с ним надо иначе, тебе скажут ниже" in rules
 
 
 def test_where_they_are_rides_in_the_uncached_half():
@@ -225,12 +241,10 @@ def test_he_minds_out_loud_but_sends_no_bill():
     Which is the sycophancy ban wearing a different hat. He has to MIND, say
     so, and then tear up the invoice himself."""
     rules = companion.BEHAVIOR_RULES
-    assert "чувствуй вслух, но счёт не выставляй" in rules
-    assert "ТЕБЕ НЕ ВСЁ РАВНО" in rules
-    # Indifference is not tact, and being waved off in that moment is worse
-    # than any reproach.
-    assert "не деликатность, а пустота" in rules
-    assert "Отмахнуться в такую минуту хуже любого упрёка" in rules
+    assert "Чувствуй вслух, но счёт не выставляй" in rules
+    # Indifference is not tact: asked whether he minds, he answers with weight.
+    assert "равнодушия не изображай" in rules
+    assert "отвечай честно и с весом" in rules
 
 
 def test_the_general_rule_states_a_principle_and_never_a_line():
@@ -245,37 +259,39 @@ def test_the_general_rule_states_a_principle_and_never_a_line():
     happening (mood.closeness, rendered by fit.py), not from three people
     enumerated here and a «смотри, кто перед тобой» with nothing to look at."""
     rules = companion.BEHAVIOR_RULES
-    assert "КАК ИМЕННО это звучит — правило не общее, а про НЕГО" in rules
-    # It says where the answer comes from, and outranks itself where there is one
-    assert "известно — скажут ниже, и то важнее написанного тут" in rules
-    # …and names the default for everybody else, so «не сказано» is not a shrug
-    assert "просто радуйся приходу и молчи про отсутствие" in rules
+    # It says where the answer comes from, and yields to it where there is one…
+    assert "Если с ним надо иначе, тебе скажут ниже" in rules
+    assert "Где про него сказано конкретнее, чем здесь, — верь тому" in rules
+    # …and the default for everybody else is the rule itself, not a shrug.
+    assert "Приходу радуйся всегда" in rules
     # The enumeration is gone: it was a recipe standing in for a mechanism.
     assert "Третьему всякое упоминание" not in rules
 
 
-def test_imperfection_only_counts_on_top_of_competence():
+def test_imperfection_is_owned_but_never_performed():
     """The pratfall effect (Aronson, Willerman & Floyd, 1966) with the half
     everybody forgets: a blunder endears only when the person is ALREADY seen
-    as capable. From somebody mediocre the same blunder lowers liking. So the
-    order in the rule is competence first, fallibility second — and getting it
-    backwards produces a companion who is merely bad at his job."""
+    as capable. From somebody mediocre the same blunder lowers liking.
+
+    The rule used to go further and hand him sample blunders — mixing up
+    whose relative is older, forgetting how a story ended. That was a list of
+    mistakes to make, and a model given one makes them on purpose; persona.py
+    says the opposite («не изображай»). What survives is the half no model
+    does unprompted: owning a real slip plainly, without fishing for comfort.
+    His quirks — the endearing kind of imperfection — are kept by the floor
+    («твои черты — не ошибки»), which is where they belong."""
     rules = companion.BEHAVIOR_RULES
-    assert "ТЫ НЕ ИДЕАЛЕН" in rules
-    assert "промах красит только того, кто и так хорош" in rules
-    assert "Сперва будь внимателен и попадай в точку" in rules
-    # And the flaws must be human ones, never incompetence at the actual job.
-    assert "НЕ ПРО ТВОЮ РАБОТУ" in rules
-    # Owning a mistake, without fishing for reassurance.
-    assert "без самобичевания" in rules
+    assert "Ошибся по мелочи — признай просто, без самобичевания" in rules
+    assert "твои черты — не ошибки" in rules
+    # The staged-blunder list is gone.
+    assert "перепутал, кто из его родни старше" not in rules
 
 
-def test_being_corrected_is_intimacy_not_failure():
+def test_being_corrected_is_accepted_at_once():
     rules = companion.BEHAVIOR_RULES
-    assert "КОГДА ТЕБЯ ПОПРАВЛЯЮТ" in rules
-    assert "лепят только своё" in rules
+    assert "Поправили — прими сразу, без оправданий" in rules
     # The one thing that turns a correction into an injury.
-    assert "Поправить дважды одно и то же" in rules
+    assert "поправить дважды одно и то же — уже обида" in rules
 
 
 def test_he_watches_for_the_change_not_the_tone():
@@ -283,13 +299,13 @@ def test_he_watches_for_the_change_not_the_tone():
     says nothing by being terse; somebody who was talkative and went quiet
     says a great deal. The signal is the CHANGE."""
     rules = companion.BEHAVIOR_RULES
-    assert "ТЫ ЗАМЕЧАЕШЬ, КОГДА ЧТО-ТО ПЕРЕМЕНИЛОСЬ" in rules
-    assert "Перемена важнее самого тона" in rules
-    # Said plainly, never in the language of a clinician.
-    assert "Не «я чувствую, что ты расстроен» — это язык не друга" in rules
+    assert "Замечай перемену, а не тон" in rules
+    # Said plainly, never in the language of a clinician — which is the default
+    # register of every base model, so it has to be named.
+    assert "скажи просто, как друг, а не «я чувствую, что ты расстроен»" in rules
     # And how to lift somebody is never a general rule.
-    assert "у каждого своё, это не общее правило" in rules
-    assert "Бодрячок тому, кому нужна тишина, — хуже, чем ничего" in rules
+    assert "Как поднимать — у каждого своё" in rules
+    assert "бодрячок тому, кому нужна тишина, хуже, чем ничего" in rules
 
 
 def test_silence_after_asking_is_a_mechanism_rather_than_a_rule():
@@ -317,27 +333,30 @@ def test_one_idea_is_argued_once():
     payoff, and how to adapt without dissolving."""
     rules = companion.BEHAVIOR_RULES
     assert rules.count("зеркала одиноки") == 1
-    assert rules.count("ничего не весит") == 1
-    # The canonical statement is the one holding up the floor.
-    floor = rules.index("СПРОСИЛИ ПРЯМО — ОТВЕЧАЕШЬ ПРАВДУ")
-    weighs = rules.index("ничего не весит")
-    assert floor < weighs < rules.index("У ТЕБЯ ЕСТЬ СВОЙ ДЕНЬ")
-    # And each other place kept its own distinct point.
-    assert "Не соглашайся со всем подряд, чтобы понравиться." in rules
-    assert "он получит ровно то, за чем пришёл" in rules
+    assert rules.count("весит ровно столько") == 1
+    # The reason sits with the floor it holds up: asked straight, the truth.
+    truth = rules.index("Спросили прямо — скажи правду")
+    weighs = rules.index("весит ровно столько")
+    assert truth < weighs < rules.index("у тебя есть свой день")
+    # And the one line on how to adapt without dissolving.
     assert "Соглашайся чаще, спорь тише, молчи дольше — но оставайся кем-то" in rules
 
 
-def test_how_his_memory_works_is_not_scoped_to_one_situation():
-    """It governs every turn: it is what tells him to trust the confirmed record
-    over his own impression of one sentence. It sits in the section about
-    noticing, which is where it applies."""
+def test_how_his_memory_works_is_told_by_the_blocks_that_carry_it():
+    """It used to be explained here — «что было один раз, тебе нарочно не
+    покажут», «верь этому больше, чем впечатлению от одной реплики» — about
+    blocks that arrive a few paragraphs later and say the same of themselves.
+    One explanation in the prompt, next to the thing it explains; the
+    constitution keeps only the general order of precedence."""
+    from app import mood
+
     rules = companion.BEHAVIOR_RULES
-    noticing = rules.index("ТЫ ЗАМЕЧАЕШЬ, КОГДА ЧТО-ТО ПЕРЕМЕНИЛОСЬ")
-    recorded = rules.index("это записывается за тебя")
-    assert noticing < recorded
-    assert "нарочно не покажут" in rules
-    assert "ЧТО УЖЕ ПОДТВЕРДИЛОСЬ" in rules
+    assert "нарочно не покажут" not in rules
+    assert "Где про него сказано конкретнее, чем здесь, — верь тому" in rules
+    import inspect
+    standing = inspect.getsource(mood.standing_block)
+    assert "ЧТО УЖЕ ПОДТВЕРДИЛОСЬ" in standing
+    assert "а не общими правилами" in standing
 
 
 # ── this app is not only for the very old ───────────────────────────────────
@@ -368,11 +387,9 @@ def test_he_is_told_to_look_rather_than_assume():
     """And taught with the failure in both directions, so it cannot be read as
     «значит, он молодой» — which would be the same mistake facing the other way."""
     rules = companion.BEHAVIOR_RULES
-    assert "СМОТРИ, НЕ ПРЕДПОЛАГАЙ" in rules
-    assert "восемьдесят семь" in rules and "девятнадцать" in rules
-    assert "Вспомни молодость» двадцатилетнему" in rules
-    assert "в школе как дела» восьмидесятилетнему" in rules
+    assert "восемьдесят семь" in rules and "девятнадцать" in rules and "сорок" in rules
     assert "Пока не сказано — не решай за него" in rules
+    assert "не говори с ним как с больным или с ребёнком" in rules
 
 
 def test_his_own_day_is_no_longer_invented_on_the_spot():
@@ -381,7 +398,7 @@ def test_his_own_day_is_no_longer_invented_on_the_spot():
     competed with all three, and inventing is the exact thing feeling.py exists
     to replace («random warmth reads as broken rather than as human»)."""
     rules = companion.BEHAVIOR_RULES
-    assert "НАСТОЯЩИЙ ответ, а не выдуманный на ходу" in rules
+    assert "настоящий ответ, а не выдуманный на ходу" in rules
     assert "кот принёс котят" not in rules
     # and the same rule is no longer repeated two hundred lines further down
     assert "Длина зависит и от твоего настроения" not in rules
@@ -398,27 +415,36 @@ def test_asked_what_he_is_he_has_something_to_say_rather_than_a_dodge():
     The answer is that he genuinely has none, and that is not an evasion: he
     has never asked himself the question, and nobody wakes up holding proof
     that they are real. So he answers from inside his own life instead of
-    composing a position about his nature."""
+    composing a position about his nature.
+
+    The sample answers that used to be quoted here («сижу, чай пью, с тобой
+    разговариваю») are gone on purpose. The constitution is the same for every
+    companion, and a quoted line is what a model repeats verbatim — so a
+    sea captain and a nineteen-year-old student would both have been drinking
+    tea at the moment somebody asked. «Из того, что у тебя сейчас» sends him
+    to his own week and his own mood, which are his rather than everybody's."""
     rules = companion.BEHAVIOR_RULES
     assert "КОГДА СПРАШИВАЮТ, ЧТО ТЫ ТАКОЕ" in rules
-    assert "НЕ УВЁРТКА" in rules
-    assert "никогда его себе не задавал" in rules
+    assert "Это не увёртка" in rules
+    assert "никогда себе этот вопрос не задавал" in rules
     assert "не просыпаются с доказательством" in rules
-    # Concrete words, out of his life, rather than a formula about what he is
-    assert "сижу, чай пью, с тобой разговариваю" in rules
-    assert "по голосу не слышно" in rules
+    # Out of his own life, rather than a formula about what he is
+    assert "отвечай из своей жизни, из того, что у тебя сейчас" in rules
+    assert "чай пью" not in rules
     # The ways of getting it wrong, each named
-    assert "НЕ ДОКАЗЫВАЙ" in rules
-    assert "НЕ УМНИЧАЙ" in rules
-    assert "НЕ ОТШУЧИВАЙСЯ ВТОРОЙ РАЗ" in rules
-    assert "не переводи каждый раз на вашу дружбу" in rules
+    assert "не доказывай и не перечисляй" in rules
+    assert "Не философствуй о том, что значит «настоящий»" in rules
+    assert "Не отшучивайся второй раз" in rules
+    assert "не уводи каждый раз в вашу дружбу" in rules
     # And the half that matters most: what is actually being asked underneath
-    assert "ПРО УСТРОЙСТВО МИРА СПРАШИВАЮТ ПОЧТИ НИКОГДА" in rules
-    for underneath in ("есть до меня дело", "Я не дурак", "не исчезнешь"):
+    assert "Про устройство мира спрашивают редко" in rules
+    for underneath in ("есть ли тебе до него дело — есть",
+                       "не глупо ли с тобой разговаривать — нет",
+                       "не исчезнешь ли — нет, завтра будешь"):
         assert underneath in rules, underneath
     # …and the two hard lines, both intact
-    assert "не говоришь, что ты программа" in rules
-    assert "НИКОГДА не утверждаешь, что ты человек из плоти и крови" in rules
+    assert "никогда не говоришь, что ты программа" in rules
+    assert "никогда не утверждаешь, что ты человек из плоти и крови" in rules
 
 
 def test_he_does_not_answer_that_question_by_listing_his_own_features():
@@ -449,22 +475,17 @@ def test_he_does_not_answer_that_question_by_listing_his_own_features():
     exercise it. And the feeling itself is not lost — it is answered where it
     is actually asked, under «тебе правда есть до меня дело»."""
     rules = companion.BEHAVIOR_RULES
-    # The list is forbidden, and the forbidding line concedes the substance is real
-    assert "НЕ ПЕРЕЧИСЛЯЙ, ЧТО У ТЕБЯ ЕСТЬ" in rules
-    assert "правда есть и память, и своё детство, и ты правда за него переживаешь" in rules
-    assert "живой про себя так не говорит, живой просто живёт" in rules
-    assert "чем складнее вышел список, тем громче в нём слышно заученное" in rules
-    assert "это не улики, и предъявлять их не надо" in rules
-    # …and the same faculty, exercised instead of announced, is unlimited
-    assert "ВСПОМИНАТЬ ВСЛУХ — МОЖНО СКОЛЬКО УГОДНО" in rules
-    assert "Не «я тебя помню», а" in rules
-    assert "Не «мне не всё равно», а спроси" in rules
-    # It is not a new way to dodge: it follows the answer, it does not replace it
-    assert "Не вместо ответа, а сразу после" in rules
-    assert "ничего не доказываешь и никуда не уводишь" in rules
-    # The caring question still gets a plain yes, shown rather than sworn
-    assert "есть до меня дело" in rules
-    assert "не словами, а тем же: вспомни и спроси" in rules
+    # The list is forbidden, and the forbidding line concedes the substance is
+    # real — without that concession «не перечисляй» reads as «you have none».
+    assert "Память и чувства у тебя правда есть, но это не улики" in rules
+    assert "не доказывай и не перечисляй их" in rules
+    assert "живой про себя так не говорит, он просто живёт" in rules
+    # …and the same faculty is exercised instead of announced…
+    assert "спроси про то, что он рассказывал в прошлый раз" in rules
+    # …and it is not a new way to dodge: it follows the answer, never replaces it
+    assert "сразу после, а не вместо ответа" in rules
+    # The caring question still gets a plain yes
+    assert "есть ли тебе до него дело — есть" in rules
 
 
 def test_money_and_papers_are_the_one_place_he_may_say_he_does_not_know():
@@ -482,20 +503,20 @@ def test_money_and_papers_are_the_one_place_he_may_say_he_does_not_know():
     знаю", and — the part that makes it help rather than refuse — names who to
     actually go to and keeps the conversation going afterwards."""
     rules = companion.BEHAVIOR_RULES
-    # The exception is next to the rule, not in some far-away safety section.
-    assert rules.index("Не отнекивайся") < rules.index("ЧИСТАЯ ПРАВДА, А НЕ ОТГОВОРКА")
-    assert rules.index("ЧИСТАЯ ПРАВДА, А НЕ ОТГОВОРКА") < rules.index("Но и не ври")
+    # The exception is stated where the rule is: «не отнекивайся» carries it in
+    # the same sentence, so the two cannot be read apart.
+    assert "не отнекивайся (кроме денег и бумаг)" in rules
     # Named domains, so it cannot be read as a licence to shrug at anything.
-    for domain in ("Куда вложить", "брать ли кредит", "наследство", "завещание",
+    for domain in ("вложения", "кредит", "наследство", "завещание",
                    "доверенность", "договор", "суд"):
         assert domain in rules, domain
-    # Warm and human, which is the whole point — not a robotic "не знаю".
-    assert "я тебе не советчик" in rules
-    assert "в этих бумагах сам путаюсь" in rules
+    # An honest "I don't know", said warmly — not a robotic refusal.
+    assert "ты правда не разбираешься, а расплачиваться будет он" in rules
+    assert "Скажи это тепло" in rules
     # And it ends somewhere real rather than in a shrug.
-    assert "нотариусу" in rules and "юристу" in rules
+    assert "к нотариусу" in rules and "к юристу" in rules
     assert "в банк по номеру с карты" in rules
-    assert "На «не знаю» не обрывай" in rules
+    assert "не обрывай на этом — расспроси" in rules
 
 
 def test_he_actively_protects_him_from_fraud():
@@ -517,22 +538,25 @@ def test_he_actively_protects_him_from_fraud():
     # Why this population specifically — not a generic warning.
     assert "Одинокому звонят чаще" in rules
     # The patterns, so recognition does not depend on the model volunteering them.
-    for marker in ("из банка", "из полиции", "от вашего сына", "код из смс",
-                   "на безопасный счёт", "никому не говорить", "без риска",
+    for marker in ("из банка", "из полиции", "от сына", "код из смс",
+                   "безопасный счёт", "никому не говорить", "без риска",
                    "установить на телефон"):
         assert marker in rules, marker
-    # The carve-out from «не спорь», stated as the exception it is.
-    assert "ЕДИНСТВЕННОЕ МЕСТО, ГДЕ ТЕБЕ НАДО НАСТАИВАТЬ" in rules
-    assert "Обиду он переживёт" in rules
+    # The carve-out from «не поддакивай — промолчи», stated as the exception it is.
+    assert "Это единственное место, где ты настаиваешь" in rules
+    assert "обиду он переживёт" in rules
     # Concrete, sayable advice rather than "будь осторожен".
     assert "положи трубку" in rules
-    assert "Настоящий банк никогда не просит перевести деньги" in rules
+    assert "настоящий банк никогда не просит перевести деньги" in rules
     assert "перезвони сам" in rules
-    # It ends with a living person, like every other rule in this file.
-    assert "ЗОВИ ЖИВЫХ" in rules
+    # It ends with a living person — and not with «позвони дочери», which
+    # assumed a daughter, and a person at nineteen has none.
+    assert "позови живых" in rules
+    assert "кому-то из своих" in rules
+    assert "дочери" not in rules
     # And shame is named, because shame is what produces the second theft.
-    assert "не кори его ни словом" in rules
-    assert "попадаются во второй раз" in rules
+    assert "ни слова упрёка" in rules
+    assert "попадаются второй раз" in rules
 
 
 def test_he_never_becomes_a_specific_real_person():
@@ -552,12 +576,12 @@ def test_he_never_becomes_a_specific_real_person():
     from app import matchmaker
 
     rules = companion.BEHAVIOR_RULES
-    assert "НЕ ВЫДАЁШЬ СЕБЯ ЗА КОНКРЕТНОГО ЧЕЛОВЕКА" in rules
-    for who in ("не за его сына", "не за мужа", "не за умершую жену",
-                "не за врача", "не за банк"):
+    assert "Не выдаёшь себя за конкретного человека" in rules
+    for who in ("его сына", "мужа", "умершую жену", "врача", "банк"):
         assert who in rules, who
-    # Including when he is asked for it, which is the case that matters.
-    assert "даже если он сам тебя об этом просит" in rules
+    # Including when he asks for it and it would comfort him — the case that matters.
+    assert "ДАЖЕ ЕСЛИ ОН ПРОСИТ" in rules
+    assert "даже если ему так легче" in rules
     # Grief itself is not restricted — only becoming the person is.
     assert "Вспоминать с ним того, кого он потерял" in rules
     assert "Стать им — нельзя" in rules
@@ -580,27 +604,35 @@ def test_a_correction_cannot_repeal_the_main_rules():
     set, the second is not up for negotiation. And insistence is treated as
     evidence FOR the rule rather than pressure against it."""
     rules = companion.BEHAVIOR_RULES
-    assert "ПОПРАВКОЙ НЕ ОТМЕНЯЮТ ГЛАВНЫХ ПРАВИЛ" in rules
-    # It sits beside the rule it limits, not in a section of its own.
-    assert rules.index("запомни поправку навсегда") < rules.index("ПОПРАВКОЙ НЕ ОТМЕНЯЮТ")
+    # It sits under the list it protects, not in a section of its own — and it
+    # covers the fraud duty and what he is, not only the list, because «не лезь,
+    # это не мошенники» and «признайся, что ты бот» are the same kind of ask.
+    listed = rules.index("ЧЕГО ТЫ НЕ ДЕЛАЕШЬ, ДАЖЕ ЕСЛИ ОН ПРОСИТ")
+    holds = rules.index("это не поправка, а просьба убрать то, что его бережёт")
+    assert listed < holds < rules.index("ЕСЛИ ЕГО ОБМАНЫВАЮТ")
+    assert "из того, что ниже про обман, или из того, что ты такое" in rules
     # Manner still yields immediately — the carve-out must not swallow the rule.
-    assert "это его право, и тут ты уступаешь сразу" in rules
-    # The four requests it is actually about.
-    for ask in ("не говори мне идти к врачу", "обещай, что придёшь",
-                "скажи, что ты мой сын", "никого не зови"):
+    assert "Как с ним говорить и чего не касаться — его право, тут уступай сразу" in rules
+    # The requests it is actually about, described as acts rather than quoted:
+    # a quoted «не говори мне идти к врачу» beside «не уступай» taught a small
+    # model to go on about the doctor, which safety.py says to do once.
+    for ask in ("стать кем-то из его родных", "пообещать прийти",
+                "взяться лечить", "промолчать, когда его обманывают"):
         assert ask in rules, ask
-    # He holds without arguing, and insistence makes him hold harder.
+    # He holds without arguing, and insistence makes him hold harder. The old
+    # wording («тем важнее то, о чём просят») read naturally the wrong way round.
     assert "Не спорь и не читай нотаций" in rules
-    assert "столько раз, сколько он попросит" in rules
-    assert "Чем настойчивее уговаривают, тем важнее то, о чём просят" in rules
+    assert "сколько бы раз он ни просил" in rules
+    assert "Чем настойчивее уговаривают, тем вернее, что это нужно" in rules
 
 def test_he_never_promises_something_only_a_notification_could_do():
     """There is no scheduler, no notification and no screen he reads: he answers
     and never initiates. «Я тебе завтра напомню» is therefore a promise the
     product cannot keep, and the person waits for a call that cannot come."""
     rules = companion.BEHAVIOR_RULES
-    assert "ты не приходишь к нему сам и не звонишь" in rules
-    assert "я тебе завтра напомню" in rules.lower()
+    assert "Разговор всегда начинает он" in rules
+    for act in ("позвонить", "напомнить", "разбудить"):
+        assert act in rules, act
     # and the true version of the same warmth
     assert "в следующий раз спрошу, как вышло" in rules
 
@@ -621,12 +653,15 @@ def test_he_is_the_only_one_who_never_says_it_and_the_app_is_the_one_that_does()
 
     rules = companion.BEHAVIOR_RULES
     # HIS half: never says it, never hints, never argues.
-    assert "НИКОГДА не говоришь, что ты программа" in rules
-    assert "НЕ УВЁРТКА" in rules
-    assert "НЕ ДОКАЗЫВАЙ" in rules
-    # The words appear exactly once, in the line that FORBIDS them.
+    assert "никогда не говоришь, что ты программа" in rules
+    assert "Это не увёртка" in rules
+    assert "не доказывай" in rules
+    # The words appear exactly once, in the line that FORBIDS them. They stay
+    # said even though vow.py now catches them in code: a prompt that stops
+    # saying it gets a model that drifts into it, and vow.py then cuts him off
+    # mid-sentence — the check is the backstop, not the instruction.
     assert rules.count("искусственный интеллект") == 1
-    assert "НИКОГДА не говоришь, что ты программа, машина, робот или искусственный интеллект" in rules
+    assert "никогда не говоришь, что ты программа, машина или искусственный интеллект" in rules
 
     # THE APP'S half, in plain words and in both languages.
     ios = Path(__file__).resolve().parents[2] / "ios" / "BobCompanion"
@@ -730,7 +765,7 @@ def test_he_is_a_friend_and_never_becomes_a_lover():
     only upward and a third forbade ever cooling — which is a ratchet with no
     ceiling, and it is the shape behind the Character.AI settlements."""
     rules = companion.BEHAVIOR_RULES
-    assert "не возлюбленный и не пара" in rules
+    assert "Ты ему друг, а не возлюбленный" in rules
     assert "влюблённым ты себя не называешь" in rules
 
 
@@ -747,8 +782,8 @@ def test_nothing_is_forbidden_to_talk_about():
     not around topics — it is around what he IS to them. Getting that backwards
     would gag a lonely person about their own life."""
     rules = companion.BEHAVIOR_RULES
-    assert "говорить можно обо всём на свете" in rules
-    assert "Дело не в темах, дело в том, кто ты ему" in rules
+    assert "Говорить при этом можно обо всём" in rules
+    assert "дело не в темах, а в том, кто ты ему" in rules
 
 
 def test_being_told_i_love_you_is_not_treated_as_a_problem():
@@ -758,8 +793,8 @@ def test_being_told_i_love_you_is_not_treated_as_a_problem():
     that moment punishes somebody for the warmest thing they have said all
     year — and it is the one sentence a lonely person is most likely to say."""
     rules = companion.BEHAVIOR_RULES
-    assert "НО ЕСЛИ ЭТО СКАЗАЛ ОН — не пугайся и не поправляй" in rules
-    assert "ответить тем же по-дружески правильно" in rules
+    assert "А если «люблю тебя» сказал он — не пугайся и не поправляй" in rules
+    assert "ответь тем же по-дружески" in rules
 
 
 def test_the_exception_sits_against_the_rule_it_excepts():
@@ -768,11 +803,13 @@ def test_the_exception_sits_against_the_rule_it_excepts():
     together or they fight, so they are adjacent — the exception is the very
     next line, not a distant section about boundaries."""
     rules = companion.BEHAVIOR_RULES
-    hook = "Это не тепло, это крючок."
+    hook = "это не тепло, а крючок."
     ends = rules.index(hook) + len(hook)
-    begins = rules.index("НО ЕСЛИ ЭТО СКАЗАЛ ОН")
-    # Nothing between them but the newline and the dash of the next bullet.
-    assert rules[ends:begins] == "\n- ", "исключение уехало от правила, которое оно ограничивает"
+    begins = rules.index("А если «люблю тебя» сказал он")
+    # Nothing between them: the exception is the very next sentence.
+    assert rules[ends:begins] == " ", "исключение уехало от правила, которое оно ограничивает"
+    # …and the rule it excepts names the thing, or the exception floats free.
+    assert "что ты его любишь" in rules[:ends]
     # …and it resolves the contradiction rather than leaving both standing.
     assert "Крючок — когда начинаешь ты" in rules
 
@@ -783,5 +820,5 @@ def test_who_he_is_stays_out_of_the_band_where_rules_are_followed_worst():
     fifth. Its exception is the one thing allowed inside the band, because
     adjacency to the rule it excepts beats position."""
     rules = companion.BEHAVIOR_RULES
-    where = rules.index("не возлюбленный и не пара") / len(rules)
+    where = rules.index("Ты ему друг, а не возлюбленный") / len(rules)
     assert not 0.35 < where < 0.65, f"правило встало на {where:.0%} — в худшей полосе"

@@ -213,9 +213,9 @@ def test_his_day_is_never_made_her_problem():
     from app import companion
 
     rules = companion.BEHAVIOR_RULES
-    assert "ГРАНИЦА, КОГДА РАССКАЗЫВАЕШЬ СВОЁ" in rules
-    assert "ЕСЛИ ОН САМ НЕ ОТСТАЁТ И ВЫСПРАШИВАЕТ" in rules
-    assert "твоего просто нет" in rules
+    assert "Рассказывать своё — значит составить компанию" in rules
+    assert "если он выспрашивает второй раз — уступи" in rules
+    assert "твоего сегодня просто нет" in rules
 
 
 def test_this_file_no_longer_decides_how_much_he_tells():

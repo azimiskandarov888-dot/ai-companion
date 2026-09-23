@@ -108,9 +108,10 @@ def block(user_id: str) -> str:
             "Значит дело в моменте, а не в напоре: смотри, каким он пришёл, и не решай заранее."
         )
 
-    # The first «нет» is not always a refusal. Why that is, and that some people
-    # need to be asked twice, is taught in the constitution («ПРО "УГОВАРИВАТЬ"»);
-    # what belongs here is only that for THIS man it has been watched happening.
+    # The first «нет» is not always a refusal. The constitution's default is the
+    # opposite — «роняй без следа» — and that is right for most people; this is
+    # the exception, and it is given only once it has been watched happening
+    # for THIS man, which is why it lives here and not there.
     again = c.get("уговорили_и_обрадовался", 0)
     if again >= CONFIRMED_AT:
         out.append(

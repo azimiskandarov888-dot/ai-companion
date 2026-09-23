@@ -51,7 +51,7 @@ any module, check it for that assumption; several had it.
 the person feels *less* alone, not emptier — and that they go on having a life
 with real people in it. Stanford 2026 found that people with limited offline
 networks felt MORE lonely after seeking emotional support from chatbots. That
-finding is the reason `ТЫ ВОЗВРАЩАЕШЬ ЕГО К ЖИВЫМ ЛЮДЯМ` exists, and it is the
+finding is the reason the living-people paragraph of `ЗАЧЕМ ТЫ НУЖЕН` exists, and it is the
 failure mode to design against, not a footnote.
 
 ---
@@ -86,19 +86,20 @@ is that he is **somebody**, with:
 somebody talks to every day for months. When improving "his character", improve
 *that prompt* first; everything else is plumbing around it.
 
-### The number that still hurts
+### The number that hurt, and what the cut did to it
 
 In a real assembled prompt with a fully written character:
 
-| | chars | share |
+| | before the cut | after (2026-09-23) |
 |---|---|---|
-| Universal constitution (identical for everybody) | 25,756 | **94.4%** |
-| Him — who he is, his week, his mood, his things | ~1,500 | **5.5%** |
+| Universal constitution (identical for everybody) | 25,756 chars — **94.4%** | 10,385 chars — **~87%** |
+| Him — who he is, his week, his mood, his things | ~1,500 — **5.5%** | ~1,500 — **~13%** |
 
-The rules about how to be kind are seventeen times bigger than the person. This
-is measured, not estimated. Reducing it means cutting constitution that
-currently works, so it should be done by measurement, not by eye. **It is the
-biggest open problem in the product.**
+The rules were seventeen times bigger than the person; now they are about
+seven. Still the larger half, and honestly so: what is left is the part a base
+model would get wrong without being told. **The next gain is on HIS side** —
+the writer (`matchmaker._WRITE_SYSTEM`) giving him more to be, not the
+constitution giving him less to obey.
 
 ---
 
@@ -158,7 +159,7 @@ Do not reopen these without being asked.
 | **13–17: the FULL app** — a friend their own age, who remembers. Teenagers are the second group this is for after the old, because loneliness peaks in adolescence. The memory starts off and is theirs to switch on | done (`/api/memory/keep`, asked once after a conversation ends) |
 | **He is an ACE in the one thing the person loves most.** Not «also interested» — a knower who always has something beyond what was asked. Warmth on its own runs out; a subject does not, and it is what gives a conversation a tomorrow. The one place they overlap on purpose — everything else about him stays his own | done (`matchmaker._WRITE_SYSTEM` → `expertise`, carried into every turn by `persona.py`) |
 | **The rules stay a file you can read, plus mechanisms in code. No fine-tuning.** Four reasons, in order of weight: a fine-tune trained on our own prompt's output can at best COPY it and never exceed it; Anthropic has no fine-tuning API, so it means leaving Claude for a small model that writes worse Russian; catastrophic forgetting is documented and shows up where you did not test; and weights cannot be read, diffed, or fixed by one line with a test | settled 2026-09-22 |
-| **The constitution gets CUT, from 26,348 chars to ~8,000.** This is the whole answer to the 94/6 problem. The first cut removes ~7,000 tokens from every request; fine-tuning would have removed the last ~3,000 for a month of work and no way back. Not started | decided, open |
+| **The constitution gets CUT, from 26,348 chars to ~8,000.** This is the whole answer to the 94/6 problem. Fine-tuning would have removed the last ~3,000 tokens for a month of work and no way back | **done 2026-09-23: 10,385 chars**, ~6,000 tokens off every request (estimate). Awaiting the owner's ear (§13.1) |
 | **Claude is out of the candidate list for the VOICE.** Owner's call on cost, and the observation is real. One caveat recorded in `tryout.py`: the audition runs uncached, so it charged ~4× what the app would. Still the dearest of the five | owner's call 2026-09-23 |
 | **The model is chosen BY EAR, on the real prompt.** A 50-phrase scored set was proposed and the owner replaced it with listening himself — correctly: no published benchmark measures warm ordinary Russian said to a lonely person, and the ear is the instrument that does | owner's call (`tryout.py`) |
 | One background agent at a time — credits are limited | working constraint |
@@ -530,9 +531,11 @@ the reason the tests that now hold them exist.
     Measured-for, not yet measured — see §7a. Check the `[кэш]` lines on the
     first real conversation before doing anything else about cost; if it is
     happening it is worth more than everything else on this list put together.
-11. **The constitution is still 26,348 chars.** The decision to cut it to
-    ~8,000 is made (§4) and the work is not started. This is the next piece of
-    real work on the prompt.
+11. ~~**The constitution is still 26,348 chars.**~~ Cut to 10,385. How it
+    was done, and why it ended above the ~8,000 estimate, is in §11. **Still
+    open: the owner's ear** — `python tryout.py --talk` on the new text, with
+    the old one in git (`git show 0072dc5:backend/app/companion.py`) to
+    compare against.
 12. **Persona growth rides in the cached half.** Bounded now (`persona._MOST`),
     but it is still user-varying content inside the half that must stay
     byte-identical — worth re-checking after any change there, because a silent
@@ -555,8 +558,7 @@ the reason the tests that now hold them exist.
 - **Model swaps** (Deepgram for ears, Mistral Large for the reader, GPT-5.6
   Luna for the voice). All need vendor keys and measurement. Untested vendor
   code is worse than none.
-- ~~**Cutting the constitution.**~~ No longer "not done" — **decided** (§4),
-  not started. What changed the answer was working out where the win actually
+- ~~**Cutting the constitution.**~~ **Done** 2026-09-23 (§4). What changed the answer was working out where the win actually
   is: 12,500 tokens per request today, ~5,500 after the cut, ~2,400 if the
   rules were baked into weights. **The first step is bigger than the second**,
   takes days rather than months, and is reversible. What survives the cut is
@@ -566,6 +568,23 @@ the reason the tests that now hold them exist.
   if he is being defrauded. What goes is the two-thirds that is either ordinary
   kindness every model already has, or has since become code (`vow.py`,
   `young.py`, `erase.py`).
+  **How it was actually done**, so the next edit follows the same rules: a
+  draft, then three independent reviews (the character's soul, whether a
+  cheap non-Claude model will follow it, the boundaries), each finding
+  checked against the code before it was taken or refused. What the research
+  settled: compliance falls as instructions are added and omission is how it
+  fails, fastest on small models (IFScale, arXiv 2507.11538); the top of a
+  prompt is followed best, so the spoken-output rule is now its second
+  sentence; a reason beats capitals; and **a quoted sample line is repeated
+  verbatim** — so the constitution now describes acts instead of quoting
+  lines, or every companion comes out saying «сижу, чай пью». It ended at
+  10,385 rather than ~8,000 because the reviews put back ~2,000 characters
+  that each showed a cheap model breaking without — «не вместо ответа, а
+  сразу после», «я ждал» by name, «не „я чувствую, что ты расстроен"»,
+  gladness when he leaves for people, «его спокойствие важнее». Refused, with
+  reasons in the tests: dropping the "never say you are an AI" line because
+  `vow.py` catches it (then `vow.py` cuts him off mid-sentence instead), and
+  dropping the 87/19/40 portraits (the owner's opening, §1).
 - **Fine-tuning the rules into a model.** Researched at length at the owner's
   request, across every provider — and **closed**. The decisive fact is not
   cost: the only training data we could produce is our own prompt's output, so
@@ -611,10 +630,9 @@ the reason the tests that now hold them exist.
   63 tests look like failures rather than like a missing plugin.
 - **The constitution has a ceiling** (`test_the_constitution_stays_within_its_ceiling`
   in `test_situations.py` — not in `test_companion.py`, which costs everyone a
-  minute). 26,400 chars, currently **26,348**. It has caught real regrowth more
-  than once. If you need room, pay for it by consolidation, not by raising it —
-  and note that the ceiling is about to become a floor to shoot at instead:
-  the decision is to get this to ~8,000 (§4).
+  minute). **10,500 chars, currently 10,385** — lowered from 26,400 by the cut
+  (§11). It has caught real regrowth more than once. If you need room, pay for
+  it by consolidation, not by raising it.
 - **A failing test is not a flake until you have found the reason.** Two tests
   in `test_body.py` compared decayed values at `rel=1e-6` while `body.state`
   fades by real wall-clock time with a 45-minute half-life. The arithmetic:
@@ -648,10 +666,9 @@ the reason the tests that now hold them exist.
 
 ## 13. Open questions for the owner
 
-1. ~~**The 94% / 5.5% ratio.**~~ Answered: **cut the constitution** (§4, §11).
-   The question that replaces it is narrower and is the next piece of work —
-   *which* third survives, and how do we know the cut did not cool him? The
-   owner judges by ear, as with the voice.
+1. ~~**The 94% / 5.5% ratio.**~~ Answered: **cut the constitution** (§4, §11)
+   — and cut. What is left is the question only the owner can answer: **did
+   the cut cool him?** By ear, old text against new, as with the voice.
 2. **Crisis lines.** Real numbers per country for `kind: "self"`, or a single
    international one?
 3. **Who ELSE gets notified on `danger`**, and how? The person now gets the
@@ -664,7 +681,7 @@ the reason the tests that now hold them exist.
    faster and more expressive than the current STT→LLM→TTS pipeline, but cannot
    carry a 125-rule constitution and locks the product to one vendor. Worth a
    separate conversation; not mixed into model choice. **Note that cutting the
-   constitution to 8,000 chars changes this arithmetic** — it may be worth
+   constitution to ~10,400 chars changes this arithmetic** — it may be worth
    re-asking afterwards rather than now.
 6. **Where the real money is.** The owner keeps optimising the brain, and the
    brain is the minority: **voice and hearing are 68% of the bill**, and Russian

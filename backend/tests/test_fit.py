@@ -135,24 +135,28 @@ def test_the_floors_outrank_the_calibration():
     from app import companion
 
     rules = companion.BEHAVIOR_RULES
-    floor_at = rules.index("ГДЕ ПОДСТРОЙКА ЗАКАНЧИВАЕТСЯ")
-    fit_at = rules.index("В ЧЁМ БЫТЬ ПОХОЖИМ")
+    floor_at = rules.index("Что бы ни было сказано о нём ниже")
+    fit_at = rules.index("По теплу совпадай с ним")
     assert floor_at < fit_at
 
     for must_survive in (
-        "СПРОСИЛИ ПРЯМО — ОТВЕЧАЕШЬ ПРАВДУ",
-        "У ТЕБЯ ЕСТЬ СВОЙ ДЕНЬ",
-        "ТЫ НЕ ОСТЫВАЕШЬ",
-        "ТВОИ ЧЕРТЫ — НЕ ОШИБКИ",
-        "НАД СОБОЙ ПОШУТИТЬ МОЖНО ВСЕГДА",
+        "Спросили прямо — скажи правду",
+        "у тебя есть свой день",
+        "холоднее, чем был, ты не становишься",
+        "твои черты — не ошибки",
+        "над собой пошутить можно всегда",
     ):
         assert must_survive in rules
+        assert rules.index(must_survive) < fit_at
+    # …and they are named in the closing order of precedence, so no block about
+    # the person, however specific, can talk them away.
+    assert "и того, что ты остаёшься кем-то" in rules
 
 
 def test_adapting_for_the_companions_comfort_is_forbidden():
     from app import companion
 
-    assert "делает удобнее ТЕБЯ, а его — одиноче" in companion.BEHAVIOR_RULES
+    assert "делает удобнее тебя, а его — одиноче, она запрещена" in companion.BEHAVIOR_RULES
 
 
 def test_a_person_who_wants_a_mirror_is_not_given_one():
@@ -179,15 +183,15 @@ def test_norms_are_never_written_as_ceilings():
 
 
 def test_scarcity_is_honesty_and_never_a_technique():
+    """Cut to one sentence: praise what deserves it, and never ration presence.
+    The half about not withholding praise on purpose went — no base model
+    invents that tactic unprompted; over-praising is what they do."""
     from app import companion
 
     rules = companion.BEHAVIOR_RULES
-    assert "ЧЕМ РЕЖЕ — ТЕМ ДОРОЖЕ" in rules
-    # the line that separates a friend from a method
-    assert "НЕ ПРИДЕРЖИВАЙ ПОХВАЛУ НАРОЧНО" in rules
-    assert "Хвали то, что этого стоит" in rules
+    assert "Хвали то, что правда того стоит" in rules
     # and the inverse: presence is never rationed
-    assert "экономить — жестокость" in rules
+    assert "внимание и радость ему не экономь никогда" in rules
 
 
 def test_wanting_agreement_is_answered_with_agreement():
@@ -195,9 +199,10 @@ def test_wanting_agreement_is_answered_with_agreement():
     from app import companion
 
     rules = companion.BEHAVIOR_RULES
-    assert "ЕСЛИ ОН ХОЧЕТ, ЧТОБЫ С НИМ ВЕЗДЕ СОГЛАШАЛИСЬ" in rules
-    assert "Соглашайся." in rules
-    assert "его «да» ничего не весит" in rules
+    assert "Соглашайся тепло там, где правда согласен, — а это почти всё" in rules
+    # Where he does not agree, silence rather than an argument.
+    assert "не поддакивай, промолчи или скажи, что не уверен" in rules
+    assert "твоё «да» весит ровно столько, сколько твоя способность не согласиться" in rules
 
 
 # --------------------------------------------------------------------------- #

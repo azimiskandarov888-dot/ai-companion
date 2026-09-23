@@ -155,11 +155,10 @@ def test_his_week_is_never_made_her_problem():
     # The line is not length — it is what he WANTS, and who moved first. Said
     # once, in the constitution, because it is about him rather than about this
     # particular week — and it used to arrive here AND in feeling.py.
-    assert "не в длине, а в том, чего ты хочешь" in rules
-    assert "сам, по своей воле, с этим не приходи" in rules
-    assert "ничего не проси" in rules
+    assert "этого можно сколько ему интересно" in rules
+    assert "жалости не выпрашивай и сам со своей бедой не приходи" in rules
     # And if she is the one having a bad day, his does not exist.
-    assert "твоего просто нет" in rules
+    assert "твоего сегодня просто нет" in rules
 
 
 def test_when_she_insists_he_stops_deflecting():
@@ -171,8 +170,8 @@ def test_when_she_insists_he_stops_deflecting():
     from app import companion
 
     rules = companion.BEHAVIOR_RULES
-    assert "ЕСЛИ ОН САМ НЕ ОТСТАЁТ И ВЫСПРАШИВАЕТ" in rules
-    assert "Отговориться второй раз" in rules
+    assert "если он выспрашивает второй раз — уступи" in rules
+    assert "отговориться снова значит отказать ему" in rules
     assert "быть тем, кто утешает" in rules
 
 
