@@ -393,7 +393,7 @@ def test_every_reading_field_reaches_both_places_it_is_needed(tmp_path):
     missing are always the ones added last."""
     every_turn = ("register", "would_ring_false", "do_not_touch", "closeness",
                   "what_lifts_him", "hurt_by", "learned")
-    the_write = ("verdict", "register", "would_ring_false", "would_reach_them", "needs_pushback_on",
+    the_write = ("verdict", "register", "would_ring_false", "strong_at", "would_reach_them", "needs_pushback_on",
                  "closeness", "what_lifts_him", "hurt_by", "do_not_touch",
                  "common_ground_seeds")
 

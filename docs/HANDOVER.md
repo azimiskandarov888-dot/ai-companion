@@ -4,7 +4,7 @@ Everything a new session needs to work on this project without re-deriving it
 or re-litigating decisions that are already made. Written 2026-09-17 on branch
 `claude/gallant-bardeen-0l6ff0`; revised through 2026-09-23 on
 `claude/awesome-planck-wdj4hu`, which is where all current work lives.
-**912 tests pass.** Every number below was measured by running the code, not
+**916 tests pass.** Every number below was measured by running the code, not
 estimated; where something is an estimate it says so.
 
 **What the last stretch was about.** Nine of the ten must-fix items are closed.
@@ -157,7 +157,8 @@ Do not reopen these without being asked.
 | **No age gate, ever.** The app opens and talks. The warm-up asks how old somebody is the way a friend asks; what changes is how he speaks and what is kept — never who is let in | done (`young.py`) |
 | **Under 13:** nothing is kept, and there is no button. Consent a child cannot give is not consent | done |
 | **13–17: the FULL app** — a friend their own age, who remembers. Teenagers are the second group this is for after the old, because loneliness peaks in adolescence. The memory starts off and is theirs to switch on | done (`/api/memory/keep`, asked once after a conversation ends) |
-| **He is an ACE in the one thing the person loves most.** Not «also interested» — a knower who always has something beyond what was asked. Warmth on its own runs out; a subject does not, and it is what gives a conversation a tomorrow. The one place they overlap on purpose — everything else about him stays his own | done (`matchmaker._WRITE_SYSTEM` → `expertise`, carried into every turn by `persona.py`) |
+| **He is an ACE in what the person loves or misses — never on the ground the person is proudest of, and not in his daily work even from another side.** A friend who outdoes you where your self-image lives is a rival (Tesser's self-evaluation maintenance); one who knows what you love or lack is somebody to be proud of and come back to. And he is **hopeless exactly where the person is strong**, so the person gets to explain — help that goes one way is lonely on both sides (Buunk & Prins 1998). Amends the 2026-09-18 «ace in what the person loves most», which on the owner's own test produced a co-founder for his startup | owner's call 2026-09-23 (`matchmaker._WRITE_SYSTEM`, `reading` → `strong_at`) |
+| **The reader decides WHAT somebody needs; the writer decides WHO gives it.** The request is honoured literally and never overruled — it decides what he is like; the need decides what he is for. Stated ideals do not predict whom people actually warm to (Eastwick & Finkel 2008), but a visibly overridden request provokes reactance, so neither is traded for the other. The first reading is a hypothesis; the conversations correct it (re-reads, confirmed observations) | owner's question, 2026-09-23 |
 | **The rules stay a file you can read, plus mechanisms in code. No fine-tuning.** Four reasons, in order of weight: a fine-tune trained on our own prompt's output can at best COPY it and never exceed it; Anthropic has no fine-tuning API, so it means leaving Claude for a small model that writes worse Russian; catastrophic forgetting is documented and shows up where you did not test; and weights cannot be read, diffed, or fixed by one line with a test | settled 2026-09-22 |
 | **The constitution gets CUT, from 26,348 chars to ~8,000.** This is the whole answer to the 94/6 problem. Fine-tuning would have removed the last ~3,000 tokens for a month of work and no way back | **done 2026-09-23: 10,385 chars**, ~6,000 tokens off every request (estimate). Awaiting the owner's ear (§13.1) |
 | **Claude is out of the candidate list for the VOICE.** Owner's call on cost, and the observation is real. One caveat recorded in `tryout.py`: the audition runs uncached, so it charged ~4× what the app would. Still the dearest of the five | owner's call 2026-09-23 |
@@ -621,7 +622,7 @@ the reason the tests that now hold them exist.
   Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
   Claude-Session: https://claude.ai/code/session_018PiV38FZMupJ19foghBRZm
   ```
-- **Tests:** `cd backend && python -m pytest -q`. **912 pass.** The suite is the
+- **Tests:** `cd backend && python -m pytest -q`. **916 pass.** The suite is the
   design record — test docstrings carry the *reasoning*, including what went
   wrong before. Read the docstring before changing an assertion; several tests
   exist because a previous fix was subtly wrong.

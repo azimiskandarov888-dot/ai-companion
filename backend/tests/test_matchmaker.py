@@ -13,7 +13,7 @@ import json
 import pytest
 from fastapi.testclient import TestClient
 
-from app import brain, companion, config, identity, main, matchmaker, memory, persona
+from app import brain, companion, config, identity, main, matchmaker, memory, persona, reading
 
 #: The endpoint tests post with no token, so the created friend belongs to the
 #: anonymous user — the same one the direct calls below use.
@@ -561,10 +561,74 @@ def test_his_topic_is_aimed_at_what_the_person_loves():
     it landed. It still comes from there — it has to, or he is a mirror — but
     it now has to come out where the person is already looking."""
     w = matchmaker._WRITE_SYSTEM
-    assert "ПОПАДАЕТ В ТО, ЧТО ЧЕЛОВЕК ЛЮБИТ БОЛЬШЕ ВСЕГО" in w
+    assert "ТО, ЧТО ЧЕЛОВЕК ЛЮБИТ ИЛИ ПО ЧЕМУ СКУЧАЕТ" in w
     assert "сделай друга АСОМ ровно в ней" in w
     # An ace, not an enthusiast. «Тоже интересуется» is the failure this fixes.
     assert "Не «тоже интересуется»" in w
+
+
+def test_he_is_never_the_better_man_on_the_persons_own_ground():
+    """Owner's decision, 2026-09-23, amending the one above, after he ran the
+    whole pipeline on himself. His life is his startup; every reading, and so
+    every writer, handed him a friend who was an ace at exactly that. «Не
+    быть лучше юзера в том, в чём юзер считает себя самым лучшим — это будет
+    унижением.» He would have been glad of an ace in the philosophy of
+    feelings, or in ping-pong, which he loves to play.
+
+    It is the best-replicated finding there is on this: Tesser's
+    self-evaluation maintenance model (1988). A close other who outperforms
+    you in a domain central to your self-image is a threat, and the closer
+    they are the worse it is; the same performance in a domain that is not
+    yours makes you proud of them. So the topic comes from what the person
+    loves but does not master, or from what he misses — never from where his
+    pride lives. And the old way of finding it — «where he talks longest» —
+    finds his work, which is the one place it must not land."""
+    w = matchmaker._WRITE_SYSTEM
+    assert "НО НЕ ТО, В ЧЁМ ОН САМ СИЛЬНЕЕ ВСЕХ" in w
+    assert "Тему бери из первого и никогда из второго" in w
+    assert "унижает его, даже не желая" in w
+    # …and not his daily work either, not even from another side. The first
+    # run of this rule on the owner kept programming away from the friend and
+    # made him an expert in the casings for the owner's own smart glasses:
+    # a co-founder, which is exactly what «hard projects are better alone»
+    # had ruled out.
+    assert "не из того, чем человек занят с утра до ночи, даже с другого боку" in w
+    assert "бери тему из того, чего ему не хватает" in w
+    assert "говорит охотнее и дольше прочего" not in w
+    # The reading has to say where that ground is, or the writer cannot avoid it.
+    assert "strong_at — " in reading._READING_SYSTEM
+    assert "В чём он сам силён" in reading.as_brief({"strong_at": "код"})
+
+
+def test_he_does_not_know_what_the_person_knows():
+    """The other half of the same decision: «чтобы не казаться лучше юзера,
+    он также должен не знать некоторые вещи, которые знает юзер». Buunk &
+    Prins (1998): people who feel either deprived OR advantaged in the
+    give-and-take of help with their closest friend are the lonelier ones.
+    Help has to go both ways — so one of the things he is hopeless at sits
+    exactly on the person's ground, and the voice is told to ask there."""
+    w = matchmaker._WRITE_SYSTEM
+    assert "И одно — ровно там, где силён сам человек" in w
+    assert "там друг спрашивает, а человек объясняет" in w
+    block = persona.build_persona_block({"name": "Гриша", "hopeless": ["в компьютерах ни в зуб ногой"]})
+    assert "спрашивай его: там учит он" in block
+
+
+def test_the_reading_says_why_and_the_request_says_how():
+    """Who decides what somebody actually needs? The reader — it is a
+    diagnosis, made from how he wrote. The writer decides WHO gives it to
+    him. And the request is not overruled to get there: people's stated
+    ideals do not predict whom they actually warm to (Eastwick & Finkel,
+    2008), but a request visibly overridden provokes reactance. So the
+    request decides what he is like, the need decides what he is for, and
+    neither is traded for the other."""
+    w = matchmaker._WRITE_SYSTEM
+    assert "ЗАЧЕМ этот человек ему" in w
+    assert "Выполни просьбу буквально и пиши его ради того, чего не хватает" in w
+    ten = matchmaker._TEN_SYSTEM
+    assert "Оно говорит, чего ему не хватает" in ten
+    assert "не больше того, что у него и так есть" in ten
+    assert "ни один из десяти не мастер того, в чём человек сам сильнее всего" in ten
 
 
 def test_he_has_more_to_give_there_than_was_asked_for():
@@ -595,3 +659,15 @@ def test_the_topic_reaches_every_single_turn():
     assert "омуты на реке" in block
     stable, _ = companion.build_system_parts(persona_block=block)
     assert "омуты на реке" in stable
+
+
+def test_the_interview_hears_about_a_love_that_is_not_his_work():
+    """The writer can only aim the friend's topic at a love it has heard of.
+    The owner's own interview followed his work from question to question —
+    which is good interviewing — and never learned that he loves ping-pong,
+    so there was nothing for the topic to land on but the one place it must
+    not. One question, asked once, is what makes the rule above possible."""
+    from app import intake
+
+    assert "ПРО ТО, ЧТО ОН ЛЮБИТ ПРОСТО ТАК, не по делу и не по работе" in intake._ASK_SYSTEM
+

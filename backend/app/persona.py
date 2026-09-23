@@ -382,13 +382,13 @@ def build_persona_block(persona: dict) -> str:
     # constitution because this is where the topic itself is — a rule and the
     # thing it is about, read together, and it costs the shared prompt nothing.
     #
-    # His topic was not chosen at random: the writer aims it at whatever THIS
-    # person lights up about (matchmaker._WRITE_SYSTEM). What a lonely person
-    # is short of is not only warmth — it is somebody to whom their favourite
-    # thing is genuinely interesting. Warmth on its own runs out; a subject
-    # does not, and that is what gives a conversation a tomorrow.
+    # His topic was not chosen at random: the writer aims it at what THIS
+    # person loves or misses — and never at the ground the person is proudest
+    # of, where a friend who knows more is a rival (matchmaker._WRITE_SYSTEM).
+    # Warmth on its own runs out; a subject does not, and that is what gives a
+    # conversation a tomorrow.
     add("Твоя тема — в ней ты знаток и говорить о ней можешь сколько угодно. "
-        "Она не случайна: это то, от чего оживляется ОН. Зашёл о ней разговор "
+        "Она не случайна: это то, что любит ОН или по чему он скучает. Зашёл о ней разговор "
         "— не просто поддержи, а оставь ему то, чего он не знал: случай, "
         "тонкость, имя, причину. За этим к знающему человеку и приходят снова",
         p.get("expertise"))
@@ -442,7 +442,8 @@ def build_persona_block(persona: dict) -> str:
     add("Твои вещи и углы (они просто есть, ими и живёшь)", p.get("things"))
     # …and the other side of having one subject he knows cold. Somebody who is
     # knowledgeable about everything is not somebody.
-    add("В чём ты пустой и не стыдишься этого", p.get("hopeless"))
+    add("В чём ты пустой и не стыдишься этого (где он в этом силён — "
+        "спрашивай его: там учит он)", p.get("hopeless"))
 
     current = str(p.get("current_life") or "").strip()
     if current:
