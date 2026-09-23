@@ -164,15 +164,37 @@ def test_he_is_not_made_to_apologise_twice():
     assert "не извиняйся второй раз" in body.block(U, may_sneeze=False)
 
 
-def test_a_yawn_does_not_make_him_less_tired():
+def _stopped_clock(monkeypatch) -> None:
+    """Остановить часы на время замера — иначе мерится не зевок, а диск.
+
+    `body.state` считает увядание по НАСТОЯЩЕМУ времени, прошедшему с записи.
+    У горла период полураспада сорок пять минут, и при допуске rel=1e-6 двух
+    замеров хватает разойтись, если между ними прошло больше ЧЕТЫРЁХ
+    МИЛЛИСЕКУНД; у усталости — тринадцати. А между ними лежит запись в базу.
+
+    То есть оба теста проходили не потому, что зевок ничего не трогает, а
+    потому, что диск успевал обернуться. При полном прогоне он однажды не
+    успел — и уронил сборку на файле, которого никто не касался. Такой тест
+    не строгий, а мнимо строгий: его точность измеряет скорость машины.
+
+    С остановленными часами утверждение становится тем, чем всегда хотело
+    быть: зевок меняет тело РОВНО НА НОЛЬ, и это проверяется точно.
+    """
+    frozen = time.time()
+    monkeypatch.setattr(time, "time", lambda: frozen)
+
+
+def test_a_yawn_does_not_make_him_less_tired(monkeypatch):
     """Which is exactly why one yawn tends to be followed by another."""
+    _stopped_clock(monkeypatch)
     _talk(16)
     before = body.state(U)["tired"]
     body.yawned(U)
     assert body.state(U)["tired"] == pytest.approx(before, rel=1e-6)
 
 
-def test_a_yawn_does_not_quietly_clear_his_throat_either():
+def test_a_yawn_does_not_quietly_clear_his_throat_either(monkeypatch):
+    _stopped_clock(monkeypatch)
     _talk(16)
     before = body.state(U)["throat"]
     body.yawned(U)
