@@ -312,7 +312,24 @@ async def _extract(user_id: str, said: str) -> dict:
     # that fixes wording; see mood.subjects_seen.
     topics = mood.subjects_seen(user_id)
     known_bob = memory.believes(user_id, "bob") or "(пока ничего)"
-    prompt = (
+    message = await client.messages.create(
+        model=config.BRAIN_MODEL,
+        max_tokens=800,
+        system=_EXTRACTION_SYSTEM,
+        messages=[{"role": "user", "content": extraction_prompt(
+            known_elder, known_bob, topics, said)}],
+    )
+    text = "".join(b.text for b in message.content if b.type == "text").strip()
+    return _parse_json(text)
+
+
+def extraction_prompt(known_elder: str, known_bob: str, topics: str, said: str) -> str:
+    """What the scribe is handed, from what is known and what was just said.
+
+    Pure, and apart from the call, so the owner's own test (backend/myself.py)
+    can hand the same words to other models without a database behind it.
+    """
+    return (
         f"Что уже известно о ЧЕЛОВЕКЕ (не повторяй это):\n{known_elder}\n\n"
         f"Что уже известно о БОБЕ (не повторяй это):\n{known_bob}\n\n"
         + (
@@ -324,14 +341,6 @@ async def _extract(user_id: str, said: str) -> dict:
         + f"Что было сказано с прошлого раза:\n{said}\n\n"
         "Выпиши новое, что стоит запомнить, в требуемом JSON."
     )
-    message = await client.messages.create(
-        model=config.BRAIN_MODEL,
-        max_tokens=800,
-        system=_EXTRACTION_SYSTEM,
-        messages=[{"role": "user", "content": prompt}],
-    )
-    text = "".join(b.text for b in message.content if b.type == "text").strip()
-    return _parse_json(text)
 
 
 def _parse_json(text: str) -> dict:

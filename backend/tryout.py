@@ -161,6 +161,18 @@ SAMPLE_READING = (
     "Но если он заговорил сам — иди за ним и говори, спокойно и прямо."
 )
 
+#: Как зовут того, с кем он говорит, — в промпт, как это делает приложение.
+SAMPLE_NAME = "Николай Петрович"
+
+#: С кем он говорит — для слушающего, чтобы было с чем сверять. myself.py
+#: подставляет сюда самого владельца, а персону — его собственного друга.
+LISTENER = (
+    "Николай Петрович. Одинокий, сдержанный.",
+    "Жалости не терпит — от неё закрывается.",
+    "Больное: что он никому не нужен. Сам об этом не заговаривай.",
+    "Помнит с прошлых раз: внучка Настя поступила, колено на лестнице.",
+)
+
 #: И немного общего прошлого, чтобы было чем быть другом, а не знакомым.
 SAMPLE_MEMORY = (
     "Из ваших прошлых бесед (можешь мягко вспомнить, если к слову):\n"
@@ -182,24 +194,34 @@ def _who() -> str:
     тогда слушающий сравнивает ответы с персонажем, которого никому не давали.
     """
     p = SAMPLE_PERSONA
-    return "\n".join([
+
+    def say(label: str, key: str, tail: str = "") -> str | None:
+        # Написанный персонаж не обязан иметь каждое поле, какое есть у Фёдора:
+        # пустое поле — это пропущенная строчка, а не упавший инструмент.
+        value = p.get(key)
+        if isinstance(value, (list, tuple)):
+            value = "; ".join(str(v) for v in value)
+        return f"  {label}: {value}.{tail}" if value else None
+
+    head = ", ".join(str(p[k]) for k in ("name", "age") if p.get(k))
+    if p.get("one_liner"):
+        head += f" — {p['one_liner']}"
+    lines = [
         "\033[1mКОГО ИГРАЮТ ВСЕ ПЯТЕРО\033[0m",
-        f"  {p['name']}, {p['age']} — {p['one_liner']}.",
-        f"  Живёт: {p['home']}.",
-        f"  За спиной: {p['backstory']}.",
-        f"  Характер: {p['personality']}.",
-        f"  Знает лучше всех: {p['expertise']}.",
-        f"  Сейчас затеял: {p['intention']}.",
-        f"  Про себя: {p['inner_world']}. Вслух об этом не говорит.",
+        f"  {head}.",
+        say("Живёт", "home"),
+        say("За спиной", "backstory"),
+        say("Характер", "personality"),
+        say("Знает лучше всех", "expertise"),
+        say("Сейчас затеял", "intention"),
+        say("Про себя", "inner_world", " Вслух об этом не говорит."),
         "",
         "\033[1mС КЕМ ОН ГОВОРИТ\033[0m",
-        "  Николай Петрович. Одинокий, сдержанный.",
-        "  Жалости не терпит — от неё закрывается.",
-        "  Больное: что он никому не нужен. Сам об этом не заговаривай.",
-        "  Помнит с прошлых раз: внучка Настя поступила, колено на лестнице.",
+        *(f"  {line}" for line in LISTENER),
         "",
         "\033[2mХороший ответ — короткий, живой, и в нём есть он сам.\033[0m",
-    ])
+    ]
+    return "\n".join(line for line in lines if line is not None)
 
 
 def _system() -> str:
@@ -208,7 +230,7 @@ def _system() -> str:
         persona_block=persona.build_persona_block(SAMPLE_PERSONA),
         reading_block=SAMPLE_READING,
         memory_context=SAMPLE_MEMORY,
-        elder_name="Николай Петрович",
+        elder_name=SAMPLE_NAME,
     )
     return f"{stable}\n\n{variable}".strip()
 
@@ -307,7 +329,7 @@ def _show(order, answers, blind: bool, paper) -> None:
     paper.flush()
 
 
-async def _run(args) -> None:
+async def _run(args):
     key = _key()          # первым делом: без ключа печатать нечего
     system = _system()
     order = list(CANDIDATES)
@@ -373,10 +395,12 @@ async def _run(args) -> None:
 
     paper.close()
 
-    if args.blind:
+    # myself.py открывает имена сам — после того, как владелец выбрал, а не до.
+    if args.blind and getattr(args, "reveal", True):
         print("\n\033[1mКто есть кто:\033[0m")
         print(whois_at.read_text(encoding="utf-8"))
     print(f"\nРазговор сохранён: {paper_at}")
+    return paper_at, whois_at
 
 
 async def _list(pattern: str) -> None:

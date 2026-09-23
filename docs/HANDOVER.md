@@ -4,7 +4,7 @@ Everything a new session needs to work on this project without re-deriving it
 or re-litigating decisions that are already made. Written 2026-09-17 on branch
 `claude/gallant-bardeen-0l6ff0`; revised through 2026-09-23 on
 `claude/awesome-planck-wdj4hu`, which is where all current work lives.
-**901 tests pass.** Every number below was measured by running the code, not
+**907 tests pass.** Every number below was measured by running the code, not
 estimated; where something is an estimate it says so.
 
 **What the last stretch was about.** Nine of the ten must-fix items are closed.
@@ -621,7 +621,7 @@ the reason the tests that now hold them exist.
   Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
   Claude-Session: https://claude.ai/code/session_018PiV38FZMupJ19foghBRZm
   ```
-- **Tests:** `cd backend && python -m pytest -q`. **901 pass.** The suite is the
+- **Tests:** `cd backend && python -m pytest -q`. **907 pass.** The suite is the
   design record — test docstrings carry the *reasoning*, including what went
   wrong before. Read the docstring before changing an assertion; several tests
   exist because a previous fix was subtly wrong.
@@ -641,10 +641,16 @@ the reason the tests that now hold them exist.
   not because the code was right, and the full suite eventually caught one out.
   Both now stop the clock. Look for this shape anywhere a test asserts on a
   value that decays.
-- **Two tools, both meant to be run by a person with ears**, not by CI:
-  `audition.py` (voices, side by side) and `tryout.py` (brains, §7b). Both keep
-  their output on disk so a judgement can be revisited a day later rather than
-  trusted to memory of the third one.
+- **Three tools, all meant to be run by a person with ears**, not by CI:
+  `audition.py` (voices, side by side), `tryout.py` (brains, §7b), and
+  `myself.py` — every agent tested on the owner himself, stage by stage in the
+  order a person meets them (interview → reading → sketches → writer → voice →
+  scribe), because he cannot judge what a 68-year-old should hear and can judge
+  everything about himself. Shortlists and why: `docs/MODELS-FOR-EACH-AGENT.md`.
+  It writes no prompt of its own — it swaps only the model behind
+  `brain.think` / `brain.generate_text`, so it cannot drift from the app. All
+  three keep their output on disk so a judgement can be revisited a day later
+  rather than trusted to memory of the third one.
 - **Setup is one command per platform:** `setup.sh` (macOS/Linux), `setup.ps1`
   (Windows). Both refuse to run if a real key is sitting in `.env.example` —
   that file is deliberately NOT hidden from git (`!.env.example` in

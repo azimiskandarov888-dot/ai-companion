@@ -360,6 +360,81 @@ def _their_story(
     return text
 
 
+# ── the stages, each on its own ─────────────────────────────────────────────
+#
+# Split out of create_companion so that something other than signup can run
+# them one at a time — the owner's own test (backend/myself.py) runs each
+# stage on several models and keeps the output it likes as the next stage's
+# input. The composition is the app's, defined once, here; a tool that built
+# these prompts itself would drift from the product on the first edit.
+
+
+async def sketch_ten(context: str, rng: random.Random | None = None) -> list[str]:
+    """Ten strangers for this person, from one call. The caller rolls the dice."""
+    # Ten strangers, one call. This used to run on the fast model, on the
+    # argument that «sketching breadth is cheap, and someone is watching the
+    # arriving screen» — and that is the assumption to distrust. Breadth is
+    # precisely what a small model does not have: asked for ten people it
+    # returns one person ten times, which is the mode this whole stage exists
+    # to break. The dice cannot pick variety out of a list that has none, and
+    # the deep write downstream cannot put back what was never sketched.
+    #
+    # So the writer's model, at LOW effort. Low because this is breadth rather
+    # than depth — ten one-paragraph strangers do not repay deliberation — and
+    # low is also what keeps the waiting screen honest, in a signup flow that
+    # already spends minutes on the reading and the write either side of it.
+    sketch_prompt = (
+        context + "\n\nСЛУЧАЙНЫЕ ИСКРЫ (толчки воображению): "
+        + ", ".join(_roll_sparks(rng))
+    )
+    ten = await brain.generate_text(
+        _TEN_SYSTEM, sketch_prompt, max_tokens=1400,
+        model=config.WRITER_MODEL, effort="low", timeout=_STAGE_TIMEOUT,
+    )
+    return _split_sketches(ten)
+
+
+async def write_him(context: str, chosen: str) -> dict:
+    """The deep write: one sketch, chosen by the dice, becomes a whole person."""
+    write_prompt = context + "\n\nВЫБРАННЫЙ СЛУЧАЕМ НАБРОСОК (разверни его):\n" + chosen
+
+    # ONE retry, here specifically. Every earlier stage of creation
+    # degrades gracefully on a bad response — a failed reading is skipped, an
+    # unparseable ten-strangers reply falls back to treating the whole thing
+    # as one sketch — but there is no fallback for a broken deep write: it
+    # either is a person or the entire creation fails, on the one screen where
+    # that means «он пока не смог прийти» to someone who came here specifically
+    # to meet him. Sending the identical prompt again is not guesswork: an
+    # incomplete or malformed JSON reply is a real, observed failure mode of
+    # the model itself (not a network error — it answered, just not cleanly),
+    # and asking a second time routinely gets a clean one.
+    created = None
+    failure: RuntimeError | None = None
+    for _attempt in range(2):
+        # think(), not generate_text(): the best model, allowed to actually
+        # think about who this person should be before it starts writing him.
+        # Everything else in creation optimises for breadth or speed; this one
+        # call is the character, and it is the only one whose output somebody
+        # lives with every day for months.
+        raw = await brain.think(
+            _WRITE_SYSTEM,
+            write_prompt,
+            model=config.WRITER_MODEL,
+            effort=config.WRITER_EFFORT,
+            max_tokens=_WRITE_MAX_TOKENS,
+            timeout=_WRITE_TIMEOUT,
+        )
+        try:
+            created = _extract_json(raw)
+            break
+        except RuntimeError as e:
+            failure = e
+    if created is None:
+        assert failure is not None
+        raise failure
+    return created
+
+
 async def create_companion(
     user_id: str,
     about: str,
@@ -402,67 +477,11 @@ async def create_companion(
 
     context = story + ("\n\n" + brief if brief else "")
 
-    # Ten strangers, one call. This used to run on the fast model, on the
-    # argument that «sketching breadth is cheap, and someone is watching the
-    # arriving screen» — and that is the assumption to distrust. Breadth is
-    # precisely what a small model does not have: asked for ten people it
-    # returns one person ten times, which is the mode this whole stage exists
-    # to break. The dice cannot pick variety out of a list that has none, and
-    # the deep write downstream cannot put back what was never sketched.
-    #
-    # So the writer's model, at LOW effort. Low because this is breadth rather
-    # than depth — ten one-paragraph strangers do not repay deliberation — and
-    # low is also what keeps the waiting screen honest, in a signup flow that
-    # already spends minutes on the reading and the write either side of it.
-    sketch_prompt = (
-        context + "\n\nСЛУЧАЙНЫЕ ИСКРЫ (толчки воображению): "
-        + ", ".join(_roll_sparks(rng))
-    )
-    ten = await brain.generate_text(
-        _TEN_SYSTEM, sketch_prompt, max_tokens=1400,
-        model=config.WRITER_MODEL, effort="low", timeout=_STAGE_TIMEOUT,
-    )
-
     # The dice choose — never the model. Asked to choose, it would pick its
     # safe favourite, and the mode would be back.
-    chosen = r.choice(_split_sketches(ten))
+    chosen = r.choice(await sketch_ten(context, rng))
+    created = await write_him(context, chosen)
 
-    write_prompt = context + "\n\nВЫБРАННЫЙ СЛУЧАЕМ НАБРОСОК (разверни его):\n" + chosen
-
-    # ONE retry, here specifically. Every earlier stage in this function
-    # degrades gracefully on a bad response — a failed reading is skipped, an
-    # unparseable ten-strangers reply falls back to treating the whole thing
-    # as one sketch — but there is no fallback for a broken deep write: it
-    # either is a person or the entire creation fails, on the one screen where
-    # that means «он пока не смог прийти» to someone who came here specifically
-    # to meet him. Sending the identical prompt again is not guesswork: an
-    # incomplete or malformed JSON reply is a real, observed failure mode of
-    # the model itself (not a network error — it answered, just not cleanly),
-    # and asking a second time routinely gets a clean one.
-    created = None
-    failure: RuntimeError | None = None
-    for _attempt in range(2):
-        # think(), not generate_text(): the best model, allowed to actually
-        # think about who this person should be before it starts writing him.
-        # Everything else in creation optimises for breadth or speed; this one
-        # call is the character, and it is the only one whose output somebody
-        # lives with every day for months.
-        raw = await brain.think(
-            _WRITE_SYSTEM,
-            write_prompt,
-            model=config.WRITER_MODEL,
-            effort=config.WRITER_EFFORT,
-            max_tokens=_WRITE_MAX_TOKENS,
-            timeout=_WRITE_TIMEOUT,
-        )
-        try:
-            created = _extract_json(raw)
-            break
-        except RuntimeError as e:
-            failure = e
-    if created is None:
-        assert failure is not None
-        raise failure
     # Only now, once there is definitely a new friend to replace him with, is
     # the old one erased. Wiping first would mean a failed write leaves this
     # person with nobody at all.

@@ -119,13 +119,19 @@ def save_persona(user_id: str, data: dict) -> dict:
     a gap is honest, a borrowed life is not.
     """
     path = identity.persona_path(user_id)
-    cleaned = {k: v for k, v in data.items() if v not in (None, "")}
-    cleaned.setdefault("address", "ты")
-    cleaned.pop("_note", None)
+    cleaned = clean(data)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
         json.dumps(cleaned, ensure_ascii=False, indent=2), encoding="utf-8"
     )
+    return cleaned
+
+
+def clean(data: dict) -> dict:
+    """A written persona as it is kept: blanks dropped, «ты» by default."""
+    cleaned = {k: v for k, v in data.items() if v not in (None, "")}
+    cleaned.setdefault("address", "ты")
+    cleaned.pop("_note", None)
     return cleaned
 
 
