@@ -4,7 +4,7 @@ Everything a new session needs to work on this project without re-deriving it
 or re-litigating decisions that are already made. Written 2026-09-17 on branch
 `claude/gallant-bardeen-0l6ff0`; revised through 2026-09-23 on
 `claude/awesome-planck-wdj4hu`, which is where all current work lives.
-**909 tests pass.** Every number below was measured by running the code, not
+**910 tests pass.** Every number below was measured by running the code, not
 estimated; where something is an estimate it says so.
 
 **What the last stretch was about.** Nine of the ten must-fix items are closed.
@@ -621,7 +621,7 @@ the reason the tests that now hold them exist.
   Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
   Claude-Session: https://claude.ai/code/session_018PiV38FZMupJ19foghBRZm
   ```
-- **Tests:** `cd backend && python -m pytest -q`. **909 pass.** The suite is the
+- **Tests:** `cd backend && python -m pytest -q`. **910 pass.** The suite is the
   design record — test docstrings carry the *reasoning*, including what went
   wrong before. Read the docstring before changing an assertion; several tests
   exist because a previous fix was subtly wrong.

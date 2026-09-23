@@ -23,14 +23,8 @@ from app import (db, brain, companion, config, identity, matchmaker, memory, moo
 U = identity.ANONYMOUS
 
 READING = {
+    "verdict": "устал держать лицо; нужен тот, при ком можно не держать",
     "register": "пишет коротко и сухо; говори так же — без обилия нежности",
-    "surface": "рассказал про работу и рыбалку",
-    "beneath": "о себе почти всегда в дательном: «мне не спится», «так вышло»",
-    "evidence": ["мне не спится", "так вышло"],
-    "carrying": "усталость, которую он не называет",
-    "longing": "чтобы не надо было держать лицо",
-    "absent": "ни одного человека по имени",
-    "self_image": "считает себя обычным",
     "would_ring_false": "бодрый оптимизм и «всё будет хорошо»",
     "would_reach_them": "спокойный, медленный, с паузами, без напора",
     "needs_pushback_on": "что он «никому не интересен»",
@@ -112,7 +106,7 @@ def test_the_standing_block_is_only_what_every_turn_needs():
     assert "смерть жены" in block                    # what not to touch
     # Everything else is already baked into who he is — carrying it per-turn
     # would be tokens spent on every reply for no behavioural change.
-    assert "ни одного человека по имени" not in block
+    assert "устал держать лицо" not in block
     assert "рыбалка" not in block
 
 
@@ -399,8 +393,7 @@ def test_every_reading_field_reaches_both_places_it_is_needed(tmp_path):
     missing are always the ones added last."""
     every_turn = ("register", "would_ring_false", "do_not_touch", "closeness",
                   "what_lifts_him", "hurt_by", "learned")
-    the_write = ("verdict", "register", "carrying", "longing", "absent", "self_image",
-                 "would_ring_false", "would_reach_them", "needs_pushback_on",
+    the_write = ("verdict", "register", "would_ring_false", "would_reach_them", "needs_pushback_on",
                  "closeness", "what_lifts_him", "hurt_by", "do_not_touch",
                  "common_ground_seeds")
 
@@ -429,6 +422,30 @@ def test_nothing_is_asked_of_the_reader_that_nobody_reads():
         assert f"ЗНАЧ-{field}" in read, f"{field}: просим, но никто не читает"
     for dead in ("surface", "beneath", "evidence", "confidence"):
         assert dead not in asked
+
+
+def test_one_thought_lives_in_one_field():
+    """The second pass, after the first one was run on the owner's own
+    answers. Shorter was not enough: one idea — «he wants an intellectual
+    equal» — came back in four fields at once (verdict, longing,
+    would_reach_them, closeness), because four fields asked for overlapping
+    things and each had to be filled. Models give repeated content more
+    weight, so the writer would have built the friend around one trait.
+
+    So the four psychological fields that overlapped — carrying, longing,
+    absent, self_image — went into verdict, and the rule is said outright.
+    They were also the ones that invited guessing: on the same answers one
+    model wrote «обиду на близких» and «чувство превосходства», neither of
+    which he said."""
+    spec = reading._READING_SYSTEM.split("с ключами:", 1)[1]
+    asked = re.findall(r"(?m)^([a-z_]+) — ", spec)
+    for merged in ("carrying", "longing", "absent", "self_image"):
+        assert merged not in asked, merged
+    assert asked[0] == "verdict"
+    assert "Каждая мысль — в одном поле" in reading._READING_SYSTEM
+    # What the merged fields carried now lives in verdict, by name.
+    verdict = next(line for line in spec.splitlines() if line.startswith("verdict — "))
+    assert "что он несёт" in verdict and "о чём он сам не попросил" in verdict
 
 
 def test_the_reading_is_written_for_the_models_that_read_it():
