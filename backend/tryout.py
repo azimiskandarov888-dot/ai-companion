@@ -107,7 +107,7 @@ CANDIDATES: list[tuple[str, str]] = [
     ("MiniMax M2-Her",     "minimax/minimax-m2-her"),
     ("GPT-5.6 Luna",       "openai/gpt-5.6-luna"),
     ("DeepSeek V4 Flash",  "deepseek/deepseek-v4-flash"),
-    ("Gemini 3 Flash",     "google/gemini-3-flash-preview"),
+    ("Gemini 3.5 Flash-Lite", "google/gemini-3.5-flash-lite"),
     ("Qwen 3.5",           "qwen/qwen3.5-27b"),
 ]
 
