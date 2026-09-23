@@ -59,6 +59,7 @@ import contextvars
 import json
 import random
 import re
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -230,6 +231,10 @@ def _paper(stage: str, title: str, entries: list[dict], render) -> Path:
         lines.append("")
     at = _path(stage, "md")
     at.write_text("\n".join(lines), encoding="utf-8")
+    # Папка лежит внутри скрытой .claude, и Finder её не показывает — владелец
+    # дважды не смог её найти. Поэтому файл открывается сам.
+    if sys.platform == "darwin":
+        subprocess.run(["open", str(at)], check=False)
     return at
 
 
