@@ -1055,3 +1055,49 @@ def test_one_confirmed_thing_is_not_a_changed_person(tmp_path, monkeypatch):
 
     asyncio.run(reading.keep_reading(user))
     assert not called, "одного подтверждения хватило — это уже не перемена, а шум"
+
+
+def test_the_reader_is_told_how_not_to_be_wrong():
+    """Accuracy about a person needs four things in a row — the cues have to
+    exist, reach the judge, be noticed and be used right (Funder's Realistic
+    Accuracy Model) — and the last one is where a model fails on its own. So
+    the reading is walked through the techniques that measurably help:
+    perspective-taking first (SimToM, Wilf et al. 2023, beats plain
+    chain-of-thought on theory-of-mind tasks); direct words over form, because
+    the owner's own «po seryoznomu delu?? ai» was the strongest sentence he
+    wrote; more than one hypothesis and a look for what contradicts the
+    winner, which measurably cuts confirmation bias in LLMs; and the Barnum
+    check, because a sentence true of most lonely people says nothing about
+    this one. All of it in the thinking — none of it costs the output."""
+    rules = reading._READING_SYSTEM
+    assert "КАК НЕ ОШИБИТЬСЯ (это в размышлениях, до ответа)" in rules
+    assert "Побудь им" in rules
+    assert "Прямые слова весомее формы" in rules
+    assert "Первая, что приходит в голову, обычно про то, чем он занят, — а это зеркало" in rules
+    assert "поищи, что ей противоречит" in rules
+    assert "подошёл бы почти любому одинокому человеку" in rules
+    # And it comes before the main question, so the question is asked of a
+    # reading that has already been checked.
+    assert rules.index("КАК НЕ ОШИБИТЬСЯ") < rules.index("ГЛАВНЫЙ ВОПРОС")
+
+
+def test_the_reread_revisits_what_is_missing_first():
+    """The first reading is a hypothesis made from a dozen answers to a
+    stranger. The conversations are the evidence — and the owner's case is the
+    reason this field comes first: what he lacked was visible in how he would
+    talk, not in the questionnaire."""
+    assert "ЧЕГО ЕМУ НЕ ХВАТАЕТ (поле verdict)" in reading._REREAD_SYSTEM
+    assert "это важнее любого другого поля" in reading._REREAD_SYSTEM
+
+
+def test_the_interview_asks_the_one_question_that_answers_it():
+    """No reader can read what was never said. The owner's closing question
+    was «о чём думаешь вечером» — «не могу сказать, слишком много» — and so
+    the one thing he most wanted, to talk about feelings, never reached the
+    page. The closing question is now the one whose answer says what is
+    missing: whom there is nobody to talk to about what."""
+    from app import intake
+
+    ask = intake._ASK_SYSTEM
+    assert "Лучше всего тот, из ответа на который видно, ЧЕГО ему не хватает" in ask
+    assert ask.index("о чём ему не с кем поговорить") < ask.index("о чём думает, когда не спится")
