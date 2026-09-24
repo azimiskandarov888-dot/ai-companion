@@ -346,13 +346,16 @@ async def interview(args) -> None:
             print(f"\n\033[2m(вопрос не получился — заканчиваю, как сделало бы приложение: {e})\033[0m")
             break
         if nxt["enough"] or not nxt["say"]:
+            if nxt["reaction"]:  # as the app now does: the last words are shown
+                print(f"\n\033[1m{nxt['reaction']}\033[0m")
             break
         if nxt["reaction"]:
             print(f"\n\033[2m{nxt['reaction']}\033[0m")
         turns.append({"q": nxt["say"], "a": _ask(nxt["say"], [])})
 
-    wishes = _ask("Кого бы ты хотел встретить?\n\033[2mЧем больше решишь о нём "
-                  "сейчас, тем меньше останется — встретить. Можно пусто.\033[0m", [])
+    wishes = _ask("Кого бы тебе хотелось встретить?\n\033[2mЧем больше решишь о нём "
+                  "сейчас, тем меньше останется — встретить. Например: «Кого-то, с кем "
+                  "можно…». Можно пусто.\033[0m", [])
 
     if _path("interview").exists():
         _path("interview").rename(HOME / f"interview.{time.strftime('%Y%m%d-%H%M%S')}.json")

@@ -188,6 +188,34 @@ def test_something_that_is_not_a_country_is_not_read_as_one(said):
     assert emergency.resolve(said) == ""
 
 
+@pytest.mark.parametrize(
+    "said,expected",
+    [
+        ("uzbekistan", "узбекистан"),
+        ("Uzbekistan, Tashkent", "узбекистан"),
+        ("Israel", "израиль"),
+        ("rossiya", "россия"),
+        ("live in the USA", "сша"),
+        ("United Kingdom", "великобритания"),
+        ("New Zealand", "новая зеландия"),
+        ("Kazakhstan", "казахстан"),
+    ],
+)
+def test_a_country_typed_in_latin_letters_is_understood(said, expected):
+    """The owner answered his own intake in translit, and a phone keyboard in
+    Tashkent or Haifa is often not Russian. «Israel» going unread meant 103
+    instead of 101 — 112 still said beside it, but the local number is the
+    one people remember."""
+    assert emergency.resolve(said) == expected
+
+
+@pytest.mark.parametrize("said", ["tell us", "us", "uk", "Georgia on my mind", "tashkent"])
+def test_latin_near_misses_still_miss(said):
+    """«us» is a pronoun; «Georgia» is as likely a US state as a country; and
+    a city, in either alphabet, is still not a country here (the test below)."""
+    assert emergency.resolve(said) == ""
+
+
 def test_a_city_alone_leaves_the_country_unknown():
     """«Москва» is not «Россия» to this module, and pretending otherwise would
     start it down the road of being a geography database. Unknown falls back to

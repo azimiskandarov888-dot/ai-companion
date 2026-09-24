@@ -119,6 +119,43 @@ _BY_COUNTRY: dict[str, str] = {
 }
 
 
+#: The same countries typed in Latin letters: in English, or Russian written
+#: on a keyboard without Cyrillic («uzbekistan», «rossiya»). Far from rare —
+#: the owner answered his own intake in translit, and so will anybody in
+#: Tashkent, Almaty or Haifa whose phone keyboard is not Russian. Each maps to
+#: a row above. No two-letter forms: «us» is a pronoun long before it is a
+#: country, and a wrong country is a wrong ambulance number.
+_LATIN: dict[str, str] = {
+    "russia": "россия", "rossiya": "россия", "rossia": "россия",
+    "belarus": "беларусь", "kazakhstan": "казахстан", "qazaqstan": "казахстан",
+    "ukraine": "украина", "ukraina": "украина", "uzbekistan": "узбекистан",
+    "ozbekiston": "узбекистан", "kyrgyzstan": "кыргызстан", "kirgiziya": "киргизия",
+    "tajikistan": "таджикистан", "turkmenistan": "туркмения",
+    "azerbaijan": "азербайджан", "armenia": "армения", "moldova": "молдова",
+    "gruziya": "грузия",
+    "usa": "сша", "america": "америка", "united states": "сша", "canada": "канада",
+    "mexico": "мексика",
+    "germany": "германия", "deutschland": "германия", "france": "франция",
+    "italy": "италия", "spain": "испания", "portugal": "португалия",
+    "greece": "греция", "poland": "польша", "czechia": "чехия",
+    "slovakia": "словакия", "hungary": "венгрия", "romania": "румыния",
+    "bulgaria": "болгария", "croatia": "хорватия", "serbia": "сербия",
+    "austria": "австрия", "switzerland": "швейцария", "belgium": "бельгия",
+    "netherlands": "нидерланды", "holland": "голландия", "denmark": "дания",
+    "sweden": "швеция", "norway": "норвегия", "finland": "финляндия",
+    "estonia": "эстония", "latvia": "латвия", "lithuania": "литва",
+    "ireland": "ирландия", "iceland": "исландия", "turkey": "турция",
+    "turkiye": "турция", "cyprus": "кипр",
+    "england": "англия", "britain": "великобритания",
+    "united kingdom": "великобритания", "scotland": "шотландия",
+    "israel": "израиль", "izrail": "израиль", "australia": "австралия",
+    "new zealand": "новая зеландия", "china": "китай", "japan": "япония",
+    "korea": "корея", "south korea": "южная корея", "india": "индия",
+    "thailand": "таиланд", "vietnam": "вьетнам", "brazil": "бразилия",
+    "argentina": "аргентина", "uae": "оаэ", "emirates": "эмираты",
+}
+
+
 #: Acronyms. Said as written or not at all: «рф» with an ending allowed would
 #: reach «рука», and a wrong country here is a wrong ambulance number.
 _ACRONYM = 3
@@ -184,13 +221,17 @@ def resolve(text) -> str:
             window = words[i : i + span]
             if len(window) < span:
                 continue
-            for name in _BY_COUNTRY:
+            for name, row in _NAMES.items():
                 parts = name.split()
                 if len(parts) == span and all(
                     _same(w, p) for w, p in zip(window, parts)
                 ):
-                    return name
+                    return row
     return ""
+
+
+#: Every way a country is written → its row in _BY_COUNTRY.
+_NAMES: dict[str, str] = {**{name: name for name in _BY_COUNTRY}, **_LATIN}
 
 
 def remember(user_id: str, country: str) -> None:

@@ -674,5 +674,7 @@ def test_the_interview_hears_about_a_love_that_is_not_his_work():
     not. One question, asked once, is what makes the rule above possible."""
     from app import intake
 
-    assert "ПРО ТО, ЧТО ОН ЛЮБИТ ПРОСТО ТАК, не по делу и не по работе" in intake._ASK_SYSTEM
+    assert "НАЧНИ С ТОГО, ЧТО ОН ЛЮБИТ ПРОСТО ТАК, не по делу и не по работе" in intake._ASK_SYSTEM
+    # …and it is no longer only a rule: the app's warm-up asks it, fixed,
+    # right after what they do (test_interview.py).
 

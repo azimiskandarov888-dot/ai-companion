@@ -1034,13 +1034,28 @@ async def companion_create(
     if req.age.strip():
         young.remember(user_id, req.age)
 
+    # HIS NAME, which he gave in the very first line of the intake and which
+    # never used to reach his friend: the voice took it from a deployment
+    # setting from the single-user days. So the friend who had just been
+    # written from eighteen of his answers opened by not knowing what to call
+    # him. A fact like any other — and, like any other, not kept for a child.
+    name = intake.their_name(req.about)
+    if name:
+        memory.add_memory(user_id, "fact", f"имя: {name}", owner="elder",
+                          title="имя", importance=3)
+
     started = time.monotonic()
     try:
         p = await matchmaker.create_companion(
             user_id,
             req.about,
             wishes=req.wishes.strip(),
-            age=req.age.strip(),
+            # NOT `age=`. That parameter is the FRIEND's age as the person
+            # wished it, and what the app sends as `age` is the person's OWN
+            # age from the warm-up — so every adult was being handed a friend
+            # their own age as law: «Кого он хотел бы встретить (закон):
+            # возраст: 74». The biggest mirror of all, and nobody had asked
+            # for it. An age they want for him is in their wishes, in words.
             # A teenager gets somebody their own age. Without this the ten
             # sketches are all grown-ups by construction, and no roll of the
             # dice can produce a peer out of a list that has none.

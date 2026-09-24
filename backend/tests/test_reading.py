@@ -1099,5 +1099,9 @@ def test_the_interview_asks_the_one_question_that_answers_it():
     from app import intake
 
     ask = intake._ASK_SYSTEM
-    assert "Лучше всего тот, из ответа на который видно, ЧЕГО ему не хватает" in ask
-    assert ask.index("о чём ему не с кем поговорить") < ask.index("о чём думает, когда не спится")
+    assert "«А о чём бы поговорить, да не с кем?»" in ask
+    assert "Из ответа на него видно, ЧЕГО ему не хватает" in ask
+    # The two alternatives that were there are gone: «когда не спится» is
+    # exactly what got «слишком много», and «кому позвонил бы в три ночи»
+    # makes the most isolated say «никому» and asks about a crisis he can't be.
+    assert "когда не спится" not in ask and "в три ночи" not in ask

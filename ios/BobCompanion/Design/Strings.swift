@@ -197,18 +197,26 @@ enum Strings {
 
     // MARK: - 4 · Who you'd like to meet
 
-    static let meetHeading = Phrase(ru: "Кого бы ты хотел встретить?", en: "Who would you like to meet?")
+    // «хотелось», not «хотел»: the masculine addressed every woman as a man.
+    static let meetHeading = Phrase(ru: "Кого бы тебе хотелось встретить?", en: "Who would you like to meet?")
     static let caution = Phrase(
         ru: "Чем больше решишь о нём сейчас, тем меньше останется — встретить.",
         en: "The more you decide about him now, the less of him is left to meet.")
+    // WHAT THE FRIEND IS FOR, not what he is like. People copy the shape of
+    // the example they are shown; shown a trait («кто повидал жизнь» — an old
+    // man's trait, even for a fifteen-year-old), they answer with a trait, and
+    // the commonest trait is «как я». Shown «с кем можно…», they say what they
+    // would want somebody for. The wish is still theirs and still law.
     static let meetPlaceholder = Phrase(
-        ru: "Кого-то, кто повидал жизнь…",
-        en: "Someone who has seen a bit of life…")
+        ru: "Кого-то, с кем можно…",
+        en: "Someone I could…")
     static let chipAge    = Phrase(ru: "возраст",              en: "his age")
     static let chipGender = Phrase(ru: "мужчина или женщина",  en: "man or woman")
     static let chipOrigin = Phrase(ru: "откуда он",            en: "where he's from")
     /// What a chip inserts into their own writing — a phrase, never a field.
-    static let chipAgeText    = Phrase(ru: "Лет шестидесяти, наверное. ", en: "Around sixty, maybe. ")
+    // Just the start of the phrase: «шестидесяти» was a guess about whom a
+    // fifteen-year-old would want, typed into their wish for them.
+    static let chipAgeText    = Phrase(ru: "Лет ", en: "About ")
     static let chipGenderText = Phrase(ru: "Мужчина. ",                    en: "A man. ")
     static let chipOriginText = Phrase(ru: "Откуда-нибудь издалека. ",     en: "From somewhere far away. ")
     static let meetHim = Phrase(ru: "Познакомиться", en: "Meet him")

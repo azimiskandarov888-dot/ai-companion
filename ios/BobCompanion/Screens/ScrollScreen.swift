@@ -390,6 +390,8 @@ private struct IntakeConversation: View {
     /// must never open in the dimmed "waiting" state.
     @State private var asking = false
     @State private var finished = false
+    /// The interviewer's last words are on screen and one tap ends it.
+    @State private var parting = false
     /// Bumped on every new question so the arrival animation replays.
     @State private var questionID = 0
 
@@ -599,6 +601,7 @@ private struct IntakeConversation: View {
     }
 
     private func choose(_ option: String) {
+        if parting { finish(); return }
         turns.append(IntakeTurn(q: question, a: option))
         options = []
         ownWords = false
@@ -668,6 +671,14 @@ private struct IntakeConversation: View {
         Step(say: "Как вас зовут?"),
         Step(say: "Ну, как сегодня день?"),
         Step(say: "А чем обычно занимаетесь?"),
+        // WHAT THEY LOVE, ASKED RIGHT AFTER WHAT THEY DO — and fixed here
+        // rather than left to the interviewer. The friend's topic has to land
+        // on something the person loves or misses and NOT on their daily work
+        // (matchmaker._WRITE_SYSTEM), and the interviewer, following a good
+        // thread, can spend every question on the work and never ask: the
+        // owner's own intake did exactly that, and he loves ping-pong. An open
+        // «что», not «есть ли»: a yes/no question gets «нет».
+        Step(say: "А для души что любите?"),
         // ASKED PLAINLY, AND ASKED EARLY, FOR TWO REASONS.
         //
         // The one that cannot wait: it decides which number he is told to dial.
@@ -702,19 +713,20 @@ private struct IntakeConversation: View {
 
         // 2 · Только теперь — лёгкие, и как бы между делом. Разговор уже идёт,
         // так что смена темпа читается как оживление, а не как анкета.
-        Step(say: "Кстати, а вам что больше по душе — горы или море?",
-             options: ["Горы", "Море"],
-             reactions: ["Горы": "Простор, значит.", "Море": "К воде тянет."]),
-        Step(say: "А вы жаворонок или сова?",
+        //
+        // ТРИ, А НЕ ПЯТЬ. «Горы или море?» ушло, и причина дороже самого
+        // вопроса: выбор из двух кнопок чтение приняло за любовь, и из «Море»
+        // вышла тема друга у владельца, который моря не просил. «Чай или
+        // кофе» ушло следом: пять кнопок подряд — та самая анкета.
+        Step(say: "Кстати, жаворонок или сова?",
              options: ["Жаворонок", "Сова"],
              reactions: ["Сова": "Тихое время, понимаю."]),
-        Step(say: "Пьёте что обычно?",
-             options: ["Чай", "Кофе", "Просто воду"],
-             reactions: ["Чай": "Правильно."]),
-        // «Никого» здесь — не пустой ответ, а важный. Поэтому на него нет
-        // отклика: любой отклик прозвучал бы жалостью.
-        Step(say: "А дома у вас кто-нибудь есть — кот, собака?",
-             options: ["Кот", "Собака", "Никого"],
+        // Про зверя — и только про зверя. «А дома у вас кто-нибудь есть?»
+        // спрашивало сперва, есть ли дома хоть кто-то, и вдове приходилось
+        // нажимать «Никого» посреди лёгких вопросов; а чтение принимало это
+        // за «живёт один». На «Нет» по-прежнему никакого отклика.
+        Step(say: "А кот или собака дома есть?",
+             options: ["Кот", "Собака", "Нет"],
              reactions: ["Кот": "Хозяин, значит, не вы."]),
         // The transition line rides on the answer rather than replacing it —
         // a blanket reaction would swallow the joke, and the pace change
@@ -727,23 +739,18 @@ private struct IntakeConversation: View {
         Step(say: "What's your name?"),
         Step(say: "So how's your day been?"),
         Step(say: "And what do you usually get up to?"),
+        Step(say: "And what do you love doing, just for yourself?"),
         Step(say: "And whereabouts do you live — which country?", asksCountry: true),
         Step(say: "How old are you, if you don't mind me asking?",
              reaction: "Thank you.", asksAge: true),
         Step(say: "Are you a man or a woman?",
              options: ["A man", "A woman", "Neither"]),
 
-        Step(say: "By the way — mountains or the sea?",
-             options: ["Mountains", "The sea"],
-             reactions: ["Mountains": "Room to breathe.", "The sea": "Drawn to water."]),
-        Step(say: "Are you an early bird or a night owl?",
+        Step(say: "By the way — early bird or night owl?",
              options: ["Early bird", "Night owl"],
              reactions: ["Night owl": "The quiet hours."]),
-        Step(say: "What do you usually drink?",
-             options: ["Tea", "Coffee", "Just water"],
-             reactions: ["Tea": "Good answer."]),
-        Step(say: "Anyone at home with you — a cat, a dog?",
-             options: ["A cat", "A dog", "Just me"],
+        Step(say: "Got a cat or a dog at home?",
+             options: ["A cat", "A dog", "No"],
              reactions: ["A cat": "So they're in charge, then."]),
         Step(say: "Last easy one: summer or winter?",
              options: ["Summer", "Winter"],
@@ -765,6 +772,7 @@ private struct IntakeConversation: View {
     }
 
     private func ask() async {
+        if parting { finish(); return }
         // The warm-up needs no network at all, so it runs at the speed of a
         // finger. This is the part that has to feel like play.
         if let step = warmUpStep {
@@ -784,6 +792,23 @@ private struct IntakeConversation: View {
         do {
             let next = try await client.intakeNext(conversation: turns)
             if next.enough || next.say.isEmpty {
+                // THE LAST WORDS ARE SHOWN, NOT DROPPED. They used to be: the
+                // conversation ended the moment it was told to, so the reply
+                // written for someone who had just said something frightening
+                // («об этом лучше поговорить с близкими или с врачом») was never
+                // on screen, and they went straight on to «кого бы вы хотели
+                // встретить». Now they are the last thing shown, with one tap.
+                let words = (next.reaction ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+                if !words.isEmpty {
+                    parting = true
+                    reaction = ""
+                    question = words
+                    options = [Strings.language == .russian ? "Дальше" : "Next"]
+                    deepAnswer = false
+                    ownWords = false
+                    questionID += 1
+                    return
+                }
                 finish()
                 return
             }
