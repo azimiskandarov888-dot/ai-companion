@@ -46,18 +46,15 @@ def routed(monkeypatch):
     return install
 
 
-def test_the_warm_up_is_read_from_the_app_rather_than_copied():
-    """A second copy of the warm-up beside the Swift one would drift on the
-    first edit, and the reading would then judge a conversation the app does
-    not have."""
-    steps = myself.warm_up()
-    assert steps[0]["say"] == "Как вас зовут?"
-    assert len(steps) == 8
-    # The two answers the server also needs on their own — exactly one each.
-    assert sum(s["country"] for s in steps) == 1
-    assert sum(s["age"] for s in steps) == 1
-    gender = next(s for s in steps if "мужчина или женщина" in s["say"])
-    assert gender["options"] == ["Мужчина", "Женщина", "Иначе"]
+def test_the_interview_runs_exactly_as_the_app_does():
+    """No warm-up of its own: the first question from intake.opening(), every
+    other from intake.next_question, and each answer handed back with the
+    target it was asked for — or the list would re-ask what was answered."""
+    import inspect
+
+    source = inspect.getsource(myself.interview)
+    assert "intake.opening()" in source and "intake.next_question(turns)" in source
+    assert '"target": nxt.get("target", "")' in source
 
 
 def test_the_reading_goes_to_the_model_under_test_with_the_apps_own_prompt(routed):

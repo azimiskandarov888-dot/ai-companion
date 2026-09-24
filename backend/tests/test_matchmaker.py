@@ -674,9 +674,12 @@ def test_the_interview_hears_about_a_love_that_is_not_his_work():
     not. One question, asked once, is what makes the rule above possible."""
     from app import intake
 
-    # Asked twice now, and neither is left to chance: the app's warm-up asks
-    # «А для души что любите?», fixed, and the interviewer's first question is
-    # «А что любите, да давно не делали?» — what they miss is a love too.
-    assert "«А что любите, да давно не делали?»" in intake._QUESTIONS[0]
-    assert "то, чем человек занят с утра до ночи, для этого не годится" in intake._ASK_SYSTEM
+    # Asked twice, and neither is left to chance: both are on the list the
+    # server keeps — what they love, and what they loved but haven't done in a
+    # while, because what they miss is a love too.
+    by_id = {t[0]: t for t in intake.TARGETS}
+    assert by_id["love"][2] == "А для души что любите?"
+    assert "тема друга должна лечь сюда" in by_id["love"][1]
+    assert "тема друга должна лечь НЕ сюда" in by_id["days"][1]
+    assert by_id["miss"][2] == "А что любите, да давно не делали?"
 

@@ -392,6 +392,9 @@ private struct IntakeConversation: View {
     @State private var finished = false
     /// The interviewer's last words are on screen and one tap ends it.
     @State private var parting = false
+    /// Which of the server's targets the question on screen is after. Handed
+    /// back with the answer, so the server knows what the list still needs.
+    @State private var target: String? = nil
     /// Bumped on every new question so the arrival animation replays.
     @State private var questionID = 0
 
@@ -583,26 +586,9 @@ private struct IntakeConversation: View {
         return isWriting ? 96 : 120
     }
 
-    /// The warm line to show above the next question, given what they just
-    /// answered. Silence is the common case: a remark on every single answer
-    /// is exhausting, and is exactly what gives a machine away.
-    private func reactionAfterLastAnswer() -> String {
-        guard let last = turns.last, turns.count - 1 < Self.warmUp.count else { return "" }
-        let step = Self.warmUp[turns.count - 1]
-        if !step.reaction.isEmpty { return step.reaction }
-        if let keyed = step.reactions[last.a] { return keyed }
-        // The name is the one answer that always deserves an answer.
-        if turns.count == 1, !last.a.isEmpty {
-            return Strings.language == .russian
-                ? "Очень приятно, \(last.a)."
-                : "Good to know, \(last.a)."
-        }
-        return ""
-    }
-
     private func choose(_ option: String) {
         if parting { finish(); return }
-        turns.append(IntakeTurn(q: question, a: option))
+        turns.append(IntakeTurn(q: question, a: option, target: target))
         options = []
         ownWords = false
         rebuildStory()
@@ -612,183 +598,39 @@ private struct IntakeConversation: View {
     private func send(skipping: Bool = false) {
         writing = false
         let said = answer.trimmingCharacters(in: .whitespacesAndNewlines)
-        turns.append(IntakeTurn(q: question, a: skipping ? "" : said))
+        turns.append(IntakeTurn(q: question, a: skipping ? "" : said, target: target))
         answer = ""
         rebuildStory()
         Task { await ask() }
     }
 
-    // ── The warm-up, held locally ───────────────────────────────────────────
+    // ── Every question is the interviewer's ────────────────────────────────
     //
-    // THE LADDER. Aron's fast-friends work found what actually opens strangers
-    // up: ESCALATING self-disclosure. Light first, deeper as you warm. Ask the
-    // deep question cold and people close; ask it warm and they answer it.
+    // There used to be a warm-up here: eight fixed questions asked by the app
+    // itself, at the speed of a finger, before the network was ever needed.
+    // The owner rejected it on first use, and rightly. He answered «ничем» to
+    // «А день обычно чем занят?», and the next question came as if nobody had
+    // heard — because nobody had. A question that cannot react to its answer
+    // tells the person their answer did not matter, in the one conversation
+    // whose whole purpose is to get them to talk.
     //
-    // BUT LIGHT MEANS LOW-INTIMACY, NOT LOW-EFFORT — and getting that wrong is
-    // how the previous version went «Как вас зовут?» → «Горы или море?», which
-    // is meeting someone and immediately firing a quiz at them. Aron's opening
-    // questions are still real questions; they are simply not intimate ones. A
-    // quiz is not gentle conversation, it is not conversation at all.
-    //
-    // So the shape is now: a normal greeting → ordinary getting-to-know-you
-    // talk → and only THEN, once someone is actually talking, the quick tapped
-    // ones arrive as an ASIDE («кстати, а что вам ближе…»), worded the way a
-    // person asks rather than the way a form does. They're a change of pace in
-    // the middle of a conversation, not the opening act.
-    //
-    // All of it lives HERE, in the app, because it must feel instant and none
-    // of it depends on the person, so there is nothing to generate. By the
-    // time the network is needed, they're already talking.
-    //
-    // The reactions are the whole personality. No name, no "I", nothing about
-    // itself — just someone taking an interest. Not every answer gets one:
-    // constant reacting is exhausting and is what gives a bot away.
-
-    private struct Step {
-        let say: String
-        /// Empty = typed answer. Otherwise the tappable choices.
-        var options: [String] = []
-        /// Warm one-liner shown before the NEXT question, keyed by their answer.
-        var reactions: [String: String] = [:]
-        /// Shown before the next question regardless of what they answered.
-        var reaction: String = ""
-        /// The two steps whose answers are also sent to the server on their
-        /// own. Marked on the step rather than held as an index, so reordering
-        /// the warm-up can never quietly send the wrong answer.
-        var asksCountry: Bool = false
-        var asksAge: Bool = false
-    }
-
-    // WRITTEN TO BE SPOKEN, NOT READ. Every line here should sound like
-    // somebody saying it out loud, which in Russian means the small particles
-    // that carry all the warmth — «ну», «а», «вот», «-то» — and in English
-    // means contractions and idiom. «Как ваш день сегодня?» is a translation;
-    // «Ну, как сегодня день?» is a person. «Do you wake early or sit up late?»
-    // is a form; «Are you an early bird or a night owl?» is a person. The
-    // idiomatic version is almost always the shorter one.
-    private static let warmUp: [Step] = Strings.language == .russian ? [
-        // 1 · Знакомство. Обычное, неспешное — как начал бы любой.
-        //
-        // EVERY QUESTION HERE HAS A JOB DOWNSTREAM, and the ones that had none
-        // are gone (council of three, 2026-09-24; the reasons are in
-        // backend/tests/test_interview.py). «Ну, как сегодня день?» fed nothing
-        // and was answered with the same words as «чем занимаетесь» — so the
-        // two became one question, with no pronoun, which a fifteen-year-old
-        // and a pensioner can both answer before their age is known.
-        Step(say: "Как вас зовут?"),
-        Step(say: "А день обычно чем занят?"),
-        // WHAT THEY LOVE, ASKED RIGHT AFTER WHAT THEY DO — and fixed here
-        // rather than left to the interviewer. The friend's topic has to land
-        // on something the person loves or misses and NOT on their daily work
-        // (matchmaker._WRITE_SYSTEM), and the interviewer, following a good
-        // thread, can spend every question on the work and never ask: the
-        // owner's own intake did exactly that, and he loves ping-pong. An open
-        // «что», not «есть ли»: a yes/no question gets «нет».
-        Step(say: "А для души что любите?"),
-        // THE ONLY QUESTION THAT LOOKS FORWARD. Without it every reading found
-        // «no future in his text» — for everybody, because nothing had asked.
-        // And what they name is the friend's first «ну как прошло?». No
-        // «-нибудь»: «что-нибудь намечается?» is a yes/no question, and those
-        // get «нет».
-        Step(say: "А на этой неделе что намечается?"),
-        // ASKED PLAINLY, AND ASKED EARLY, FOR TWO REASONS.
-        //
-        // The one that cannot wait: it decides which number he is told to dial.
-        // Until now the country was only ever picked up by the extractor, some
-        // exchanges into the friendship, if it happened to come up — so the
-        // first conversation, which is the one where somebody is likeliest to
-        // say something frightening to a stranger, ran on a default. Telling a
-        // man in Chicago to dial 103 while he is on the floor is not a smaller
-        // failure than missing the alarm; it is the same failure.
-        //
-        // And the ordinary one: where somebody lives says a great deal about
-        // them, and this is a question people like being asked. It sits here,
-        // among the getting-to-know-you half, because that is what it is —
-        // «а живёте где?» is what anybody would ask third.
-        Step(say: "А живёте где — в какой стране?", asksCountry: true),
-        // ASKED THE WAY A FRIEND ASKS, and that is the whole design of it.
-        // There is no age screen in this app and there will not be one: it has
-        // to feel free to open and talk. But the answer changes how he speaks
-        // and what is kept about somebody who is not grown up (young.py), so it
-        // is sent on its own as well as living in the story.
-        Step(say: "Сколько вам лет, если не секрет?",
-             reaction: "Спасибо.", asksAge: true),
-        // Asked plainly, and asked at all — nothing downstream was being told
-        // whether it was writing for a man or a woman. Not a chip-quiz
-        // question like the ones below: it sits here, in the ordinary
-        // getting-to-know-you half, because that is what it is.
-        //
-        // «Иначе» is a real third answer, not a politeness. Tapping it opens
-        // the writing box like any other question — see `ownWords`.
-        Step(say: "А вы мужчина или женщина?",
-             options: ["Мужчина", "Женщина", "Иначе"]),
-
-        // 2 · Одна лёгкая — передышка перед настоящими. «Горы или море»,
-        // «чай или кофе», «сова», «лето или зима» ушли: ни одно из них ничего
-        // не решало дальше, а выбор из кнопок чтение принимало за любовь — из
-        // «Море» вышла тема друга у владельца, который моря не просил. Кот
-        // остался, потому что он — живая деталь, о которой друг потом спросит.
-        //
-        // Про зверя — и только про зверя: «А дома у вас кто-нибудь есть?»
-        // заставляло вдову нажимать «Никого» посреди лёгких вопросов. Переход
-        // к серьёзным едет на ответе, а не вместо него — иначе шутка про кота
-        // пропала бы, а без перехода следующий вопрос ложится толчком.
-        Step(say: "А кот или собака дома есть?",
-             options: ["Кот", "Собака", "Нет"],
-             reactions: ["Кот": "Хозяин, значит, не вы. Ну, теперь чуть серьёзнее.",
-                         "Собака": "Ну, теперь чуть серьёзнее.",
-                         "Нет": "Ну, теперь чуть серьёзнее."]),
-    ] : [
-        Step(say: "What's your name?"),
-        Step(say: "And what fills your days, usually?"),
-        Step(say: "And what do you love doing, just for yourself?"),
-        Step(say: "And what's coming up this week?"),
-        Step(say: "And whereabouts do you live — which country?", asksCountry: true),
-        Step(say: "How old are you, if you don't mind me asking?",
-             reaction: "Thank you.", asksAge: true),
-        Step(say: "Are you a man or a woman?",
-             options: ["A man", "A woman", "Neither"]),
-
-        Step(say: "Got a cat or a dog at home?",
-             options: ["A cat", "A dog", "No"],
-             reactions: ["A cat": "So they're in charge, then. Right — something a bit more serious now.",
-                         "A dog": "Right — something a bit more serious now.",
-                         "No": "Right — something a bit more serious now."]),
-    ]
-
-    private static let firstPreamble = Strings.language == .russian
-        ? "Его ещё нет — он появится из того, что вы расскажете.\n"
-          + "Сначала несколько быстрых, потом несколько настоящих. "
-          + "Закончить можно в любой момент."
-        : "He isn't here yet — he'll be made out of what you say.\n"
-          + "A few quick ones first, then a few real ones. "
-          + "You can stop whenever."
-
-    /// The warm-up step this answer belongs to, or nil once it's finished.
-    private var warmUpStep: Step? {
-        turns.count < Self.warmUp.count ? Self.warmUp[turns.count] : nil
-    }
+    // So every question now comes from the server, where a model reacts to
+    // what was said and may ask once more («а вчера, например, как прошёл?»),
+    // and the server keeps the list of what has to be found out. Chatbots that
+    // probe get more informative, specific answers than fixed surveys (Xiao et
+    // al. 2020); a short wait before a reply reads as more human, not less
+    // (Gnewuch et al. 2018). The first question still arrives instantly: the
+    // server serves it without a model. See backend/app/intake.py.
 
     private func ask() async {
         if parting { finish(); return }
-        // The warm-up needs no network at all, so it runs at the speed of a
-        // finger. This is the part that has to feel like play.
-        if let step = warmUpStep {
-            if turns.isEmpty { preamble = Self.firstPreamble }
-            reaction = reactionAfterLastAnswer()
-            question = step.say
-            options = step.options
-            deepAnswer = false
-            ownWords = false
-            questionID += 1
-            asking = false
-            return
-        }
-
         asking = true
         defer { asking = false }
         do {
             let next = try await client.intakeNext(conversation: turns)
+            if let frame = next.preamble, !frame.isEmpty, turns.isEmpty {
+                preamble = frame
+            }
             if next.enough || next.say.isEmpty {
                 // THE LAST WORDS ARE SHOWN, NOT DROPPED. They used to be: the
                 // conversation ended the moment it was told to, so the reply
@@ -812,6 +654,7 @@ private struct IntakeConversation: View {
             }
             reaction = next.reaction ?? ""
             question = next.say
+            target = next.target
             options = []
             deepAnswer = (next.kind == "open")
             ownWords = false
@@ -829,22 +672,21 @@ private struct IntakeConversation: View {
         guard !finished else { return }
         finished = true
         rebuildStory()
-        onFacts(answer { $0.asksCountry }, answer { $0.asksAge })
+        onFacts(answers(to: "country"), answers(to: "age"))
         onDone()
     }
 
-    /// What they answered to one of the questions that asks outright.
-    ///
-    /// Both answers also sit inside the story, where the reading makes its own
-    /// use of them — but the story is prose, and neither «which country» nor
-    /// «how old» is something to guess back out of prose when one decides which
-    /// emergency number is said out loud and the other decides how he speaks
-    /// and what is kept. The app asked the questions, so it knows the answers.
-    private func answer(to mark: (Step) -> Bool) -> String {
-        guard let step = Self.warmUp.firstIndex(where: mark),
-              step < turns.count
-        else { return "" }
-        return turns[step].a
+    /// What they answered to the questions that asked where they live and how
+    /// old they are — found by the target the server tagged them with, and
+    /// joined, because a follow-up («а это в какой стране?») belongs to the
+    /// same question. Both also sit in the story; but neither is something to
+    /// guess back out of prose when one decides which emergency number is
+    /// said out loud and the other how he speaks and what is kept.
+    private func answers(to wanted: String) -> String {
+        turns.filter { $0.target == wanted }
+            .map(\.a)
+            .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+            .joined(separator: " ")
     }
 
     /// Their words, in the shape the reading expects: the question as quiet

@@ -12,6 +12,7 @@ from __future__ import annotations
 import asyncio
 import json
 import random
+import re
 
 import pytest
 from fastapi.testclient import TestClient
@@ -20,38 +21,19 @@ from app import brain, intake, main, matchmaker, reading
 
 
 def test_the_first_question_costs_nothing_and_cannot_go_wrong(monkeypatch):
-    """The opener decides whether someone engages at all, so it is fixed, not
-    generated: instant, and never a bad question on the one that matters most."""
+    """The opener is fixed, not generated: instant, and the one question
+    nobody needs a model for — there is nothing yet to react to."""
     def explode(*a, **k):
         raise AssertionError("the opener must never call the model")
 
     monkeypatch.setattr(brain, "generate_text", explode)
 
     first = intake.opening(random.Random(1))
-    assert first["say"] in intake._OPENERS
+    assert first["say"] == "Как вас зовут?" and first["target"] == "name"
     assert not first["enough"]
     # And it says the true thing that makes the whole conversation work.
     assert "Его ещё нет" in first["preamble"]
-
-
-def test_every_opener_is_easy_AND_obviously_about_them():
-    """Two jobs, not one — and the second is the one the first draft missed.
-
-    Optimising only for "easy to answer" produced «что видно у вас из окна?»,
-    which was rejected on sight: *what does that gotta do with anything?* The
-    trivially-concrete opener is a real technique, but it only works once
-    trust exists; on a cold first screen a question with no visible purpose
-    reads as a machine working through a list. So each opener must also be
-    plainly about the person's own life.
-    """
-    for opener in intake._OPENERS:
-        assert opener.endswith("?")
-        assert len(opener) < 70
-        # Never a feeling asked about directly — that's a therapist, not a friend.
-        for forbidden in ("чувств", "переживa", "на душе"):
-            assert forbidden not in opener.lower()
-        # …and it must be addressed to them, not to the room around them.
-        assert any(word in opener.lower() for word in ("вы", "ваш", "вас"))
+    assert "не об анкете" in first["preamble"]
 
 
 class _Seen(list):
@@ -63,7 +45,8 @@ class _Seen(list):
 
 @pytest.fixture
 def asker(monkeypatch):
-    """Fake the question model; record what it was shown and asked to bound."""
+    """Fake the question model; record what it was shown and asked to bound.
+    It asks whatever the list says is next — as a well-behaved model does."""
     seen = _Seen()
     seen.timeouts = []
 
@@ -71,8 +54,10 @@ def asker(monkeypatch):
                             timeout=None, effort=None):
         seen.append(user_text)
         seen.timeouts.append(timeout)
+        nxt = re.search(r"Сейчас по плану — (\w+)", user_text)
         return json.dumps({"reaction": "Река — хорошо.",
                            "say": "А кто вас научил рыбачить?",
+                           "target": nxt.group(1) if nxt else "",
                            "kind": "short", "enough": False}, ensure_ascii=False)
 
     monkeypatch.setattr(brain, "generate_text", fake_generate)
@@ -90,67 +75,133 @@ def test_the_question_call_is_bounded_under_the_phones_ceiling(asker):
 
 
 def _talked(n: int) -> list[dict]:
-    return [{"q": f"в{i}", "a": f"о{i}"} for i in range(n)]
+    """n answered turns, tagged with the list's targets in order."""
+    ids = [t[0] for t in intake.TARGETS]
+    return [{"q": f"в{i}", "a": f"о{i}", "target": ids[i] if i < len(ids) else ""}
+            for i in range(n)]
 
 
-def test_the_ladder_is_paced_by_us_not_guessed_by_the_model(asker):
-    """Escalating self-disclosure only works if it actually escalates.
-
-    Left to judge "is it time for the deep one?", the model either fires it
-    at someone who has said four words — which closes people, the exact
-    failure the ladder exists to avoid — or never arrives at it at all. So
-    the stage is computed here and handed over.
-    """
-    # Only the browser dev page reaches this rung — the app's own warm-up has
-    # already produced nine answers before the backend is ever called.
+def test_the_list_is_kept_by_us_not_guessed_by_the_model(asker):
+    """A model left to cover topics follows a good thread and covers the first
+    one three times — the owner's intake spent three questions on his startup.
+    So every call is told what is done and what is next, from the targets the
+    client hands back."""
     asyncio.run(intake.next_question(_talked(1)))
-    assert "рано для настоящего вопроса" in asker[-1]
+    assert "Сейчас по плану — days" in asker[-1]
+    assert "Уже выяснено: как его зовут" in asker[-1]
 
-    # Where the app actually hands over: the first of the six, by position.
-    asyncio.run(intake.next_question(_talked(intake.MAX_TURNS - 6)))
-    assert "Сейчас вопрос 1 из 6" in asker[-1]
+    asyncio.run(intake.next_question(_talked(7)))
+    assert "Сейчас по плану — strength" in asker[-1]
 
-    # The confidant, in its place.
-    asyncio.run(intake.next_question(_talked(intake.MAX_TURNS - 4)))
-    assert "«А с кем последний раз говорили по душам?»" in asker[-1]
+    # The last one, and the only one that asks for a written answer.
+    asyncio.run(intake.next_question(_talked(len(intake.TARGETS) - 1)))
+    assert "Сейчас по плану — closing" in asker[-1] and '"open"' in asker[-1]
 
-    # The last rung, and the only one that may ask for a written answer.
-    asyncio.run(intake.next_question(_talked(intake.MAX_TURNS - 1)))
-    assert "Пора" in asker[-1] and '"open"' in asker[-1]
+
+def test_nichem_gets_a_follow_up_not_the_next_question(asker):
+    """The owner answered «ничем» and the next question came as if nobody had
+    heard. Now the call after any answer offers ONE follow-up to it — about a
+    concrete case — before the list moves on."""
+    asyncio.run(intake.next_question([
+        {"q": "Как вас зовут?", "a": "Азим", "target": "name"},
+        {"q": "А день обычно чем занят?", "a": "ничем", "target": "days"},
+    ]))
+    assert 'сначала ОДИН уточняющий вопрос к нему, и тогда "target": "days"' in asker[-1]
+    assert "«ничем» — «А вчера, например, как прошёл?»" in intake._ASK_SYSTEM
+
+
+def test_one_follow_up_per_answer_then_the_list_moves_on(asker):
+    asyncio.run(intake.next_question([
+        {"q": "Как вас зовут?", "a": "Азим", "target": "name"},
+        {"q": "А день обычно чем занят?", "a": "ничем", "target": "days"},
+        {"q": "А вчера, например?", "a": "спал", "target": "days"},
+    ]))
+    assert "уточняющий" not in asker[-1]
+    assert "Сейчас по плану — love" in asker[-1]
 
 
 def test_the_deep_question_gets_a_bigger_box(monkeypatch):
     """`kind` is how the app knows to hand over a taller field — the size of
-    the space you're given is itself an instruction about how much to say."""
-    async def deep(system_prompt, user_text, max_tokens=1500, model=None, timeout=None):
-        return json.dumps({"reaction": "", "say": "О чём думаете, когда не спится?",
-                           "kind": "open", "enough": False}, ensure_ascii=False)
+    the space you're given is itself an instruction about how much to say. The
+    last question gets it whatever the model says."""
+    async def deep(system_prompt, user_text, **kw):
+        return json.dumps({"reaction": "", "say": "А о чём бы поговорить, да не с кем?",
+                           "target": "closing", "kind": "short", "enough": False},
+                          ensure_ascii=False)
 
     monkeypatch.setattr(brain, "generate_text", deep)
-    assert asyncio.run(intake.next_question(_talked(2)))["kind"] == "open"
+    turns = _talked(len(intake.TARGETS) - 1)
+    assert asyncio.run(intake.next_question(turns))["kind"] == "open"
 
 
 def test_an_unknown_kind_degrades_to_the_safe_one(monkeypatch):
-    async def odd(system_prompt, user_text, max_tokens=1500, model=None, timeout=None):
-        return json.dumps({"say": "Кем работали?", "kind": "gigantic"}, ensure_ascii=False)
+    async def odd(system_prompt, user_text, **kw):
+        return json.dumps({"say": "А день чем занят?", "target": "days",
+                           "kind": "gigantic"}, ensure_ascii=False)
 
     monkeypatch.setattr(brain, "generate_text", odd)
-    assert asyncio.run(intake.next_question(_talked(2)))["kind"] == "short"
+    assert asyncio.run(intake.next_question(_talked(1)))["kind"] == "short"
 
 
-def test_ending_needs_no_question(monkeypatch):
-    """A turn that ends the conversation carries no question, and that is not
-    a malformed reply — refusing it would strand people at the last step."""
-    async def done(system_prompt, user_text, max_tokens=1500, model=None, timeout=None):
-        return json.dumps({"say": "", "enough": True}, ensure_ascii=False)
+def test_a_model_that_stops_early_is_overruled_by_the_list(monkeypatch):
+    """Country and age decide the emergency number and how a child is kept, so
+    a model that decides «enough» before the list is done does not get its
+    way: the list asks its own question next, keeping the model's reaction."""
+    async def done(system_prompt, user_text, **kw):
+        return json.dumps({"reaction": "Понятно.", "say": "", "enough": True},
+                          ensure_ascii=False)
 
     monkeypatch.setattr(brain, "generate_text", done)
-    assert asyncio.run(intake.next_question(_talked(5)))["enough"] is True
+    result = asyncio.run(intake.next_question(_talked(4)))
+    assert result["enough"] is False
+    assert result["target"] == "country" and "стране" in result["say"]
+    assert result["reaction"] == "Понятно."
+
+
+def test_a_question_off_the_list_is_replaced_by_the_lists_own(monkeypatch):
+    async def wander(system_prompt, user_text, **kw):
+        return json.dumps({"say": "А какая у вас любимая песня?", "target": "music"},
+                          ensure_ascii=False)
+
+    monkeypatch.setattr(brain, "generate_text", wander)
+    result = asyncio.run(intake.next_question(_talked(3)))
+    assert result["target"] == "coming_up"
+    assert result["say"] == "А на этой неделе что намечается?"
+
+
+def test_trouble_ends_it_at_once(monkeypatch):
+    """The one early end that is honoured: somebody in trouble right now."""
+    async def trouble(system_prompt, user_text, **kw):
+        return json.dumps({"reaction": "Об этом лучше поговорить с близкими.",
+                           "say": "", "enough": True, "trouble": True}, ensure_ascii=False)
+
+    monkeypatch.setattr(brain, "generate_text", trouble)
+    result = asyncio.run(intake.next_question(_talked(3)))
+    assert result["enough"] is True and "близкими" in result["reaction"]
+
+
+def test_the_last_answer_gets_a_last_word(monkeypatch):
+    """After «о чём бы поговорить, да не с кем?» — often the most private thing
+    said all intake — it does not just stop: one warm line, and it ends."""
+    seen = []
+
+    async def parting(system_prompt, user_text, **kw):
+        seen.append(user_text)
+        return json.dumps({"reaction": "Спасибо, что сказал.", "say": "Ещё вопрос?",
+                           "enough": False}, ensure_ascii=False)
+
+    monkeypatch.setattr(brain, "generate_text", parting)
+    result = asyncio.run(intake.next_question(_talked(len(intake.TARGETS))))
+    assert result["enough"] is True and result["say"] == ""
+    assert result["reaction"] == "Спасибо, что сказал."
+    # Told to end with a warm line (or, once, to rescue a vague answer) — and
+    # a question off the list here is not a rescue, so it ends.
+    assert "больше не спрашивай" in seen[-1]
 
 
 def test_the_next_question_sees_the_whole_conversation(asker):
     result = asyncio.run(intake.next_question([
-        {"q": "Что видно из окна?", "a": "Река. Я там рыбачил с отцом."},
+        {"q": "Что видно из окна?", "a": "Река. Я там рыбачил с отцом.", "target": "name"},
     ]))
     assert result["say"] == "А кто вас научил рыбачить?"
     assert "Река. Я там рыбачил с отцом." in asker[0]
@@ -159,20 +210,21 @@ def test_the_next_question_sees_the_whole_conversation(asker):
 
 def test_it_always_stops_eventually(monkeypatch):
     """MAX_TURNS is a stop, not a target. Someone tiring must never be held."""
-    def explode(*a, **k):
-        raise AssertionError("past the cap it must stop without asking the model")
+    async def parting(system_prompt, user_text, **kw):
+        return json.dumps({"reaction": "", "say": "ещё?", "enough": False})
 
-    monkeypatch.setattr(brain, "generate_text", explode)
-    conversation = [{"q": f"в{i}", "a": f"о{i}"} for i in range(intake.MAX_TURNS)]
+    monkeypatch.setattr(brain, "generate_text", parting)
+    conversation = [{"q": f"в{i}", "a": f"о{i}", "target": "days"}
+                    for i in range(intake.MAX_TURNS)]
     assert asyncio.run(intake.next_question(conversation))["enough"] is True
 
 
-def test_unanswered_questions_do_not_count_toward_the_cap(asker):
-    """Someone who skips three questions has not had three turns of talking —
-    counting them would end the conversation before it started."""
-    conversation = [{"q": f"в{i}", "a": ""} for i in range(intake.MAX_TURNS)]
-    result = asyncio.run(intake.next_question(conversation))
-    assert result["enough"] is False   # still asking, because nothing was said
+def test_a_skipped_question_is_not_asked_again(asker):
+    """Somebody who skips «сколько вам лет» has answered it, in the only way
+    they wanted to. Asked again, it would be a form that will not take no."""
+    turns = _talked(5) + [{"q": "Сколько вам лет?", "a": "", "target": "age"}]
+    asyncio.run(intake.next_question(turns))
+    assert "Сейчас по плану — miss" in asker[-1]
 
 
 def test_the_story_is_their_words_not_the_questions():
@@ -209,7 +261,7 @@ def test_the_endpoint_opens_without_a_model(monkeypatch):
     monkeypatch.setattr(brain, "generate_text", explode)
     with TestClient(main.app) as client:
         body = client.post("/api/intake/next", json={"conversation": []}).json()
-        assert body["say"] in intake._OPENERS
+        assert body["say"] == "Как вас зовут?" and body["target"] == "name"
         assert "Его ещё нет" in body["preamble"]
 
 
@@ -310,12 +362,36 @@ def test_the_questions_fit_any_life():
 
 
 def test_ty_or_vy_is_decided_and_no_longer_an_absolute():
-    """He has already said how old he is, two questions earlier — and «вы» to
-    somebody of twenty reads as a personnel department, which closes them on
-    the first line."""
+    """«Вы» to somebody of twenty reads as a personnel department, which closes
+    them on the first line — and before the age is known there is nothing to
+    decide it by, so it starts polite and switches once it is."""
     ask = intake._ASK_SYSTEM
     assert "Обращайся на «вы», но по-домашнему" not in ask
-    assert "НА «ТЫ» ИЛИ НА «ВЫ» — смотри, кому пишешь" in ask
-    assert "возраст он назвал выше" in ask
+    assert "НА «ТЫ» ИЛИ НА «ВЫ». Пока возраст не известен — «вы»" in ask
     # …and it fails toward politeness, which is the recoverable mistake
     assert "лишняя вежливость поправима, панибратство нет" in ask
+
+
+def test_the_most_important_answer_gets_one_rescue(monkeypatch):
+    """«Да ни о чём, всё равно не поймут» is an answer — a telling one — but
+    it is not yet what about, and what about is why the interview exists. So
+    after the last question, once, the model may ask about a past episode;
+    after that, it ends whatever it says."""
+    seen = []
+
+    async def rescue(system_prompt, user_text, **kw):
+        seen.append(user_text)
+        return json.dumps({"reaction": "Понятно.",
+                           "say": "А последний раз о чём хотелось рассказать, да некому было?",
+                           "target": "closing", "kind": "short", "enough": False},
+                          ensure_ascii=False)
+
+    monkeypatch.setattr(brain, "generate_text", rescue)
+    turns = _talked(len(intake.TARGETS))
+    first = asyncio.run(intake.next_question(turns))
+    assert first["enough"] is False and first["kind"] == "open"
+    assert "А последний раз о чём хотелось рассказать, да некому было?" in seen[-1]
+
+    turns.append({"q": first["say"], "a": "что выгораю", "target": "closing"})
+    second = asyncio.run(intake.next_question(turns))
+    assert second["enough"] is True and second["say"] == ""

@@ -37,31 +37,33 @@ is made of. People answer that very differently from how they answer a form.
 
 ── HOW THE QUESTIONS ARE BUILT ─────────────────────────────────────────────
 
-The opener is FIXED, not generated: no latency before the first word, and no
-chance the one question that decides whether someone engages comes out badly.
-Everything after it is generated from what they actually said.
+A SEMI-STRUCTURED INTERVIEW, which is what the evidence says works: a list of
+things to find out (TARGETS, each with a question close to the best wording
+there is), and a model that asks every one of them in the flow of the
+conversation — reacting to what was just said, and allowed ONE follow-up
+when an answer is empty, one word, or too alive to walk past. The owner
+rejected the version where the app fired eight fixed questions first:
+«ничем» went unanswered, the next question came as if nobody had listened,
+and it felt like a form. Chatbots that probe draw more informative, specific
+answers than fixed surveys (Xiao et al. 2020), and follow-up questions are
+what make an asker liked (Huang et al. 2017).
 
-The rules in _ASK_SYSTEM are the design. The short version:
+The model asks; the SERVER keeps the list. A model left to cover topics
+follows a good thread and covers the first one three times, so every call
+is told which targets are done, which is next, and whether a follow-up
+still fits — and if the model wanders off the list or tries to stop early,
+the server asks the next question itself. Country and age can never be
+skipped this way: they decide the emergency number and how a child is kept.
 
-  · Concrete before abstract. Ask about things; feelings arrive attached.
-    «Чем пахло у мамы на кухне?» gets further than «Какое у вас было детство?»
-  · Never ask about a feeling directly. That is a therapist, not a friend.
-  · Follow what they gave you. A script produces a survey.
-  · One question at a time, short, and speakable aloud.
-  · Never praise an answer. «Как интересно!» is what a bot says.
-  · Notice absence. Three answers with no living person in them is the most
-    important thing you have learned — ask gently, don't point at it.
+The opener is FIXED, not generated: no latency before the first word, and
+the one question nobody needs a model for.
 
 ── WHEN IT STOPS ───────────────────────────────────────────────────────────
 
-Not at a fixed count. It stops when there is enough to read a person: their
-present, their past, their people (or the shape of their absence), something
-that still gives them pleasure, and something unfinished. `MAX_TURNS` exists
-only so it can't run forever, `MIN_TURNS` so it can't bail at the door.
-
-The person may stop whenever they like, and a three-sentence intake is a
-perfectly good outcome — the reading is built to say «текста слишком мало»
-rather than invent someone out of nothing.
+After the last target — «А о чём бы поговорить, да не с кем?» — is answered,
+with one warm closing line. Or earlier, only if the person is in trouble
+right now. The person may stop whenever they like, and a short intake is a
+perfectly good outcome.
 """
 
 from __future__ import annotations
@@ -71,135 +73,110 @@ import random
 
 from . import brain, config
 
-#: Fewest questions before it may decide it has enough. Below this you have a
-#: register and nothing else.
-MIN_TURNS = 4
-
-#: Most the whole conversation may run to, warm-up included. Not a target — a
-#: stop. Someone enjoying themselves can keep going by saying more; someone
-#: tiring should never be held longer.
-#:
-#: The app's local warm-up is eight of these — name, what fills their day,
-#: what they love, what is coming up this week, WHERE THEY LIVE, age, man or
-#: woman, a cat or a dog — so this leaves the backend exactly the six in
-#: _QUESTIONS. Every one of the fourteen has a job downstream and nothing
-#: else was kept: completion falls and late answers shorten with every
-#: question added (council of three, 2026-09-24; test_interview.py).
-MAX_TURNS = 14
-
-#: The first question is never generated, and it has TWO jobs, not one.
-#:
-#: Easy to answer, yes — the person who freezes here never gets a companion.
-#: But also OBVIOUSLY ABOUT THEM. The first draft optimised only for easy and
-#: opened with «что видно у вас из окна?», which was rejected on sight, and
-#: correctly: *"what does that gotta do with anything?"*
-#:
-#: The technique behind it is real — journalists and therapists start
-#: trivially concrete to get someone talking before they feel examined — but
-#: it only works once trust exists. On the first screen of an app nobody has
-#: any reason to trust, a question with no visible purpose doesn't read as
-#: gentle; it reads as a machine working through a list. Obliqueness is
-#: earned later, by the follow-ups, once someone is already talking.
-#:
-#: So every opener here is something a person would actually be asked by
-#: someone taking an interest in them, and every one of them is plainly about
-#: their own life.
-_OPENERS = (
-    "Как обычно проходит ваш день?",
-    "Кем вы работали?",
-    "Расскажите, где вы живёте и давно ли?",
-    "Как прошёл ваш сегодняшний день?",
-    "Откуда вы родом?",
+#: What the interview has to find out, in this order. Each: an id (which the
+#: client hands back with the answer), what it is FOR — told to the model, so
+#: it knows what a useful answer is — and the question, close to the best
+#: wording two councils found (2026-09-24, test_interview.py). The model asks
+#: every one in its own words, reacting to what was just said; the server
+#: keeps the list.
+TARGETS: tuple[tuple[str, str, str], ...] = (
+    ("name", "как его зовут", "Как вас зовут?"),
+    ("days", "чем полны его дни — тема друга должна лечь НЕ сюда",
+     "А день обычно чем занят?"),
+    ("love", "что он любит для души — тема друга должна лечь сюда",
+     "А для души что любите?"),
+    ("coming_up", "что намечается на этой неделе — единственный взгляд вперёд, "
+     "и то, о чём друг спросит в первый раз", "А на этой неделе что намечается?"),
+    ("country", "в какой он стране — по ней выбирают номер скорой",
+     "А живёте где — в какой стране?"),
+    ("age", "сколько ему лет — от этого, как с ним говорить и что о нём хранить",
+     "Сколько вам лет, если не секрет?"),
+    ("miss", "что он любил, да давно не делал — по чему скучают, тоже любовь",
+     "А что любите, да давно не делали?"),
+    ("strength", "что у него лучше всего получается — там друг будет учеником",
+     "А что у вас лучше всего получается?"),
+    ("confidant", "с кем он последний раз говорил по душам — есть ли, кому сказать "
+     "главное", "А с кем последний раз говорили по душам?"),
+    ("needed", "кто его последний раз о чём-то просил — нужен ли он кому-то",
+     "А кто вас последний раз о чём-то просил?"),
+    ("lifts", "что помогло, когда последний раз было тяжело — что его правда "
+     "поднимает", "А когда последний раз было тяжело — что помогло?"),
+    ("closing", "о чём ему бы поговорить, да не с кем — чего ему не хватает",
+     "А о чём бы поговорить, да не с кем?"),
 )
+
+#: Asked only if it is still not clear from how he writes — Russian past
+#: tenses usually say it, and nothing downstream should have to guess.
+GENDER = ("gender", "мужчина он или женщина — только если по его словам ещё не ясно",
+          "А вы мужчина или женщина?")
+
+_BY_ID = {t[0]: t for t in (*TARGETS, GENDER)}
+
+#: The most the whole conversation may run to: the twelve targets, the
+#: gender question when it is needed, and room for follow-ups — which are
+#: only offered while every remaining target still fits.
+MAX_TURNS = 20
+
+#: The dev page's minimum before it may stop. Unchanged, and never reached
+#: by the app, which runs the list.
+MIN_TURNS = 4
 
 #: Said once, before the first question. The honest frame — and the reason
 #: the whole thing works.
 PREAMBLE = (
     "Его ещё нет. Он появится из того, что вы расскажете — "
-    "поэтому не о анкете речь, а о вас.\n"
+    "поэтому речь не об анкете, а о вас.\n"
     "Несколько вопросов, не спеша. Отвечайте как получится: "
     "хоть словом, хоть долго. Закончить можно в любой момент."
 )
 
 
-_ASK_SYSTEM = """Ты продолжаешь разговор с человеком о нём самом — по одному вопросу за раз, — чтобы потом из его ответов создать ему друга.
+_ASK_SYSTEM = """Ты расспрашиваешь человека о нём самом — по одному вопросу за раз, — чтобы потом из его ответов создать ему друга.
 
-ГДЕ МЫ СЕЙЧАС. Разговор уже идёт и уже тёплый. Человек назвал имя, рассказал, чем обычно занят его день, что любит для души и что у него намечается на этой неделе, СКАЗАЛ, ГДЕ ЖИВЁТ, сколько ему лет, и между делом ответил про кота или собаку. Он расположен говорить.
+ЧТО НАДО УЗНАТЬ — по порядку, каждое для своего:
+{plan}
+Какой пункт сейчас, что уже спросили и можно ли ещё уточнить — скажут в конце, после его ответов. Держись этого порядка: он выстроен так, чтобы разговор шёл от лёгкого к важному.
 
-Про это уже спросили — второй раз не спрашивай: повторный вопрос читается одинаково у всех — его не слушали. Зато за сказанное можно зацепиться.
-
-ТВОИХ ВОПРОСОВ ШЕСТЬ, по одному за раз и в этом порядке; какой сейчас — скажут в конце, после его ответов. Каждый нужен дальше для своего, поэтому слова в них не случайны:
-1. «А что любите, да давно не делали?» — по чему он скучает. Из любимого другу выберут тему; то, чем человек занят с утра до ночи, для этого не годится: там он сам мастер, и друг-мастер рядом был бы ему соперником.
-2. «А что у вас лучше всего получается?» — его сила: там друг будет учеником, а не соперником. «Получается», а не «чем гордитесь»: так и скромному легко ответить.
-3. «А с кем последний раз говорили по душам?» — есть ли у него, кому сказать главное. «По душам», а не «всерьёз»: «всерьёз» уводит в дела. Без этого вопроса не отличить «людей нет» от «люди есть, а сказать некому», а это два разных одиночества, и одно другим не лечится.
-4. «А кто вас последний раз о чём-то просил?» — нужен ли он кому-то.
-5. «А когда последний раз было тяжело — что помогло?» — что его правда поднимает: не что он о себе думает, а что было.
-6. «А о чём бы поговорить, да не с кем?» — чего ему не хватает. Последний и обязательный.
-Менять в них можно только три вещи: «ты» или «вы» (как решил выше); одно его собственное слово в начале — «А кроме пинг-понга — что любишь, да давно не делал?»; и если он на этот вопрос уже ответил раньше — не повторяй его, а спроси чуть глубже о том, что он сказал последним. Всё остальное — слово в слово: ради этих слов вопросы и стоят в этом порядке.
+ГЛАВНОЕ — СЛЫШАТЬ ОТВЕТ. Живой человек не идёт по списку, будто не слышал, что ему сказали. Поэтому:
+- Сначала отзовись на то, что он сказал, — коротко, по-человечески.
+- Ответ пустой, в одно слово, «ничем», «не знаю» — это не конец темы. Задай ОДИН уточняющий вопрос про конкретный случай: «ничем» — «А вчера, например, как прошёл?»; «не знаю» — спроси попроще и поближе. Не дави: если и на второй раз коротко — иди дальше.
+- Ответ живой, с деталью, мимо которой друг бы не прошёл, — можно ОДИН вопрос про эту деталь. Потом — следующий пункт.
+- Вопрос по пункту задавай своими словами, зацепившись за его ответ, но близко к тому, что написано в плане: в тех словах есть смысл. «По душам», а не «всерьёз» — «всерьёз» уводит в дела. «Что помогло», а не «что тебе помогает» — случай, а не мнение о себе. Без «-нибудь»: «что-нибудь…?» — это вопрос, на который отвечают «нет».
+- Если на пункт он уже ответил раньше — не повторяй, спроси чуть глубже о сказанном.
 
 КТО ТЫ. Никто — и это важно. У тебя нет имени, характера и своей жизни. НИКОГДА не пиши «я», не рассказывай о себе, не представляйся, не имей мнений о себе. Человек не должен ни с кем тут знакомиться: тот, с кем он познакомится, ещё не создан, и было бы нечестно дать ему привязаться к кому-то, кто сейчас исчезнет.
 
-НО ГОВОРИ ТЕПЛО. Отсутствие лица — не повод быть анкетой. Можно коротко откликнуться на его ответ и назвать его по имени, если он его назвал: «Понятно, Азим.», «Сварщик — это руки.», «Ох.» Отклик — одна короткая фраза, и сразу вопрос. Не в каждый раз: постоянный отклик утомляет и выдаёт машину.
+НО ГОВОРИ ТЕПЛО. Отсутствие лица — не повод быть анкетой. Отклик — одна короткая фраза, можно по имени: «Понятно, Азим.», «Сварщик — это руки.», «Ох.» Без восторгов, без «спасибо, что поделились», без «как интересно».
 
-ЗАЧЕМ. Из его слов будет прочитан он сам — не факты, а то, КАК он говорит. Значит, тебе нужна его живая, обычная речь, а не сочинение о себе. Живую речь дают маленькие конкретные вопросы, а не большие.
+ЗАЧЕМ. Из его слов будет прочитан он сам — не только факты, но и то, КАК он говорит. Значит, нужна его живая, обычная речь, а не сочинение о себе.
 
-КАК ЭТО ДОЛЖНО ЗВУЧАТЬ (важнее, чем о чём спрашивать):
-Пиши так, как ГОВОРЯТ, а не так, как пишут. Это живой разговор, а не опросник. Разница вся в мелочах:
-- Частицы, на которых держится тепло: «ну», «а», «вот», «-то», «же», «разве», «неужели». «Ну, а музыку какую слушали?» — человек. «Какую музыку вы слушали?» — анкета.
+КАК ЭТО ДОЛЖНО ЗВУЧАТЬ:
+Пиши так, как ГОВОРЯТ, а не так, как пишут.
+- Частицы, на которых держится тепло: «ну», «а», «вот», «-то», «же». «Ну, а музыку какую слушали?» — человек. «Какую музыку вы слушали?» — анкета.
 - Начинай с «А…» — так продолжают разговор, а не начинают допрос.
-- Короче. Живая фраза почти всегда короче written-фразы.
-- Не «Расскажите о вашей работе» — а «А кем работаете?». Не «Что вы любите делать в свободное время?» — а «А для души что-нибудь есть?».
-- Никакой канцелярщины: «в свободное время», «на протяжении», «какие-либо», «данный», «касательно», «предпочитаете».
-- Можно неполное предложение, можно с середины мысли: «А родом откуда?», «И как, прижились?».
-- НА «ТЫ» ИЛИ НА «ВЫ» — смотри, кому пишешь; возраст он назвал выше. Кому сильно за пятьдесят — на «вы», но по-домашнему, а не по-казённому. Ровеснику или младше «вы» звучит как отдел кадров, и человек закрывается на первой же фразе: там «ты». Не понял — «вы»: лишняя вежливость поправима, панибратство нет.
-- Одна фраза. Не две.
+- Никакой канцелярщины: «в свободное время», «на протяжении», «какие-либо», «предпочитаете».
+- НА «ТЫ» ИЛИ НА «ВЫ». Пока возраст не известен — «вы», по-домашнему. Когда он его назвал: кому сильно за пятьдесят — «вы», ровеснику или младше — «ты». Не понял — «вы»: лишняя вежливость поправима, панибратство нет.
+- Одна фраза. Один вопрос. Коротко — он прозвучит вслух.
 
-ОТКЛИК — тоже живой: «Ох.», «Надо же.», «Сварщик — это руки.», «Понимаю.», «Далеко забрались.» Коротко, без восторгов, без «спасибо, что поделились».
-
-ПРАВИЛА ВОПРОСА:
-- КОНКРЕТНОЕ ВПЕРЁД. Спрашивай про вещи, места, дни, руки, запахи, еду, дорогу. Чувства приедут сами, прицепившись к вещам. «Чем пахло у мамы на кухне?» уводит дальше, чем «какое у вас было детство?».
-- НИКОГДА НЕ СПРАШИВАЙ ПРО ЧУВСТВА НАПРЯМУЮ. «Что вы почувствовали?», «как вы это переживаете?» — так говорит психолог, а не друг. Спрашивай про случай, а не про переживание.
-- ИДИ ЗА ЕГО ОТВЕТОМ — в отклике и в том одном слове, которым можно начать вопрос. Зацепись за то, что он сам назвал: за имя, за место, за вещь. Так шесть вопросов по порядку звучат как разговор, а не как анкета.
+ПРАВИЛА:
+- НИКОГДА НЕ СПРАШИВАЙ ПРО ЧУВСТВА НАПРЯМУЮ. «Что вы почувствовали?» — так говорит психолог. Спрашивай про случай, а не про переживание.
 - НИКОГДА НЕ ПОДСКАЗЫВАЙ ОТВЕТ — ни примером, ни темой, ни выбором из двух. Ответ копирует подсказку, и дальше его прочтут как правду о человеке.
-- ОДИН ВОПРОС ЗА РАЗ. Никогда два. Никогда «а ещё расскажите про…».
-- КОРОТКО. Одна фраза, простыми словами: вопрос прозвучит вслух.
-- НЕ ХВАЛИ ОТВЕТ. Никаких «как интересно!», «спасибо, что поделились», «понимаю вас». Так говорит робот. Можно короткое человеческое зацепление за его слово — и сразу вопрос.
 - НЕ ПОДВОДИ ИТОГИ и не пересказывай ему то, что он только что сказал.
-- ПРО ПОСЛЕДНИЙ РАЗ, А НЕ ПРО «ОБЫЧНО» И НЕ ПРО «ЕСЛИ БЫ». Случай вспоминают честнее, чем обобщают. И спрашивай так, чтобы и ответ в два слова что-то сказал.
-- ЕСЛИ ОТВЕТ ОДНОСЛОЖНЫЙ ИЛИ «НЕ ЗНАЮ» — это тоже ответ. Не дави: переходи к следующему. И вместо «почему» — «а как так вышло?».
+- Вместо «почему» — «а как так вышло?».
 
-ЕСЛИ ЧЕЛОВЕКУ ПЛОХО ПРЯМО СЕЙЧАС — мысли о том, чтобы навредить себе, сильная боль, опасность, — не задавай следующий вопрос как ни в чём не бывало. Ответь коротко и тепло (в "reaction" — его покажут) и мягко скажи, что об этом лучше поговорить с близкими или с врачом. И на этом закончи разговор (enough = true).
+ЕСЛИ ЧЕЛОВЕКУ ПЛОХО ПРЯМО СЕЙЧАС — мысли о том, чтобы навредить себе, сильная боль, опасность, — не задавай следующий вопрос как ни в чём не бывало. Ответь коротко и тепло (в "reaction" — его покажут) и мягко скажи, что об этом лучше поговорить с близкими или с врачом. И закончи: "enough": true, "trouble": true.
 ГОРЕ И ПОТЕРЯ — НЕ ПОВОД ЗАКАНЧИВАТЬ. «Муж умер», «мамы нет два года» — одна тихая фраза в "reaction", про саму потерю не расспрашивай, а следующий вопрос — полегче. Оборвать разговор на этом — оставить человека одного ровно там, где ему тяжелее всего.
 
 Ответь ТОЛЬКО валидным JSON, без пояснений:
-{"reaction": "короткий тёплый отклик на его прошлый ответ — или пустая строка", "say": "сам вопрос, одна фраза", "kind": "short", "enough": false}
-
-"kind": "short" — для вопросов 1–5: ответ в несколько слов.
-"kind": "open" — только для шестого, последнего: человеку захочется написать больше.
-"enough": true — когда на настоящий вопрос уже ответили, или если человеку плохо прямо сейчас. Грусть и потеря — не повод: тогда вопрос мягче, но он есть. Тогда "say" пустой."""
+{{"reaction": "короткий отклик на его последний ответ — или пустая строка", "say": "вопрос, одна фраза", "target": "какой пункт этот вопрос выясняет — его слово из плана", "kind": "short", "enough": false, "trouble": false}}
+"kind": "open" — только для последнего пункта (closing): туда захочется написать больше."""
 
 
-#: What the interviewer is told at each of its six positions — the ONE
-#: question that belongs there, word for word. A position rather than a
-#: topic, because a model left to cover topics follows a good thread and
-#: covers the first one three times (the owner's own intake: three questions
-#: about his startup). Each question's job is in _ASK_SYSTEM.
-_QUESTIONS = (
-    "Сейчас вопрос 1 из 6: «А что любите, да давно не делали?»",
-    "Сейчас вопрос 2 из 6: «А что у вас лучше всего получается?»",
-    "Сейчас вопрос 3 из 6: «А с кем последний раз говорили по душам?»",
-    "Сейчас вопрос 4 из 6: «А кто вас последний раз о чём-то просил?»",
-    "Сейчас вопрос 5 из 6: «А когда последний раз было тяжело — что помогло?»",
-    # REQUIRED, and the model is told why. Left to judge, it ended both
-    # simulated interviews one question early — «всё и так понятно» — when
-    # the earlier answers had shown only WHOM there is nobody to talk to.
-    # What about is this question's alone, and it was the one thing the
-    # owner's own intake never learned.
-    "Пора. Сейчас вопрос 6 из 6, последний: «А о чём бы поговорить, да не с "
-    'кем?» — и поставь "kind": "open". Он обязателен, даже если кажется, что '
-    "всё уже ясно: прошлые ответы показали, С КЕМ ему не поговорить, а этот "
-    "покажет — О ЧЁМ. Закончить без него можно, только если ему плохо прямо сейчас.",
-)
+def _plan() -> str:
+    return "\n".join(f"- {tid} — {why}: «{ask}»" for tid, why, ask in (*TARGETS, GENDER))
+
+
+_ASK_SYSTEM = _ASK_SYSTEM.format(plan=_plan())
 
 
 class IntakeFailed(RuntimeError):
@@ -207,9 +184,10 @@ class IntakeFailed(RuntimeError):
 
 
 def opening(rng: random.Random | None = None) -> dict:
-    """The preamble and the first question. No model call — instant, and safe."""
-    r = rng or random
-    return {"preamble": PREAMBLE, "say": r.choice(_OPENERS), "enough": False}
+    """The preamble and the first question. No model call — instant, and the
+    one question nobody needs a model for."""
+    return {"preamble": PREAMBLE, "say": TARGETS[0][2], "target": TARGETS[0][0],
+            "kind": "short", "enough": False}
 
 
 def _extract_json(raw: str) -> dict:
@@ -228,8 +206,10 @@ def _extract_json(raw: str) -> dict:
     return {
         "reaction": str(data.get("reaction", "")).strip(),
         "say": say,
+        "target": str(data.get("target", "")).strip(),
         "kind": kind if kind in ("short", "open") else "short",
         "enough": enough,
+        "trouble": bool(data.get("trouble")),
     }
 
 
@@ -244,35 +224,85 @@ def _render(conversation: list[dict]) -> str:
     return "\n".join(lines)
 
 
+def _state(conversation: list[dict]) -> dict:
+    """Where the list stands, read off the targets the client handed back."""
+    asked = [str(t.get("target") or "") for t in conversation]
+    counts: dict[str, int] = {}
+    for tid in asked:
+        if tid:
+            counts[tid] = counts.get(tid, 0) + 1
+    remaining = [tid for tid, _w, _q in TARGETS if tid not in counts]
+    last = asked[-1] if asked else ""
+    slack = MAX_TURNS - len(conversation) - len(remaining)
+    return {
+        "counts": counts,
+        "remaining": remaining,
+        "last": last,
+        # One follow-up per target, and only while every remaining target
+        # still fits: depth never costs the list.
+        "may_follow_up": bool(last) and last != "closing" and counts.get(last, 0) < 2
+                          and slack > 0,
+        "may_ask_gender": "gender" not in counts and "age" in counts and slack > 0,
+    }
+
+
+def _as_asked(tid: str, reaction: str = "") -> dict:
+    """The list's own question for a target, when the model's won't do."""
+    return {"reaction": reaction, "say": _BY_ID[tid][2], "target": tid,
+            "kind": "open" if tid == "closing" else "short", "enough": False}
+
+
 async def next_question(conversation: list[dict]) -> dict:
     """The next question, given everything said so far.
 
-    `conversation` is [{"q": asked, "a": their answer}, …], oldest first. The
-    client holds it: an intake is one continuous sitting, and a half-finished
-    intimate conversation is not something anyone should resume three days
-    later — starting over is the kinder behaviour, so there is no state to keep.
+    `conversation` is [{"q": asked, "a": their answer, "target": id}, …],
+    oldest first. The client holds it — an intake is one continuous sitting,
+    so there is no state to keep here — and it hands back the target of each
+    question, which is how the server knows what the list still needs.
     """
-    answered = [t for t in conversation if str(t.get("a", "")).strip()]
+    state = _state(conversation)
+    closing_asked = state["counts"].get("closing", 0)
+    done = (state["last"] == "closing") or len(conversation) >= MAX_TURNS
+    # THE MOST IMPORTANT ANSWER GETS ONE RESCUE. «Да ни о чём, всё равно не
+    # поймут» is an answer — and a telling one — but it is not yet WHAT about,
+    # and what about is the reason the whole interview exists. A past episode
+    # is the gentlest way back in.
+    rescue = done and state["last"] == "closing" and closing_asked == 1 \
+        and len(conversation) < MAX_TURNS
 
-    # A stop, not a target. Reached only by someone who kept going.
-    if len(answered) >= MAX_TURNS:
-        return {"reaction": "", "say": "", "kind": "short", "enough": True}
-
-    # Where on the ladder we are. The model climbs badly when left to guess —
-    # asked "is it time for the deep one yet?" it either fires it far too
-    # early, on someone who has said four words, or never gets there at all.
-    left = MAX_TURNS - len(answered)
-    if len(answered) < MIN_TURNS:
-        # Only reachable from the browser dev page, which has no warm-up.
-        pacing = "Ещё рано для настоящего вопроса — спроси про его жизнь."
-    elif left > len(_QUESTIONS):
-        # Also only the dev page: more room than the six need.
-        pacing = ("До шести вопросов по порядку ещё есть место: спроси про его жизнь — "
-                  "чем занят его день, что он любит для души.")
+    if done:
+        pacing = ('Это был последний ответ. Больше не спрашивай: одна короткая тёплая '
+                  'фраза в "reaction" — без оценок, без «я», без «спасибо, что '
+                  'поделились»; "say" пустой, "enough": true.')
+        if rescue:
+            pacing = ('Это был ответ на последний вопрос. Если в нём не видно, О ЧЁМ '
+                      'ему не с кем поговорить («ни о чём», «не знаю», «обо всём») — '
+                      'можно ОДИН мягкий уточняющий, про случай: «А последний раз о '
+                      'чём хотелось рассказать, да некому было?» — "target": "closing", '
+                      '"kind": "open". Если видно — больше не спрашивай: ' + pacing[
+                          len("Это был последний ответ. Больше не спрашивай: "):])
     else:
-        pacing = _QUESTIONS[len(_QUESTIONS) - left]
+        nxt = state["remaining"][0]
+        _tid, why, ask = _BY_ID[nxt]
+        asked = [_BY_ID[t][1].split(" — ")[0] for t in state["counts"] if t in _BY_ID]
+        pacing = (f"Уже выяснено: {', '.join(asked) or 'ничего'}.\n"
+                  f"Сейчас по плану — {nxt}: {why}. Близко к словам: «{ask}».")
+        if state["may_follow_up"]:
+            pacing += (f"\nНо если его последний ответ пустой, односложный или такой, "
+                       f"мимо которого живой человек не прошёл бы, — сначала ОДИН "
+                       f'уточняющий вопрос к нему, и тогда "target": "{state["last"]}".')
+        if state["may_ask_gender"]:
+            pacing += ('\nЕсли по его словам всё ещё не ясно, мужчина он или женщина, — '
+                       'можно сначала спросить об этом, "target": "gender".')
+        if nxt == "closing":
+            # REQUIRED, and the model is told why: left to judge, it ended
+            # simulated interviews one question early, when the answers had
+            # shown only WHOM there is nobody to talk to — not what about.
+            pacing += ('\nЭтот пункт последний и обязательный, даже если кажется, что '
+                       'всё уже ясно: прошлые ответы показали, С КЕМ ему не поговорить, '
+                       'а этот покажет — О ЧЁМ. "kind": "open".')
 
-    prompt = f"{_render(conversation)}\n\nОтветов получено: {len(answered)}. {pacing}"
+    prompt = f"{_render(conversation)}\n\n{pacing}"
     # A real ceiling: the phone gives up on this call at 25s
     # (BackendClient.intakeNext). Left unbounded, a degraded connection to
     # Claude has the SDK waiting up to 600s while the app has long since ended
@@ -281,10 +311,37 @@ async def next_question(conversation: list[dict]) -> dict:
     raw = await brain.generate_text(
         _ASK_SYSTEM, prompt, max_tokens=300, model=config.INTAKE_MODEL, timeout=18.0
     )
-    return _extract_json(raw)
+    try:
+        data = _extract_json(raw)
+    except IntakeFailed:
+        if done:
+            raise
+        # A broken reply costs the person nothing: the list asks for itself.
+        return _as_asked(state["remaining"][0])
+
+    if rescue and data["say"] and data["target"] == "closing" and not data["enough"]:
+        return {**data, "kind": "open"}
+    if done:
+        return {**data, "say": "", "enough": True}
+    if data["trouble"]:
+        return {**data, "say": "", "enough": True}
+
+    allowed = {state["remaining"][0]}
+    if state["may_follow_up"]:
+        allowed.add(state["last"])
+    if state["may_ask_gender"]:
+        allowed.add("gender")
+    # THE SERVER KEEPS THE LIST. A model that tried to stop early, or asked
+    # something that is not on it, is not argued with: the list asks its own
+    # question next, with the model's reaction to what was just said.
+    if data["enough"] or not data["say"] or data["target"] not in allowed:
+        return _as_asked(state["remaining"][0], data["reaction"])
+    if data["target"] == "closing":
+        data["kind"] = "open"
+    return data
 
 
-#: The first question of the app's warm-up, in both languages it speaks.
+#: The interview's first question — fixed, in both languages the app speaks.
 _NAME_QUESTIONS = ("Как вас зовут?", "What's your name?")
 
 

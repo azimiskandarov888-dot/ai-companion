@@ -912,6 +912,9 @@ _MAX_CHIP = 200
 class IntakeTurn(BaseModel):
     q: str = Field("", max_length=_MAX_QUESTION)   # what was asked
     a: str = Field("", max_length=_MAX_ANSWER)     # what they answered
+    #: Which of intake.TARGETS the question was after — handed back so the
+    #: server knows what the list still needs. Empty for an older client.
+    target: str = Field("", max_length=32)
 
 
 class IntakeRequest(BaseModel):

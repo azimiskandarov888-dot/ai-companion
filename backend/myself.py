@@ -71,15 +71,12 @@ import tryout
 
 HOME = config.DATA_DIR / "myself"
 
-#: Откуда берётся разминка — прямо из приложения, а не копией рядом с ним.
-SWIFT = Path(__file__).resolve().parents[1] / "ios" / "BobCompanion" / "Screens" / "ScrollScreen.swift"
-
 # ── кандидаты ───────────────────────────────────────────────────────────────
 #
 # Откуда они и почему именно эти — docs/MODELS-FOR-EACH-AGENT.md. Любой этап
 # принимает --models id,id,… — чтобы добавить кандидата, не трогая файл.
 
-INTERVIEWER = ("Claude Sonnet 5", "anthropic/claude-sonnet-5")
+INTERVIEWER = ("Claude Opus 5", "anthropic/claude-opus-5")   # как config.INTAKE_MODEL
 
 #: Читателю язык важнее всего — поэтому здесь нет Kimi (у Kimi K2 #24 на
 #: русской арене), зато есть Gemini 3.1 Pro, которая на русской арене первая.
@@ -274,95 +271,54 @@ def _candidates(args, default):
 
 # ── 1 · знакомство ──────────────────────────────────────────────────────────
 
-def warm_up() -> list[dict]:
-    """Разминка — из ScrollScreen.swift, русская половина, как видит её человек.
-
-    Читается из исходника, а не переписана сюда: вторая копия разошлась бы с
-    первой на первой же правке, и чтение судило бы разговор, которого в
-    приложении нет."""
-    src = SWIFT.read_text(encoding="utf-8")
-    block = src[src.index("private static let warmUp"):]
-    block = block[block.index("? [") + 3: block.index("] : [")]
-    steps, at = [], 0
-    while (at := block.find("Step(", at)) != -1:
-        depth, i, quoted = 0, at + 4, False
-        while True:
-            c = block[i]
-            if c == '"':
-                quoted = not quoted
-            elif not quoted and c == "(":
-                depth += 1
-            elif not quoted and c == ")":
-                depth -= 1
-                if depth == 0:
-                    break
-            i += 1
-        body = block[at:i]
-        options = re.search(r"options:\s*\[([^\]]*)\]", body)
-        steps.append({
-            "say": re.search(r'say:\s*"([^"]*)"', body).group(1),
-            "options": re.findall(r'"([^"]*)"', options.group(1)) if options else [],
-            "country": "asksCountry: true" in body,
-            "age": "asksAge: true" in body,
-        })
-        at = i
-    return steps
-
-
-def _ask(question: str, options: list[str]) -> str:
+def _ask(question: str) -> str:
     print(f"\n\033[1m{question}\033[0m")
-    for n, o in enumerate(options, 1):
-        print(f"  {n}. {o}")
     try:
-        said = input("> ").strip()
+        return input("> ").strip()
     except (EOFError, KeyboardInterrupt):
         sys.exit("\nПрервано. Ничего не сохранено — знакомство проходится за один раз.")
-    if said.isdigit() and 1 <= int(said) <= len(options):
-        return options[int(said) - 1]
-    return said
 
 
 async def interview(args) -> None:
+    """Ровно как в приложении: все вопросы — от интервьюера, первый — сразу."""
     name, model = (args.model, args.model) if args.model else INTERVIEWER
     _model.set(model)
     _bill.set(bill := {"cost": 0.0, "calls": 0})
     print("Отвечай так, как написал бы другу в мессенджере: быстро и как есть.")
     print("Читатель смотрит не только на ЧТО, но и на КАК — вылизанный текст его обманет.")
-    print("Цифрой — выбрать вариант, словами — ответить по-своему. Пусто — пропустить.")
+    print(f"\033[2mСпрашивает {name}. Пусто — пропустить.\033[0m")
 
-    turns, facts = [], {"country": "", "age": ""}
-    for step in warm_up():
-        said = _ask(step["say"], step["options"])
-        turns.append({"q": step["say"], "a": said})
-        for key in ("country", "age"):
-            if step[key]:
-                facts[key] = said
-
-    print(f"\n\033[2m— дальше вопросы задаёт интервьюер ({name}) —\033[0m")
-    while True:
+    turns: list[dict] = []
+    nxt = intake.opening()
+    print(f"\n\033[2m{nxt['preamble']}\033[0m")
+    for _ in range(intake.MAX_TURNS + 2):
+        if nxt["enough"] or not nxt["say"]:
+            if nxt.get("reaction"):  # as the app does: the last words are shown
+                print(f"\n\033[1m{nxt['reaction']}\033[0m")
+            break
+        if nxt.get("reaction"):
+            print(f"\n\033[2m{nxt['reaction']}\033[0m")
+        turns.append({"q": nxt["say"], "a": _ask(nxt["say"]),
+                      "target": nxt.get("target", "")})
         try:
             nxt = await intake.next_question(turns)
         except Exception as e:  # noqa: BLE001 — как в приложении: конец, а не ошибка
             print(f"\n\033[2m(вопрос не получился — заканчиваю, как сделало бы приложение: {e})\033[0m")
             break
-        if nxt["enough"] or not nxt["say"]:
-            if nxt["reaction"]:  # as the app now does: the last words are shown
-                print(f"\n\033[1m{nxt['reaction']}\033[0m")
-            break
-        if nxt["reaction"]:
-            print(f"\n\033[2m{nxt['reaction']}\033[0m")
-        turns.append({"q": nxt["say"], "a": _ask(nxt["say"], [])})
 
     wishes = _ask("Кого бы тебе хотелось встретить?\n\033[2mЧем больше решишь о нём "
                   "сейчас, тем меньше останется — встретить. Например: «Кого-то, с кем "
-                  "можно…». Можно пусто.\033[0m", [])
+                  "можно…». Можно пусто.\033[0m")
+
+    def about(wanted: str) -> str:
+        return " ".join(t["a"] for t in turns if t.get("target") == wanted and t["a"])
 
     if _path("interview").exists():
         _path("interview").rename(HOME / f"interview.{time.strftime('%Y%m%d-%H%M%S')}.json")
     _save("interview", {
         "interviewer": name, "model": model, "cost": round(bill["cost"], 5),
         "turns": turns, "story": intake.as_story(turns), "wishes": wishes,
-        "name": turns[0]["a"] if turns else "", **facts,
+        "name": about("name"), "country": about("country"), "age": about("age"),
     })
     print(f"\nСохранено: {_path('interview')}  (интервьюер стоил ${bill['cost']:.4f})")
     print("Дальше: python3 myself.py read")

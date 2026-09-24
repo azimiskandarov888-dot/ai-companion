@@ -81,11 +81,15 @@ WRITER_MODEL: str = os.getenv("WRITER_MODEL", "claude-opus-5")
 WRITER_EFFORT: str = os.getenv("WRITER_EFFORT", "high")
 
 # ASKING him about himself (app/intake.py) — the conversation that replaces
-# the blank «расскажите о себе» page. Not deep work, but the quality of each
-# follow-up decides whether someone opens up or gives up, so it gets the
-# middle model rather than the fast one: a bad question wastes the only
-# chance the app has to hear this person in their own voice.
-INTAKE_MODEL: str = os.getenv("INTAKE_MODEL", BRAIN_MODEL)
+# the blank «расскажите о себе» page. Every question is the model's now, and
+# each one's quality decides whether somebody opens up or gives up — so it
+# gets the model with the best measured ear for what a particular person
+# needs in a multi-turn conversation (#1 on EQ-Bench 4), not the middle one.
+# It had been the middle one by default, never by comparison. Compared
+# (2026-09-24), all seven candidates kept the list and all followed «ничем»
+# with «а вчера, например?»; this one did it fastest of the Claude models,
+# about three seconds a question. Once per person: about thirty cents.
+INTAKE_MODEL: str = os.getenv("INTAKE_MODEL", "claude-opus-5")
 #: low | medium | high | xhigh | max — how long it may think before answering.
 READING_EFFORT: str = os.getenv("READING_EFFORT", "high")
 

@@ -115,6 +115,8 @@ struct CreateCompanionResponse: Decodable {
 struct IntakeTurn: Codable, Equatable {
     var q: String
     var a: String
+    /// Which of the server's targets the question was after (intake.TARGETS).
+    var target: String? = nil
 }
 
 /// POST /api/intake/next — the next question, or the end of the conversation.
@@ -131,6 +133,8 @@ struct IntakeQuestion: Decodable {
     /// Only on the very first call: the honest frame that makes the whole
     /// conversation work — he isn't here yet, he'll be made out of this.
     let preamble: String?
+    /// What the question is after — handed back with the answer.
+    let target: String?
 }
 
 /// GET /api/diary — what he has written about his friend so far.
