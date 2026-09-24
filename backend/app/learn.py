@@ -78,7 +78,8 @@ _EXTRACTION_SYSTEM = """Ты ведёшь память для тёплого д�
   "country": "страна, где он живёт — ТОЛЬКО если он сам об этом сказал, иначе пусто",
   "no_longer_true": [{"id": 0, "because": "его слова, из которых это следует"}],
   "follow_ups": ["о чём по-доброму спросить ЧЕЛОВЕКА в следующий раз (незаконченные дела, переживания, планы)"],
-  "bob_facts": ["новые устойчивые детали, которые БОБ рассказал О СВОЕЙ жизни (имена, места, факты) — чтобы он не противоречил себе потом"]
+  "bob_facts": ["новые устойчивые детали, которые БОБ рассказал О СВОЕЙ жизни (имена, места, факты) — чтобы он не противоречил себе потом"],
+  "taught_bob": ["чему ЧЕЛОВЕК научил Боба или что ему объяснил и посоветовал — суть одной строкой, чтобы Боб это знал и дальше. Только то, что человек правда объяснял, а не просто упомянул"]
 }
 
 КАК СТАВИТЬ ОЦЕНКИ НАСТРОЕНИЯ
@@ -447,6 +448,14 @@ async def _store(user_id: str, data: dict) -> None:
         bf = (bf or "").strip()
         if bf:
             memory.add_memory(user_id, "fact", bf, owner="bob", importance=2)
+
+    # What the person taught him. HIS row, not the person's: it is what this
+    # friend now knows, so a parting takes it with him (erase.the_companion)
+    # and the next friend does not arrive knowing another man's lessons.
+    for lesson in data.get("taught_bob") or []:
+        lesson = (lesson or "").strip() if isinstance(lesson, str) else ""
+        if lesson:
+            memory.add_memory(user_id, "lesson", lesson, owner="bob")
 
 
 #: The runaway guard, and the number is a judgement rather than a round figure.

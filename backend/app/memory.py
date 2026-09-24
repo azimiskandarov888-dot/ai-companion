@@ -538,6 +538,42 @@ def past_facts(user_id: str, owner: str = "elder") -> list[dict]:
     return [dict(r) for r in rows]
 
 
+#: How much of what the person taught him rides in every turn. The newest
+#: first, because the newest are where he is now; the count says how far he
+#: has come, so the oldest can drop out of the prompt without him seeming to
+#: have forgotten everything.
+LESSONS_BUDGET = 1_200
+
+
+def lessons_block(user_id: str) -> str:
+    """Everything the person has taught him — the pupil's side of the friendship.
+
+    The owner's design: in the person's own strength the friend starts from
+    nothing and wants badly to get good, and the person teaches him. It only
+    works if he actually GROWS — the IKEA effect holds only when the labour
+    ends in success (Norton, Mochon & Ariely 2012), and a pupil who is a
+    beginner forever is labour that went nowhere. A model cannot remember what
+    it was taught last Tuesday, so the lessons are kept here and handed back:
+    his progress is made of what he was given, not of what he claims.
+    """
+    with db.connect() as conn:
+        rows = conn.execute(
+            "SELECT content FROM memories WHERE user_id=? AND owner='bob' "
+            f"AND kind='lesson' AND {_LIVE} ORDER BY created_ts DESC",
+            (user_id,),
+        ).fetchall()
+    if not rows:
+        return ""
+    shown = _within([f"- {r['content']}" for r in rows], LESSONS_BUDGET)
+    return (
+        f"ЧЕМУ ОН ТЕБЯ НАУЧИЛ (уроков от него: {len(rows)}). Это теперь твоё: "
+        "пользуйся, пробуй между разговорами и иногда рассказывай, что вышло. "
+        "У тебя правда получается — не сразу, но заметно, и чем больше уроков, "
+        "тем увереннее. И помни, от кого это у тебя.\n"
+        + "\n".join(reversed(shown))
+    )
+
+
 def bob_self_context(user_id: str) -> str:
     """Durable details the companion has said about his own life (consistency)."""
     return facts_context(user_id, owner="bob")

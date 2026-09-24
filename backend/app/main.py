@@ -260,6 +260,8 @@ async def _assemble(user_id: str, user_text: str) -> tuple[str, str, list, str |
         situation_block=situations.block(user_text, memory.recent_turns(user_id)),
         elder_facts=elder_facts,
         bob_facts=bob_facts,
+        # What the person has taught him, so the pupil actually grows.
+        lessons_block=memory.lessons_block(user_id),
         memory_context=mem_ctx,
         elder_name=config.ELDER_NAME,
         broke_off=broke_off,

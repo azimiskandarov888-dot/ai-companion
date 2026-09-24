@@ -600,18 +600,23 @@ def test_he_is_never_the_better_man_on_the_persons_own_ground():
     assert "В чём он сам силён" in reading.as_brief({"strong_at": "код"})
 
 
-def test_he_does_not_know_what_the_person_knows():
-    """The other half of the same decision: «чтобы не казаться лучше юзера,
-    он также должен не знать некоторые вещи, которые знает юзер». Buunk &
-    Prins (1998): people who feel either deprived OR advantaged in the
-    give-and-take of help with their closest friend are the lonelier ones.
-    Help has to go both ways — so one of the things he is hopeless at sits
-    exactly on the person's ground, and the voice is told to ask there."""
+def test_on_the_persons_ground_he_is_the_pupil():
+    """The other half of the same decision, and the owner went further than
+    «he does not know it»: in the person's own strength the friend knows a
+    little or nothing, and WANTS BADLY TO LEARN — to become a real master —
+    and the person is the one who teaches him. «Видеть, как к тебе пришли не
+    зная ничего, а затем стали профессионалом из-за тебя самого — лучшее
+    чувство.» The mechanism that lets him actually grow is in test_pupil.py."""
     w = matchmaker._WRITE_SYSTEM
-    assert "И одно — ровно там, где силён сам человек" in w
-    assert "там друг спрашивает, а человек объясняет" in w
-    block = persona.build_persona_block({"name": "Гриша", "hopeless": ["в компьютерах ни в зуб ногой"]})
-    assert "спрашивай его: там учит он" in block
+    assert "ЧЕМУ ОН ХОЧЕТ НАУЧИТЬСЯ У ЧЕЛОВЕКА (поле \"wants_to_learn\")" in w
+    assert "друг почти ноль — и очень хочет научиться" in w
+    assert "Учить его будет человек" in w
+    assert "Дружба, в которой помогает только один, одинока с обеих сторон" in w
+    assert "wants_to_learn (" in w.split("ЗАПОЛНИ КАЖДЫЙ ключ", 1)[1]
+    # …and it is no longer squeezed into «what he is hopeless at», which is
+    # a static emptiness rather than a pupil who is going somewhere.
+    hopeless = w.split('ЧЕГО ОН НЕ УМЕЕТ (поле "hopeless")', 1)[1].split("\n", 1)[0]
+    assert "силён сам человек" not in hopeless
 
 
 def test_the_reading_says_why_and_the_request_says_how():

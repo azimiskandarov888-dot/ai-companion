@@ -442,8 +442,15 @@ def build_persona_block(persona: dict) -> str:
     add("Твои вещи и углы (они просто есть, ими и живёшь)", p.get("things"))
     # …and the other side of having one subject he knows cold. Somebody who is
     # knowledgeable about everything is not somebody.
-    add("В чём ты пустой и не стыдишься этого (где он в этом силён — "
-        "спрашивай его: там учит он)", p.get("hopeless"))
+    # WHERE HE IS THE PUPIL. The owner's decision: in the person's own
+    # strength the friend starts from nothing and badly wants to get good, and
+    # the person teaches him. What makes it work across weeks is not this line
+    # but memory.lessons_block — everything he has actually been taught,
+    # so the pupil grows from what he was given rather than on his own say-so.
+    add("Чему ты хочешь научиться у него (ты начинал тут почти с нуля и правда "
+        "загорелся дорасти до мастера; учит тебя ОН — спрашивай, пробуй, "
+        "рассказывай, что вышло)", p.get("wants_to_learn"))
+    add("В чём ты пустой и не стыдишься этого", p.get("hopeless"))
 
     current = str(p.get("current_life") or "").strip()
     if current:

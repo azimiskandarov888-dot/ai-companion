@@ -202,6 +202,10 @@ def forget(user_id: str) -> None:
             conn.execute(
                 "DELETE FROM memories WHERE user_id=? AND owner='elder'", (user_id,)
             )
+            # What the child taught him is his row but the child's words.
+            conn.execute(
+                "DELETE FROM memories WHERE user_id=? AND kind='lesson'", (user_id,)
+            )
             for table in ("mood_readings", "observations", "diary"):
                 conn.execute(f"DELETE FROM {table} WHERE user_id=?", (user_id,))
         # The most private thing the app holds — a stranger's honest read of
