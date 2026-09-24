@@ -674,7 +674,9 @@ def test_the_interview_hears_about_a_love_that_is_not_his_work():
     not. One question, asked once, is what makes the rule above possible."""
     from app import intake
 
-    assert "НАЧНИ С ТОГО, ЧТО ОН ЛЮБИТ ПРОСТО ТАК, не по делу и не по работе" in intake._ASK_SYSTEM
-    # …and it is no longer only a rule: the app's warm-up asks it, fixed,
-    # right after what they do (test_interview.py).
+    # Asked twice now, and neither is left to chance: the app's warm-up asks
+    # «А для души что любите?», fixed, and the interviewer's first question is
+    # «А что любите, да давно не делали?» — what they miss is a love too.
+    assert "«А что любите, да давно не делали?»" in intake._QUESTIONS[0]
+    assert "то, чем человек занят с утра до ночи, для этого не годится" in intake._ASK_SYSTEM
 

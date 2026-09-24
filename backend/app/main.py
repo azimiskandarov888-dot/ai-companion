@@ -989,7 +989,9 @@ class CreateCompanionRequest(BaseModel):
 
 @app.post("/api/companion/create")
 async def companion_create(
-    req: CreateCompanionRequest, user_id: str = Depends(_user)
+    req: CreateCompanionRequest,
+    background_tasks: BackgroundTasks,
+    user_id: str = Depends(_user),
 ) -> JSONResponse:
     """From the user's own words, and whatever they asked for, the friend walks in.
 
@@ -1074,6 +1076,11 @@ async def companion_create(
     # signs up until the moment they say their first word.
     if young.keeps_nothing(user_id):
         young.forget(user_id)
+    else:
+        # What they told the intake, kept where their friend can use it — the
+        # people in their life, the cat, what is coming up this week. After the
+        # response, so nobody waits on it. See learn.from_intake.
+        background_tasks.add_task(learn.from_intake, user_id, req.about)
     return JSONResponse({"name": p.get("name"), "persona": p})
 
 

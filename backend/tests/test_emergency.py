@@ -177,7 +177,7 @@ def test_a_two_word_country_is_never_read_as_its_last_word(said, expected):
 
 @pytest.mark.parametrize(
     "said",
-    ["Нарния", "Даниил", "Индианаполис", "рука", "Москва", "в деревне",
+    ["Нарния", "Даниил", "Индианаполис", "рука", "в деревне",
      "я кореец", "не скажу", "", "   ", None, 42],
 )
 def test_something_that_is_not_a_country_is_not_read_as_one(said):
@@ -209,19 +209,35 @@ def test_a_country_typed_in_latin_letters_is_understood(said, expected):
     assert emergency.resolve(said) == expected
 
 
-@pytest.mark.parametrize("said", ["tell us", "us", "uk", "Georgia on my mind", "tashkent"])
+@pytest.mark.parametrize("said", ["tell us", "us", "uk", "Georgia on my mind"])
 def test_latin_near_misses_still_miss(said):
-    """«us» is a pronoun; «Georgia» is as likely a US state as a country; and
-    a city, in either alphabet, is still not a country here (the test below)."""
+    """«us» is a pronoun; «Georgia» is as likely a US state as a country."""
     assert emergency.resolve(said) == ""
 
 
-def test_a_city_alone_leaves_the_country_unknown():
-    """«Москва» is not «Россия» to this module, and pretending otherwise would
-    start it down the road of being a geography database. Unknown falls back to
-    the configured default plus 112, which is the honest answer."""
-    emergency.remember(U, "Москва")
-    assert emergency.known(U) is False
+@pytest.mark.parametrize(
+    "said,expected",
+    [
+        ("tashkent", "узбекистан"),
+        ("в Ташкенте", "узбекистан"),
+        ("Живу в Хайфе", "израиль"),
+        ("в Нью-Йорке", "сша"),
+        ("под Тамбовом", "россия"),
+        ("Tel Aviv", "израиль"),
+        ("в Алма-Ате", "казахстан"),
+    ],
+)
+def test_a_city_is_read_as_its_country(said, expected):
+    """This used to be refused on principle — «Москва» was not «Россия» here,
+    lest the module become a geography database. Then the owner answered «в
+    какой стране?» with «tashkent», and the example in main.py's own comment,
+    «в Хайфе», resolved to nothing. People answer that question with where
+    they live, so the capitals and the big cities where the people this is for
+    actually live are read — and only names that are nobody's word for
+    anything else. 112 is still said beside every number."""
+    assert emergency.resolve(said) == expected
+    emergency.remember(U, said)
+    assert emergency.known(U) is True
 
 
 # ── asked at the door, not waited for ───────────────────────────────────────

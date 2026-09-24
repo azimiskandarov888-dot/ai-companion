@@ -371,8 +371,36 @@ async def _store(user_id: str, data: dict) -> None:
     # and write nothing — and then the retirement would fire on the only copy
     # there was. Retiring first means the worst case is a harmless re-add.
     _retire(user_id, data.get("no_longer_true"))
+    await _store_what_they_said(user_id, data)
+    await _store_what_was_watched(user_id, data)
 
-    # --- About the person ---
+
+async def from_intake(user_id: str, story: str) -> None:
+    """What the person told the intake, kept where their friend can use it.
+
+    Everything the intake learned used to reach only the reading and the
+    writer. The friend himself began the first conversation knowing nothing
+    but a name — and could ask «а семья есть?» of somebody who had just told
+    the intake about his grandfather, which is the one thing that says most
+    plainly «you were not listened to». So the answers are read once, like a
+    conversation, and what the person SAID is kept: facts, the people in
+    their life, and whatever is coming up this week as a follow-up — the
+    friend's first «ну как прошло?». Only what was said: the mood of an intake
+    is not a visit, and the observation register is for what is watched in
+    conversation. Never raises; the friend arrives either way.
+    """
+    if not config.ANTHROPIC_API_KEY or not str(story or "").strip():
+        return
+    said = ("ИНТЕРВЬЮ ПЕРЕД ЗНАКОМСТВОМ — спрашивало приложение, отвечал ЧЕЛОВЕК; "
+            "БОБ ещё не сказал ни слова:\n" + str(story).strip())
+    try:
+        await _store_what_they_said(user_id, await _extract(user_id, said))
+    except Exception as e:  # noqa: BLE001
+        print(f"[learn] intake was not read: {e}", file=sys.stderr)
+
+
+async def _store_what_they_said(user_id: str, data: dict) -> None:
+    """Facts, stories, health and follow-ups — what the person told us."""
     for fact in data.get("facts") or []:
         if not isinstance(fact, dict):
             continue
@@ -402,6 +430,17 @@ async def _store(user_id: str, data: dict) -> None:
                 user_id, "health", note, owner="elder", embedding=emb, importance=2
             )
 
+    for fup in data.get("follow_ups") or []:
+        fup = (fup or "").strip()
+        if fup:
+            memory.add_memory(
+                user_id, "follow_up", fup, owner="elder", status="open", importance=2
+            )
+
+
+async def _store_what_was_watched(user_id: str, data: dict) -> None:
+    """Mood, observations, his own feeling, the country, what HE said and was
+    taught — what a conversation shows and an intake does not."""
     # Mood arrives as an object now. A plain string is what the previous shape
     # produced, and a model occasionally still answers that way — both are read,
     # because losing a mood is worse than losing its detail.
@@ -435,13 +474,6 @@ async def _store(user_id: str, data: dict) -> None:
     where = data.get("country")
     if isinstance(where, str) and where.strip():
         emergency.remember(user_id, where)
-
-    for fup in data.get("follow_ups") or []:
-        fup = (fup or "").strip()
-        if fup:
-            memory.add_memory(
-                user_id, "follow_up", fup, owner="elder", status="open", importance=2
-            )
 
     # --- About the companion himself (consistency) ---
     for bf in data.get("bob_facts") or []:

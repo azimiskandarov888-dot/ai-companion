@@ -106,13 +106,13 @@ def test_the_ladder_is_paced_by_us_not_guessed_by_the_model(asker):
     asyncio.run(intake.next_question(_talked(1)))
     assert "рано для настоящего вопроса" in asker[-1]
 
-    # Where the app actually hands over: plenty of room, so ask about a life.
-    asyncio.run(intake.next_question(_talked(9)))
-    assert "Спроси про его жизнь" in asker[-1]
+    # Where the app actually hands over: the first of the six, by position.
+    asyncio.run(intake.next_question(_talked(intake.MAX_TURNS - 6)))
+    assert "Сейчас вопрос 1 из 6" in asker[-1]
 
-    # Nearing the end: their people, and hold the real question back.
+    # The confidant, in its place.
     asyncio.run(intake.next_question(_talked(intake.MAX_TURNS - 4)))
-    assert "про людей" in asker[-1] and "прибереги на конец" in asker[-1]
+    assert "«А с кем последний раз говорили по душам?»" in asker[-1]
 
     # The last rung, and the only one that may ask for a written answer.
     asyncio.run(intake.next_question(_talked(intake.MAX_TURNS - 1)))
@@ -299,14 +299,14 @@ def test_free_writing_still_works(monkeypatch):
 # everything downstream — so an intake that asks an old person's questions of a
 # young one builds the whole friendship out of awkward, disengaged answers.
 
-def test_the_ladder_asks_about_the_life_he_actually_has():
+def test_the_questions_fit_any_life():
+    """«Кем работали?» to a twenty-year-old is as far off as «а в школе как?»
+    to an eighty-year-old. The six are written so that neither can happen:
+    none of them assumes work, school, a family or an age."""
     ask = intake._ASK_SYSTEM
-    assert "СПРАШИВАЙ ПРО ТУ ЖИЗНЬ, КОТОРАЯ У НЕГО ЕСТЬ" in ask
-    assert "у другого почти вся впереди" in ask
-    # the examples that only fitted one kind of life are gone
-    assert "какую музыку слушал в молодости" not in ask
-    assert "что сказал бы себе молодому" not in ask
-    assert "А кем работали?" not in ask
+    for assumed in ("кем работали", "в школе", "какую музыку слушал в молодости",
+                    "что сказал бы себе молодому", "внук"):
+        assert assumed not in ask.lower(), assumed
 
 
 def test_ty_or_vy_is_decided_and_no_longer_an_absolute():

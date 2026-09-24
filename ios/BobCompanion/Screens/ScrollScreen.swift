@@ -668,9 +668,15 @@ private struct IntakeConversation: View {
     // idiomatic version is almost always the shorter one.
     private static let warmUp: [Step] = Strings.language == .russian ? [
         // 1 · Знакомство. Обычное, неспешное — как начал бы любой.
+        //
+        // EVERY QUESTION HERE HAS A JOB DOWNSTREAM, and the ones that had none
+        // are gone (council of three, 2026-09-24; the reasons are in
+        // backend/tests/test_interview.py). «Ну, как сегодня день?» fed nothing
+        // and was answered with the same words as «чем занимаетесь» — so the
+        // two became one question, with no pronoun, which a fifteen-year-old
+        // and a pensioner can both answer before their age is known.
         Step(say: "Как вас зовут?"),
-        Step(say: "Ну, как сегодня день?"),
-        Step(say: "А чем обычно занимаетесь?"),
+        Step(say: "А день обычно чем занят?"),
         // WHAT THEY LOVE, ASKED RIGHT AFTER WHAT THEY DO — and fixed here
         // rather than left to the interviewer. The friend's topic has to land
         // on something the person loves or misses and NOT on their daily work
@@ -679,6 +685,12 @@ private struct IntakeConversation: View {
         // owner's own intake did exactly that, and he loves ping-pong. An open
         // «что», not «есть ли»: a yes/no question gets «нет».
         Step(say: "А для души что любите?"),
+        // THE ONLY QUESTION THAT LOOKS FORWARD. Without it every reading found
+        // «no future in his text» — for everybody, because nothing had asked.
+        // And what they name is the friend's first «ну как прошло?». No
+        // «-нибудь»: «что-нибудь намечается?» is a yes/no question, and those
+        // get «нет».
+        Step(say: "А на этой неделе что намечается?"),
         // ASKED PLAINLY, AND ASKED EARLY, FOR TWO REASONS.
         //
         // The one that cannot wait: it decides which number he is told to dial.
@@ -711,59 +723,45 @@ private struct IntakeConversation: View {
         Step(say: "А вы мужчина или женщина?",
              options: ["Мужчина", "Женщина", "Иначе"]),
 
-        // 2 · Только теперь — лёгкие, и как бы между делом. Разговор уже идёт,
-        // так что смена темпа читается как оживление, а не как анкета.
+        // 2 · Одна лёгкая — передышка перед настоящими. «Горы или море»,
+        // «чай или кофе», «сова», «лето или зима» ушли: ни одно из них ничего
+        // не решало дальше, а выбор из кнопок чтение принимало за любовь — из
+        // «Море» вышла тема друга у владельца, который моря не просил. Кот
+        // остался, потому что он — живая деталь, о которой друг потом спросит.
         //
-        // ТРИ, А НЕ ПЯТЬ. «Горы или море?» ушло, и причина дороже самого
-        // вопроса: выбор из двух кнопок чтение приняло за любовь, и из «Море»
-        // вышла тема друга у владельца, который моря не просил. «Чай или
-        // кофе» ушло следом: пять кнопок подряд — та самая анкета.
-        Step(say: "Кстати, жаворонок или сова?",
-             options: ["Жаворонок", "Сова"],
-             reactions: ["Сова": "Тихое время, понимаю."]),
-        // Про зверя — и только про зверя. «А дома у вас кто-нибудь есть?»
-        // спрашивало сперва, есть ли дома хоть кто-то, и вдове приходилось
-        // нажимать «Никого» посреди лёгких вопросов; а чтение принимало это
-        // за «живёт один». На «Нет» по-прежнему никакого отклика.
+        // Про зверя — и только про зверя: «А дома у вас кто-нибудь есть?»
+        // заставляло вдову нажимать «Никого» посреди лёгких вопросов. Переход
+        // к серьёзным едет на ответе, а не вместо него — иначе шутка про кота
+        // пропала бы, а без перехода следующий вопрос ложится толчком.
         Step(say: "А кот или собака дома есть?",
              options: ["Кот", "Собака", "Нет"],
-             reactions: ["Кот": "Хозяин, значит, не вы."]),
-        // The transition line rides on the answer rather than replacing it —
-        // a blanket reaction would swallow the joke, and the pace change
-        // needs saying or the next question lands as a jolt.
-        Step(say: "И последнее лёгкое: летом лучше или зимой?",
-             options: ["Летом", "Зимой"],
-             reactions: ["Зимой": "Редкий человек. Ну, теперь чуть серьёзнее.",
-                         "Летом": "Как все нормальные люди. Теперь чуть серьёзнее."]),
+             reactions: ["Кот": "Хозяин, значит, не вы. Ну, теперь чуть серьёзнее.",
+                         "Собака": "Ну, теперь чуть серьёзнее.",
+                         "Нет": "Ну, теперь чуть серьёзнее."]),
     ] : [
         Step(say: "What's your name?"),
-        Step(say: "So how's your day been?"),
-        Step(say: "And what do you usually get up to?"),
+        Step(say: "And what fills your days, usually?"),
         Step(say: "And what do you love doing, just for yourself?"),
+        Step(say: "And what's coming up this week?"),
         Step(say: "And whereabouts do you live — which country?", asksCountry: true),
         Step(say: "How old are you, if you don't mind me asking?",
              reaction: "Thank you.", asksAge: true),
         Step(say: "Are you a man or a woman?",
              options: ["A man", "A woman", "Neither"]),
 
-        Step(say: "By the way — early bird or night owl?",
-             options: ["Early bird", "Night owl"],
-             reactions: ["Night owl": "The quiet hours."]),
         Step(say: "Got a cat or a dog at home?",
              options: ["A cat", "A dog", "No"],
-             reactions: ["A cat": "So they're in charge, then."]),
-        Step(say: "Last easy one: summer or winter?",
-             options: ["Summer", "Winter"],
-             reactions: ["Winter": "Not many of you about. Right — something a bit more serious now.",
-                         "Summer": "Like every sensible person. Right — something a bit more serious now."]),
+             reactions: ["A cat": "So they're in charge, then. Right — something a bit more serious now.",
+                         "A dog": "Right — something a bit more serious now.",
+                         "No": "Right — something a bit more serious now."]),
     ]
 
     private static let firstPreamble = Strings.language == .russian
         ? "Его ещё нет — он появится из того, что вы расскажете.\n"
-          + "Сначала несколько быстрых, потом пара настоящих. "
+          + "Сначала несколько быстрых, потом несколько настоящих. "
           + "Закончить можно в любой момент."
         : "He isn't here yet — he'll be made out of what you say.\n"
-          + "A few quick ones first, then a couple of real ones. "
+          + "A few quick ones first, then a few real ones. "
           + "You can stop whenever."
 
     /// The warm-up step this answer belongs to, or nil once it's finished.

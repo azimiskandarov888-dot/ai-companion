@@ -104,9 +104,11 @@ def test_the_standing_block_is_only_what_every_turn_needs():
     assert "без обилия нежности" in block            # register
     assert "бодрый оптимизм" in block                # what rings false
     assert "смерть жены" in block                    # what not to touch
+    # …and what he lacks, first: it is the one thing the whole reading is
+    # for, and the re-reads keep correcting it for as long as they talk.
+    assert "устал держать лицо" in block
     # Everything else is already baked into who he is — carrying it per-turn
     # would be tokens spent on every reply for no behavioural change.
-    assert "устал держать лицо" not in block
     assert "рыбалка" not in block
 
 
@@ -1099,8 +1101,7 @@ def test_the_interview_asks_the_one_question_that_answers_it():
     from app import intake
 
     ask = intake._ASK_SYSTEM
-    assert "«А о чём бы поговорить, да не с кем?»" in ask
-    assert "Из ответа на него видно, ЧЕГО ему не хватает" in ask
+    assert "«А о чём бы поговорить, да не с кем?» — чего ему не хватает" in ask
     # The two alternatives that were there are gone: «когда не спится» is
     # exactly what got «слишком много», and «кому позвонил бы в три ночи»
     # makes the most isolated say «никому» and asks about a crisis he can't be.

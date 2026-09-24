@@ -78,19 +78,49 @@ _PLAUSIBLE = range(1, 121)
 
 _NUMBER = re.compile(r"\d{1,3}")
 
+#: The ages a child or teenager might type as a word instead of a number. Not
+#: the ages of adults: a word that is missed there costs nothing, because an
+#: unread answer is already read as grown-up. Missing «двенадцать» is the
+#: opposite — a child's inner life kept, which is the one thing this module
+#: exists to prevent. Checked word by word, so «пятнадцать лет» and «мне
+#: двенадцать» both land.
+_WORDS = {
+    "пять": 5, "шесть": 6, "семь": 7, "восемь": 8, "девять": 9, "десять": 10,
+    "одиннадцать": 11, "двенадцать": 12, "тринадцать": 13, "четырнадцать": 14,
+    "пятнадцать": 15, "шестнадцать": 16, "семнадцать": 17,
+    "five": 5, "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10,
+    "eleven": 11, "twelve": 12, "thirteen": 13, "fourteen": 14,
+    "fifteen": 15, "sixteen": 16, "seventeen": 17,
+}
+
+#: …and the tens, which make any of the above a grown-up's age: «двадцать
+#: пять» contains «пять», and reading it as five would take a 25-year-old's
+#: memory away and speak to them as to a child.
+_TENS = {
+    "двадцать", "тридцать", "сорок", "пятьдесят", "шестьдесят", "семьдесят",
+    "восемьдесят", "девяносто", "сто", "twenty", "thirty", "forty", "fifty",
+    "sixty", "seventy", "eighty", "ninety", "hundred",
+}
+
 
 def band(said) -> str:
     """The age band in a free-text answer, or "" for adult / no answer.
 
-    Digits only, on purpose. The question is «сколько вам лет» and the answer
-    to it is a number in every real case; a word-list would be more code for a
-    case that does not happen, and every wrong guess here changes how somebody
-    is spoken to for the life of the friendship.
+    Digits first, and a word only for the ages that matter here: a child who
+    types «двенадцать» used to be read as a grown-up, and their inner life
+    kept. Every wrong guess here changes how somebody is spoken to for the
+    life of the friendship, so nothing else is guessed at.
     """
-    found = _NUMBER.search(str(said or ""))
-    if not found:
-        return ""
-    years = int(found.group())
+    text = str(said or "")
+    found = _NUMBER.search(text)
+    if found:
+        years = int(found.group())
+    else:
+        said_words = re.findall(r"\w+", text.lower())
+        words = [_WORDS[w] for w in said_words if w in _WORDS]
+        if not words or any(w in _TENS for w in said_words):
+            return ""
+        years = words[0]
     if years not in _PLAUSIBLE or years >= _ADULT_FROM:
         return ""
     return TEEN if years >= _TEEN_FROM else CHILD

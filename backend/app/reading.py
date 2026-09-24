@@ -94,7 +94,7 @@ _READING_SYSTEM = """Ты читаешь человека по тому, КАК 
      Важно: скупость — НЕ холодность и не признак закрытого человека. Это может быть усталость, привычка не занимать собой место, возраст, или просто человек, который так говорит. Никогда не читай короткие ответы как нежелание — читай как ТЕМП, к которому надо подстроиться.
    · О ЧЁМ ОН ГОВОРИТ САМ, БЕЗ ВОПРОСА. Если его спросили про одно, а он ответил про другое или ушёл в сторону — то, куда он ушёл, важнее того, о чём спрашивали.
 
-3. ЧЕГО НЕТ. Самое сильное. О чём человек, пишущий о своей жизни, обычно упоминает — а он не упомянул? Ни одного живого человека? Ни одного будущего дня? Ни разу не сказал, что ему что-то нравится? Отсутствие — не пустота, а факт.
+3. ЧЕГО НЕТ. Самое сильное. О чём человек, пишущий о своей жизни, обычно упоминает — а он не упомянул? Ни одного живого человека? Ни одного будущего дня? Ни разу не сказал, что ему что-то нравится? Отсутствие — не пустота, а факт. Но только там, где вопрос давал для этого место: нет будущего — это факт, если его спросили, что намечается, а не если об этом просто не спросили.
 
 СТРОГИЕ ЗАПРЕТЫ
 
@@ -106,7 +106,7 @@ _READING_SYSTEM = """Ты читаешь человека по тому, КАК 
 КАК НЕ ОШИБИТЬСЯ (это в размышлениях, до ответа)
 
 1. Побудь им. Как выглядит его обычный день изнутри — и где в этом дне ему не с кем.
-2. Прямые слова весомее формы. Что он сказал прямо о том, чего хочет, чего у него нет и с кем ему не поговорить, — твоя главная опора. Форма уточняет прямые слова, а не спорит с ними.
+2. Прямые слова весомее формы. Что он сказал прямо о том, чего хочет, чего у него нет и с кем ему не поговорить, — твоя главная опора. Форма уточняет прямые слова, а не спорит с ними — а в десятке коротких ответов грамматика и вовсе почти шум.
 3. Две-три версии, а не одна. Первая, что приходит в голову, обычно про то, чем он занят, — а это зеркало. Придумай другие и оставь ту, за которую больше всего его слов, особенно прямых. Потом поищи, что ей противоречит.
 4. Не Барнум. Если вывод подошёл бы почти любому одинокому человеку, он ничего о нём не говорит: сделай конкретнее или вычеркни.
 
@@ -624,9 +624,10 @@ def standing_block(
 ) -> str:
     """The slice of the reading that belongs in EVERY turn, not just creation.
 
-    Only the fields that govern what he does on every single turn — how to
-    talk, what would ring false, what not to touch, how this person wants to
-    matter, what lifts him, and what has been learned since. Who he is already
+    Only the fields that govern what he does on every single turn — what
+    the person lacks, how to talk, what would ring false, what not to touch,
+    how this person wants to matter, what lifts him, and what has been learned
+    since. Who he is already
     carries the rest: the write stage baked the reading into his speech_style
     and personality. Everything here is paid for on every turn, which is why
     the reading is told to write these as short instructions rather than as
@@ -643,6 +644,11 @@ def standing_block(
         return ""
 
     parts = []
+    # WHAT HE LACKS, first. It used to reach only the writer, once — so every
+    # re-read that corrected it over weeks of conversation reached nobody, and
+    # the one thing the whole reading is for never steered a single reply.
+    if _said(r.get("verdict")):
+        parts.append(f"Главное про него: {_said(r['verdict'])}")
     if _said(r.get("register")):
         parts.append(f"Как с ним говорить: {_said(r['register'])}")
     if _said(r.get("would_ring_false")):

@@ -52,7 +52,7 @@ def test_the_warm_up_is_read_from_the_app_rather_than_copied():
     not have."""
     steps = myself.warm_up()
     assert steps[0]["say"] == "Как вас зовут?"
-    assert len(steps) == 10
+    assert len(steps) == 8
     # The two answers the server also needs on their own — exactly one each.
     assert sum(s["country"] for s in steps) == 1
     assert sum(s["age"] for s in steps) == 1
