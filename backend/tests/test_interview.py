@@ -40,8 +40,13 @@ def test_every_target_has_a_job_and_nothing_else_is_asked():
     # Gone, because nothing downstream used them — and a tapped choice was
     # read as a love, which is how «Море» became the owner's friend's topic.
     asked = " ".join(q for _t, _w, q in intake.TARGETS).lower()
-    for gone in ("как сегодня день", "горы или море", "пьёте", "сова", "летом", "кот"):
+    for gone in ("горы или море", "пьёте", "сова", "летом", "кот"):
         assert gone not in asked, gone
+    # «Как сегодня день?» came BACK, and why is the lesson: the first council
+    # cut it because it fed nothing, and the owner missed it at once — right
+    # after the name a person asks how you are, not what fills your days.
+    # It feeds rapport, and rapport is what the rest is said into.
+    assert dict((t[0], t[2]) for t in intake.TARGETS)["days"] == "Ну, как сегодня день?"
 
 
 def test_the_wording_carries_the_signal():
@@ -55,7 +60,7 @@ def test_the_wording_carries_the_signal():
     assert by_id["lifts"] == "А когда последний раз было тяжело — что помогло?"
     assert by_id["closing"] == "А о чём бы поговорить, да не с кем?"
     assert "нибудь" not in " ".join(t[2] for t in intake.TARGETS)
-    assert "Без «-нибудь»" in intake._ASK_SYSTEM
+    assert "без «-нибудь»" in intake._ASK_SYSTEM
 
 
 def test_gender_is_asked_only_when_it_is_not_already_clear():
@@ -82,12 +87,27 @@ def test_every_question_is_the_interviewers_and_none_is_the_apps():
     assert intake.opening()["say"] == "Как вас зовут?"
 
 
-def test_the_interviewer_hears_the_answer_before_it_asks_the_next_one():
+def test_it_is_a_conversation_first_and_a_list_second():
+    """The owner, again, on the version that asked every question from a list:
+    after his name it asked what he usually does, not how he was; after «пишу
+    программу» it did not ask what the program was about. «It's like it wants
+    to end the interview as fast as possible.» The list had been the master
+    and the conversation its servant; now it is the other way round.
+
+    What the research says a first conversation needs: small talk first — it
+    builds trust (Bickmore & Cassell 2001); and follow-up questions, about
+    what was just said, are the ones that make the asker liked, where a switch
+    to the next topic does not (Huang et al. 2017)."""
     ask = intake._ASK_SYSTEM
-    assert "ГЛАВНОЕ — СЛЫШАТЬ ОТВЕТ" in ask
-    assert "Живой человек не идёт по списку, будто не слышал" in ask
-    assert "«ничем» — «А вчера, например, как прошёл?»" in ask
-    assert "Не дави: если и на второй раз коротко — иди дальше" in ask
+    assert "ЭТО РАЗГОВОР, А НЕ АНКЕТА" in ask
+    assert "После имени — как любой при знакомстве: обрадуйся и спроси, как у него сегодня день" in ask
+    assert "следующий вопрос — про то, что он только что сказал" in ask
+    assert "«Пишу программу» — «О, а про что она?»" in ask
+    assert "«А вчера, например, как прошёл?»" in ask
+    assert "Отзывайся живо и по-настоящему: удивись, обрадуйся, посочувствуй" in ask
+    # The topics are a memo, not a script — taken up when they come up.
+    assert "не по порядку и не словами анкеты, а когда к слову" in ask
+    assert intake.MAX_PER_TOPIC == 3
 
 
 def test_the_last_question_is_required_and_says_why():

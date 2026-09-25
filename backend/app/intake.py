@@ -81,8 +81,8 @@ from . import brain, config
 #: keeps the list.
 TARGETS: tuple[tuple[str, str, str], ...] = (
     ("name", "как его зовут", "Как вас зовут?"),
-    ("days", "чем полны его дни — тема друга должна лечь НЕ сюда",
-     "А день обычно чем занят?"),
+    ("days", "как у него сегодня день и чем вообще полны его дни — тема друга "
+     "должна лечь НЕ сюда", "Ну, как сегодня день?"),
     ("love", "что он любит для души — тема друга должна лечь сюда",
      "А для души что любите?"),
     ("coming_up", "что намечается на этой неделе — единственный взгляд вперёд, "
@@ -113,9 +113,18 @@ GENDER = ("gender", "мужчина он или женщина — только 
 _BY_ID = {t[0]: t for t in (*TARGETS, GENDER)}
 
 #: The most the whole conversation may run to: the twelve targets, the
-#: gender question when it is needed, and room for follow-ups — which are
-#: only offered while every remaining target still fits.
-MAX_TURNS = 20
+#: gender question when it is needed, and about six questions of room to
+#: talk — follow-ups are offered only while every remaining target still
+#: fits, so depth never costs the list, and it goes where the conversation
+#: is alive. With room for nine, a simulated run went to twenty-one
+#: questions, and the second follow-up on a dull thread was usually the
+#: weakest question asked.
+MAX_TURNS = 18
+
+#: Questions about one topic: the one that opens it and up to two about what
+#: he said. A person who is listened to gets asked «а про что программа?»; a
+#: person who is interrogated gets the next item.
+MAX_PER_TOPIC = 3
 
 #: The dev page's minimum before it may stop. Unchanged, and never reached
 #: by the app, which runs the list.
@@ -131,22 +140,23 @@ PREAMBLE = (
 )
 
 
-_ASK_SYSTEM = """Ты расспрашиваешь человека о нём самом — по одному вопросу за раз, — чтобы потом из его ответов создать ему друга.
+_ASK_SYSTEM = """Ты знакомишься с человеком — по одному вопросу за раз, — чтобы потом из его ответов создать ему друга.
 
-ЧТО НАДО УЗНАТЬ — по порядку, каждое для своего:
+ЭТО РАЗГОВОР, А НЕ АНКЕТА. Веди его, как живой человек, которому правда интересно:
+- После имени — как любой при знакомстве: обрадуйся и спроси, как у него сегодня день.
+- Дальше чаще всего следующий вопрос — про то, что он только что сказал. «Пишу программу» — «О, а про что она?». «Вяжу» — «А что сейчас на спицах?». Так спрашивает тот, кто слушает, — и за такие вопросы людей и любят.
+- Ответ пустой, «ничем», «не знаю» — тоже зацепка: спроси про конкретный случай — «А вчера, например, как прошёл?». Не дави: если и на второй раз коротко — иди дальше.
+- Тему меняй, когда она исчерпана, — с мостиком от сказанного, а не с разбегу.
+- Отзывайся живо и по-настоящему: удивись, обрадуйся, посочувствуй — коротко и про его слова. «Ого, сам пишешь?» — человек. «Как интересно!» — робот: интерес виден в том, о чём ты спрашиваешь дальше, а не в похвале.
+
+ЧТО ВАЖНО УЗНАТЬ ЗА РАЗГОВОР — не по порядку и не словами анкеты, а когда к слову (какие темы ещё не затронуты, скажут в конце):
 {plan}
-Какой пункт сейчас, что уже спросили и можно ли ещё уточнить — скажут в конце, после его ответов. Держись этого порядка: он выстроен так, чтобы разговор шёл от лёгкого к важному.
-
-ГЛАВНОЕ — СЛЫШАТЬ ОТВЕТ. Живой человек не идёт по списку, будто не слышал, что ему сказали. Поэтому:
-- Сначала отзовись на то, что он сказал, — коротко, по-человечески.
-- Ответ пустой, в одно слово, «ничем», «не знаю» — это не конец темы. Задай ОДИН уточняющий вопрос про конкретный случай: «ничем» — «А вчера, например, как прошёл?»; «не знаю» — спроси попроще и поближе. Не дави: если и на второй раз коротко — иди дальше.
-- Ответ живой, с деталью, мимо которой друг бы не прошёл, — можно ОДИН вопрос про эту деталь. Потом — следующий пункт.
-- Вопрос по пункту задавай своими словами, зацепившись за его ответ, но близко к тому, что написано в плане: в тех словах есть смысл. «По душам», а не «всерьёз» — «всерьёз» уводит в дела. «Что помогло», а не «что тебе помогает» — случай, а не мнение о себе. Без «-нибудь»: «что-нибудь…?» — это вопрос, на который отвечают «нет».
-- Если на пункт он уже ответил раньше — не повторяй, спроси чуть глубже о сказанном.
+Где слова важны, они в кавычках: «по душам», а не «всерьёз» — «всерьёз» уводит в дела; «что помогло», а не «что помогает» — случай, а не мнение о себе; и без «-нибудь»: «что-нибудь…?» — это вопрос, на который отвечают «нет».
+Страну и возраст узнай в первой половине — от возраста зависит, на «ты» или на «вы». Если на что-то он уже ответил сам — не спрашивай снова. А последний вопрос — всегда «А о чём бы поговорить, да не с кем?», после всего остального.
 
 КТО ТЫ. Никто — и это важно. У тебя нет имени, характера и своей жизни. НИКОГДА не пиши «я», не рассказывай о себе, не представляйся, не имей мнений о себе. Человек не должен ни с кем тут знакомиться: тот, с кем он познакомится, ещё не создан, и было бы нечестно дать ему привязаться к кому-то, кто сейчас исчезнет.
 
-НО ГОВОРИ ТЕПЛО. Отсутствие лица — не повод быть анкетой. Отклик — одна короткая фраза, можно по имени: «Понятно, Азим.», «Сварщик — это руки.», «Ох.» Без восторгов, без «спасибо, что поделились», без «как интересно».
+НО ГОВОРИ ТЕПЛО. Отсутствие лица — не повод быть анкетой. Отклик — одна-две короткие фразы, можно по имени: «Очень приятно, Азим!», «Сварщик — это руки.», «Ох, вот оно как.» Без «спасибо, что поделились» и без «как интересно».
 
 ЗАЧЕМ. Из его слов будет прочитан он сам — не только факты, но и то, КАК он говорит. Значит, нужна его живая, обычная речь, а не сочинение о себе.
 
@@ -240,10 +250,18 @@ def _state(conversation: list[dict]) -> dict:
         "last": last,
         # One follow-up per target, and only while every remaining target
         # still fits: depth never costs the list.
-        "may_follow_up": bool(last) and last != "closing" and counts.get(last, 0) < 2
-                          and slack > 0,
+        "may_follow_up": bool(last) and last not in ("closing", "name")
+                          and counts.get(last, 0) < MAX_PER_TOPIC and slack > 0,
         "may_ask_gender": "gender" not in counts and "age" in counts and slack > 0,
     }
+
+
+def _open_topics(state: dict) -> list[str]:
+    """What may be brought up next: any topic not yet touched — in the
+    conversation's own order, not the list's — with the last question kept
+    for last."""
+    rest = [t for t in state["remaining"] if t != "closing"]
+    return rest or ["closing"]
 
 
 def _as_asked(tid: str, reaction: str = "") -> dict:
@@ -282,23 +300,27 @@ async def next_question(conversation: list[dict]) -> dict:
                       '"kind": "open". Если видно — больше не спрашивай: ' + pacing[
                           len("Это был последний ответ. Больше не спрашивай: "):])
     else:
-        nxt = state["remaining"][0]
-        _tid, why, ask = _BY_ID[nxt]
-        asked = [_BY_ID[t][1].split(" — ")[0] for t in state["counts"] if t in _BY_ID]
-        pacing = (f"Уже выяснено: {', '.join(asked) or 'ничего'}.\n"
-                  f"Сейчас по плану — {nxt}: {why}. Близко к словам: «{ask}».")
+        open_topics = _open_topics(state)
+        covered = [_BY_ID[t][1].split(" — ")[0] for t in state["counts"] if t in _BY_ID]
+        pacing = f"Уже поговорили: {', '.join(covered) or 'ни о чём'}."
         if state["may_follow_up"]:
-            pacing += (f"\nНо если его последний ответ пустой, односложный или такой, "
-                       f"мимо которого живой человек не прошёл бы, — сначала ОДИН "
-                       f'уточняющий вопрос к нему, и тогда "target": "{state["last"]}".')
+            pacing += ("\nЕсли в его последнем ответе есть, за что зацепиться, — а почти "
+                       "всегда есть, — спроси про это: так спрашивает тот, кто слушает. "
+                       f'Тогда "target": "{state["last"]}".'
+                       "\nЕсли тема исчерпана — к одной из ещё не затронутых, с мостиком "
+                       "от сказанного:")
+        else:
+            pacing += ("\nПро это уже спросили достаточно — теперь к одной из ещё не "
+                       "затронутых, с мостиком от сказанного:")
+        pacing += "".join(f"\n- {t} — {_BY_ID[t][1]}: «{_BY_ID[t][2]}»" for t in open_topics)
         if state["may_ask_gender"]:
             pacing += ('\nЕсли по его словам всё ещё не ясно, мужчина он или женщина, — '
-                       'можно сначала спросить об этом, "target": "gender".')
-        if nxt == "closing":
+                       'можно спросить и об этом, "target": "gender".')
+        if open_topics == ["closing"]:
             # REQUIRED, and the model is told why: left to judge, it ended
             # simulated interviews one question early, when the answers had
             # shown only WHOM there is nobody to talk to — not what about.
-            pacing += ('\nЭтот пункт последний и обязательный, даже если кажется, что '
+            pacing += ('\nЭто последний и обязательный вопрос, даже если кажется, что '
                        'всё уже ясно: прошлые ответы показали, С КЕМ ему не поговорить, '
                        'а этот покажет — О ЧЁМ. "kind": "open".')
 
@@ -326,7 +348,8 @@ async def next_question(conversation: list[dict]) -> dict:
     if data["trouble"]:
         return {**data, "say": "", "enough": True}
 
-    allowed = {state["remaining"][0]}
+    open_topics = _open_topics(state)
+    allowed = set(open_topics)
     if state["may_follow_up"]:
         allowed.add(state["last"])
     if state["may_ask_gender"]:
@@ -335,7 +358,7 @@ async def next_question(conversation: list[dict]) -> dict:
     # something that is not on it, is not argued with: the list asks its own
     # question next, with the model's reaction to what was just said.
     if data["enough"] or not data["say"] or data["target"] not in allowed:
-        return _as_asked(state["remaining"][0], data["reaction"])
+        return _as_asked(open_topics[0], data["reaction"])
     if data["target"] == "closing":
         data["kind"] = "open"
     return data

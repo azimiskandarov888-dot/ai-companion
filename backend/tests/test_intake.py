@@ -54,7 +54,7 @@ def asker(monkeypatch):
                             timeout=None, effort=None):
         seen.append(user_text)
         seen.timeouts.append(timeout)
-        nxt = re.search(r"Сейчас по плану — (\w+)", user_text)
+        nxt = re.search(r"^- (\w+) — ", user_text, re.M)
         return json.dumps({"reaction": "Река — хорошо.",
                            "say": "А кто вас научил рыбачить?",
                            "target": nxt.group(1) if nxt else "",
@@ -86,16 +86,19 @@ def test_the_list_is_kept_by_us_not_guessed_by_the_model(asker):
     one three times — the owner's intake spent three questions on his startup.
     So every call is told what is done and what is next, from the targets the
     client hands back."""
+    def first_open(prompt: str) -> str:
+        return re.search(r"^- (\w+) — ", prompt, re.M).group(1)
+
     asyncio.run(intake.next_question(_talked(1)))
-    assert "Сейчас по плану — days" in asker[-1]
-    assert "Уже выяснено: как его зовут" in asker[-1]
+    assert first_open(asker[-1]) == "days"
+    assert "Уже поговорили: как его зовут" in asker[-1]
 
     asyncio.run(intake.next_question(_talked(7)))
-    assert "Сейчас по плану — strength" in asker[-1]
+    assert first_open(asker[-1]) == "strength"
 
     # The last one, and the only one that asks for a written answer.
     asyncio.run(intake.next_question(_talked(len(intake.TARGETS) - 1)))
-    assert "Сейчас по плану — closing" in asker[-1] and '"open"' in asker[-1]
+    assert first_open(asker[-1]) == "closing" and '"open"' in asker[-1]
 
 
 def test_nichem_gets_a_follow_up_not_the_next_question(asker):
@@ -106,18 +109,20 @@ def test_nichem_gets_a_follow_up_not_the_next_question(asker):
         {"q": "Как вас зовут?", "a": "Азим", "target": "name"},
         {"q": "А день обычно чем занят?", "a": "ничем", "target": "days"},
     ]))
-    assert 'сначала ОДИН уточняющий вопрос к нему, и тогда "target": "days"' in asker[-1]
-    assert "«ничем» — «А вчера, например, как прошёл?»" in intake._ASK_SYSTEM
+    assert 'Тогда "target": "days".' in asker[-1]
+    assert "«А вчера, например, как прошёл?»" in intake._ASK_SYSTEM
 
 
-def test_one_follow_up_per_answer_then_the_list_moves_on(asker):
-    asyncio.run(intake.next_question([
-        {"q": "Как вас зовут?", "a": "Азим", "target": "name"},
-        {"q": "А день обычно чем занят?", "a": "ничем", "target": "days"},
-        {"q": "А вчера, например?", "a": "спал", "target": "days"},
-    ]))
-    assert "уточняющий" not in asker[-1]
-    assert "Сейчас по плану — love" in asker[-1]
+def test_a_thread_is_followed_but_not_forever(asker):
+    """A topic gets the question that opens it and up to two about what he
+    said — «а про что программа?», then one more — and then the conversation
+    moves on, so depth never costs what is still to be learned."""
+    days = [{"q": f"в{i}", "a": "ну да", "target": "days"}
+            for i in range(intake.MAX_PER_TOPIC)]
+    asyncio.run(intake.next_question(
+        [{"q": "Как вас зовут?", "a": "Азим", "target": "name"}] + days))
+    assert 'Тогда "target": "days"' not in asker[-1]
+    assert "Про это уже спросили достаточно" in asker[-1]
 
 
 def test_the_deep_question_gets_a_bigger_box(monkeypatch):
@@ -224,7 +229,8 @@ def test_a_skipped_question_is_not_asked_again(asker):
     they wanted to. Asked again, it would be a form that will not take no."""
     turns = _talked(5) + [{"q": "Сколько вам лет?", "a": "", "target": "age"}]
     asyncio.run(intake.next_question(turns))
-    assert "Сейчас по плану — miss" in asker[-1]
+    assert "\n- age — " not in asker[-1]
+    assert re.search(r"^- (\w+) — ", asker[-1], re.M).group(1) == "miss"
 
 
 def test_the_story_is_their_words_not_the_questions():
