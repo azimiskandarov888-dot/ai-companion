@@ -368,14 +368,78 @@ def test_the_questions_fit_any_life():
 
 
 def test_ty_or_vy_is_decided_and_no_longer_an_absolute():
-    """«Вы» to somebody of twenty reads as a personnel department, which closes
-    them on the first line — and before the age is known there is nothing to
-    decide it by, so it starts polite and switches once it is."""
+    """«Вы» to somebody of twenty, all the way through, reads as a personnel
+    department. But «ты» from somebody met a minute ago is the familiarity the
+    owner heard as false. So it starts on «вы», and with the young it moves to
+    «ты» once they are no longer strangers — which is how getting closer
+    sounds in Russian."""
     ask = intake._ASK_SYSTEM
     assert "Обращайся на «вы», но по-домашнему" not in ask
-    assert "НА «ТЫ» ИЛИ НА «ВЫ». Пока возраст не известен — «вы»" in ask
+    assert "НА «ТЫ» ИЛИ НА «ВЫ». Начинай на «вы»" in ask
+    assert "когда вы уже немного знакомы, переходи на «ты»" in ask
     # …and it fails toward politeness, which is the recoverable mistake
     assert "лишняя вежливость поправима, панибратство нет" in ask
+
+
+def test_it_warms_up_as_it_goes(asker):
+    """Every call is told how far along they are — the server counts, as it
+    does for the list: a stranger for the first half, then warmer, then
+    close."""
+    asyncio.run(intake.next_question(_talked(2)))
+    assert "Ступень: пока незнакомы" in asker[-1]
+    asyncio.run(intake.next_question(_talked(intake.WARMER)))
+    assert "Ступень: уже немного знакомы" in asker[-1]
+    asyncio.run(intake.next_question(_talked(intake.CLOSER)))
+    assert "Ступень: почти свои" in asker[-1]
+
+
+def test_his_people_and_hard_times_wait_for_the_lighter_topics(monkeypatch):
+    """Who he talks to «по душам», who needs him, what helped when it was hard:
+    from somebody met a minute ago that is prying. So they are offered only
+    once the lighter topics are done — never before the ninth question. But
+    if he goes there himself, a model that follows him is not overruled."""
+    seen = []
+
+    async def follows(system_prompt, user_text, **kw):
+        seen.append(user_text)
+        return json.dumps({"reaction": "Сочувствую.", "say": "А с кем тогда можно поговорить?",
+                           "target": "confidant", "kind": "short", "enough": False},
+                          ensure_ascii=False)
+
+    monkeypatch.setattr(brain, "generate_text", follows)
+    result = asyncio.run(intake.next_question(_talked(3)))
+    for deeper in intake.DEEPER:
+        assert f"\n- {deeper} — " not in seen[-1]
+    assert "\n- coming_up — " in seen[-1]
+    assert result["target"] == "confidant"      # he went there himself: followed
+
+    asyncio.run(intake.next_question(_talked(8)))
+    assert "\n- confidant — " in seen[-1]
+
+
+def test_a_question_filed_as_the_age_must_ask_the_age(monkeypatch):
+    """A simulated run filed «А кодить давно начали?» as the age. The answer
+    would have been read as his age, and a fifteen-year-old kept as an adult.
+    Age and country decide the emergency number and how a child is kept, so
+    a question filed under them has to actually ask — or the list asks."""
+    say = {"q": "А кодить давно начали?"}
+
+    async def mislabels(system_prompt, user_text, **kw):
+        return json.dumps({"reaction": "Рано начали.", "say": say["q"], "target": "age",
+                           "kind": "short", "enough": False}, ensure_ascii=False)
+
+    monkeypatch.setattr(brain, "generate_text", mislabels)
+    result = asyncio.run(intake.next_question(_talked(5)))
+    assert result["target"] == "age" and result["say"] == "Сколько вам лет, если не секрет?"
+    assert result["reaction"] == "Рано начали."
+
+    say["q"] = "А вам сколько, если не секрет?"      # asked in its own words: kept
+    assert asyncio.run(intake.next_question(_talked(5)))["say"] == say["q"]
+
+    # Once asked, a follow-up about it may be about anything.
+    say["q"] = "А в каком классе?"
+    turns = _talked(5) + [{"q": "Сколько тебе лет?", "a": "15", "target": "age"}]
+    assert asyncio.run(intake.next_question(turns))["say"] == say["q"]
 
 
 def test_the_most_important_answer_gets_one_rescue(monkeypatch):

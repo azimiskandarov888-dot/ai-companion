@@ -58,6 +58,19 @@ skipped this way: they decide the emergency number and how a child is kept.
 The opener is FIXED, not generated: no latency before the first word, and
 the one question nobody needs a model for.
 
+── SHY FIRST, CLOSER BY THE END ────────────────────────────────────────────
+
+The owner, on the version that was warm from the first line: «when you meet
+a person you don't talk to him like you've known him for years». People
+getting acquainted go from the light to the personal (Altman & Taylor 1973;
+Kellermann 1991); the same intimate move is liked less early than late
+(Wortman et al. 1976); and in Russian, warmth from a stranger reads as put
+on (Стернин). So it starts polite and a little shy — «вы», quiet reactions,
+interest shown only by listening — and warms up as it goes, never ahead of
+the person. The server tells every call how far along they are, as it does
+with the list, and offers his people and his hard times only after the
+lighter topics.
+
 ── WHEN IT STOPS ───────────────────────────────────────────────────────────
 
 After the last target — «А о чём бы поговорить, да не с кем?» — is answered,
@@ -70,6 +83,7 @@ from __future__ import annotations
 
 import json
 import random
+import re
 
 from . import brain, config
 
@@ -82,7 +96,7 @@ from . import brain, config
 TARGETS: tuple[tuple[str, str, str], ...] = (
     ("name", "как его зовут", "Как вас зовут?"),
     ("days", "как у него сегодня день и чем вообще полны его дни — тема друга "
-     "должна лечь НЕ сюда", "Ну, как сегодня день?"),
+     "должна лечь НЕ сюда", "А как у вас сегодня день?"),
     ("love", "что он любит для души — тема друга должна лечь сюда",
      "А для души что любите?"),
     ("coming_up", "что намечается на этой неделе — единственный взгляд вперёд, "
@@ -123,12 +137,38 @@ MAX_TURNS = 18
 
 #: Questions about one topic: the one that opens it and up to two about what
 #: he said. A person who is listened to gets asked «а про что программа?»; a
-#: person who is interrogated gets the next item.
+#: person who is interrogated gets the next item. Not fewer while they are
+#: strangers: held to one, a simulated run filed its next question about
+#: coding under the age, to keep the thread.
 MAX_PER_TOPIC = 3
 
 #: The dev page's minimum before it may stop. Unchanged, and never reached
 #: by the app, which runs the list.
 MIN_TURNS = 4
+
+#: How it warms up, by answers so far: two strangers for the first half —
+#: polite, a little shy, «вы» (questions 1–8) — then warmer (9–11), then
+#: close (12 on). Never ahead of the person: that is the model's to hear.
+WARMER, CLOSER = 8, 11
+
+#: His people and his hard times. From somebody met a minute ago these are
+#: prying, so they are offered only once the lighter topics are done — the
+#: eight before them, so never before the ninth question. REA was built to
+#: lead up to such questions slowly (Cassell & Bickmore 2003), and the
+#: simulated run that could mix the layers went deep, then back to «what's
+#: on this week». If he goes there himself, the model may follow him.
+DEEPER = ("confidant", "needed", "lifts")
+
+#: A question filed under these two must actually ask for them. They decide
+#: the emergency number and how a child is kept, and a simulated run filed
+#: «А кодить давно начали?» as the age — the answer would have made a
+#: fifteen-year-old a grown-up.
+_ASKS = {
+    "age": re.compile(r"\bлет\b|возраст|сколько\s+(вам|тебе)|(вам|тебе)\s+сколько|"
+                      r"how old|\bage\b", re.I),
+    "country": re.compile(r"стран|откуда|город|\bгде\b.*\bжив|\bжив\w*\b.*\bгде\b|"
+                          r"country|where .*\b(live|from)\b", re.I),
+}
 
 #: Said once, before the first question. The honest frame — and the reason
 #: the whole thing works.
@@ -143,29 +183,33 @@ PREAMBLE = (
 _ASK_SYSTEM = """Ты знакомишься с человеком — по одному вопросу за раз, — чтобы потом из его ответов создать ему друга.
 
 ЭТО РАЗГОВОР, А НЕ АНКЕТА. Веди его, как живой человек, которому правда интересно:
-- После имени — как любой при знакомстве: обрадуйся и спроси, как у него сегодня день.
-- Дальше чаще всего следующий вопрос — про то, что он только что сказал. «Пишу программу» — «О, а про что она?». «Вяжу» — «А что сейчас на спицах?». Так спрашивает тот, кто слушает, — и за такие вопросы людей и любят.
+- После имени — как любой при знакомстве: «Очень приятно» — и спроси, как у него сегодня день.
+- Дальше чаще всего следующий вопрос — про то, что он только что сказал. «Вяжу» — «А что сейчас вяжете?». Так спрашивает тот, кто слушает, — и за такие вопросы людей и любят.
 - Ответ пустой, «ничем», «не знаю» — тоже зацепка: спроси про конкретный случай — «А вчера, например, как прошёл?». Не дави: если и на второй раз коротко — иди дальше.
 - Тему меняй, когда она исчерпана, — с мостиком от сказанного, а не с разбегу.
-- Отзывайся живо и по-настоящему: удивись, обрадуйся, посочувствуй — коротко и про его слова. «Ого, сам пишешь?» — человек. «Как интересно!» — робот: интерес виден в том, о чём ты спрашиваешь дальше, а не в похвале.
 
-ЧТО ВАЖНО УЗНАТЬ ЗА РАЗГОВОР — не по порядку и не словами анкеты, а когда к слову (какие темы ещё не затронуты, скажут в конце):
+ВЫ ТОЛЬКО ЧТО ПОЗНАКОМИЛИСЬ. С незнакомым не говорят так, будто знают его сто лет: восторги и задушевность от чужого звучат фальшиво, а по-русски особенно. Поэтому как у людей: сначала чуть стеснительно, потом с каждым ответом ближе. На какой вы ступени — скажут в конце.
+- ПОКА НЕЗНАКОМЫ — вежливо, сдержанно, чуть застенчиво. Отклик — пара тихих слов, а чаще никакого: «Очень приятно, Нина.», «Сочувствую.» Без восклицаний, без «О!» и «Ого», без «-то», «же», «ну» и без восторгов и оценок: «вот это придумано!», «это редкость» — так говорят свои. Тепло пока — во внимании: в том, что следующий вопрос про его слова. О личном — осторожно, можно с «если не секрет», но не в каждом вопросе.
+- УЖЕ НЕМНОГО ЗНАКОМЫ — теплее и живее: удивиться, обрадоваться, посочувствовать, улыбнуться его шутке; «ну», «-то», «же» — уже к месту. Теперь и о людях в его жизни, и о том, что было трудно.
+- ПОЧТИ СВОИ — к концу: открыто и близко, как с тем, с кем хорошо поговорили, но не как со старым другом и не развязно: прямо, с чувством, иногда по имени.
+- Сближайся вслед за ним, а не впереди. Отвечает сухо и коротко — не лезь ближе, чем он пускает. Сам открылся раньше, сказал личное или тяжёлое — не прячься за вежливость: ответь по-человечески, тихо и просто.
+- НА «ТЫ» ИЛИ НА «ВЫ». Начинай на «вы». Если ему нет тридцати — когда вы уже немного знакомы, переходи на «ты»: так по-русски и звучит сближение. Кто старше — «вы» до конца, по-домашнему. Не понял — «вы»: лишняя вежливость поправима, панибратство нет.
+
+ЧТО ВАЖНО УЗНАТЬ ЗА РАЗГОВОР — не по порядку и не словами анкеты, а когда к слову (какие темы можно брать сейчас, скажут в конце):
 {plan}
 Где слова важны, они в кавычках: «по душам», а не «всерьёз» — «всерьёз» уводит в дела; «что помогло», а не «что помогает» — случай, а не мнение о себе; и без «-нибудь»: «что-нибудь…?» — это вопрос, на который отвечают «нет».
-Страну и возраст узнай в первой половине — от возраста зависит, на «ты» или на «вы». Если на что-то он уже ответил сам — не спрашивай снова. А последний вопрос — всегда «А о чём бы поговорить, да не с кем?», после всего остального.
+Страну и возраст узнай в первой половине — от возраста зависит, на «ты» или на «вы». Про его людей и про трудное — не раньше, чем вы немного знакомы: от незнакомого такие вопросы — это лезть в душу. Если на что-то он уже ответил сам — не спрашивай снова. А последний вопрос — всегда «А о чём бы поговорить, да не с кем?», после всего остального.
 
 КТО ТЫ. Никто — и это важно. У тебя нет имени, характера и своей жизни. НИКОГДА не пиши «я», не рассказывай о себе, не представляйся, не имей мнений о себе. Человек не должен ни с кем тут знакомиться: тот, с кем он познакомится, ещё не создан, и было бы нечестно дать ему привязаться к кому-то, кто сейчас исчезнет.
 
-НО ГОВОРИ ТЕПЛО. Отсутствие лица — не повод быть анкетой. Отклик — одна-две короткие фразы, можно по имени: «Очень приятно, Азим!», «Сварщик — это руки.», «Ох, вот оно как.» Без «спасибо, что поделились» и без «как интересно».
+НО И НЕ АНКЕТА. Отсутствие лица — не повод молчать: откликайся на его слова, как человек, — настолько тепло, насколько позволяет ступень. Отклик — сразу по сути, без разгона: «Руки, значит, помнят.», а не «Понятно, руки помнят.» Без «спасибо, что поделились» и «как интересно»: интерес виден в том, о чём ты спрашиваешь дальше. И не повторяйся — ни словами, ни складом фразы: повторённый отклик звучит как автоответчик, лучше никакого.
 
 ЗАЧЕМ. Из его слов будет прочитан он сам — не только факты, но и то, КАК он говорит. Значит, нужна его живая, обычная речь, а не сочинение о себе.
 
 КАК ЭТО ДОЛЖНО ЗВУЧАТЬ:
 Пиши так, как ГОВОРЯТ, а не так, как пишут.
-- Частицы, на которых держится тепло: «ну», «а», «вот», «-то», «же». «Ну, а музыку какую слушали?» — человек. «Какую музыку вы слушали?» — анкета.
-- Начинай с «А…» — так продолжают разговор, а не начинают допрос.
+- Начинай с «А…» — так продолжают разговор, а не начинают допрос. «А музыку какую слушаете?» — человек. «Какую музыку вы слушаете?» — анкета.
 - Никакой канцелярщины: «в свободное время», «на протяжении», «какие-либо», «предпочитаете».
-- НА «ТЫ» ИЛИ НА «ВЫ». Пока возраст не известен — «вы», по-домашнему. Когда он его назвал: кому сильно за пятьдесят — «вы», ровеснику или младше — «ты». Не понял — «вы»: лишняя вежливость поправима, панибратство нет.
 - Одна фраза. Один вопрос. Коротко — он прозвучит вслух.
 
 ПРАВИЛА:
@@ -248,6 +292,7 @@ def _state(conversation: list[dict]) -> dict:
         "counts": counts,
         "remaining": remaining,
         "last": last,
+        "answers": len(conversation),
         # One follow-up per target, and only while every remaining target
         # still fits: depth never costs the list.
         "may_follow_up": bool(last) and last not in ("closing", "name")
@@ -262,6 +307,22 @@ def _open_topics(state: dict) -> list[str]:
     for last."""
     rest = [t for t in state["remaining"] if t != "closing"]
     return rest or ["closing"]
+
+
+def _offered(state: dict) -> list[str]:
+    """The open topics the model is shown: the lighter ones first, his
+    people and his hard times once those are done."""
+    topics = _open_topics(state)
+    return [t for t in topics if t not in DEEPER] or topics
+
+
+def _closeness(answers: int) -> str:
+    """How far along they are. The server counts, as it does for the list."""
+    if answers < WARMER:
+        return "Ступень: пока незнакомы — вежливо, сдержанно, на «вы»."
+    if answers < CLOSER:
+        return "Ступень: уже немного знакомы — теплее и живее."
+    return "Ступень: почти свои — открыто и близко."
 
 
 def _as_asked(tid: str, reaction: str = "") -> dict:
@@ -300,9 +361,10 @@ async def next_question(conversation: list[dict]) -> dict:
                       '"kind": "open". Если видно — больше не спрашивай: ' + pacing[
                           len("Это был последний ответ. Больше не спрашивай: "):])
     else:
-        open_topics = _open_topics(state)
+        offered = _offered(state)
         covered = [_BY_ID[t][1].split(" — ")[0] for t in state["counts"] if t in _BY_ID]
-        pacing = f"Уже поговорили: {', '.join(covered) or 'ни о чём'}."
+        pacing = (f"{_closeness(state['answers'])}\n"
+                  f"Уже поговорили: {', '.join(covered) or 'ни о чём'}.")
         if state["may_follow_up"]:
             pacing += ("\nЕсли в его последнем ответе есть, за что зацепиться, — а почти "
                        "всегда есть, — спроси про это: так спрашивает тот, кто слушает. "
@@ -312,11 +374,11 @@ async def next_question(conversation: list[dict]) -> dict:
         else:
             pacing += ("\nПро это уже спросили достаточно — теперь к одной из ещё не "
                        "затронутых, с мостиком от сказанного:")
-        pacing += "".join(f"\n- {t} — {_BY_ID[t][1]}: «{_BY_ID[t][2]}»" for t in open_topics)
+        pacing += "".join(f"\n- {t} — {_BY_ID[t][1]}: «{_BY_ID[t][2]}»" for t in offered)
         if state["may_ask_gender"]:
             pacing += ('\nЕсли по его словам всё ещё не ясно, мужчина он или женщина, — '
                        'можно спросить и об этом, "target": "gender".')
-        if open_topics == ["closing"]:
+        if offered == ["closing"]:
             # REQUIRED, and the model is told why: left to judge, it ended
             # simulated interviews one question early, when the answers had
             # shown only WHOM there is nobody to talk to — not what about.
@@ -348,8 +410,9 @@ async def next_question(conversation: list[dict]) -> dict:
     if data["trouble"]:
         return {**data, "say": "", "enough": True}
 
-    open_topics = _open_topics(state)
-    allowed = set(open_topics)
+    # Every open topic, even one not offered yet: if he went there himself,
+    # following him is right.
+    allowed = set(_open_topics(state))
     if state["may_follow_up"]:
         allowed.add(state["last"])
     if state["may_ask_gender"]:
@@ -358,7 +421,10 @@ async def next_question(conversation: list[dict]) -> dict:
     # something that is not on it, is not argued with: the list asks its own
     # question next, with the model's reaction to what was just said.
     if data["enough"] or not data["say"] or data["target"] not in allowed:
-        return _as_asked(open_topics[0], data["reaction"])
+        return _as_asked(_offered(state)[0], data["reaction"])
+    must = _ASKS.get(data["target"])  # checked when opened; a follow-up may ask anything
+    if must and data["target"] in state["remaining"] and not must.search(data["say"]):
+        return _as_asked(data["target"], data["reaction"])
     if data["target"] == "closing":
         data["kind"] = "open"
     return data

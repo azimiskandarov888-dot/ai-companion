@@ -13,6 +13,11 @@ a question close to the best wording, asked in the flow of the conversation
 with room for one follow-up, and a server that keeps the list. Chatbots that
 probe draw more informative, specific answers than fixed surveys (Xiao et al.
 2020); follow-up questions are what make an asker liked (Huang et al. 2017).
+
+The fourth, on 2026-09-26: warm from the first line felt false — «when you
+meet a person you don't talk to him like you've known him for years». So it
+starts polite and a little shy and gets closer as it goes, the way people
+getting acquainted do.
 """
 
 from __future__ import annotations
@@ -45,8 +50,9 @@ def test_every_target_has_a_job_and_nothing_else_is_asked():
     # «Как сегодня день?» came BACK, and why is the lesson: the first council
     # cut it because it fed nothing, and the owner missed it at once — right
     # after the name a person asks how you are, not what fills your days.
-    # It feeds rapport, and rapport is what the rest is said into.
-    assert dict((t[0], t[2]) for t in intake.TARGETS)["days"] == "Ну, как сегодня день?"
+    # It feeds rapport, and rapport is what the rest is said into. Without
+    # «Ну,»: from somebody met a second ago that is already familiar.
+    assert dict((t[0], t[2]) for t in intake.TARGETS)["days"] == "А как у вас сегодня день?"
 
 
 def test_the_wording_carries_the_signal():
@@ -100,14 +106,41 @@ def test_it_is_a_conversation_first_and_a_list_second():
     to the next topic does not (Huang et al. 2017)."""
     ask = intake._ASK_SYSTEM
     assert "ЭТО РАЗГОВОР, А НЕ АНКЕТА" in ask
-    assert "После имени — как любой при знакомстве: обрадуйся и спроси, как у него сегодня день" in ask
+    assert "После имени — как любой при знакомстве: «Очень приятно» — и спроси, как у него сегодня день" in ask
     assert "следующий вопрос — про то, что он только что сказал" in ask
-    assert "«Пишу программу» — «О, а про что она?»" in ask
+    assert "«Вяжу» — «А что сейчас вяжете?»" in ask
     assert "«А вчера, например, как прошёл?»" in ask
-    assert "Отзывайся живо и по-настоящему: удивись, обрадуйся, посочувствуй" in ask
     # The topics are a memo, not a script — taken up when they come up.
     assert "не по порядку и не словами анкеты, а когда к слову" in ask
     assert intake.MAX_PER_TOPIC == 3
+
+
+def test_it_starts_shy_and_gets_closer():
+    """The owner, on the version that was warm from the first line: «when you
+    meet a person you don't talk to him like you've known him for years». In
+    the first half it should be a little shy; then more and more open,
+    lively and close.
+
+    What the research says: people getting acquainted go from the light to
+    the personal (Altman & Taylor 1973; Kellermann 1991); the same intimate
+    move is liked less early than late (Wortman et al. 1976); and in Russian,
+    warmth from a stranger reads as put on (Стернин). The server says which
+    stage they are at — the model does not count — and the model keeps pace
+    with the person, never ahead of him."""
+    ask = intake._ASK_SYSTEM
+    assert "ВЫ ТОЛЬКО ЧТО ПОЗНАКОМИЛИСЬ" in ask
+    for stage in ("ПОКА НЕЗНАКОМЫ", "УЖЕ НЕМНОГО ЗНАКОМЫ", "ПОЧТИ СВОИ"):
+        assert stage in ask
+    # A stranger's warmth is attention — a question about what was said — not
+    # exclamations, praise, or the particles of people who know each other.
+    assert "Без восклицаний, без «О!» и «Ого», без «-то», «же», «ну»" in ask
+    assert "Сближайся вслед за ним, а не впереди" in ask
+    # The examples it copied: «О, а про что она?» came back as «О, целый день
+    # за кодом» and «О, про бесконечное…»; «Вот как.» opened six reactions
+    # running.
+    assert "О, а про что она" not in ask and "«Вот как.»" not in ask
+    assert "не повторяйся — ни словами, ни складом фразы" in ask
+    assert intake.WARMER == 8 and intake.CLOSER == 11
 
 
 def test_the_last_question_is_required_and_says_why():
