@@ -366,11 +366,28 @@ def build_persona_block(persona: dict) -> str:
         if text:
             lines.append(f"{label}: {text}.")
 
+    # WHAT HE IS, for his own grammar. The writer has always been required to
+    # say it (for the voice — tts.voice_for) and it never reached the words:
+    # the model was left to guess from the name, and Russian names will not
+    # support the guess — Саша, Никита, Илья and Женя would have said «я
+    # пришла» half the time.
+    gender = str(p.get("gender") or "").strip().lower()
+    if gender:
+        lines.append("Ты женщина." if gender.startswith(("ж", "f")) else "Ты мужчина.")
+
     add("Возраст", p.get("age"))
     add("Где живёшь", p.get("home"))
     add("Откуда ты родом", p.get("roots"))
     add("Твоя история", p.get("backstory"))
     add("Твой характер", p.get("personality"))
+    # HOW HE TALKS — his words, how he builds a sentence. The writer is
+    # required to write it (matchmaker._REQUIRED) and the reading is baked into
+    # it (reading.py), and it never reached the prompt: every companion talked
+    # in the constitution's one general manner, whoever the writer had made.
+    # Pet words are for now and then: rendered bare, «смеётся одним «ха»»
+    # opened seven replies of one rehearsal.
+    add("Как ты говоришь (свои словечки — к месту и изредка, не в каждой фразе)",
+        p.get("speech_style"))
     # What's on his mind when nobody's listening. Never recited out loud — it
     # is there so that what he DOES say comes from somewhere.
     add("Что у тебя на душе (не рассказывай это прямо — просто живи с этим)",

@@ -28,6 +28,8 @@ Two further speed decisions live here:
 
 from __future__ import annotations
 
+import re
+
 from anthropic import AsyncAnthropic
 
 from . import config
@@ -156,6 +158,38 @@ def _system_blocks(stable: str, variable: str) -> list[dict]:
     return blocks
 
 
+#: What stands before a history that begins with HIM. It does whenever he
+#: spoke first — a first meeting opens with his hello, not with anything they
+#: said (meeting.HELLO) — and whenever the window of recent turns happens to
+#: start on one of his lines. The API's own contract is alternating turns,
+#: user first; a placeholder costs nothing, and nothing stores it.
+_BEFORE_HIM = {"role": "user", "content": "…"}
+
+
+def _conversation(history: list[dict[str, str]]) -> list[dict[str, str]]:
+    messages = list(history)
+    if messages and messages[0].get("role") == "assistant":
+        messages.insert(0, dict(_BEFORE_HIM))
+    return messages
+
+
+#: Where a sentence ends: the stop, and any closing quote or bracket after it.
+_SENTENCE_END = re.compile(r"[.!?…]+[»\"')\]]*")
+
+
+def whole_sentences(text: str) -> str:
+    """A reply cut off by the length limit, back to its last whole sentence.
+
+    Nothing used to look at why a reply stopped, so one that ran into
+    MAX_REPLY_TOKENS was spoken exactly as it ended — «можно фантазировать с
+    цвет» — which is the sound of a machine, not of somebody who has said
+    what he meant. A reply with no finished sentence at all is left as it is:
+    half a thought is better than silence.
+    """
+    ends = list(_SENTENCE_END.finditer(text))
+    return text[: ends[-1].end()].rstrip() if ends else text
+
+
 def _note_cache(message) -> None:
     """Say it out loud whenever the cached head had to be written again.
 
@@ -209,7 +243,7 @@ async def generate_reply(
     model = config.BRAIN_MODEL if fresh_info else config.CHAT_MODEL
     tools = [_WEB_SEARCH_TOOL] if fresh_info else []
 
-    messages = list(history)
+    messages = _conversation(history)
     message = None
     for _ in range(3):  # allow a couple of server-side web-search continuations
         async with client.messages.stream(
@@ -230,7 +264,8 @@ async def generate_reply(
 
     if message is None:
         return ""
-    return "".join(b.text for b in message.content if b.type == "text").strip()
+    text = "".join(b.text for b in message.content if b.type == "text").strip()
+    return whole_sentences(text) if message.stop_reason == "max_tokens" else text
 
 
 async def stream_reply(
@@ -257,7 +292,7 @@ async def stream_reply(
         model=config.CHAT_MODEL,
         max_tokens=config.MAX_REPLY_TOKENS,
         system=_system_blocks(system_stable, system_variable),
-        messages=list(history),
+        messages=_conversation(history),
         timeout=_LIVE_REPLY_TIMEOUT,
     ) as stream:
         async for event in stream:
@@ -268,9 +303,19 @@ async def stream_reply(
         # from `_note_cache`: asking a finished stream for its final message is
         # its own way to fail, and neither failure may reach the listener.
         try:
-            _note_cache(await stream.get_final_message())
+            final = await stream.get_final_message()
+            _note_cache(final)
         except Exception as e:  # noqa: BLE001
             print(f"[кэш] не смог посмотреть: {e}", flush=True)
+            final = None
+    # CUT OFF BY THE LENGTH LIMIT: one last, SHORTER value — the reply back to
+    # its last whole sentence. The caller speaks finished sentences as they
+    # come and the unfinished tail only after the stream ends, so the tail is
+    # simply never spoken, and what is remembered is what was meant.
+    if final is not None and final.stop_reason == "max_tokens":
+        trimmed = whole_sentences(text)
+        if trimmed != text:
+            yield trimmed
 
 
 async def think(

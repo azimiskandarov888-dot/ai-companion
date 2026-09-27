@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Проверить всех агентов на себе — по порядку, как их проходит человек.
 
+    python3 myself.py meet             # первая встреча: он здоровается, ты отвечаешь
     python3 myself.py interview        # 1. знакомство — ровно как в приложении
     python3 myself.py read             # 2. несколько чтений тебя, вслепую
     python3 myself.py sketch           # 3. наборы из десяти набросков
@@ -530,6 +531,78 @@ async def scribe(args) -> None:
 STAGES = ("interview", "read", "sketch", "write", "talk", "scribe")
 
 
+# ── первая встреча ──────────────────────────────────────────────────────────
+
+async def meet(args) -> None:
+    """Первая встреча — ровно как в приложении, только печатая.
+
+    Он здоровается первым; ты отвечаешь как есть. Внутри — настоящий путь
+    приложения (main.hello, main._think_and_speak, писарь), на временной базе,
+    как в rehearse.py; ровесник для младших — как решено для подростков.
+    Пустая строка — закончить.
+    """
+    import tempfile
+
+    from fastapi import BackgroundTasks
+
+    import rehearse
+    from app import main as app_main, meeting, memory
+
+    age = _ask("Сколько тебе лет? (как в регистрации; ему это не скажут)")
+    pick = ""
+    while pick not in ("п", "д"):
+        pick = _ask("С кем знакомишься — с парнем или девушкой? (п/д)").lower()[:1]
+    peers = young.band(age) in (young.TEEN, young.CHILD)
+    key = {("п", True): "mark", ("д", True): "liza",
+           ("п", False): "andrey", ("д", False): "galina"}[(pick, peers)]
+    voice = args.model or rehearse.VOICE
+
+    rehearse._patch(Path(tempfile.mkdtemp(prefix="meet-")))
+    uid = "myself-meet"
+    persona.save_persona(uid, rehearse.COMPANIONS[key])
+    young.remember(uid, age)
+    log: list[tuple[str, str, int | None]] = []
+    async with httpx.AsyncClient(timeout=120.0,
+                                 headers={"Authorization": f"Bearer {tryout._key()}"}) as client:
+        rehearse._client = client
+        rehearse._voice.set(voice)
+        print("\033[2mПишешь — он отвечает. Пустая строка — закончить.\033[0m")
+        hello = json.loads((await app_main.hello(user_id=uid)).body)["reply"]
+        print(f"\n\033[1m{hello}\033[0m")
+        log.append(("он", hello, 0))
+        while True:
+            try:
+                said = input("\n> ").strip()
+            except (EOFError, KeyboardInterrupt):
+                said = ""
+            if not said:
+                break
+            log.append(("человек", said, None))
+            stage = meeting.stage(memory.words_said(uid))
+            tasks = BackgroundTasks()
+            answer = await app_main._think_and_speak(uid, said, tasks)
+            for task in tasks.tasks:
+                if task.func is learn.learn_from_conversation:
+                    await task.func(*task.args, **task.kwargs)
+            print(f"\n\033[1m{answer['reply']}\033[0m")
+            log.append(("он", answer["reply"], stage))
+            if answer.get("farewell"):
+                break
+
+    companion = rehearse.COMPANIONS[key]
+    numbers = rehearse.measure(log, companion["name"], "")
+    stamp = time.strftime("%Y%m%d-%H%M%S")
+    paper = HOME / f"meet.{stamp}.md"
+    HOME.mkdir(parents=True, exist_ok=True)
+    paper.write_text(
+        f"# Первая встреча — {companion['name']}\n\nголос: {voice}\n\n"
+        + "\n\n".join(f"**{'Он' if w == 'он' else 'Ты'}**: {t}" for w, t, _ in log)
+        + "\n\n---\n\n" + "  \n".join(f"{k}: {v}" for k, v in numbers.items()) + "\n",
+        encoding="utf-8")
+    print(f"\nЗаписано: {paper}")
+    print(f"Потрачено: " + ", ".join(f"{k} ${v:.3f}" for k, v in rehearse._spent.items()))
+
+
 def status(args) -> None:
     total = 0.0
     for stage in STAGES:
@@ -576,6 +649,8 @@ async def _staged(stage) -> None:
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="stage", required=True)
+    m = sub.add_parser("meet")
+    m.add_argument("--model", help="другой голос (имя OpenRouter)")
     for name in STAGES:
         s = sub.add_parser(name)
         s.add_argument("--models", help="свои кандидаты: id,id,… (имена OpenRouter)")
@@ -592,6 +667,8 @@ def main() -> None:
         return status(args)
     if args.stage == "pick":
         return pick(args)
+    if args.stage == "meet":
+        return asyncio.run(meet(args))
     asyncio.run(_staged(globals()[args.stage](args)))
 
 

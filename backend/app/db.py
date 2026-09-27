@@ -195,6 +195,20 @@ CREATE TABLE IF NOT EXISTS companion_feeling (
     ts       REAL NOT NULL              -- when it last MOVED, not when last read
 );
 
+-- HOW MUCH THE TWO OF THEM HAVE TALKED: the person's words, summed, and
+-- nothing else. It decides how close they are (meeting.py) — by how much was
+-- said, never by the calendar. A number, not their words, so it survives what
+-- young.forget takes from a child or from a teenager who keeps nothing: without
+-- it every conversation of theirs would be a first meeting, and he would
+-- introduce himself every day. It belongs to the pair, so it goes when he goes.
+-- `named` is the same kind of fact about HIM: that he has told them his name,
+-- which the deleted log could otherwise no longer prove.
+CREATE TABLE IF NOT EXISTS acquaintance (
+    user_id  TEXT PRIMARY KEY,
+    words    INTEGER NOT NULL DEFAULT 0,
+    named    INTEGER NOT NULL DEFAULT 0
+);
+
 -- The "seen once, watching" register. Several rules in companion.py say some
 -- version of «по одному разу не решай» — decide only when it happens twice.
 -- That is unenforceable with nowhere to hold the first time, so this is that

@@ -119,9 +119,25 @@ def _playing(user_text: str, history: list[dict] | None) -> bool:
     return any(m in haystack for m in _GAME_MARKERS)
 
 
+#: Two of his replies in a row ended with a question. That is the shape of an
+#: interview even when each also carries something of his own, and the
+#: constitution's «не заканчивай вопросом каждый ответ» did not hold it: the
+#: first rehearsals of the first meeting (2026-09-27) ran to nine in a row with
+#: a man who answered in one word. Counting is the server's job.
+_ASKED_TWICE = ("ДВЕ ТВОИ ПОСЛЕДНИЕ РЕПЛИКИ КОНЧАЛИСЬ ВОПРОСОМ. Эту — лучше без "
+                "вопроса: отзовись на его слова или расскажи своё. Пусть спросит и он.")
+
+
+def _asking_in_a_row(history: list[dict] | None) -> bool:
+    his = [str(t.get("content") or "") for t in (history or []) if t.get("role") == "assistant"]
+    return len(his) >= 2 and all(line.rstrip().endswith("?") for line in his[-2:])
+
+
 def block(user_text: str, history: list[dict] | None = None) -> str:
     """The rules this particular turn actually needs. Usually empty."""
     parts = []
+    if _asking_in_a_row(history):
+        parts.append(_ASKED_TWICE)
     if _playing(user_text, history):
         parts.append(_GAMES)
     if brain.wants_fresh_info(user_text or ""):

@@ -56,9 +56,10 @@ from . import config, db, identity, reading
 #: count that mood.py keeps is the AGE OF THE FRIENDSHIP. A new friend
 #: inheriting forty visits would greet a stranger like an old acquaintance on
 #: his first evening — which is exactly the borrowed life this app exists to
-#: prevent.
+#: prevent. `acquaintance` is the same age counted in words (meeting.py).
 HIS = (
     "turns",
+    "acquaintance",
     "diary",
     "life",
     "body",

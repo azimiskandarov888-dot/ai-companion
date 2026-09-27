@@ -329,3 +329,18 @@ def test_his_biography_is_out_of_reach(monkeypatch):
     assert "отмени СТАРОЕ" in learn._EXTRACTION_SYSTEM
     # And the reason the newest wins is the person's own ears.
     assert "только что слышал своими ушами" in learn._EXTRACTION_SYSTEM
+
+
+
+def test_a_talkative_batch_is_not_cut_off_and_lost():
+    """Five exchanges with somebody who talks a lot came to ~960 tokens of
+    extraction (measured 2026-09-27). The ceiling was 800: the JSON was cut,
+    _parse_json returned {}, the batch was marked read, and nothing was kept —
+    the people who say the most had the least remembered. His own facts come
+    last in the format, so they were the first to go."""
+    from app import learn
+
+    assert learn.SCRIBE_TOKENS >= 2_000
+    assert learn._parse_json('{"facts": [{"value": "обрез') == {}   # why it matters
+    fmt = learn._EXTRACTION_SYSTEM
+    assert fmt.index('"bob_facts"') > fmt.index('"facts"')

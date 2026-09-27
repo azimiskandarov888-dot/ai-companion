@@ -109,6 +109,7 @@ def build_system_parts(
     broke_off: bool = False,
     acquaintance: str = "",
     lessons_block: str = "",
+    meeting_block: str = "",
 ) -> tuple[str, str]:
     """Assemble the system prompt as (stable, variable).
 
@@ -128,6 +129,8 @@ def build_system_parts(
     broke_off:      their last conversation ended with nobody saying goodbye,
                     and it is still early enough to be worth remarking on
                     (memory.broke_off_last_time decides that, not this).
+    meeting_block:  how two strangers get talking — only while they still
+                    are (meeting.block decides that, not this).
     """
     # ── DANGER IS THE WHOLE PROMPT, OR IT IS NOT THE WHOLE PROMPT ───────────
     #
@@ -251,6 +254,14 @@ def build_system_parts(
             "ВАШИ ОБЩИЕ МОМЕНТЫ И О ЧЁМ ВЫ НЕДАВНО ГОВОРИЛИ "
             "(можешь мягко вспомнить это):\n" + memory_context.strip()
         )
+
+    # How to meet somebody — for the first few hundred of his words, and never
+    # again. Late, with the other instructions for this conversation rather
+    # than for who he is: the end of the prompt is where an instruction is
+    # followed best. Before the turn's own rules, which are narrower, and
+    # before the young block, which outranks everything above it.
+    if meeting_block.strip():
+        variable_parts.append(meeting_block.strip())
 
     # The rules this particular turn actually needs — how to play the game they
     # are playing, how to hand him the news he asked for. Late on purpose: these

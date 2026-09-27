@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import json
 import random
+import re
 import time
 
 from . import db, embeddings
@@ -77,6 +78,67 @@ def log_turn(user_id: str, role: str, content: str, farewell: bool = False) -> N
             "INSERT INTO turns(user_id, role, content, ts, farewell) VALUES (?,?,?,?,?)",
             (user_id, role, content, time.time(), 1 if farewell else 0),
         )
+        # Counted here, where every line is written, so no path can say
+        # something without it counting — see words_said.
+        if role == "user":
+            conn.execute(
+                "INSERT INTO acquaintance(user_id, words) VALUES (?, ?) "
+                "ON CONFLICT(user_id) DO UPDATE SET words = words + excluded.words",
+                (user_id, len((content or "").split())),
+            )
+
+
+def named_himself(user_id: str, name: str) -> bool:
+    """Whether he has ever said his own name to this person — in any case of
+    it: «Даня», «Даней», «Дане»; «Андрей», «Андрея»; «Галина», «Галиной».
+    Somebody with no name has nothing to say, so the answer is yes."""
+    first = (name or "").split()[0] if (name or "").strip() else ""
+    if not first:
+        return True
+    stem = first[:-1] if len(first) > 3 and first[-1].lower() in "аяйьоеёиыую" else first
+    said = re.compile(rf"\b{re.escape(stem)}[а-яё]{{0,3}}\b", re.I)
+    with db.connect() as conn:
+        row = conn.execute(
+            "SELECT named FROM acquaintance WHERE user_id=?", (user_id,)
+        ).fetchone()
+        if row and row["named"]:
+            return True
+        rows = conn.execute(
+            "SELECT content FROM turns WHERE user_id=? AND role='assistant'", (user_id,)
+        ).fetchall()
+        found = any(said.search(r["content"] or "") for r in rows)
+        # Kept once found: for somebody about whom nothing is kept, the log
+        # that proves it is deleted after the conversation (young.forget).
+        if found:
+            conn.execute(
+                "INSERT INTO acquaintance(user_id, named) VALUES (?, 1) "
+                "ON CONFLICT(user_id) DO UPDATE SET named = 1", (user_id,))
+    return found
+
+
+def times_heard(user_id: str) -> int:
+    """How many times the person has spoken to him — lines, not words."""
+    with db.connect() as conn:
+        row = conn.execute(
+            "SELECT COUNT(*) n FROM turns WHERE user_id=? AND role='user'", (user_id,)
+        ).fetchone()
+    return int(row["n"])
+
+
+def words_said(user_id: str) -> int:
+    """How much this person has said to him, in words, over every conversation.
+
+    It is what decides how close the two of them are (meeting.py) — the
+    amount of talk, never the calendar. Kept as a count beside the log rather
+    than summed from it, because for a child, and for a teenager who keeps
+    nothing, the log of earlier conversations is deleted (young.forget), and a
+    sum over what is left would make every conversation their first.
+    """
+    with db.connect() as conn:
+        row = conn.execute(
+            "SELECT words FROM acquaintance WHERE user_id=?", (user_id,)
+        ).fetchone()
+    return int(row["words"]) if row else 0
 
 
 def recent_turns(user_id: str, limit: int = RECENT_TURNS) -> list[dict[str, str]]:
@@ -261,42 +323,6 @@ def how_much_he_says(user_id: str) -> str:
     if middle >= _TALKATIVE_AT:
         return "talkative"
     return "normal"
-
-
-#: Where the warmth rule gets something to stand on. Without this the model
-#: has only the last twelve turns to judge by, and twelve turns look identical
-#: on day one and in year two.
-_JUST_MET = 6
-_STILL_NEW = 14 * 24 * 3600
-
-
-def how_long_acquainted(user_id: str) -> str:
-    """One line telling him how far into this friendship he actually is.
-
-    THE WARMTH RULE NEEDS THIS. He is told to be interested at first and to
-    warm as he comes to know somebody — which is unusable advice unless he
-    knows which of those he is doing. A friend who is still cautious after a
-    year is cold; one who is tender on the first evening is a salesman.
-    """
-    with db.connect() as conn:
-        row = conn.execute(
-            "SELECT COUNT(*) n, MIN(ts) first FROM turns WHERE user_id=?",
-            (user_id,),
-        ).fetchone()
-
-    turns, first = row["n"], row["first"]
-    if not turns:
-        return ("Вы только что познакомились. Ты внимателен и тебе любопытно — "
-                "но ещё не ласков: пока не за что.")
-    if turns < _JUST_MET:
-        return ("Вы едва знакомы — это первый разговор. Интерес есть, тепло "
-                "ещё нет. Не забегай вперёд.")
-    if time.time() - first < _STILL_NEW:
-        return ("Вы знакомы недавно, несколько дней. Ты уже кое-что о нём "
-                "знаешь, и тебе стало не всё равно. Можно теплее — "
-                "настолько, насколько ты правда узнал.")
-    return ("Вы знакомы давно, и он тебе дорог. Здесь уместна та теплота, "
-            "которую вы нажили вместе. Не отыгрывай её назад.")
 
 
 #: Below this a gap is just life — he was busy, he slept in. Above it, it is a

@@ -284,6 +284,10 @@ async def learn_from_conversation(user_id: str, *, farewell: bool = False) -> No
         print(f"[learn] storing failed: {e}", file=sys.stderr)
 
 
+#: The scribe's ceiling — see _extract.
+SCRIBE_TOKENS = 2_500
+
+
 async def _extract(user_id: str, said: str) -> dict:
     client = _get_client()
     # Numbered, and only here. The companion never sees an id — he would have
@@ -315,7 +319,12 @@ async def _extract(user_id: str, said: str) -> dict:
     known_bob = memory.believes(user_id, "bob") or "(пока ничего)"
     message = await client.messages.create(
         model=config.BRAIN_MODEL,
-        max_tokens=800,
+        # Room for a talkative batch. At 800, five exchanges with somebody who
+        # talks a lot needed ~960 tokens (measured, 2026-09-27): the JSON was
+        # cut, _parse_json returned {}, the batch was marked read — and nothing
+        # at all was kept, least of all his own words about himself, which come
+        # last (bob_facts, taught_bob). Only what is written is paid for.
+        max_tokens=SCRIBE_TOKENS,
         system=_EXTRACTION_SYSTEM,
         messages=[{"role": "user", "content": extraction_prompt(
             known_elder, known_bob, topics, said)}],

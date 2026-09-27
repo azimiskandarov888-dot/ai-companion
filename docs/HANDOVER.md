@@ -4,7 +4,7 @@ Everything a new session needs to work on this project without re-deriving it
 or re-litigating decisions that are already made. Written 2026-09-17 on branch
 `claude/gallant-bardeen-0l6ff0`; revised through 2026-09-23 on
 `claude/awesome-planck-wdj4hu`, which is where all current work lives.
-**969 tests pass.** Every number below was measured by running the code, not
+**1003 tests pass.** Every number below was measured by running the code, not
 estimated; where something is an estimate it says so.
 
 **What the last stretch was about.** Nine of the ten must-fix items are closed.
@@ -22,7 +22,7 @@ the others were written earlier and some of them have drifted.
 
 | Document | Trust |
 |---|---|
-| `FIRST-MEETING.md` | **the plan that replaces the intake interview** — owner's decisions of 2026-09-26; not built yet |
+| `FIRST-MEETING.md` | **the plan that replaces the intake interview** — owner's decisions of 2026-09-26; step 1 (the conversation) built and rehearsed 2026-09-27, steps 2–3 ahead |
 | `BOUNDARIES.md`, `AUDIT-2026-09.md` | current, evidence-backed |
 | `VISION.md`, `README.md` | corrected today; the rest is older but sound |
 | `BUILD-PLAN.md`, `ALWAYS-ON.md` | **stale** — phase plans and an always-on listening design that was not built |
@@ -161,7 +161,7 @@ Do not reopen these without being asked.
 | **He is an ACE in what the person loves or misses — never on the ground the person is proudest of, and not in his daily work even from another side.** A friend who outdoes you where your self-image lives is a rival (Tesser's self-evaluation maintenance); one who knows what you love or lack is somebody to be proud of and come back to. And he is **hopeless exactly where the person is strong**, so the person gets to explain — help that goes one way is lonely on both sides (Buunk & Prins 1998). Amends the 2026-09-18 «ace in what the person loves most», which on the owner's own test produced a co-founder for his startup | owner's call 2026-09-23 (`matchmaker._WRITE_SYSTEM`, `reading` → `strong_at`) |
 | **On the person's own ground the friend is a PUPIL** — knows little or nothing, badly wants to become a master, and the person teaches him. Built as a mechanism, not a sentence: the scribe writes down what he was taught (`taught_bob` → memory `kind='lesson'`, HIS row, so it leaves with him), and `memory.lessons_block` hands it back every turn with the count — so he actually grows. Labour becomes love only when it ends in success (IKEA effect); a forever-beginner would be labour that went nowhere. Same mechanism carries life advice he acts on and reports back. And he now notices the person's change for the better, not only for the worse (Michelangelo phenomenon) | owner's call 2026-09-24 (`tests/test_pupil.py`) |
 | **The intake interview — a conversation first, a list second.** Every question is the interviewer's (Opus 5 — #1 on EQ-Bench 4, chosen by comparison). It talks like a person meeting someone: after the name, «Очень приятно» and how's your day (small talk builds trust — Bickmore & Cassell 2001); then, most often, a question about what was just said — «пишу программу» → «а про что она?» — because follow-up questions, not topic switches, are what make an asker liked (Huang 2017). **Shy first, closer by the end**: the server tells every call the stage — strangers for questions 1–8 (polite, «вы», quiet reactions or none, no exclamations, praise or «-то/же/ну»; warmth only as attention), a little acquainted for 9–11 (warmer, livelier; the under-thirties move to «ты»), almost friends from 12 (open, close, never an old friend) — and the model keeps pace with the person, never ahead. Why: acquaintance goes from light to personal (Altman & Taylor 1973; Kellermann 1991), the same intimacy is liked less early (Wortman 1976), and in Russian a stranger's warmth reads as put on (Стернин); the owner: «you don't talk to someone you just met like you've known him for years». The server keeps a memo of twelve topics (name; how the day is and what fills it — the friend's topic must NOT land there; what they love; what's coming up this week; country; age; what they love but haven't done in a while; what they're best at; who they last talked to «по душам»; who last asked them for something; what helped the last time it was hard; and, last and required, «А о чём бы поговорить, да не с кем?» with one gentle rescue if the answer is vague). Topics are taken up when they come up, in any order — except that his people and his hard times (`intake.DEEPER`) are offered only after the lighter topics, so never before question 9; up to three questions per thread; at most 18 in all — follow-ups only while every remaining topic still fits, so country and age cannot be lost, and a model that wanders off or stops early is overruled — as is a question filed under age or country that doesn't ask it (a simulated run filed «А кодить давно начали?» as the age). History: the owner rejected a fixed app warm-up («ничем» went unanswered) and then a strict list («it wants to end the interview as fast as possible») — both times rightly | owner + councils, 2026-09-24/25 (`tests/test_interview.py`, `tests/test_intake.py`) |
-| **The beginning becomes a first meeting — no interview at all.** The person meets the companion himself, in voice, as two strangers: the day and the moment, where from, a topic both care about, names (his first), and closer only as they talk more — measured by the amount of talk, never by days; no list of deep questions anywhere. He is a little shy, calm, more interested in the person than in himself. Before: an ordinary sign-up (name, age, gender, country) and the person's choice of his gender and age. He exists as a SKETCH before the meeting and gets his PORTRAIT after it — everything he said about himself is law. He never lives where the person does: abroad or on the road. That he is an AI is written in small print, as on AI sites; he still never says it. The intake row above stands until this is built | **planned**, owner 2026-09-26 (`docs/FIRST-MEETING.md`) |
+| **The beginning becomes a first meeting — no interview at all.** The person meets the companion himself, in voice, as two strangers: the day and the moment, where from, a topic both care about, names (his first), and closer only as they talk more — measured by the amount of talk, never by days; no list of deep questions anywhere. He is a little shy, calm, more interested in the person than in himself. Before: an ordinary sign-up (name, age, gender, country) and the person's choice of his gender and age. He exists as a SKETCH before the meeting and gets his PORTRAIT after it — everything he said about himself is law. He never lives where the person does: abroad or on the road. That he is an AI is written in small print, as on AI sites; he still never says it. The intake row above stands until step 3 replaces it. **Step 1 — the conversation itself — is built** (`meeting.py`; `/api/hello`; closeness by the person's words, 300 / 2,000 / 8,000, kept as a count in `acquaintance` because a child's log is deleted; the server tells him to say his name if he has not by the person's fifth line, and to end a reply without a question after two in a row) and rehearsed in three rounds (`rehearse.py`): GPT-5.6 Luna was the best voice for it, Gemini 3.5 Flash-Lite next; Haiku 4.5, MiniMax (asterisk stage directions) and Qwen 3.5 (empty replies) were not | step 1 built 2026-09-27; owner's plan 2026-09-26 (`docs/FIRST-MEETING.md`, `tests/test_meeting.py`) |
 | **The reader decides WHAT somebody needs; the writer decides WHO gives it.** The request is honoured literally and never overruled — it decides what he is like; the need decides what he is for. Stated ideals do not predict whom people actually warm to (Eastwick & Finkel 2008), but a visibly overridden request provokes reactance, so neither is traded for the other. The first reading is a hypothesis; the conversations correct it (re-reads, confirmed observations). **How the reader gets it right**, by Funder's Realistic Accuracy Model — the cue must exist, reach the reader, be noticed and be used right: the interview now asks the one closing question whose answer says what is missing («о чём тебе не с кем поговорить»); the reader is walked through perspective-taking, direct words over form, competing hypotheses and a Barnum check, in its thinking. Tested on the owner: without that answer every model correctly declined to guess «feelings»; with it, Opus 5.5 wrote «нет никого, с кем можно всерьёз, особенно о чувствах» | owner's question, 2026-09-23 |
 | **The rules stay a file you can read, plus mechanisms in code. No fine-tuning.** Four reasons, in order of weight: a fine-tune trained on our own prompt's output can at best COPY it and never exceed it; Anthropic has no fine-tuning API, so it means leaving Claude for a small model that writes worse Russian; catastrophic forgetting is documented and shows up where you did not test; and weights cannot be read, diffed, or fixed by one line with a test | settled 2026-09-22 |
 | **The constitution gets CUT, from 26,348 chars to ~8,000.** This is the whole answer to the 94/6 problem. Fine-tuning would have removed the last ~3,000 tokens for a month of work and no way back | **done 2026-09-23: 10,385 chars**, ~6,000 tokens off every request (estimate). Awaiting the owner's ear (§13.1) |
@@ -436,7 +436,8 @@ lose; and self-hosting — GPUs idle at our size.
 | `safety.py` | The danger watcher — outside the character, deliberately |
 | `emergency.py` | Which number to dial, by country; `resolve` reads it out of free text, `dialable` hands it to a button |
 | `erase.py` | The ONE definition of what a parting removes — a friend leaving, or a person |
-| `situations.py` | Rules that apply only to this turn (games, news) |
+| `meeting.py` | The first meeting: how two strangers get talking (only while they are), where the two of them are by the person's WORDS (never days), and his first words (`/api/hello`) |
+| `situations.py` | Rules that apply only to this turn (games, news, and — after two of his replies in a row ended with a question — a nudge to end this one without) |
 | `occasions.py` | What day it is, and whose birthday |
 | `allowance.py` | Daily spend per person; dozing |
 | `brain.py` | The model calls: `generate_reply`, `stream_reply`, `think`, `generate_text` |
@@ -548,6 +549,22 @@ the reason the tests that now hold them exist.
     byte-identical — worth re-checking after any change there, because a silent
     cache miss costs money on every turn of every conversation.
 
+13. ~~**His written manner of speech and his gender never reached the
+    prompt.**~~ Fixed 2026-09-27. The writer is required to write
+    `speech_style` (and the reading is baked into it) and `gender`, and
+    `persona.build_persona_block` rendered neither — every companion talked
+    in the constitution's one general manner and guessed his own grammar from
+    a name that does not tell (Саша, Никита, Женя).
+14. ~~**A reply cut off by the length limit was spoken as it ended**~~ —
+    «можно фантазировать с цвет». Fixed: `brain.whole_sentences`, in both the
+    whole-reply and the streaming path (the stream ends with one SHORTER
+    value, so the unfinished tail is never spoken).
+15. ~~**The scribe's 800-token ceiling lost whole batches.**~~ Five exchanges
+    with a talkative person needed ~960 tokens; the JSON was cut,
+    `_parse_json` returned `{}`, the batch was marked read, and nothing was
+    kept — least of all his own words about himself, which come last.
+    `learn.SCRIBE_TOKENS` is 2,500; only what is written is paid for.
+
 ## 11. Deliberately NOT done, and why
 
 - **A two-stage watchman** (cheap high-recall filter → strong verifier). It
@@ -628,7 +645,7 @@ the reason the tests that now hold them exist.
   Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
   Claude-Session: https://claude.ai/code/session_018PiV38FZMupJ19foghBRZm
   ```
-- **Tests:** `cd backend && python -m pytest -q`. **969 pass.** The suite is the
+- **Tests:** `cd backend && python -m pytest -q`. **1003 pass.** The suite is the
   design record — test docstrings carry the *reasoning*, including what went
   wrong before. Read the docstring before changing an assertion; several tests
   exist because a previous fix was subtly wrong.
@@ -648,16 +665,21 @@ the reason the tests that now hold them exist.
   not because the code was right, and the full suite eventually caught one out.
   Both now stop the clock. Look for this shape anywhere a test asserts on a
   value that decays.
-- **Three tools, all meant to be run by a person with ears**, not by CI:
-  `audition.py` (voices, side by side), `tryout.py` (brains, §7b), and
+- **Four tools, all meant to be run by a person with ears**, not by CI:
+  `audition.py` (voices, side by side), `tryout.py` (brains, §7b),
   `myself.py` — every agent tested on the owner himself, stage by stage in the
   order a person meets them (interview → reading → sketches → writer → voice →
   scribe), because he cannot judge what a 68-year-old should hear and can judge
-  everything about himself. Shortlists and why: `docs/MODELS-FOR-EACH-AGENT.md`.
-  It writes no prompt of its own — it swaps only the model behind
-  `brain.think` / `brain.generate_text`, so it cannot drift from the app. All
-  three keep their output on disk so a judgement can be revisited a day later
-  rather than trusted to memory of the third one.
+  everything about himself; `myself.py meet` is his own first meeting — and
+  `rehearse.py`, whole first meetings with six very different invented people
+  (a teenager, a widow of 71, a man who answers in one word, a talker, a girl
+  who is having a bad week…), each saved with the numbers that betray an
+  interview. Shortlists and why: `docs/MODELS-FOR-EACH-AGENT.md`.
+  None of them writes a prompt of its own — they swap only the model behind
+  the app's own calls (`rehearse.py` and `meet` drive `main.hello` and
+  `main._think_and_speak` themselves, on a throwaway database), so they cannot
+  drift from the app. All keep their output on disk so a judgement can be
+  revisited a day later rather than trusted to memory of the third one.
 - **Setup is one command per platform:** `setup.sh` (macOS/Linux), `setup.ps1`
   (Windows). Both refuse to run if a real key is sitting in `.env.example` —
   that file is deliberately NOT hidden from git (`!.env.example` in

@@ -581,3 +581,24 @@ def test_an_ordinary_turn_is_not_interrupted(client, monkeypatch, tmp_path):
 
     assert said == _as_it_arrives(REPLY)
     assert "".join(said).replace(" ", "") == REPLY.replace(" ", "")
+
+
+def test_a_tail_cut_off_by_the_length_limit_is_never_spoken(client, monkeypatch):
+    """brain.stream_reply ends a cut-off reply with one SHORTER value. The
+    finished sentences have been spoken as they came; the unfinished tail
+    would only have been spoken after the stream ended, so it never is — and
+    what he is remembered to have said is what he actually said."""
+    cut = "Доброе утро. Как спалось? Мне сегодня снилось мо"
+
+    async def cut_off(history, system_stable, system_variable=""):
+        for i in range(1, len(cut) + 1, 7):
+            yield cut[:i]
+        yield cut
+        yield "Доброе утро. Как спалось?"
+
+    monkeypatch.setattr(brain, "stream_reply", cut_off)
+    lines = [json.loads(line) for line in _talk(client, AUTH).text.splitlines() if line.strip()]
+    spoken = " ".join(line.get("text", "") for line in lines if line.get("kind") == "say")
+    assert "Как спалось?" in spoken and "снилось" not in spoken
+    assert memory.recent_turns(UID)[-1] == {"role": "assistant",
+                                            "content": "Доброе утро. Как спалось?"}

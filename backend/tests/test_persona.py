@@ -381,3 +381,21 @@ def test_his_things_grow_with_the_friendship_but_not_without_end():
         him = persona.merge_growth(him, {"things": [f"вещь {i}"]})
     assert len(him["things"]) == persona._MOST["things"]
     assert him["things"][:3] == ["чайник", "кресло", "ящик с гайками"]
+
+
+def test_how_he_talks_and_what_he_is_reach_the_conversation():
+    """Both were written for every companion and neither reached the prompt.
+    `speech_style` is required of the writer, and the reading is baked into
+    it; without it every companion talked in the constitution's one general
+    manner. And `gender` went only to the voice, leaving the words to guess
+    from the name — which Russian names do not give away: Саша, Никита, Илья,
+    Женя."""
+    block = persona.build_persona_block(
+        {"name": "Саша", "gender": "мужской", "speech_style": "коротко, словечко «стало быть»"})
+    assert "Как ты говоришь (свои словечки — к месту и изредка, не в каждой фразе): " \
+           "коротко, словечко «стало быть»." in block
+    assert "Ты мужчина." in block
+    assert "Ты женщина." in persona.build_persona_block({"name": "Женя", "gender": "женский"})
+    # An older persona with no gender says nothing rather than guess.
+    unknown = persona.build_persona_block({"name": "Женя"})
+    assert "Ты мужчина" not in unknown and "Ты женщина" not in unknown

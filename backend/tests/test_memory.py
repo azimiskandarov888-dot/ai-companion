@@ -309,40 +309,39 @@ def test_the_goodbye_flag_is_written_and_the_words_stay_clean():
 
 
 # --------------------------------------------------------------------------- #
-# How far into the friendship he is
+# How far into the friendship he is — by what was SAID, never by the calendar
 # --------------------------------------------------------------------------- #
 #
 # The warmth rule — interested first, warm as he comes to know somebody — is
 # unusable without this. Twelve recent turns look identical on the first
-# evening and in the second year.
+# evening and in the second year. It used to be counted in turns and days; the
+# owner: «it's not about the time, it's about the amount of talking». The
+# thresholds and the words themselves are meeting.py's; see test_meeting.py.
 
 def test_a_stranger_gets_interest_not_tenderness():
-    assert "не ласков" in memory.how_long_acquainted(U)
+    from app import meeting
+    assert "не ласков" in meeting.where(memory.words_said(U))
 
 
-def test_the_first_conversation_is_still_the_first_conversation():
-    _conversation(U, turns=4, ended=60)
-    assert "первый разговор" in memory.how_long_acquainted(U)
+def test_only_his_words_are_counted():
+    memory.log_turn(U, "user", "ну да, сегодня опять дождь")
+    memory.log_turn(U, "assistant", "у нас тоже, с самого утра льёт")
+    assert memory.words_said(U) == 5
 
 
-def test_a_few_days_in_he_may_be_warmer():
-    _conversation(U, turns=30, ended=2 * DAY)
-    said = memory.how_long_acquainted(U)
-    assert "недавно" in said and "теплее" in said
+def test_a_month_of_yes_and_no_is_still_nearly_a_stranger():
+    """Forty «да» over forty days is forty words: the calendar alone makes
+    nobody close."""
+    from app import meeting
+    for _ in range(40):
+        memory.log_turn(U, "user", "да")
+    assert memory.words_said(U) == 40
+    assert meeting.stage(memory.words_said(U)) == 0
 
 
-def test_after_a_fortnight_the_warmth_is_earned_and_stays():
-    _conversation(U, turns=40, ended=40 * DAY)
-    _conversation(U, turns=40, ended=HOUR)
-    said = memory.how_long_acquainted(U)
-    assert "давно" in said
-    # The one thing that must never happen: going cold again.
-    assert "Не отыгрывай" in said
-
-
-def test_one_persons_history_says_nothing_about_another():
-    _conversation(U, turns=40, ended=40 * DAY)
-    assert "не ласков" in memory.how_long_acquainted(V)
+def test_one_persons_talk_says_nothing_about_another():
+    memory.log_turn(U, "user", " ".join(["слово"] * 10_000))
+    assert memory.words_said(V) == 0
 
 
 # ── how much this person actually says ──────────────────────────────────────

@@ -358,3 +358,47 @@ def test_measuring_never_costs_anybody_their_reply(monkeypatch):
     # And the same with no usage attribute on the message at all.
     brain._note_cache(object())
     brain._note_cache(None)
+
+
+# --------------------------------------------------------------------------- #
+# A reply cut off by the length limit
+# --------------------------------------------------------------------------- #
+def test_a_reply_cut_off_by_the_limit_ends_on_its_last_whole_sentence(monkeypatch):
+    """Nothing used to look at why a reply stopped, so one that ran into
+    MAX_REPLY_TOKENS was spoken exactly as it ended. The first rehearsals of
+    the first meeting did it five times in three conversations — «можно
+    фантазировать с цвет»."""
+    fake = _FakeClient(message=_Message("Море успокаивает. Можно фантазировать с цвет",
+                                        stop_reason="max_tokens"))
+    monkeypatch.setattr(brain, "_get_client", lambda: fake)
+    said = asyncio.run(brain.generate_reply([{"role": "user", "content": "а море?"}], "КТО ТЫ"))
+    assert said == "Море успокаивает."
+
+    # A reply that simply ended is left exactly as it is.
+    fake = _FakeClient(message=_Message("Море успокаивает. И всё"))
+    monkeypatch.setattr(brain, "_get_client", lambda: fake)
+    said = asyncio.run(brain.generate_reply([{"role": "user", "content": "а море?"}], "КТО ТЫ"))
+    assert said == "Море успокаивает. И всё"
+
+
+def test_a_streamed_reply_cut_off_by_the_limit_takes_its_tail_back(monkeypatch):
+    """The last value is SHORTER: what was spoken stays spoken (it is always
+    whole sentences), and the unfinished tail — spoken only after the stream
+    ends — is never spoken at all."""
+    fake = _FakeClient(message=_Message("", stop_reason="max_tokens"),
+                       events=[_Block("Море успокаивает. "), _Block("Можно фантазировать с цвет")])
+    monkeypatch.setattr(brain, "_get_client", lambda: fake)
+
+    async def drain():
+        return [chunk async for chunk in brain.stream_reply(
+            [{"role": "user", "content": "а море?"}], "КТО ТЫ")]
+
+    chunks = asyncio.run(drain())
+    assert chunks[-1] == "Море успокаивает."
+
+
+def test_whole_sentences():
+    assert brain.whole_sentences("Да. Ну и что с цвет") == "Да."
+    assert brain.whole_sentences("Всё… Ладно, давай") == "Всё…"
+    assert brain.whole_sentences("Ты куда? Я тут") == "Ты куда?"
+    assert brain.whole_sentences("без единой точки") == "без единой точки"

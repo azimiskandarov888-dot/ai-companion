@@ -74,6 +74,7 @@ from . import (
     learn,
     life,
     matchmaker,
+    meeting,
     memory,
     mood,
     occasions,
@@ -170,27 +171,38 @@ def _unavailable(stage: str, error: Exception) -> HTTPException:
     return HTTPException(status_code=503, detail=f"{stage}: {error}")
 
 
-async def _assemble(user_id: str, user_text: str) -> tuple[str, str, list, str | None]:
+async def _assemble(user_id: str, user_text: str | None) -> tuple[str, str, list, str | None]:
     """Recall everything he should have in mind, and log that he was spoken to.
 
     Shared by both reply paths — the whole-reply one and the streaming one —
     so there is exactly one place where what he knows is decided.
+
+    `user_text` is None on the one call where HE speaks first (/api/hello):
+    nothing is logged and nothing is watched, because nobody has said
+    anything, and the history handed back is his cue alone — meeting.HELLO,
+    which is never stored.
     """
     # BEFORE the log, not after: this asks how long it has been since anybody
     # last said anything, and logging first makes that answer zero — forever.
     broke_off = memory.broke_off_last_time(user_id)
-    # Also before the log, for the same reason: it counts turns, and this one
-    # would otherwise count itself.
-    acquaintance = memory.how_long_acquainted(user_id)
+    # Also before the log, for the same reason: it counts his words, and these
+    # would otherwise count themselves. How close they are is decided by how
+    # much has been said, never by the calendar — see meeting.py.
+    words = memory.words_said(user_id)
+    # Whether he has said his own name yet — the one thing a first meeting
+    # owes that he did not do unasked (meeting.NAME_BY).
+    who = persona.load_persona(user_id)
+    named = memory.named_himself(user_id, who.get("name", ""))
+    acquaintance = meeting.where(words, named=named)
     # …and HOW LONG HE HAS BEEN GONE, which nothing used to say. See
     # memory.how_long_since_last_time. Before the log, like the two above.
     gap = memory.how_long_since_last_time(user_id)
     if gap:
         acquaintance = f"{acquaintance}\n{gap}"
-    memory.log_turn(user_id, "user", user_text)
+    if user_text is not None:
+        memory.log_turn(user_id, "user", user_text)
 
     # All of it this person's — including WHICH VOICE he or she speaks in.
-    who = persona.load_persona(user_id)
     persona_block = persona.build_persona_block(who)
     elder_facts = memory.facts_context(user_id, "elder")
     bob_facts = memory.bob_self_context(user_id)
@@ -204,8 +216,9 @@ async def _assemble(user_id: str, user_text: str) -> tuple[str, str, list, str |
     # written down rather than generated (_breaking_in / safety.spoken_alert).
     # Anything found too late to interrupt is not lost either — it rides in the
     # next turn's prompt, once, via safety.carried(). It cannot raise.
-    watcher = asyncio.create_task(safety.look(user_id, user_text))
-    mem_ctx = await memory.build_memory_context(user_id, user_text)
+    watcher = (asyncio.create_task(safety.look(user_id, user_text))
+               if user_text is not None else None)
+    mem_ctx = await memory.build_memory_context(user_id, user_text or "")
     # What the watcher found on some earlier turn and he never got to hear.
     # Empty on virtually every turn, and a live `danger` never arrives here.
     carried = safety.carried(user_id)
@@ -257,7 +270,7 @@ async def _assemble(user_id: str, user_text: str) -> tuple[str, str, list, str |
         # Rules that only apply to the turn in front of him — the game they are
         # playing, the news he asked for. Empty nearly always; see situations.py
         # for why they are no longer read on every turn.
-        situation_block=situations.block(user_text, memory.recent_turns(user_id)),
+        situation_block=situations.block(user_text or "", memory.recent_turns(user_id)),
         elder_facts=elder_facts,
         bob_facts=bob_facts,
         # What the person has taught him, so the pupil actually grows.
@@ -266,12 +279,15 @@ async def _assemble(user_id: str, user_text: str) -> tuple[str, str, list, str |
         elder_name=config.ELDER_NAME,
         broke_off=broke_off,
         acquaintance=acquaintance,
+        # How two strangers get talking — only while they still are.
+        meeting_block=meeting.block(words, named=named, heard=memory.times_heard(user_id)),
     )
 
     return (
         system_stable,
         system_variable,
-        memory.recent_turns(user_id),
+        ([{"role": "user", "content": meeting.HELLO}] if user_text is None
+         else memory.recent_turns(user_id)),
         tts.voice_for(who),
         watcher,
     )
@@ -858,6 +874,54 @@ async def say(
     except Exception as e:  # noqa: BLE001
         raise _unavailable("🧠 the brain (Claude) / 🗣️ the voice", e)
     return JSONResponse({"transcript": text, **result})
+
+
+@app.post("/api/hello")
+async def hello(user_id: str = Depends(_user)) -> JSONResponse:
+    """His first words — on the very first visit, and only then.
+
+    Somebody who has just opened the app has nothing to say to a stranger,
+    and leaving it to them is the blank page this app was built to get rid
+    of. So the first time, HE speaks first, the way somebody you have just
+    met says hello (meeting.py). From then on, as ever, the person does.
+
+    If they have ever talked, nothing comes back and nothing is paid for:
+    this is a greeting, not a way to make him speak on demand.
+    """
+    nothing = {"reply": "", "audio_base64": "", "audio_mime": "", "voice": "client"}
+    if memory.recent_turns(user_id, limit=1):
+        return JSONResponse(nothing)
+    try:
+        system_stable, system_variable, cue, voice, _ = await _assemble(user_id, None)
+        reply = await brain.generate_reply(cue, system_stable, system_variable)
+    except Exception as e:  # noqa: BLE001
+        raise _unavailable("🧠 the brain (Claude)", e)
+
+    # The same filters as any line of his: no marker survives, and neither
+    # does either of the two things he never says (vow.py).
+    reply, _leaving = _farewell(reply)
+    said = reply
+    reply, slip = vow.keep(reply)
+    if slip:
+        vow.note(user_id, slip, said)
+        reply = reply or vow.LAST_RESORT
+    reply = _body(user_id, reply)
+    if not reply:
+        return JSONResponse(nothing)
+
+    spoken = {**nothing, "reply": reply}
+    if tts.configured():
+        try:
+            audio_bytes = await tts.synthesize(reply, voice, rate=tts.rate_for(user_id))
+        except Exception as e:  # noqa: BLE001
+            raise _unavailable("🗣️ the voice", e)
+        spoken.update(audio_base64=base64.b64encode(audio_bytes).decode("ascii"),
+                      audio_mime="audio/mpeg", voice="server")
+    # Logged only once it can be heard. Logged first, a voice that failed
+    # would leave a hello nobody heard in the log — and then, because they
+    # have «talked», no hello at all when the app asked again.
+    memory.log_turn(user_id, "assistant", reply)
+    return JSONResponse(spoken)
 
 
 @app.post("/api/wake")

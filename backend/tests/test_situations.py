@@ -290,3 +290,21 @@ def test_the_news_block_no_longer_asserts_that_he_asked():
     said = situations.block("какая сегодня погода?")
     assert "он правда спросил" not in said
     assert "если не спрашивает" in said
+
+
+
+def test_after_two_questions_in_a_row_the_next_reply_is_asked_to_have_none():
+    """The shape of an interview is a question at the end of every reply, even
+    when each also carries something of his own — nine in a row, in a first
+    meeting with a man who answered in one word. The constitution says «не
+    заканчивай вопросом каждый ответ»; the server counts."""
+    asked = [{"role": "assistant", "content": "Нарочь — это в Беларуси, да?"},
+             {"role": "user", "content": "ага"},
+             {"role": "assistant", "content": "Ха. А рыба там какая?"},
+             {"role": "user", "content": "щука"}]
+    assert "КОНЧАЛИСЬ ВОПРОСОМ" in situations.block("щука", asked)
+    # One question is not a pattern, and a reply without one resets it.
+    assert "КОНЧАЛИСЬ ВОПРОСОМ" not in situations.block("щука", asked[2:])
+    told = asked[:2] + [{"role": "assistant", "content": "У меня дед так же сидел."},
+                        {"role": "user", "content": "угу"}]
+    assert "КОНЧАЛИСЬ ВОПРОСОМ" not in situations.block("угу", told)
