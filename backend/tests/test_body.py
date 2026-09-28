@@ -78,6 +78,10 @@ def test_laughter_is_read_from_what_HE_wrote_not_from_her_mood():
     assert body.laughed_in("Ох. Понимаю.") is False
 
 
+def test_his_laugh_marker_is_laughing_too():
+    assert body.laughed_in(f"{body.MARK_LAUGH} Ну ты даёшь.") is True
+
+
 def test_a_long_conversation_makes_him_sleepy():
     _talk(20)
     assert "клонит в сон" in body.block(U, may_sneeze=False)
@@ -295,6 +299,29 @@ def test_the_option_to_sneeze_is_only_offered_when_it_is_happening():
     _talk(14)
     assert body.MARK_SNEEZE not in body.block(U, may_sneeze=False)
     assert body.MARK_SNEEZE in body.block(U, may_sneeze=True)
+
+
+# ── the laugh ───────────────────────────────────────────────────────────────
+
+def test_a_voice_that_can_laugh_is_told_how_on_every_turn():
+    """A joke can come on any turn — so the laugh is there even when his body
+    has nothing else to say."""
+    said = body.block(U, may_sneeze=False, can_laugh=True)
+    assert body.MARK_LAUGH in said
+    assert "в начале фразы" in said            # where it plays, found by listening
+    assert "«Ха-ха» буквами не пиши" in said   # a voice reads that as a word
+
+
+def test_a_voice_that_cannot_is_never_offered_one():
+    assert body.block(U, may_sneeze=False) == ""
+    _talk(18)
+    assert body.MARK_LAUGH not in body.block(U, may_sneeze=False)
+
+
+def test_the_laugh_comes_after_what_his_body_is_doing():
+    _talk(18)
+    said = body.block(U, may_sneeze=False, can_laugh=True)
+    assert said.index("першит") < said.index(body.MARK_LAUGH)
 
 
 # ── where it sits, and what silences it ────────────────────────────────────

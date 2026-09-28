@@ -40,6 +40,15 @@ What is not random is the ten seconds after: the sniff, the «извини», th
 thread picked back up. So it is rolled rarely by code rather than accumulated,
 and the block that announces it is mostly about the aftermath. The realism
 lives in the consequence, which is where it lives for the other two as well.
+(And it is rolled only for a voice that can make it — none can yet, see
+tts.SOUNDS. A sneeze nobody hears is an «извини» out of nowhere.)
+
+── THE LAUGH ───────────────────────────────────────────────────────────────
+
+Not a state at all — it comes from what was said, not from the body. It lives
+here because it is a sound his throat makes, and a laugh is harder on a throat
+than talking. Offered only when his voice can play it (tts.SOUNDS); otherwise
+it would be written as «ха-ха», and a voice reads that as a word.
 """
 
 from __future__ import annotations
@@ -142,7 +151,8 @@ MARK_CLEAR = "//КХМ//"
 MARK_YAWN = "//ЗЕВОК//"
 MARK_SNEEZE = "//ЧИХ//"
 MARK_SIGH = "//ВЗДОХ//"
-MARKERS = (MARK_COUGH, MARK_CLEAR, MARK_YAWN, MARK_SNEEZE, MARK_SIGH)
+MARK_LAUGH = "//СМЕХ//"
+MARKERS = (MARK_COUGH, MARK_CLEAR, MARK_YAWN, MARK_SNEEZE, MARK_SIGH, MARK_LAUGH)
 
 
 def _decayed(value: float, hours: float, half_life: float) -> float:
@@ -251,10 +261,11 @@ def read_markers(reply: str, user_id: str) -> str:
     return said.strip()
 
 
-#: Written laughter, which is harder on a throat than talking is. Deliberately
-#: only what he TYPED — a laugh detected from her side would be his throat
-#: reacting to her mood, which is the mirror this codebase keeps refusing.
-_LAUGHTER = ("ха-ха", "хаха", "ха!", "хех", "хо-хо", "гы", "ахах")
+#: His laughter, which is harder on a throat than talking is — the marker, or
+#: laughter written out. Deliberately only what HE wrote — a laugh detected from
+#: her side would be his throat reacting to her mood, which is the mirror this
+#: codebase keeps refusing.
+_LAUGHTER = (MARK_LAUGH.lower(), "ха-ха", "хаха", "ха!", "хех", "хо-хо", "гы", "ахах")
 
 
 def laughed_in(reply: str) -> bool:
@@ -262,16 +273,33 @@ def laughed_in(reply: str) -> bool:
     return any(mark in low for mark in _LAUGHTER)
 
 
-def block(user_id: str, may_sneeze: bool | None = None, valence: float = 0.0) -> str:
+def block(
+    user_id: str,
+    may_sneeze: bool | None = None,
+    valence: float = 0.0,
+    can_laugh: bool = False,
+) -> str:
     """What he is told about his own body. Empty while it has nothing to say.
 
     Facts, never instructions. «В горле першит» is a thing he knows about
     himself; when and whether that becomes a cough is his, because he is the one
     who can tell whether this sentence is the place for it — and a sentence
     somebody is halfway through telling you about their dead wife never is.
+
+    `can_laugh`: his voice plays a laugh (tts.makes). Then he is told how — on
+    every turn, because a joke can come on any of them.
     """
     now = state(user_id)
     sneeze = random.random() < SNEEZE_CHANCE if may_sneeze is None else may_sneeze
+    # Where a laugh plays was found by listening: at the start of a sentence it
+    # comes out in a man's voice and a woman's, in the middle of one only now
+    # and then (docs/SOUNDS.md).
+    laugh = (
+        f"Когда правда смешно — тебе или ему, — можно засмеяться: {MARK_LAUGH} "
+        "в начале фразы. Не на каждую шутку, а то выйдет закадровый смех. "
+        "«Ха-ха» буквами не пиши: голос прочитает это как слово."
+        if can_laugh else ""
+    )
 
     lines: list[str] = []
     if now["hoarse"]:
@@ -300,7 +328,7 @@ def block(user_id: str, may_sneeze: bool | None = None, valence: float = 0.0) ->
         lines.append("Ты сейчас чихнул. Не объясняй почему — просто чихнул.")
 
     if not lines:
-        return ""
+        return laugh
 
     how = ["ТВОЁ ТЕЛО СЕЙЧАС (это про тебя, не про него):"] + lines
     can = [f"кашлянуть ({MARK_COUGH})", f"кхмкнуть ({MARK_CLEAR})",
@@ -324,4 +352,6 @@ def block(user_id: str, may_sneeze: bool | None = None, valence: float = 0.0) ->
         "Кашлянул — и говоришь дальше с того же места. Один раз буркнуть "
         "«извини» можно, если перебил сам себя."
     )
+    if laugh:
+        how.append(laugh)
     return "\n".join(how)

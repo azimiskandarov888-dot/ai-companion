@@ -1,18 +1,27 @@
-"""The brain: Claude — one model for BEING him, another for WRITING him.
+"""The brain — one model for BEING him, others for WRITING him.
 
 Every turn of conversation is a race against silence: the listener said
-something and is waiting. So conversation runs on CHAT_MODEL (Haiku — fast),
-with the character it plays fully written in advance. The slow, deep work —
-creating the person, rewriting the diary, distilling memory — runs on
-BRAIN_MODEL (Sonnet) where nobody is waiting mid-sentence.
+something and is waiting. So conversation runs on CHAT_MODEL, with the
+character it plays fully written in advance. The slow, deep work — creating
+the person, rewriting the diary, distilling memory — runs on Claude
+(BRAIN_MODEL and friends) where nobody is waiting mid-sentence.
+
+WHERE A CALL GOES is read off the model id. «openai/gpt-5.6-luna» — an
+OpenRouter id, with a «/» — goes to OpenRouter; a bare «claude-…» id goes to
+Anthropic, as it always did. The voice is GPT-5.6 Luna through OpenRouter:
+the owner's choice (2026-09-28) from 24 rehearsed first meetings — the best
+Russian, the best listener, calm with somebody who answers in one word, and
+among the cheapest (docs/VOICE-MODELS-REHEARSAL.md). Same prompt, same
+history, same length limit as the meetings it was chosen on.
 
 Two further speed decisions live here:
 
-  · The web-search tool is attached ONLY when the message actually asks about
-    the current world (news, weather, prices). A tool that is merely available
-    invites the model to consider it, and a search turn costs seconds. When it
-    is needed, the turn runs on BRAIN_MODEL, which supports the tool — those
-    turns are rare and inherently slow anyway.
+  · Web search is attached ONLY when the message actually asks about the
+    current world (news, weather, prices). A tool that is merely available
+    invites the model to consider it, and a search turn costs seconds. On
+    OpenRouter it is the `web` plugin on the same voice; on Claude, the turn
+    runs on BRAIN_MODEL, which supports the tool — those turns are rare and
+    inherently slow anyway.
 
   · The system prompt's stable head (behavior rules + persona) is marked for
     provider-side caching. It is meant to be identical every turn, so Claude
@@ -28,13 +37,56 @@ Two further speed decisions live here:
 
 from __future__ import annotations
 
+import json
 import re
 
+import httpx
 from anthropic import AsyncAnthropic
 
 from . import config
 
 _client: AsyncAnthropic | None = None
+_router: httpx.AsyncClient | None = None
+
+#: OpenRouter's API. Every «vendor/model» id is sent here.
+ROUTER_URL = "https://openrouter.ai/api/v1"
+
+#: How OpenRouter introduces what a web search found, when it is OpenRouter
+#: that searches (Exa, for a model with no search of its own). Its default asks
+#: the model to cite every source as a markdown link — and everything he writes
+#: is read aloud, so a link would be spoken as an address. He says what he found
+#: the way somebody at a table would.
+#:
+#: OpenAI's models search for themselves — OpenRouter's default for them, and
+#: left that way on purpose: asked the weather in Tashkent (2026-09-28), it had
+#: today's, where Exa's pages had a different day's. It does not read this
+#: prompt, and it cites anyway — so the citations are taken out (_uncited).
+_WEB_PROMPT = (
+    "Вот что сейчас нашлось в интернете по его вопросу. Скажи главное своими "
+    "словами, коротко, как человек за столом: без ссылок, без адресов сайтов и "
+    "без названий источников."
+)
+
+#: A letter of a Cyrillic alphabet that is not Russian — Ukrainian, Kazakh,
+#: Abkhaz… Luna once ended a reply «…видно особенно ясно.АҞӘА» (the rehearsals,
+#: docs/VOICE-MODELS-REHEARSAL.md): a glitch, not a word, and the voice would
+#: have read it out. He speaks Russian, and no Russian word has one of these
+#: letters, so a word that does is taken out whole — before anybody hears it,
+#: sees it, or remembers it.
+_NOT_RUSSIAN = re.compile(r"\w*[\u0400\u0402-\u040F\u0450\u0452-\u045F\u0460-\u052F]\w*")
+
+#: What OpenAI's own search leaves in the text: a whole citation — « ([nuz.uz]
+#: (https://…))», one link or several — a link inside a sentence, whose words
+#: are kept, and a bare address. Spoken, each is an address read aloud; kept,
+#: it is a URL in his diary.
+_CITATION = re.compile(r"\s*\((?:\s*\[[^\]\n]{0,80}\]\([^)\s]{0,500}\)[,;]?)+\s*\)")
+_LINK = re.compile(r"\[([^\]\n]{1,80})\]\([^)\s]{0,500}\)")
+_ADDRESS = re.compile(r"\s*\(?https?://[^\s)]+\)?")
+
+
+def _uncited(text: str) -> str:
+    return _ADDRESS.sub("", _LINK.sub(r"\1", _CITATION.sub("", text)))
+
 
 # Capped so one question can't spiral into many searches.
 _WEB_SEARCH_TOOL = {"type": "web_search_20260209", "name": "web_search", "max_uses": 3}
@@ -127,6 +179,110 @@ def wants_fresh_info(text: str) -> bool:
     if not any(hint in lowered for hint in _FRESH_INFO_HINTS):
         return False
     return any(a in lowered for a in _ASKING)
+
+
+def via_openrouter(model: str) -> bool:
+    """An OpenRouter id («openai/gpt-5.6-luna») has a «/»; a Claude id does not."""
+    return "/" in (model or "")
+
+
+def _get_router() -> httpx.AsyncClient:
+    """One client for the whole process, so each turn reuses a warm connection
+    instead of paying a TLS handshake before the first word."""
+    global _router
+    if not config.OPENROUTER_API_KEY:
+        raise RuntimeError(
+            "OPENROUTER_API_KEY is not set — the voice (OpenRouter) is not configured."
+        )
+    if _router is None:
+        _router = httpx.AsyncClient(
+            base_url=ROUTER_URL,
+            headers={"Authorization": f"Bearer {config.OPENROUTER_API_KEY}"},
+            # A stall detector, like _LIVE_REPLY_TIMEOUT on the Claude side: the
+            # read timeout resets on every chunk that arrives.
+            timeout=httpx.Timeout(_LIVE_REPLY_TIMEOUT, connect=10.0),
+        )
+    return _router
+
+
+def _router_body(history, system_stable: str, system_variable: str, *,
+                 web: bool = False) -> dict:
+    """The Claude path's prompt and history, in OpenAI's shape.
+
+    One system message, the stable half first: OpenAI caches the longest
+    prefix that repeats, so the head that is identical every turn is still the
+    part that is paid for once."""
+    system = system_stable
+    if system_variable.strip():
+        system = f"{system_stable}\n\n{system_variable}"
+    body: dict = {
+        "model": config.CHAT_MODEL,
+        "max_tokens": config.MAX_REPLY_TOKENS,
+        "messages": [{"role": "system", "content": system}, *_conversation(history)],
+        "stream": True,
+    }
+    if web:
+        body["plugins"] = [{"id": "web", "max_results": 3, "search_prompt": _WEB_PROMPT}]
+    return body
+
+
+def _router_failed(status: int, text: str) -> RuntimeError:
+    """OpenRouter's refusal in words that say what to do. 402 is named because
+    its own text («Prompt tokens limit exceeded») sends you to shorten a prompt
+    that is fine: the account is empty."""
+    if status == 402:
+        return RuntimeError("OpenRouter: на счету кончились деньги (402) — "
+                            "пополни openrouter.ai/credits")
+    return RuntimeError(f"OpenRouter: {status} — {text[:300]}")
+
+
+async def _router_reply(history, system_stable: str, system_variable: str, *,
+                        web: bool) -> str:
+    """The whole reply, read off the stream — as the Claude path does, and for
+    the same reason: the live-reply timeout stays a stall detector. A search
+    that is slow but working keeps sending; only a dead line is cut off."""
+    text = ""
+    async for text in _router_stream(history, system_stable, system_variable, web=web):
+        pass
+    # A search turn is never streamed (main.py), so its sources can be taken
+    # out here, whole, before anyone hears, sees or remembers them.
+    return (_uncited(text) if web else text).strip()
+
+
+async def _router_stream(history, system_stable: str, system_variable: str, *,
+                         web: bool = False):
+    """Server-sent events: «data: {json}» lines, keep-alive comments between
+    them, «data: [DONE]» at the end. Yields the text so far, as stream_reply
+    does — and, if the length limit cut it, one last SHORTER value.
+
+    Cleaning the whole text again on every yield is what keeps it safe for the
+    caller that cuts sentences off it by position: a word can only turn out to
+    be a glitch while it is still being written, at the very end."""
+    text, finish = "", None
+    body = _router_body(history, system_stable, system_variable, web=web)
+    async with _get_router().stream("POST", "/chat/completions", json=body) as r:
+        if r.status_code != 200:
+            raise _router_failed(r.status_code, (await r.aread()).decode("utf-8", "replace"))
+        async for line in r.aiter_lines():
+            if not line.startswith("data:"):
+                continue  # «: OPENROUTER PROCESSING» keep-alives and blank lines
+            data = line[len("data:"):].strip()
+            if data == "[DONE]":
+                break
+            chunk = json.loads(data)
+            if chunk.get("error"):
+                raise RuntimeError(f"OpenRouter: {chunk['error']}")
+            choice = (chunk.get("choices") or [{}])[0]
+            finish = choice.get("finish_reason") or finish
+            piece = (choice.get("delta") or {}).get("content") or ""
+            if piece:
+                text += piece
+                yield _NOT_RUSSIAN.sub("", text)
+    if finish == "length":
+        said = _NOT_RUSSIAN.sub("", text)
+        trimmed = whole_sentences(said)
+        if trimmed != said:
+            yield trimmed
 
 
 def _get_client() -> AsyncAnthropic:
@@ -238,6 +394,9 @@ async def generate_reply(
     fresh_info:       the message asks about the current world → attach web
                       search and run on the bigger model that supports it.
     """
+    if via_openrouter(config.CHAT_MODEL):
+        return await _router_reply(history, system_stable, system_variable, web=fresh_info)
+
     client = _get_client()
 
     model = config.BRAIN_MODEL if fresh_info else config.CHAT_MODEL
@@ -286,6 +445,11 @@ async def stream_reply(
     back. Those turns are rare and inherently slow, so main.py sends them down
     the whole-reply path instead.
     """
+    if via_openrouter(config.CHAT_MODEL):
+        async for text in _router_stream(history, system_stable, system_variable):
+            yield text
+        return
+
     client = _get_client()
     text = ""
     async with client.messages.stream(

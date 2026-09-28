@@ -4,8 +4,9 @@ Run it from the `backend` folder, with your virtual environment active:
 
     python check_keys.py
 
-It reads your keys from .env, gently pings Claude and OpenAI, and tells you in
-plain words whether each one works. It never prints the key itself.
+It reads your keys from .env, gently pings Claude, OpenAI and the model he
+talks with, and tells you in plain words whether each one works. It never
+prints the key itself.
 """
 
 from __future__ import annotations
@@ -87,6 +88,7 @@ def shape_report() -> None:
 
     describe("ANTHROPIC_API_KEY", config.ANTHROPIC_API_KEY, "sk-ant-")
     describe("OPENAI_API_KEY", config.OPENAI_API_KEY, "sk-")
+    describe("OPENROUTER_API_KEY", config.OPENROUTER_API_KEY, "sk-or-")
     if config.FISH_API_KEY:
         describe("FISH_API_KEY", config.FISH_API_KEY, "")
     print()
@@ -117,6 +119,44 @@ def check_claude() -> bool:
             print(f"🧠 Claude (brain): ⚠️ ключ работает, но модель '{config.BRAIN_MODEL}' недоступна")
         else:
             print(f"🧠 Claude (brain): ⚠️ не удалось связаться с Claude ({type(error).__name__})")
+        return False
+
+
+def check_conversation() -> bool:
+    """He actually answers — one real reply from the model he talks with.
+
+    The conversation runs on OpenRouter now (config.CHAT_MODEL), so a Claude
+    key that works says nothing about it. A few tokens, a fraction of a cent.
+    """
+    from app import brain
+
+    model = config.CHAT_MODEL
+    if not brain.via_openrouter(model):
+        return True  # he talks on Claude — check_claude has asked it already
+    if not config.OPENROUTER_API_KEY:
+        print("💬 Разговор: нет ключа в .env  → добавьте OPENROUTER_API_KEY")
+        return False
+    try:
+        said = asyncio.run(brain.generate_reply(
+            [{"role": "user", "content": "Скажи одно слово: привет."}],
+            "Отвечай одним словом.",
+        ))
+        if not said:
+            print(f"💬 Разговор ({model}): ⚠️ ответил пустотой")
+            return False
+        print(f"💬 Разговор ({model}): ✅ отвечает")
+        return True
+    except Exception as error:  # noqa: BLE001 — friendly report, not a crash
+        reason = _classify(error)
+        if reason == "rejected":
+            print("💬 Разговор: ❌ ключ OpenRouter ОТКЛОНЁН — неверный или устаревший")
+        elif reason == "no_credit":
+            print("💬 Разговор: ⚠️ на счету OpenRouter кончились деньги — openrouter.ai/credits")
+        elif reason == "not_found":
+            print(f"💬 Разговор: ⚠️ модели '{model}' нет на OpenRouter")
+        else:
+            print(f"💬 Разговор ({model}): ⚠️ не отвечает")
+        print(f"           {error}")
         return False
 
 
@@ -200,11 +240,12 @@ def main() -> None:
     shape_report()
     print("Проверяю ключи (сами ключи не показываю)…\n")
     brain_ok = check_claude()
+    talk_ok = check_conversation()
     ears_ok = check_openai()
     voice_ok = check_voice()
 
     print()
-    if brain_ok and ears_ok and voice_ok:
+    if brain_ok and talk_ok and ears_ok and voice_ok:
         print("✅ Всё готово — откройте http://localhost:8000 и поговорите с Бобом.")
     else:
         print("Исправьте пункт(ы) с ❌/⚠️ выше и запустите проверку снова.")

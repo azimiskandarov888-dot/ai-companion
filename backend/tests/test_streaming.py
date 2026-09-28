@@ -17,7 +17,7 @@ import json
 import pytest
 from fastapi.testclient import TestClient
 
-from app import (brain, config, db, emergency, identity, learn, main, memory,
+from app import (body, brain, config, db, emergency, identity, learn, main, memory,
                  safety, stt, tts)
 
 TOKEN = "aVerYlOngRandomLookingTokenFromTheKeychain_0123456789"
@@ -405,6 +405,80 @@ def test_a_fragment_that_is_only_a_direction_is_skipped_not_spoken(client, monke
     assert not any(e["kind"] == "trouble" for e in events)
     spoken_aloud = " ".join(e["text"] for e in events if e["kind"] == "say")
     assert "пауза" not in tts.spoken(spoken_aloud)
+
+
+# --------------------------------------------------------------------------- #
+# His sounds: heard, never shown, never remembered
+# --------------------------------------------------------------------------- #
+@pytest.fixture
+def plays_sounds(client, monkeypatch):
+    """A voice that makes his sounds — and every text it was handed."""
+    monkeypatch.setattr(config, "TTS_PROVIDER", "openrouter")
+    monkeypatch.setattr(config, "FISH_MODEL", "s2.1-pro")
+    voiced: list[str] = []
+
+    async def voice(text, voice=None, *, rate=1.0):
+        voiced.append(text)
+        return b"MP3"
+
+    monkeypatch.setattr(tts, "synthesize", voice)
+    return voiced
+
+
+def test_his_cough_is_heard_and_never_shown_or_remembered(client, plays_sounds, monkeypatch):
+    reply = f"Доброе утро. {body.MARK_COUGH} Как спалось?"
+
+    async def coughs(history, s, v=""):
+        for i in range(1, len(reply) + 1, 5):
+            yield reply[:i]
+        yield reply
+
+    monkeypatch.setattr(brain, "stream_reply", coughs)
+    events = _lines(_talk(client, AUTH))
+
+    assert any(body.MARK_COUGH in text for text in plays_sounds)
+    assert all("//" not in e["text"] for e in events if e["kind"] == "say")
+    assert events[-1]["reply"] == "Доброе утро. Как спалось?"
+    assert memory.recent_turns(UID)[-1]["content"] == "Доброе утро. Как спалось?"
+
+
+def test_the_whole_reply_path_plays_it_too(client, plays_sounds, monkeypatch):
+    async def laughs(history, s, v="", *, fresh_info=False):
+        return f"{body.MARK_LAUGH} Ну ты даёшь. Правда?"
+
+    monkeypatch.setattr(brain, "generate_reply", laughs)
+    r = _talk(client, {"Authorization": f"Bearer {TOKEN}"})
+
+    assert plays_sounds == [f"{body.MARK_LAUGH} Ну ты даёшь. Правда?"]
+    assert r.json()["reply"] == "Ну ты даёшь. Правда?"
+
+
+def test_he_is_offered_only_the_sounds_his_voice_will_make(client, plays_sounds, monkeypatch):
+    """A laugh, because this voice plays one. Never a sneeze: no voice here can
+    make it, and a sneeze nobody hears is an «извини» out of nowhere."""
+    told: list[str] = []
+    asked: list[dict] = []
+    real_block = body.block
+
+    def block(user_id, **kw):
+        asked.append(kw)
+        return real_block(user_id, **kw)
+
+    async def listens(history, s, v=""):
+        told.append(v)
+        yield "Ну да."
+
+    monkeypatch.setattr(body, "block", block)
+    monkeypatch.setattr(brain, "stream_reply", listens)
+    _talk(client, AUTH)
+    assert asked[-1]["may_sneeze"] is False and asked[-1]["can_laugh"] is True
+    assert body.MARK_LAUGH in told[-1]
+
+    # The phone's own voice plays nothing — so nothing is offered.
+    monkeypatch.setattr(tts, "configured", lambda: False)
+    _talk(client, AUTH)
+    assert asked[-1]["can_laugh"] is False
+    assert body.MARK_LAUGH not in told[-1]
 
 
 # --------------------------------------------------------------------------- #

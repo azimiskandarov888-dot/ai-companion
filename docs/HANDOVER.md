@@ -4,7 +4,7 @@ Everything a new session needs to work on this project without re-deriving it
 or re-litigating decisions that are already made. Written 2026-09-17 on branch
 `claude/gallant-bardeen-0l6ff0`; revised through 2026-09-23 on
 `claude/awesome-planck-wdj4hu`, which is where all current work lives.
-**1003 tests pass.** Every number below was measured by running the code, not
+**1035 tests pass.** Every number below was measured by running the code, not
 estimated; where something is an estimate it says so.
 
 **What the last stretch was about.** Nine of the ten must-fix items are closed.
@@ -22,8 +22,8 @@ the others were written earlier and some of them have drifted.
 
 | Document | Trust |
 |---|---|
-| `VOICE-MODELS-REHEARSAL.md` | **which voice for the conversation**, from 24 rehearsed first meetings — each model's pros and cons in plain words; GPT-5.6 Luna best, Gemini 3.5 Flash-Lite second (2026-09-27) |
-| `SOUNDS.md` | **proposal, awaiting the owner**: his coughs, sighs, laughs and yawns made by the voice itself (our markers → Fish S2.1 tags), the world around him as a quiet loop played by the phone |
+| `VOICE-MODELS-REHEARSAL.md` | **which voice for the conversation**, from 24 rehearsed first meetings — each model's pros and cons in plain words; GPT-5.6 Luna best, Gemini 3.5 Flash-Lite second (2026-09-27). **The owner chose Luna; it is the voice since 2026-09-28** |
+| `SOUNDS.md` | his coughs, «кхм», sighs, laughs and yawns made by the voice itself (our markers → Fish S2.1 tags) — **layer 1 built 2026-09-28**, and what listening showed; layer 2, the world around him as a quiet loop played by the phone, waits for the iOS screen |
 | `FIRST-MEETING.md` | **the plan that replaces the intake interview** — owner's decisions of 2026-09-26; step 1 (the conversation) built and rehearsed 2026-09-27, steps 2–3 ahead |
 | `BOUNDARIES.md`, `AUDIT-2026-09.md` | current, evidence-backed |
 | `VISION.md`, `README.md` | corrected today; the rest is older but sound |
@@ -168,6 +168,8 @@ Do not reopen these without being asked.
 | **The rules stay a file you can read, plus mechanisms in code. No fine-tuning.** Four reasons, in order of weight: a fine-tune trained on our own prompt's output can at best COPY it and never exceed it; Anthropic has no fine-tuning API, so it means leaving Claude for a small model that writes worse Russian; catastrophic forgetting is documented and shows up where you did not test; and weights cannot be read, diffed, or fixed by one line with a test | settled 2026-09-22 |
 | **The constitution gets CUT, from 26,348 chars to ~8,000.** This is the whole answer to the 94/6 problem. Fine-tuning would have removed the last ~3,000 tokens for a month of work and no way back | **done 2026-09-23: 10,385 chars**, ~6,000 tokens off every request (estimate). Awaiting the owner's ear (§13.1) |
 | **Claude is out of the candidate list for the VOICE.** Owner's call on cost, and the observation is real. One caveat recorded in `tryout.py`: the audition runs uncached, so it charged ~4× what the app would. Still the dearest of the five | owner's call 2026-09-23 |
+| **The voice is GPT-5.6 Luna**, through OpenRouter — chosen from 24 rehearsed first meetings: the best Russian and the best listener, calm with somebody who answers in one word, among the cheapest. The watcher stays on Claude on purpose (`config.SAFETY_MODEL`) | done 2026-09-28 (`brain.py`, `docs/VOICE-MODELS-REHEARSAL.md`) |
+| **His sounds are PLAYED, not read** — a cough, «кхм», a sigh, a laugh, a yawn, made in his own voice (Fish S2.1) from our markers, never a recording of somebody else's; a sound no voice can make (a sneeze) is not offered at all | layer 1 done 2026-09-28 (`tts.SOUNDS`, `docs/SOUNDS.md`) |
 | **The model is chosen BY EAR, on the real prompt.** A 50-phrase scored set was proposed and the owner replaced it with listening himself — correctly: no published benchmark measures warm ordinary Russian said to a lonely person, and the ear is the instrument that does | owner's call (`tryout.py`) |
 | One background agent at a time — credits are limited | working constraint |
 
@@ -214,8 +216,8 @@ These are not style preferences. They have each been earned by a bug.
 |---|---|---|---|
 | ① | **Ears** — speech to text | `whisper-1` | **stale**; Deepgram Nova-3 Flux recommended, needs a key |
 | ② | **Watchman** — danger in the person's words | Haiku 4.5 | runs as a task; **does not hold up the answer** |
-| ③ | **Voice** — the companion speaking | Haiku 4.5 | 0.82 s to first token — best in the field |
-| ④ | **Mouth** — text to speech | Fish Audio | #1 on TTS-Arena2; `s1` configured, `s2-pro` is newer |
+| ③ | **Voice** — the companion speaking | GPT-5.6 Luna, via OpenRouter | ~1.0 s to first words (short prompt, 2026-09-28); to measure on the real one |
+| ④ | **Mouth** — text to speech | Fish Audio `s2.1-pro` | #1 on TTS-Arena2; makes his sounds. Direct (`fish`) or on the OpenRouter key (`TTS_PROVIDER=openrouter`) |
 
 **The watchman never blocks.** It used to be awaited before the prompt could be
 assembled, so every person who was fine paid for it in silence. Now the reply
@@ -291,17 +293,20 @@ with least breadth; it is on Opus 5 at low effort now.
 
 ### Two out-of-band markers
 
-The model writes these on their own line; they are stripped before a single
-syllable is spoken and before anything is remembered.
+Neither kind is ever shown or remembered. The goodbye is never spoken either;
+his body's markers are PLAYED by a voice that can make the sound, and removed
+for any other.
 
 - **`//КОНЕЦ//`** — "they are saying goodbye, stop listening". Deliberately not
   a keyword list: matching «пока» fires on «пока не знаю» and misses every real
   goodbye without the word. Judging whether somebody is leaving is what a model
   is good at and a regex is hopeless at.
-- **`//КАШЕЛЬ//`, `//КХМ//`, `//ЗЕВОК//`, `//ЧИХ//`** — his body. `body.py`
-  gives him the *fact* («в горле першит»); whether that becomes a cough, and
-  where, is his — a sentence somebody is halfway through telling you about
-  their dead wife is never the place.
+- **`//КАШЕЛЬ//`, `//КХМ//`, `//ВЗДОХ//`, `//ЗЕВОК//`, `//СМЕХ//`, `//ЧИХ//`** —
+  his body. `body.py` gives him the *fact* («в горле першит»); whether that
+  becomes a cough, and where, is his — a sentence somebody is halfway through
+  telling you about their dead wife is never the place. `tts.SOUNDS` turns each
+  into the tag Fish S2 plays; the laugh and the sneeze are offered only to a
+  voice that can make them, and no voice makes a sneeze yet.
 
 ---
 
@@ -325,6 +330,11 @@ Three things worth knowing:
 3. **Russian voice costs twice what English does.** Fish bills per UTF-8
    *byte*, and Cyrillic is two bytes per letter: the same conversation is
    $0.29 in Russian and $0.21 in English.
+
+These were measured with Haiku as the voice. Luna, the voice since 2026-09-28,
+spoke its first words in ~1.0 s through OpenRouter on a short prompt and is
+among the cheapest of the rehearsed five; both still want measuring on the
+real prompt, in the app.
 
 ---
 
@@ -566,6 +576,18 @@ the reason the tests that now hold them exist.
     `_parse_json` returned `{}`, the batch was marked read, and nothing was
     kept — least of all his own words about himself, which come last.
     `learn.SCRIBE_TOKENS` is 2,500; only what is written is paid for.
+16. ~~**Luna now and then ends a reply with letters Russian does not have**~~
+    — «…видно особенно ясно.АҞӘА», read aloud as gibberish. Fixed
+    2026-09-28: `brain._NOT_RUSSIAN` takes such a word out whole, before
+    anybody hears, sees or remembers it.
+17. ~~**OpenAI's own web search cites its sources as links**~~, asked not to
+    or not — «([nuz.uz](https://…))» on the first real search turn. Fixed:
+    `brain._uncited` takes them out of a search turn's reply.
+18. **Choose his two voices by ear** (`FISH_VOICE_ID`, `FISH_VOICE_ID_FEMALE`).
+    Both are empty: with no id Fish picks its own voice, and every woman
+    companion speaks as a man. Listening showed the «Спокойный женский голос»
+    the sound tests used (`2a1036d6…`) comes out low and is heard as a man;
+    «Молодой Женский Голос» (`d567e990…`) is plainly a woman.
 
 ## 11. Deliberately NOT done, and why
 
@@ -581,9 +603,9 @@ the reason the tests that now hold them exist.
   fixed by ordering instead. The hypothesis that would have justified the
   module ("his body doesn't know about his week") was **checked and found
   false**: `life.block` already emits «Как это слышно: гнусавит, шмыгает».
-- **Model swaps** (Deepgram for ears, Mistral Large for the reader, GPT-5.6
-  Luna for the voice). All need vendor keys and measurement. Untested vendor
-  code is worse than none.
+- **Model swaps** (Deepgram for ears, Mistral Large for the reader). Both need
+  vendor keys and measurement. Untested vendor code is worse than none. (Luna
+  for the voice is done — 24 rehearsed meetings first, 2026-09-28.)
 - ~~**Cutting the constitution.**~~ **Done** 2026-09-23 (§4). What changed the answer was working out where the win actually
   is: 12,500 tokens per request today, ~5,500 after the cut, ~2,400 if the
   rules were baked into weights. **The first step is bigger than the second**,
@@ -647,7 +669,7 @@ the reason the tests that now hold them exist.
   Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
   Claude-Session: https://claude.ai/code/session_018PiV38FZMupJ19foghBRZm
   ```
-- **Tests:** `cd backend && python -m pytest -q`. **1003 pass.** The suite is the
+- **Tests:** `cd backend && python -m pytest -q`. **1035 pass.** The suite is the
   design record — test docstrings carry the *reasoning*, including what went
   wrong before. Read the docstring before changing an assertion; several tests
   exist because a previous fix was subtly wrong.
@@ -728,7 +750,15 @@ the reason the tests that now hold them exist.
 7. **The scribe, the reader and the matchmaker are still on Claude.** They run
    rarely — once a conversation, once in a friend's life — so they are a small
    part of the bill, and there quality of writing decides rather than price per
-   turn. Left alone deliberately until the voice is chosen.
+   turn. Left alone deliberately until the voice was chosen — it is now
+   (Luna, 2026-09-28), so this is the next question.
+8. **One key for everything?** The voice and his sounds now run on the
+   OpenRouter key. The ears (Whisper), the watcher, the scribe, the reader and
+   the writer still need OpenAI and Anthropic keys of their own. Move them to
+   OpenRouter too, or keep those vendors direct?
+9. **The history window.** He is given the last twelve lines; at the end of a
+   long first meeting that is why a model re-asks and introduces itself again.
+   Twelve → thirty? (Asked 2026-09-27, still open.)
 
 ---
 

@@ -12,7 +12,17 @@ from __future__ import annotations
 
 import asyncio
 
-from app import brain
+import pytest
+
+from app import brain, config
+
+
+@pytest.fixture(autouse=True)
+def _on_claude(monkeypatch):
+    """Everything in this file is the Claude path. The voice itself went to
+    OpenRouter (tests/test_router.py), and a reply goes wherever CHAT_MODEL
+    points — so this file points it at Claude."""
+    monkeypatch.setattr(config, "CHAT_MODEL", "claude-haiku-4-5")
 
 # --------------------------------------------------------------------------- #
 # A minimal stand-in for the Anthropic SDK, just enough to see what a call

@@ -16,8 +16,8 @@ import re
 import pytest
 from fastapi.testclient import TestClient
 
-from app import (brain, companion, db, erase, identity, learn, main, meeting, memory,
-                 persona, tts, young)
+from app import (body, brain, companion, db, erase, identity, learn, main, meeting,
+                 memory, persona, tts, young)
 
 U = "u1"
 
@@ -280,6 +280,26 @@ def test_a_hello_nobody_heard_is_not_kept(hello, monkeypatch):
     monkeypatch.setattr(tts, "synthesize", broken_voice)
     assert client.post("/api/hello", headers=AUTH).status_code == 503
     assert memory.recent_turns(UID) == []
+
+
+def test_a_sigh_in_his_hello_is_heard_and_not_kept(hello, monkeypatch):
+    client, _calls = hello
+    voiced: list[str] = []
+
+    async def sighs(history, system_stable, system_variable="", *, fresh_info=False):
+        return f"{body.MARK_SIGH} Привет. У нас тут весь день дождь."
+
+    async def voice(text, voice=None, *, rate=1.0):
+        voiced.append(text)
+        return b"FAKEMP3"
+
+    monkeypatch.setattr(brain, "generate_reply", sighs)
+    monkeypatch.setattr(tts, "synthesize", voice)
+    said = client.post("/api/hello", headers=AUTH).json()["reply"]
+
+    assert voiced == [f"{body.MARK_SIGH} Привет. У нас тут весь день дождь."]
+    assert said == "Привет. У нас тут весь день дождь."
+    assert memory.recent_turns(UID) == [{"role": "assistant", "content": said}]
 
 
 def test_the_turn_prompt_tells_him_to_say_his_name_once_it_is_time(hello, monkeypatch):

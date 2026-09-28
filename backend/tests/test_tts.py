@@ -1,8 +1,14 @@
-"""The voice (TTS): provider selection (Fish Audio default, ElevenLabs, or none)."""
+"""The voice (TTS): provider selection (Fish Audio default, ElevenLabs, or none),
+and his sounds — played by a voice that can make them, removed by one that can't."""
 
 from __future__ import annotations
 
-from app import config, tts
+import asyncio
+import json
+
+import httpx
+
+from app import body, config, tts
 
 
 def test_fish_is_configured_when_key_present(monkeypatch):
@@ -79,3 +85,117 @@ def test_a_broken_speed_setting_does_not_silence_him_either():
     assert tts._base_speed("") == 1.0
     assert tts._base_speed("не число") == 1.0
     assert tts._base_speed("0.95") == 0.95
+
+
+# --------------------------------------------------------------------------- #
+# His sounds
+# --------------------------------------------------------------------------- #
+def _fish_s2(monkeypatch, provider: str = "openrouter") -> None:
+    monkeypatch.setattr(config, "TTS_PROVIDER", provider)
+    monkeypatch.setattr(config, "FISH_MODEL", "s2.1-pro")
+    monkeypatch.setattr(config, "OPENROUTER_API_KEY", "test-key")
+    monkeypatch.setattr(config, "FISH_API_KEY", "test-key")
+
+
+def test_a_cough_is_played_not_read():
+    said = tts.spoken(f"Горло уже {body.MARK_COUGH} извини. Так вот.", sounds=True)
+    assert said == "Горло уже [cough] извини. Так вот."
+
+
+def test_every_sound_is_one_of_his_markers_and_a_tag_in_brackets():
+    """Brackets, never parentheses: «(clears throat)» came out as «Силле…
+    строт», and «(yawning)» was spelled out letter by letter."""
+    for mark, tag in tts.SOUNDS.items():
+        assert mark in body.MARKERS
+        assert tag.startswith("[") and tag.endswith("]")
+        assert tts.spoken(f"Ну. {mark} Да.", sounds=True) == f"Ну. {tag} Да."
+
+
+def test_a_sound_the_voice_cannot_make_is_removed_not_read():
+    """A sneeze came out as a sniff — so it is not in the table, and a marker
+    that is not in the table is taken out, exactly as before."""
+    assert body.MARK_SNEEZE not in tts.SOUNDS
+    assert tts.spoken(f"{body.MARK_SNEEZE} Ой, извини.", sounds=True) == "Ой, извини."
+
+
+def test_brackets_he_writes_himself_never_reach_the_voice_as_a_tag():
+    """The voice acts on whatever is in square brackets. Only OUR tags may get
+    there; a «[whispers]» of the model's own is removed as it always was."""
+    assert tts.spoken("[whispers] Слушай. [laughs] Да.", sounds=True) == "Слушай. Да."
+
+
+def test_a_sound_inside_a_stage_direction_goes_with_it():
+    said = tts.spoken(f"Да. *{body.MARK_SIGH} смотрит в окно* Ну вот.", sounds=True)
+    assert said == "Да. Ну вот."
+    assert "\x00" not in said
+
+
+def test_without_sounds_every_marker_is_removed():
+    for mark in body.MARKERS:
+        assert tts.spoken(f"Ну. {mark} Да.") == "Ну. Да."
+
+
+def test_only_fish_s2_speaking_from_the_server_makes_them(monkeypatch):
+    _fish_s2(monkeypatch)
+    assert tts.makes_sounds()
+    assert tts.makes(body.MARK_COUGH) and tts.makes(body.MARK_LAUGH)
+    assert not tts.makes(body.MARK_SNEEZE)
+    monkeypatch.setattr(config, "TTS_PROVIDER", "fish")
+    assert tts.makes_sounds()
+    # The old model plays nothing.
+    monkeypatch.setattr(config, "FISH_MODEL", "s1")
+    assert not tts.makes_sounds()
+    # No server voice: the phone speaks, and it cannot.
+    monkeypatch.setattr(config, "FISH_MODEL", "s2.1-pro")
+    monkeypatch.setattr(config, "FISH_API_KEY", None)
+    assert not tts.makes_sounds()
+    monkeypatch.setattr(config, "TTS_PROVIDER", "openai")
+    monkeypatch.setattr(config, "OPENAI_API_KEY", "test-key")
+    assert not tts.makes_sounds()
+
+
+def test_a_lone_cough_is_something_to_say_only_to_a_voice_that_makes_it(monkeypatch):
+    _fish_s2(monkeypatch)
+    assert tts.audible(body.MARK_COUGH)
+    assert not tts.audible("*пауза*")
+    monkeypatch.setattr(config, "FISH_MODEL", "s1")
+    assert not tts.audible(body.MARK_COUGH)
+
+
+def test_the_sound_reaches_the_voice_through_openrouter(monkeypatch):
+    _fish_s2(monkeypatch)
+    sent: list[httpx.Request] = []
+
+    def answer(request: httpx.Request) -> httpx.Response:
+        sent.append(request)
+        return httpx.Response(200, content=b"MP3")
+
+    real = httpx.AsyncClient
+    monkeypatch.setattr(tts.httpx, "AsyncClient",
+                        lambda **kw: real(transport=httpx.MockTransport(answer), **kw))
+    audio = asyncio.run(tts.synthesize(f"Горло {body.MARK_COUGH} извини.", "voice-id"))
+
+    assert audio == b"MP3"
+    [request] = sent
+    assert str(request.url) == "https://openrouter.ai/api/v1/audio/speech"
+    assert request.headers["authorization"] == "Bearer test-key"
+    assert json.loads(request.content) == {
+        "model": "fish-audio/s2.1-pro",
+        "input": "Горло [cough] извини.",
+        "response_format": "mp3",
+        "voice": "voice-id",
+    }
+
+
+def test_a_woman_keeps_her_voice_through_openrouter(monkeypatch):
+    monkeypatch.setattr(config, "TTS_PROVIDER", "openrouter")
+    monkeypatch.setattr(config, "FISH_VOICE_ID_FEMALE", "her-voice")
+    assert tts.voice_for({"gender": "женский"}) == "her-voice"
+
+
+def test_openrouter_is_configured_by_its_key(monkeypatch):
+    monkeypatch.setattr(config, "TTS_PROVIDER", "openrouter")
+    monkeypatch.setattr(config, "OPENROUTER_API_KEY", "test-key")
+    assert tts.configured()
+    monkeypatch.setattr(config, "OPENROUTER_API_KEY", None)
+    assert not tts.configured()

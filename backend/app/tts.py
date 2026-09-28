@@ -1,6 +1,6 @@
 """The mouth: text-to-speech.
 
-Four providers, chosen by config.TTS_PROVIDER:
+Five providers, chosen by config.TTS_PROVIDER:
   - "yandex"     Yandex SpeechKit — Russian voices made BY Russians for
                  Russian. Best prosody of the lot on Russian text, and by some
                  distance the cheapest for it. The right default for this app.
@@ -10,7 +10,18 @@ Four providers, chosen by config.TTS_PROVIDER:
   - "fish"       Fish Audio — excellent model, but see the cost note below
                  before choosing it for Russian.
   - "elevenlabs" ElevenLabs — warmest, and several times the price.
+  - "openrouter" Fish Audio through OpenRouter — the same voice, on the one
+                 key the owner has.
 All return MP3 bytes, so the rest of the app doesn't care which spoke.
+
+── HIS SOUNDS ──────────────────────────────────────────────────────────────
+
+A cough, «кхм», a sigh, a laugh, a yawn — played, not read. The model writes
+our own markers (body.py) where the sound happens; here, on the way to a voice
+that can make it, each becomes that voice's tag, and it is made in HIS voice,
+with his breath, in his room — never a recording of somebody else's cough,
+which is heard at once as a sound effect. On any voice that cannot make it,
+the marker is removed, exactly as before. See docs/SOUNDS.md.
 
 ── WHAT RUSSIAN ACTUALLY COSTS ─────────────────────────────────────────────
 
@@ -50,6 +61,7 @@ import httpx
 from . import body, companion, config
 
 _FISH_API_URL = "https://api.fish.audio/v1/tts"
+_ROUTER_TTS_URL = "https://openrouter.ai/api/v1/audio/speech"
 _ELEVENLABS_API_BASE = "https://api.elevenlabs.io/v1/text-to-speech"
 _OPENAI_TTS_URL = "https://api.openai.com/v1/audio/speech"
 _YANDEX_TTS_URL = "https://tts.api.cloud.yandex.net/speech/v1/tts:synthesize"
@@ -194,6 +206,7 @@ def voice_for(persona: dict | None) -> str | None:
         "yandex": config.YANDEX_VOICE_FEMALE,
         "openai": config.OPENAI_VOICE_FEMALE,
         "fish": config.FISH_VOICE_ID_FEMALE,
+        "openrouter": config.FISH_VOICE_ID_FEMALE,
         "elevenlabs": config.ELEVENLABS_VOICE_ID_FEMALE,
     }.get(config.TTS_PROVIDER, "")
     # Unset → fall back rather than fail. A wrong-sounding voice is bad; a
@@ -223,6 +236,12 @@ _STAGE_DIRECTIONS = (
     re.compile(r"\[[^\]\n]{1,60}\]"),
 )
 
+#: A link, whole — «[сайт](https://…)» — or a bare address. A web-search turn
+#: has its sources taken out before it gets here (brain._uncited), and this is
+#: the net under that: an address read aloud is a minute of «эйч ти ти пи эс
+#: двоеточие».
+_LINKS = re.compile(r"\[[^\]\n]{0,80}\]\([^)\s]{0,300}\)|\(?https?://[^\s)]+\)?")
+
 #: Anything a voice would either mispronounce or read as a word.
 _UNSPEAKABLE = re.compile(
     r"[#`~|<>{}\\^]"                       # markdown and code punctuation
@@ -233,8 +252,47 @@ _UNSPEAKABLE = re.compile(
 _BULLET = re.compile(r"(?m)^\s*[-•*]\s+")
 
 
-def spoken(text: str) -> str:
-    """The text with everything that was never meant to be heard removed."""
+#: His markers → what Fish S2 plays instead of reading. Chosen by listening
+#: (2026-09-28, docs/SOUNDS.md): each synthesised inside a Russian sentence, in
+#: more than one voice, and heard back. Brackets, never parentheses —
+#: «(clears throat)» came out as «Силле… строт» and «(yawning)» was spelled
+#: letter by letter. A laugh plays at the START of a sentence, in a man's voice
+#: and a woman's; in the middle of one only now and then — so he is told to put
+#: it there. A yawn sometimes comes out as a tired sigh, which is a fine thing
+#: for a yawn to become. A sneeze could not be made at all — it came out as a
+#: sniff — so it is not here, and nothing that is not here is ever read aloud:
+#: it is removed.
+SOUNDS: dict[str, str] = {
+    body.MARK_COUGH: "[cough]",
+    body.MARK_CLEAR: "[clears throat]",
+    body.MARK_SIGH: "[sigh]",
+    body.MARK_YAWN: "[yawns]",
+    body.MARK_LAUGH: "[laugh]",
+}
+
+
+def makes_sounds() -> bool:
+    """Does the voice that will actually speak make his sounds? Fish S2 does —
+    directly or through OpenRouter. S1, the other providers, and the phone's
+    own voice (no server voice set up) do not."""
+    return (configured()
+            and config.TTS_PROVIDER in ("fish", "openrouter")
+            and config.FISH_MODEL.startswith("s2"))
+
+
+def makes(mark: str) -> bool:
+    """Will this marker be HEARD — rather than quietly removed?"""
+    return makes_sounds() and mark in SOUNDS
+
+
+def audible(text: str) -> bool:
+    """Is there anything in this to put through the voice at all?"""
+    return bool(spoken(text, sounds=makes_sounds()))
+
+
+def spoken(text: str, *, sounds: bool = False) -> str:
+    """The text with everything that was never meant to be heard removed —
+    and, with `sounds`, his markers turned into the sounds the voice makes."""
     # FIRST, before anything else: the farewell marker. It is not punctuation
     # and not a stage direction, and if any later rule got to it first it
     # would leave «КОНЕЦ» behind as a word and he would announce the end of
@@ -245,8 +303,19 @@ def spoken(text: str) -> str:
     # synthesises each fragment as it arrives — long before anything has looked
     # at the finished reply. «Две косые черты кашель» is the worst sound this
     # app could make, and this is the only place that sees every fragment.
-    for mark in body.MARKERS:
-        text = text.replace(mark, " ")
+    # A sound the voice can make is held aside as a token no rule below can
+    # touch — the stage-direction rule would otherwise eat its brackets — and
+    # put back as the voice's tag once everything else is clean.
+    held: dict[str, str] = {}
+    for i, mark in enumerate(body.MARKERS):
+        if sounds and mark in SOUNDS:
+            token = f"\x00{i}\x00"
+            if mark in text:
+                held[token] = SOUNDS[mark]
+            text = text.replace(mark, f" {token} ")
+        else:
+            text = text.replace(mark, " ")
+    text = _LINKS.sub(" ", text)
     for pattern in _STAGE_DIRECTIONS:
         text = pattern.sub(" ", text)
     text = _BULLET.sub("", text)
@@ -255,6 +324,8 @@ def spoken(text: str) -> str:
     # removed direction doesn't leave «слушай , друг».
     text = re.sub(r"[ \t]{2,}", " ", text)
     text = re.sub(r"\s+([,.!?…:;])", r"\1", text)
+    for token, tag in held.items():
+        text = text.replace(token, tag)
     return text.strip()
 
 
@@ -321,8 +392,9 @@ async def synthesize(
     not slowed down would be worse than the ordinary rate, because the watching
     would look as though it had been acted on.
     """
-    # One choke point, so all four providers get this for free.
-    text = spoken(text)
+    # One choke point, so every provider gets this for free — and his sounds
+    # reach only a voice that can make them.
+    text = spoken(text, sounds=makes_sounds())
     if not text:
         raise ValueError("Nothing to say — empty text passed to synthesize().")
 
@@ -332,6 +404,13 @@ async def synthesize(
                 "FISH_API_KEY is not set — the Fish Audio voice is not configured."
             )
         return await _synthesize_fish(text, voice)
+
+    if config.TTS_PROVIDER == "openrouter":
+        if not config.OPENROUTER_API_KEY:
+            raise RuntimeError(
+                "OPENROUTER_API_KEY is not set — the voice (OpenRouter) is not configured."
+            )
+        return await _synthesize_openrouter(text, voice)
 
     if config.TTS_PROVIDER == "openai":
         if not config.OPENAI_API_KEY:
@@ -390,6 +469,30 @@ async def _synthesize_fish(text: str, voice: str | None = None) -> bytes:
         if resp.status_code != 200:
             raise RuntimeError(
                 f"Fish Audio TTS failed ({resp.status_code}): {resp.text[:300]}"
+            )
+        return resp.content
+
+
+async def _synthesize_openrouter(text: str, voice: str | None = None) -> bytes:
+    """Fish Audio through OpenRouter — the same model and the same voice ids,
+    on the OpenRouter key. How his sounds were tested (docs/SOUNDS.md)."""
+    payload: dict = {
+        "model": f"fish-audio/{config.FISH_MODEL}",
+        "input": text,
+        "response_format": "mp3",
+    }
+    chosen = voice or config.FISH_VOICE_ID
+    if chosen:
+        payload["voice"] = chosen
+    async with httpx.AsyncClient(timeout=60.0) as http:
+        resp = await http.post(
+            _ROUTER_TTS_URL,
+            headers={"Authorization": f"Bearer {config.OPENROUTER_API_KEY}"},
+            json=payload,
+        )
+        if resp.status_code != 200:
+            raise RuntimeError(
+                f"OpenRouter voice failed ({resp.status_code}): {resp.text[:300]}"
             )
         return resp.content
 

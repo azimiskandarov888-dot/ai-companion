@@ -134,6 +134,7 @@ async def health(user_id: str = Depends(_user)) -> JSONResponse:
             "has_companion": persona.has_persona(user_id),
             "language": config.LANGUAGE,
             "brain_model": config.BRAIN_MODEL,
+            "chat_model": config.CHAT_MODEL,
             "tts_provider": tts.provider_name(),
             "services": services,
             "all_ready": all(services.values()),
@@ -260,13 +261,21 @@ async def _assemble(user_id: str, user_text: str | None) -> tuple[str, str, list
         # How HE is today, carried over from their last exchange and fading on
         # its own since. The one thing in the prompt that is not about her.
         feeling_block=feeling.block(user_id),
-        # His throat and his tiredness — facts about him, never instructions to
-        # cough. The valence is his own mood arriving in his breathing, which is
-        # where a mood actually goes. See body.py.
         # What is going on in his week — a cold, a brother visiting — with its
         # own shape over days. Background, never the topic; see life.py.
         life_block=life.block(user_id),
-        body_block=body.block(user_id, valence=feeling.now(user_id)["valence"]),
+        # His throat and his tiredness — facts about him, never instructions to
+        # cough. The valence is his own mood arriving in his breathing, which is
+        # where a mood actually goes. See body.py. A sneeze or a laugh is
+        # offered only to a voice that can make it: a sneeze nobody hears is
+        # an «извини» out of nowhere, and a laugh it cannot play gets written
+        # as «ха-ха» and read out as a word (tts.SOUNDS).
+        body_block=body.block(
+            user_id,
+            valence=feeling.now(user_id)["valence"],
+            may_sneeze=None if tts.makes(body.MARK_SNEEZE) else False,
+            can_laugh=tts.makes(body.MARK_LAUGH),
+        ),
         # Rules that only apply to the turn in front of him — the game they are
         # playing, the news he asked for. Empty nearly always; see situations.py
         # for why they are no longer read on every turn.
@@ -367,9 +376,8 @@ def _body(user_id: str, reply: str) -> str:
     Called on BOTH reply paths, and the markers must be gone before anything is
     remembered: they exist to move a number in body.py and to tell the voice
     where a cough went, and they belong in neither the conversation log nor the
-    diary. tts.spoken() strips them again on the way to the audio — that is not
-    redundant, it is the streaming path, where a fragment is synthesised long
-    before the finished reply exists to be cleaned.
+    diary. The VOICE is given the text from before this — tts.spoken() turns
+    each marker into the sound it can make, or removes it if it cannot.
     """
     said = body.read_markers(reply, user_id)
     # HIS age, not the listener's. A thirty-four-year-old companion does not get
@@ -467,13 +475,16 @@ async def _think_and_speak(
     if slip:
         vow.note(user_id, slip, said)
         reply = reply or vow.LAST_RESORT
+    # What he SAYS keeps his markers, so the voice can play the cough; what is
+    # remembered and shown never has them.
+    voiced = reply
     reply = _body(user_id, reply)
     # The watcher has been running this whole time, so this costs no wall clock
     # worth measuring — and on danger it replaces the answer outright. Nothing
     # of his is worth saying to a man who is on the floor.
     breaking, verdict = await _breaking_in(watcher, user_id, wait=True)
     if breaking:
-        reply, leaving = breaking, False
+        reply, voiced, leaving = breaking, breaking, False
     _remember(user_id, user_text, reply, background_tasks, farewell=leaving)
 
     # The mouth is optional. With a voice provider configured we return warm
@@ -486,7 +497,7 @@ async def _think_and_speak(
         # app has counted that for months and only ever answered it with a
         # prompt line asking for shorter sentences; the speed is the knob
         # that was actually asked for. See tts.rate_for.
-        audio_bytes = await tts.synthesize(reply, voice, rate=tts.rate_for(user_id))
+        audio_bytes = await tts.synthesize(voiced, voice, rate=tts.rate_for(user_id))
         return {
             "reply": reply,
             "audio_base64": base64.b64encode(audio_bytes).decode("ascii"),
@@ -638,14 +649,17 @@ async def _speak_as_he_thinks(
                 if slip := vow.broken(fragment):
                     vow.note(user_id, slip, fragment)
                     dropped = True
-                elif not speak:
-                    yield _said(fragment, None)
-                    spoken.append(fragment)
                 # A fragment that is nothing BUT a stage direction («*пауза*»)
                 # has nothing left once it's cleaned, and asking the voice to
                 # say nothing is an error. Skip it rather than break the turn.
-                elif tts.spoken(fragment):
-                    yield _said(fragment, await tts.synthesize(fragment, voice, rate=rate))
+                # (A cough on its own is not nothing — to a voice that makes it.)
+                elif not speak or tts.audible(fragment):
+                    # The phone is sent the words; the voice gets them WITH his
+                    # sounds. A marker is heard, never shown.
+                    yield _said(
+                        tts.spoken(fragment),
+                        await tts.synthesize(fragment, voice, rate=rate) if speak else None,
+                    )
                     spoken.append(fragment)
                 # BETWEEN SENTENCES, never before one: has the watcher come
                 # back with something that cannot wait for him to finish? This
@@ -905,6 +919,7 @@ async def hello(user_id: str = Depends(_user)) -> JSONResponse:
     if slip:
         vow.note(user_id, slip, said)
         reply = reply or vow.LAST_RESORT
+    voiced = reply  # with his markers, for the voice — as in _think_and_speak
     reply = _body(user_id, reply)
     if not reply:
         return JSONResponse(nothing)
@@ -912,7 +927,7 @@ async def hello(user_id: str = Depends(_user)) -> JSONResponse:
     spoken = {**nothing, "reply": reply}
     if tts.configured():
         try:
-            audio_bytes = await tts.synthesize(reply, voice, rate=tts.rate_for(user_id))
+            audio_bytes = await tts.synthesize(voiced, voice, rate=tts.rate_for(user_id))
         except Exception as e:  # noqa: BLE001
             raise _unavailable("🗣️ the voice", e)
         spoken.update(audio_base64=base64.b64encode(audio_bytes).decode("ascii"),

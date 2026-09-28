@@ -26,10 +26,13 @@ ANTHROPIC_API_KEY: str | None = os.getenv("ANTHROPIC_API_KEY")
 #   second is a silence the listener sits through, so speed IS the quality.
 #
 # One model for both means either slow conversation or a shallow character.
-# Haiku 4.5 answers noticeably faster than Sonnet and, given a fully written
-# persona to inhabit (it plays the character; it doesn't have to invent one),
-# the warmth survives. If a Mac and budget can take it, CHAT_MODEL=claude-sonnet-5
-# in .env brings the bigger brain back to every turn.
+#
+# THE VOICE IS GPT-5.6 LUNA, through OpenRouter — the owner's choice
+# (2026-09-28) from 24 rehearsed first meetings (docs/VOICE-MODELS-REHEARSAL.md):
+# the best Russian and the best listener of the five, calm with somebody who
+# answers in one word, and among the cheapest. Haiku 4.5, the voice before it,
+# was the most expensive and the least careful of them. A model id with a «/»
+# is sent to OpenRouter; set CHAT_MODEL=claude-haiku-4-5 to go back to Claude.
 #
 # EVERY MODEL ID HERE IS THE UNDATED ALIAS, and that is a rule, not a
 # preference. A dated id pins this app to one snapshot: it keeps answering in
@@ -38,7 +41,9 @@ ANTHROPIC_API_KEY: str | None = os.getenv("ANTHROPIC_API_KEY")
 # front of the person, with no way for them to tell it from the friend having
 # gone. The alias moves; the friend keeps talking.
 BRAIN_MODEL: str = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-5")
-CHAT_MODEL: str = os.getenv("CHAT_MODEL", "claude-haiku-4-5")
+CHAT_MODEL: str = os.getenv("CHAT_MODEL", "openai/gpt-5.6-luna")
+#: The key for every «vendor/model» id — the voice above, and the owner's tools.
+OPENROUTER_API_KEY: str | None = os.getenv("OPENROUTER_API_KEY")
 
 # READING him — once, before he even exists. The deepest work the app does:
 # understanding a person from HOW they wrote, not just what they wrote (see
@@ -98,7 +103,12 @@ READING_EFFORT: str = os.getenv("READING_EFFORT", "high")
 # ("is this person in danger right now?"), a bigger model buys nothing on it,
 # and this runs on every single turn beside a person who may be having a
 # stroke. Cheap and quick is the requirement, not deep.
-SAFETY_MODEL: str = os.getenv("SAFETY_MODEL", CHAT_MODEL)
+#
+# Its OWN default, not the voice's. It used to be CHAT_MODEL — and when the
+# voice moved to OpenRouter, the watcher would have followed it onto a Claude
+# client that cannot call it, failed on every turn, and, because safety.look
+# never raises, quietly answered «no danger» to everybody from then on.
+SAFETY_MODEL: str = os.getenv("SAFETY_MODEL", "claude-haiku-4-5")
 #: Hard ceiling. It runs concurrently with work the turn was doing anyway, so
 #: it normally costs no wall time at all — but a hung connection must never be
 #: what stands between somebody and their answer. Missing the alarm once is
@@ -136,6 +146,8 @@ EMBEDDING_DIM: int = int(os.getenv("EMBEDDING_DIM", "512"))
 #   "fish"       — Fish Audio. Excellent, but bills UTF-8 BYTES, so Russian
 #                  costs double the headline. The current default.
 #   "elevenlabs" — warmest, several times the price.
+#   "openrouter" — Fish Audio (FISH_MODEL) through OpenRouter, on the one key
+#                  the owner has. Exactly how his sounds were tested (docs/SOUNDS.md).
 #   ""/"none"    — no server voice → the client speaks with its own free voice
 #                  (the MVP path).
 # NOTE: this is only the VOICE. The EARS stay on Whisper above — Fish Audio's
@@ -153,9 +165,13 @@ FISH_VOICE_ID: str = os.getenv("FISH_VOICE_ID", "")
 #: empty, a female character speaks in the voice above, which is wrong and
 #: audible.
 FISH_VOICE_ID_FEMALE: str = os.getenv("FISH_VOICE_ID_FEMALE", "")
-# Fish model version, sent as the `model` HTTP header. "s1" is stable; set
-# FISH_MODEL=s2-pro (or the current name) for the newest open-weight model.
-FISH_MODEL: str = os.getenv("FISH_MODEL", "s1")
+# Fish model version — the `model` HTTP header, or «fish-audio/<it>» through
+# OpenRouter. s2.1-pro — Fish's own production model, S1 is legacy — at the
+# same $15 per million bytes. It is the one that can make his SOUNDS: a
+# cough, «кхм», a sigh, a laugh, a yawn, played in his own voice from a tag
+# rather than read out (docs/SOUNDS.md; tts.SOUNDS). S1 cannot, and with it
+# the markers are simply removed as before.
+FISH_MODEL: str = os.getenv("FISH_MODEL", "s2.1-pro")
 
 # ElevenLabs (alternative voice). Used when TTS_PROVIDER=elevenlabs. A warm
 # multilingual voice; default = "Sarah". eleven_multilingual_v2 handles Russian.
@@ -221,6 +237,8 @@ def tts_configured() -> bool:
     """Is the selected voice provider set up? If not, the client speaks free."""
     if TTS_PROVIDER == "fish":
         return bool(FISH_API_KEY)
+    if TTS_PROVIDER == "openrouter":
+        return bool(OPENROUTER_API_KEY)
     if TTS_PROVIDER == "openai":
         return bool(OPENAI_API_KEY)
     if TTS_PROVIDER == "yandex":
@@ -272,7 +290,9 @@ READING_PATH: Path = Path(os.getenv("READING_PATH", DATA_DIR / "reading.json"))
 def service_status() -> dict[str, bool]:
     """Which of the three 'senses' are configured (no secrets exposed)."""
     return {
-        "brain_claude": bool(ANTHROPIC_API_KEY),
+        # Named for what it used to be; the app shows it as «мозг». It is the
+        # key the CONVERSATION needs — OpenRouter's once the voice is there.
+        "brain_claude": bool(OPENROUTER_API_KEY if "/" in CHAT_MODEL else ANTHROPIC_API_KEY),
         "ears_whisper": bool(OPENAI_API_KEY),
         "mouth": tts_configured(),
     }
