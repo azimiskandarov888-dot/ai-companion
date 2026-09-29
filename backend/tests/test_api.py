@@ -47,7 +47,7 @@ def test_health(client):
     data = r.json()
     assert data["ok"] is True
     assert data["companion_name"]
-    assert set(data["services"]) == {"brain_claude", "ears_whisper", "mouth"}
+    assert set(data["services"]) == {"brain_claude", "ears_whisper", "ears_live", "mouth"}
 
 
 def test_index_served(client):

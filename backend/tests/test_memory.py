@@ -581,3 +581,40 @@ def test_the_live_conversation_window_stays_small():
     said = [t["content"] for t in memory.recent_turns("u")]
     assert said[-1] == "реплика 59"
     assert said == sorted(said, key=lambda s: int(s.split()[-1]))
+
+
+# --------------------------------------------------------------------------- #
+# The conversation he is given before a reply
+# --------------------------------------------------------------------------- #
+def _lines(user_id: str, n: int) -> None:
+    for i in range(n):
+        memory.log_turn(user_id, "user" if i % 2 == 0 else "assistant", f"строка {i}")
+
+
+def test_a_whole_first_meeting_fits():
+    """Twelve lines was shorter than a first meeting: the names fell out of it
+    and he introduced himself again."""
+    _lines("w", 30)
+    got = memory.conversation("w")
+    assert len(got) == 30 and got[0]["content"] == "строка 0"
+
+
+def test_the_window_keeps_its_beginning_for_twenty_lines_at_a_time():
+    """So the same beginning is sent turn after turn, and the provider's cache
+    holds all of it; it moves once in twenty lines, never one line a turn."""
+    starts = []
+    for n in range(1, 80):
+        memory.log_turn("s", "user", f"строка {n}")
+        got = memory.conversation("s")
+        assert len(got) >= min(n, memory.WINDOW_MIN)
+        starts.append(got[0]["content"])
+    assert len(set(starts)) == 3          # lines 1–39, 40–59, 60–79
+    assert starts[38] == starts[0] and starts[39] != starts[38]      # moves at 40
+    assert starts[58] == starts[39] and starts[59] != starts[58]     # …and at 60
+
+
+def test_a_draft_sees_the_window_its_turn_will_see():
+    _lines("d", 39)
+    drafted = memory.conversation("d", pending="новая строка")
+    memory.log_turn("d", "user", "новая строка")
+    assert drafted == memory.conversation("d")

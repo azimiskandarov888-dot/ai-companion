@@ -91,18 +91,31 @@ def test_he_is_sent_what_the_meetings_were_rehearsed_on(router):
     [sent] = router.sent
     assert sent["model"] == LUNA
     assert sent["max_tokens"] == config.MAX_REPLY_TOKENS
-    # One system message, the stable head first: OpenAI caches the longest
-    # prefix that repeats.
+    # The character first (cached with the conversation after it); what is true
+    # now LAST, right before the answer, where a model that does not stop to
+    # think still reads it.
     assert sent["messages"] == [
-        {"role": "system", "content": "КТО ТЫ\n\nСЕГОДНЯ"},
+        {"role": "system", "content": "КТО ТЫ"},
         {"role": "user", "content": "привет"},
+        {"role": "system", "content": "СЕГОДНЯ"},
     ]
     assert "plugins" not in sent
 
 
-def test_an_empty_tail_adds_nothing_to_the_head():
+def test_he_goes_to_the_fastest_place_and_does_not_think_first(router):
+    """Left to itself OpenRouter chose where to send him: first words in 1.46 s,
+    against 0.79 s from OpenAI's fast tier (median of three, 2026-09-29) — and
+    Luna now and then reasoned silently for a second before saying anything."""
+    _reply()
+    sent = router.sent[0]
+    assert sent["provider"]["order"][0] == "openai/fast"
+    assert sent["provider"]["allow_fallbacks"] is True     # slower, never silent
+    assert sent["reasoning"] == {"effort": "none"}
+
+
+def test_an_empty_tail_adds_nothing():
     sent = brain._router_body(HEARD, "КТО ТЫ", "  ")
-    assert sent["messages"][0] == {"role": "system", "content": "КТО ТЫ"}
+    assert sent["messages"] == [{"role": "system", "content": "КТО ТЫ"}, *HEARD]
 
 
 def test_a_question_about_the_world_searches_and_is_asked_not_to_cite(router):
@@ -155,15 +168,22 @@ def test_a_reply_cut_off_by_the_limit_ends_on_its_last_whole_sentence(router):
     assert _streamed()[-1] == "Море успокаивает."
 
 
-def test_a_letter_russian_does_not_have_is_never_said(router):
-    """The rehearsals caught Luna ending a reply «…видно особенно ясно.АҞӘА»."""
+def test_a_word_from_another_alphabet_is_never_said(router):
+    """The rehearsals caught Luna ending a reply «…видно особенно ясно.АҞӘА»
+    (Abkhaz) — and, later, «…ожидание разгрузки.อ่านข้อความเต็ม» (Thai)."""
     router.body = _sse(_delta("…видно особенно ясно."), _delta("АҞ"), _delta("ӘА"),
                        _delta("", "stop"))
     assert _reply() == "…видно особенно ясно."
     assert all("Ҟ" not in text and "Ә" not in text for text in _streamed())
-    # Russian, Latin and numbers are left completely alone.
-    ordinary = "Ёлка, YouTube и «Щёлково» — в 2026 году, ё-моё."
-    assert brain._NOT_RUSSIAN.sub("", ordinary) == ordinary
+    assert brain.without_glitches("…ожидание разгрузки.อ่านข้อความเต็ม") == "…ожидание разгрузки."
+    assert brain.without_glitches("Да 你好 ладно.") == "Да  ладно."
+    assert brain.without_glitches("Ну مرحبا!") == "Ну !"
+
+
+def test_russian_latin_and_numbers_are_left_alone():
+    ordinary = ("Ёлка, YouTube и «Щёлково» — в 2026 году, ё-моё. Играю в Riders "
+                "Republic и Stardew Valley. Café, naïve, 25°C, №5, ½, x², вне́шний.")
+    assert brain.without_glitches(ordinary) == ordinary
 
 
 # ── when it goes wrong ─────────────────────────────────────────────────────
@@ -180,6 +200,25 @@ def test_an_error_in_the_middle_of_a_stream_is_not_taken_for_the_end(router):
     router.body = _sse(_delta("Доброе "), {"error": {"message": "provider down"}}, done=False)
     with pytest.raises(RuntimeError, match="provider down"):
         _streamed()
+
+
+def test_a_line_from_a_finished_loop_is_not_reused(monkeypatch):
+    """A tool that runs asyncio.run twice must not be handed a connection from
+    the first, dead loop — but within one loop the line is kept."""
+    monkeypatch.setattr(config, "OPENROUTER_API_KEY", "test-key")
+    monkeypatch.setattr(brain, "_router", None)
+    monkeypatch.setattr(brain, "_router_loop", None)
+
+    async def twice():
+        return brain._get_router(), brain._get_router()
+
+    first, second = asyncio.run(twice())
+    assert first is second
+
+    async def once():
+        return brain._get_router()
+
+    assert asyncio.run(once()) is not first
 
 
 def test_the_line_is_watched_for_stalls_and_the_key_is_named(monkeypatch):

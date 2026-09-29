@@ -5,8 +5,14 @@ companion only ever *responds* — never initiates.
 
 Talking loop (with memory + persona):
     audio → 👂 Whisper → [persona + recalled facts/stories/follow-ups/mood]
-          → 🧠 Claude → 🗣️ Fish Audio → audio
+          → 🧠 the brain → 🗣️ Fish Audio → audio
           → (in the background) learn new memories
+
+The live loop (live.py) is the same turn over one open line: the ears
+(Deepgram Flux) hear the person while they speak, his answer is drafted the
+moment they seem to have finished, and his voice comes back in pieces as it is
+made — ~1.6–2.2 s from the end of their words to his first sound, against
+~6.5 s for the file-at-a-time loop above (measured 2026-09-30).
 
 ── WHO IS TALKING ──────────────────────────────────────────────────────────
 
@@ -21,6 +27,8 @@ existed before multi-user).
 
 Endpoints:
     GET  /            → browser mic test page (a developer tool)
+    GET  /live        → the live channel in a browser (a developer tool)
+    WS   /api/live    → the live channel: sound both ways over one line (live.py)
     GET  /api/health  → which services are configured + this person's memory
     POST /api/talk    → audio in  → {transcript, reply, audio}   (the real loop)
     POST /api/say     → text in   → {reply, audio}   (dev only: test brain+memory)
@@ -53,6 +61,7 @@ from fastapi import (
     Header,
     HTTPException,
     UploadFile,
+    WebSocket,
 )
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
@@ -73,6 +82,7 @@ from . import (
     intake,
     learn,
     life,
+    live,
     matchmaker,
     meeting,
     memory,
@@ -117,6 +127,21 @@ def _user(authorization: str | None = Header(default=None)) -> str:
 @app.get("/")
 async def index() -> FileResponse:
     return FileResponse(_STATIC_DIR / "index.html")
+
+
+@app.get("/live")
+async def live_page() -> FileResponse:
+    """The live channel from a browser — how the owner hears it before the
+    phone does (a developer tool, like the page above)."""
+    return FileResponse(_STATIC_DIR / "live.html")
+
+
+@app.websocket("/api/live")
+async def live_channel(ws: WebSocket) -> None:
+    """The live channel: he hears while you speak and starts on his answer the
+    moment you seem to have finished. The protocol and every decision in it —
+    live.py."""
+    await live.serve(ws)
 
 
 @app.get("/api/health")
@@ -172,17 +197,33 @@ def _unavailable(stage: str, error: Exception) -> HTTPException:
     return HTTPException(status_code=503, detail=f"{stage}: {error}")
 
 
-async def _assemble(user_id: str, user_text: str | None) -> tuple[str, str, list, str | None]:
+async def _assemble(
+    user_id: str,
+    user_text: str | None,
+    *,
+    pending: bool = False,
+    marks: list | None = None,
+) -> tuple[str, str, list, str | None, asyncio.Task | None]:
     """Recall everything he should have in mind, and log that he was spoken to.
 
-    Shared by both reply paths — the whole-reply one and the streaming one —
-    so there is exactly one place where what he knows is decided.
+    Shared by every reply path — the whole-reply one, the streaming one and the
+    live channel — so there is exactly one place where what he knows is decided.
 
     `user_text` is None on the one call where HE speaks first (/api/hello):
     nothing is logged and nothing is watched, because nobody has said
     anything, and the history handed back is his cue alone — meeting.HELLO,
     which is never stored.
+
+    `pending` is the live channel's DRAFT: a reply begun before the person is
+    certainly finished (live.py), which may yet be thrown away. So nothing is
+    written — not their line, not what memory recalls (gathered into `marks`
+    instead), and no watcher is set. The prompt is exactly the one a logged turn
+    would get: their line is added to the history here rather than read back
+    from the log, and counted where the log would have counted it. _commit
+    writes the rest once the turn is really theirs.
     """
+    if pending and user_text is None:
+        raise ValueError("Only somebody's line can be pending — he never drafts a hello.")
     # BEFORE the log, not after: this asks how long it has been since anybody
     # last said anything, and logging first makes that answer zero — forever.
     broke_off = memory.broke_off_last_time(user_id)
@@ -200,8 +241,11 @@ async def _assemble(user_id: str, user_text: str | None) -> tuple[str, str, list
     gap = memory.how_long_since_last_time(user_id)
     if gap:
         acquaintance = f"{acquaintance}\n{gap}"
-    if user_text is not None:
+    if user_text is not None and not pending:
         memory.log_turn(user_id, "user", user_text)
+    # The conversation he is given — what the log now holds, or, for a draft,
+    # what it will (memory.conversation).
+    recent = memory.conversation(user_id, pending=user_text if pending else None)
 
     # All of it this person's — including WHICH VOICE he or she speaks in.
     persona_block = persona.build_persona_block(who)
@@ -218,8 +262,11 @@ async def _assemble(user_id: str, user_text: str | None) -> tuple[str, str, list
     # Anything found too late to interrupt is not lost either — it rides in the
     # next turn's prompt, once, via safety.carried(). It cannot raise.
     watcher = (asyncio.create_task(safety.look(user_id, user_text))
-               if user_text is not None else None)
-    mem_ctx = await memory.build_memory_context(user_id, user_text or "")
+               if user_text is not None and not pending else None)
+    mem_ctx = await memory.build_memory_context(
+        user_id, user_text or "",
+        marks=(marks if marks is not None else []) if pending else None,
+    )
     # What the watcher found on some earlier turn and he never got to hear.
     # Empty on virtually every turn, and a live `danger` never arrives here.
     carried = safety.carried(user_id)
@@ -279,7 +326,7 @@ async def _assemble(user_id: str, user_text: str | None) -> tuple[str, str, list
         # Rules that only apply to the turn in front of him — the game they are
         # playing, the news he asked for. Empty nearly always; see situations.py
         # for why they are no longer read on every turn.
-        situation_block=situations.block(user_text or "", memory.recent_turns(user_id)),
+        situation_block=situations.block(user_text or "", recent),
         elder_facts=elder_facts,
         bob_facts=bob_facts,
         # What the person has taught him, so the pupil actually grows.
@@ -289,17 +336,27 @@ async def _assemble(user_id: str, user_text: str | None) -> tuple[str, str, list
         broke_off=broke_off,
         acquaintance=acquaintance,
         # How two strangers get talking — only while they still are.
-        meeting_block=meeting.block(words, named=named, heard=memory.times_heard(user_id)),
+        meeting_block=meeting.block(
+            words, named=named, heard=memory.times_heard(user_id) + (1 if pending else 0)
+        ),
     )
 
     return (
         system_stable,
         system_variable,
-        ([{"role": "user", "content": meeting.HELLO}] if user_text is None
-         else memory.recent_turns(user_id)),
+        ([{"role": "user", "content": meeting.HELLO}] if user_text is None else recent),
         tts.voice_for(who),
         watcher,
     )
+
+
+def _commit(user_id: str, user_text: str, marks: list) -> asyncio.Task:
+    """A drafted turn becoming real (live.py): write what _assemble(pending=True)
+    held back — their line, what memory recalled for the reply — and set the
+    watcher on what they said. Returns the watcher, as _assemble does."""
+    memory.log_turn(user_id, "user", user_text)
+    memory.apply_marks(user_id, marks)
+    return asyncio.create_task(safety.look(user_id, user_text))
 
 
 def _alarm(verdict: dict | None, user_id: str) -> dict | None:

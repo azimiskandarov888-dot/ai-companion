@@ -12,7 +12,9 @@ Anthropic, as it always did. The voice is GPT-5.6 Luna through OpenRouter:
 the owner's choice (2026-09-28) from 24 rehearsed first meetings — the best
 Russian, the best listener, calm with somebody who answers in one word, and
 among the cheapest (docs/VOICE-MODELS-REHEARSAL.md). Same prompt, same
-history, same length limit as the meetings it was chosen on.
+history, same length limit as the meetings it was chosen on — sent to the
+fastest place that serves it, without thinking before it speaks
+(config.CHAT_PROVIDERS, config.CHAT_REASONING; docs/LATENCY.md).
 
 Two further speed decisions live here:
 
@@ -37,8 +39,10 @@ Two further speed decisions live here:
 
 from __future__ import annotations
 
+import asyncio
 import json
 import re
+import unicodedata
 
 import httpx
 from anthropic import AsyncAnthropic
@@ -47,9 +51,14 @@ from . import config
 
 _client: AsyncAnthropic | None = None
 _router: httpx.AsyncClient | None = None
+_router_loop: asyncio.AbstractEventLoop | None = None
 
 #: OpenRouter's API. Every «vendor/model» id is sent here.
 ROUTER_URL = "https://openrouter.ai/api/v1"
+#: How long an idle connection is kept open. httpx's own default is FIVE
+#: seconds — shorter than a person's turn — so every answer used to begin with
+#: a fresh handshake, 0.4–0.6 s of it from Tashkent (measured 2026-09-29).
+KEEP_OPEN = 180.0
 
 #: How OpenRouter introduces what a web search found, when it is OpenRouter
 #: that searches (Exa, for a model with no search of its own). Its default asks
@@ -67,13 +76,41 @@ _WEB_PROMPT = (
     "без названий источников."
 )
 
-#: A letter of a Cyrillic alphabet that is not Russian — Ukrainian, Kazakh,
-#: Abkhaz… Luna once ended a reply «…видно особенно ясно.АҞӘА» (the rehearsals,
-#: docs/VOICE-MODELS-REHEARSAL.md): a glitch, not a word, and the voice would
-#: have read it out. He speaks Russian, and no Russian word has one of these
-#: letters, so a word that does is taken out whole — before anybody hears it,
-#: sees it, or remembers it.
-_NOT_RUSSIAN = re.compile(r"\w*[\u0400\u0402-\u040F\u0450\u0452-\u045F\u0460-\u052F]\w*")
+def _foreign(ch: str) -> bool:
+    """A letter — or a mark on one — from neither the Russian nor the Latin
+    alphabet. Numbers and the accents Latin and Cyrillic share are not."""
+    if ch.isnumeric() or "\u0300" <= ch <= "\u036f":
+        return False
+    if "a" <= ch <= "z" or "A" <= ch <= "Z" or "\u00c0" <= ch <= "\u024f" or "\u1e00" <= ch <= "\u1eff":
+        return False
+    return not ("\u0410" <= ch <= "\u044f" or ch in "Ёё")
+
+
+def without_glitches(text: str) -> str:
+    """WORDS FROM ANOTHER ALPHABET, taken out whole.
+
+    Luna now and then ends a sentence with a scrap of another script — a
+    glitch, not a word: «…видно особенно ясно.АҞӘА» (Abkhaz, the first
+    rehearsals), «…ожидание разгрузки.อ่านข้อความเต็ม» (Thai, 2026-09-29). The
+    voice would read it out. He speaks Russian, and the names of games and
+    bands come in Latin letters («Riders Republic»); a word with a letter from
+    any other alphabet goes — before anybody hears it, sees it or remembers it.
+
+    Word by word, so it is safe on a reply still being written: a word can only
+    turn out to be a glitch while it is the last one, and nothing before it
+    moves.
+    """
+    kept: list[str] = []
+    word: list[str] = []
+    for ch in text + " ":
+        if ch.isalnum() or unicodedata.category(ch).startswith("M"):
+            word.append(ch)
+            continue
+        if not any(_foreign(c) for c in word):
+            kept.extend(word)
+        word = []
+        kept.append(ch)
+    return "".join(kept[:-1])
 
 #: What OpenAI's own search leaves in the text: a whole citation — « ([nuz.uz]
 #: (https://…))», one link or several — a link inside a sentence, whose words
@@ -188,39 +225,73 @@ def via_openrouter(model: str) -> bool:
 
 def _get_router() -> httpx.AsyncClient:
     """One client for the whole process, so each turn reuses a warm connection
-    instead of paying a TLS handshake before the first word."""
-    global _router
+    instead of paying a TLS handshake before the first word — made again only
+    when the event loop it was made in has closed (a tool running asyncio.run
+    twice), because a connection outliving its loop is only a source of errors."""
+    global _router, _router_loop
     if not config.OPENROUTER_API_KEY:
         raise RuntimeError(
             "OPENROUTER_API_KEY is not set — the voice (OpenRouter) is not configured."
         )
+    if _router is not None and _router_loop is not None and _router_loop.is_closed():
+        _router = None
     if _router is None:
+        try:
+            _router_loop = asyncio.get_running_loop()
+        except RuntimeError:
+            _router_loop = None
         _router = httpx.AsyncClient(
             base_url=ROUTER_URL,
             headers={"Authorization": f"Bearer {config.OPENROUTER_API_KEY}"},
             # A stall detector, like _LIVE_REPLY_TIMEOUT on the Claude side: the
             # read timeout resets on every chunk that arrives.
             timeout=httpx.Timeout(_LIVE_REPLY_TIMEOUT, connect=10.0),
+            limits=httpx.Limits(keepalive_expiry=KEEP_OPEN),
         )
     return _router
 
 
+async def warm() -> None:
+    """Open the line to the brain before it is needed: the handshake is paid
+    while the person is still talking, not after they have finished. Free — a
+    HEAD for the model list — and it never raises."""
+    if not (via_openrouter(config.CHAT_MODEL) and config.OPENROUTER_API_KEY):
+        return
+    try:
+        await _get_router().head("/models")
+    except Exception:  # noqa: BLE001 — a warm-up that fails costs nothing
+        pass
+
+
 def _router_body(history, system_stable: str, system_variable: str, *,
                  web: bool = False) -> dict:
-    """The Claude path's prompt and history, in OpenAI's shape.
+    """The Claude path's prompt and history, in OpenAI's shape — with what is
+    true NOW placed last, after the conversation, right where the answer begins.
 
-    One system message, the stable half first: OpenAI caches the longest
-    prefix that repeats, so the head that is identical every turn is still the
-    part that is paid for once."""
-    system = system_stable
+    Two reasons, both measured (2026-09-29):
+
+      · A model that does not stop to think follows what it read last. With the
+        turn's instructions above the whole history, Luna without reasoning
+        ended 85% of replies with a question and asked five in a row, «don't
+        ask a third time» sitting unread above the conversation (57% and two
+        with reasoning on). Right before the answer, it is read.
+      · OpenAI caches the longest prefix that repeats. The part that changes
+        every turn used to sit BEFORE the history, so only the character was
+        ever cached; now the character AND the conversation so far are.
+    """
+    messages = [{"role": "system", "content": system_stable}, *_conversation(history)]
     if system_variable.strip():
-        system = f"{system_stable}\n\n{system_variable}"
+        messages.append({"role": "system", "content": system_variable})
     body: dict = {
         "model": config.CHAT_MODEL,
         "max_tokens": config.MAX_REPLY_TOKENS,
-        "messages": [{"role": "system", "content": system}, *_conversation(history)],
+        "messages": messages,
         "stream": True,
     }
+    if config.CHAT_REASONING:
+        body["reasoning"] = {"effort": config.CHAT_REASONING}
+    if config.CHAT_PROVIDERS:
+        body["provider"] = {"order": list(config.CHAT_PROVIDERS), "allow_fallbacks": True}
     if web:
         body["plugins"] = [{"id": "web", "max_results": 3, "search_prompt": _WEB_PROMPT}]
     return body
@@ -277,9 +348,9 @@ async def _router_stream(history, system_stable: str, system_variable: str, *,
             piece = (choice.get("delta") or {}).get("content") or ""
             if piece:
                 text += piece
-                yield _NOT_RUSSIAN.sub("", text)
+                yield without_glitches(text)
     if finish == "length":
-        said = _NOT_RUSSIAN.sub("", text)
+        said = without_glitches(text)
         trimmed = whole_sentences(said)
         if trimmed != said:
             yield trimmed

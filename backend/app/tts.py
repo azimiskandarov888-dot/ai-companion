@@ -1,6 +1,7 @@
 """The mouth: text-to-speech.
 
-Five providers, chosen by config.TTS_PROVIDER:
+Five providers, chosen by config.TTS_PROVIDER (config.voice_provider says which
+one actually speaks — «fish» with only an OpenRouter key is Fish through it):
   - "yandex"     Yandex SpeechKit — Russian voices made BY Russians for
                  Russian. Best prosody of the lot on Russian text, and by some
                  distance the cheapest for it. The right default for this app.
@@ -53,10 +54,13 @@ Fish Audio's speech-to-text doesn't support Russian (see stt.py).
 
 from __future__ import annotations
 
+import asyncio
 import re
 import sys
+from collections.abc import AsyncIterator
 
 import httpx
+
 
 from . import body, companion, config
 
@@ -105,6 +109,11 @@ LATER_CHUNK_MIN = 12
 #: One enormous sentence would defeat the whole thing, so past this length we
 #: cut at a comma or a dash — places a speaker would pause anyway.
 CHUNK_MAX = 220
+#: …and the FIRST piece need not wait that long. A long opening sentence may
+#: go to the voice at its first comma or dash once it has this much in it: the
+#: voice starts while the rest of the sentence is still being written. Short
+#: sentences still go whole — «Понимаю.» split in two would be a stammer.
+FIRST_CLAUSE_MIN = 40
 
 #: Greedy on purpose: matches through the LAST sentence-ending punctuation that
 #: has something after it, so several finished sentences go to the voice in one
@@ -112,6 +121,9 @@ CHUNK_MAX = 220
 _COMPLETE_SENTENCES = re.compile(r"^.*[.!?…]+(?=\s)", re.DOTALL)
 #: Where it is acceptable to break a sentence that has run too long, best first.
 _SOFT_BREAKS = (" — ", "; ", ", ", " – ", " - ")
+#: Where a FIRST piece may end: a finished sentence (with any closing quote or
+#: bracket), or a pause inside one. Each only once something follows it.
+_FIRST_PAUSES = re.compile(r"[.!?…]+[»\"')\]]*(?=\s)|[,;:](?=\s)|\s[—–](?=\s)")
 
 
 def ready_split(text: str, *, first: bool) -> int:
@@ -129,9 +141,19 @@ def ready_split(text: str, *, first: bool) -> int:
     """
     floor = FIRST_CHUNK_MIN if first else LATER_CHUNK_MIN
 
-    match = _COMPLETE_SENTENCES.search(text)
-    if match and len(match.group(0).strip()) >= floor:
-        return match.end()
+    if first:
+        # The EARLIEST place a speaker could pause, not the latest: this is
+        # the piece the listener is waiting on. Once found it never moves,
+        # because nothing after it can change what came before.
+        for pause in _FIRST_PAUSES.finditer(text):
+            piece = text[: pause.end()].strip()
+            ends_sentence = pause.group(0)[0] in ".!?…"
+            if len(piece) >= (FIRST_CHUNK_MIN if ends_sentence else FIRST_CLAUSE_MIN):
+                return pause.end()
+    else:
+        match = _COMPLETE_SENTENCES.search(text)
+        if match and len(match.group(0).strip()) >= floor:
+            return match.end()
 
     # No finished sentence yet. If it has run very long, break at a pause a
     # speaker would take anyway — otherwise one rambling sentence holds up the
@@ -208,7 +230,7 @@ def voice_for(persona: dict | None) -> str | None:
         "fish": config.FISH_VOICE_ID_FEMALE,
         "openrouter": config.FISH_VOICE_ID_FEMALE,
         "elevenlabs": config.ELEVENLABS_VOICE_ID_FEMALE,
-    }.get(config.TTS_PROVIDER, "")
+    }.get(config.voice_provider(), "")
     # Unset → fall back rather than fail. A wrong-sounding voice is bad; a
     # friend who has stopped speaking altogether is worse.
     return female or None
@@ -276,7 +298,7 @@ def makes_sounds() -> bool:
     directly or through OpenRouter. S1, the other providers, and the phone's
     own voice (no server voice set up) do not."""
     return (configured()
-            and config.TTS_PROVIDER in ("fish", "openrouter")
+            and config.voice_provider() in ("fish", "openrouter")
             and config.FISH_MODEL.startswith("s2"))
 
 
@@ -336,7 +358,7 @@ def configured() -> bool:
 
 def provider_name() -> str:
     """Which voice is speaking — for the health endpoint (no secrets)."""
-    return config.TTS_PROVIDER or "none"
+    return config.voice_provider() or "none"
 
 
 #: How much slower he speaks to somebody who has been struggling to follow him.
@@ -398,28 +420,29 @@ async def synthesize(
     if not text:
         raise ValueError("Nothing to say — empty text passed to synthesize().")
 
-    if config.TTS_PROVIDER == "fish":
+    provider = config.voice_provider()
+    if provider == "fish":
         if not config.FISH_API_KEY:
             raise RuntimeError(
                 "FISH_API_KEY is not set — the Fish Audio voice is not configured."
             )
         return await _synthesize_fish(text, voice)
 
-    if config.TTS_PROVIDER == "openrouter":
+    if provider == "openrouter":
         if not config.OPENROUTER_API_KEY:
             raise RuntimeError(
                 "OPENROUTER_API_KEY is not set — the voice (OpenRouter) is not configured."
             )
         return await _synthesize_openrouter(text, voice)
 
-    if config.TTS_PROVIDER == "openai":
+    if provider == "openai":
         if not config.OPENAI_API_KEY:
             raise RuntimeError(
                 "OPENAI_API_KEY is not set — the OpenAI voice is not configured."
             )
         return await _synthesize_openai(text, voice, rate=rate)
 
-    if config.TTS_PROVIDER == "yandex":
+    if provider == "yandex":
         if not (config.YANDEX_API_KEY and config.YANDEX_FOLDER_ID):
             raise RuntimeError(
                 "YANDEX_API_KEY / YANDEX_FOLDER_ID not set — the Yandex voice "
@@ -427,7 +450,7 @@ async def synthesize(
             )
         return await _synthesize_yandex(text, voice, rate=rate)
 
-    if config.TTS_PROVIDER == "elevenlabs":
+    if provider == "elevenlabs":
         if not (config.ELEVENLABS_API_KEY and config.ELEVENLABS_VOICE_ID):
             raise RuntimeError(
                 "ELEVENLABS_API_KEY / ELEVENLABS_VOICE_ID not set — the ElevenLabs "
@@ -440,8 +463,64 @@ async def synthesize(
     )
 
 
-async def _synthesize_fish(text: str, voice: str | None = None) -> bytes:
-    """Fish Audio TTS. POST /v1/tts with the model in a header; returns MP3 bytes."""
+# --------------------------------------------------------------------------- #
+# Fish — directly, or through OpenRouter — on one open line
+# --------------------------------------------------------------------------- #
+
+#: One line to the voice for the whole process. A fresh connection is three
+#: or four round trips of handshakes before a byte is even asked for: first
+#: audio came back in 0.87–1.12 s on a new connection and 0.47–0.54 s on an open
+#: one (measured from Tashkent, 2026-09-29) — and the old code opened a new one
+#: for every sentence he said.
+_client: httpx.AsyncClient | None = None
+_client_loop: asyncio.AbstractEventLoop | None = None
+
+#: Raw audio as he is streamed: 16-bit little-endian mono. OpenRouter says the
+#: rate in its content type («audio/pcm;rate=44100;channels=1»), and that is
+#: what is believed; this is the rate asked of Fish directly, and the fallback.
+PCM_RATE = 44100
+_RATE = re.compile(r"rate=(\d+)")
+
+
+def _line() -> httpx.AsyncClient:
+    """The open line — made again only once the event loop it was made in has
+    closed (a tool running asyncio.run twice), because a connection outliving
+    its loop is only a source of errors."""
+    global _client, _client_loop
+    if _client is not None and _client_loop is not None and _client_loop.is_closed():
+        _client = None
+    if _client is None:
+        _client = httpx.AsyncClient(
+            timeout=httpx.Timeout(60.0, connect=10.0),
+            # httpx keeps an idle connection five seconds by default — less
+            # than one of the person's turns — and then the handshake is paid
+            # again before the first word.
+            limits=httpx.Limits(keepalive_expiry=180.0),
+        )
+        try:
+            _client_loop = asyncio.get_running_loop()
+        except RuntimeError:
+            _client_loop = None
+    return _client
+
+
+async def warm() -> None:
+    """Open the line to the voice before it is needed (see brain.warm). Never
+    raises, costs nothing."""
+    provider = config.voice_provider()
+    url = ("https://openrouter.ai/api/v1/models" if provider == "openrouter" and config.OPENROUTER_API_KEY
+           else "https://api.fish.audio/" if provider == "fish" and config.FISH_API_KEY
+           else None)
+    if url is None:
+        return
+    try:
+        await _line().head(url)
+    except Exception:  # noqa: BLE001 — a warm-up that fails costs nothing
+        pass
+
+
+def _fish_request(text: str, voice: str | None, fmt: str) -> tuple[str, dict, dict]:
+    """Fish Audio directly: POST /v1/tts, the model in a header."""
     headers = {
         "Authorization": f"Bearer {config.FISH_API_KEY}",
         "Content-Type": "application/json",
@@ -450,8 +529,7 @@ async def _synthesize_fish(text: str, voice: str | None = None) -> bytes:
     }
     payload: dict = {
         "text": text,
-        "format": "mp3",
-        "mp3_bitrate": 128,
+        "format": fmt,
         "normalize": True,   # tidy punctuation/numbers for natural speech
         # "balanced" starts returning audio sooner than "normal" at a
         # quality cost nobody has ever noticed in a spoken sentence. The
@@ -459,42 +537,91 @@ async def _synthesize_fish(text: str, voice: str | None = None) -> bytes:
         # second available.
         "latency": "balanced",
     }
+    if fmt == "mp3":
+        payload["mp3_bitrate"] = 128
+    if fmt == "pcm":
+        payload["sample_rate"] = PCM_RATE
     # A chosen voice from the Fish library; omit to use Fish's default voice.
     chosen = voice or config.FISH_VOICE_ID
     if chosen:
         payload["reference_id"] = chosen
+    return _FISH_API_URL, headers, payload
 
-    async with httpx.AsyncClient(timeout=60.0) as http:
-        resp = await http.post(_FISH_API_URL, headers=headers, json=payload)
-        if resp.status_code != 200:
-            raise RuntimeError(
-                f"Fish Audio TTS failed ({resp.status_code}): {resp.text[:300]}"
-            )
-        return resp.content
+
+def _router_request(text: str, voice: str | None, fmt: str) -> tuple[str, dict, dict]:
+    """The same Fish model and voice ids through OpenRouter, on its key."""
+    payload: dict = {
+        "model": f"fish-audio/{config.FISH_MODEL}",
+        "input": text,
+        "response_format": fmt,
+    }
+    chosen = voice or config.FISH_VOICE_ID
+    if chosen:
+        payload["voice"] = chosen
+    return _ROUTER_TTS_URL, {"Authorization": f"Bearer {config.OPENROUTER_API_KEY}"}, payload
+
+
+async def _synthesize_fish(text: str, voice: str | None = None) -> bytes:
+    """Fish Audio TTS, the whole sentence as MP3."""
+    url, headers, payload = _fish_request(text, voice, "mp3")
+    resp = await _line().post(url, headers=headers, json=payload)
+    if resp.status_code != 200:
+        raise RuntimeError(
+            f"Fish Audio TTS failed ({resp.status_code}): {resp.text[:300]}"
+        )
+    return resp.content
 
 
 async def _synthesize_openrouter(text: str, voice: str | None = None) -> bytes:
     """Fish Audio through OpenRouter — the same model and the same voice ids,
     on the OpenRouter key. How his sounds were tested (docs/SOUNDS.md)."""
-    payload: dict = {
-        "model": f"fish-audio/{config.FISH_MODEL}",
-        "input": text,
-        "response_format": "mp3",
-    }
-    chosen = voice or config.FISH_VOICE_ID
-    if chosen:
-        payload["voice"] = chosen
-    async with httpx.AsyncClient(timeout=60.0) as http:
-        resp = await http.post(
-            _ROUTER_TTS_URL,
-            headers={"Authorization": f"Bearer {config.OPENROUTER_API_KEY}"},
-            json=payload,
+    url, headers, payload = _router_request(text, voice, "mp3")
+    resp = await _line().post(url, headers=headers, json=payload)
+    if resp.status_code != 200:
+        raise RuntimeError(
+            f"OpenRouter voice failed ({resp.status_code}): {resp.text[:300]}"
         )
+    return resp.content
+
+
+async def stream(text: str, voice: str | None = None) -> AsyncIterator[tuple[int, bytes]]:
+    """His voice for this text AS IT IS MADE: (rate, raw audio) pieces, the
+    first of them long before the sentence is finished being synthesised.
+
+    The live channel's voice (live.py). Measured through OpenRouter: the first
+    bytes of a long sentence in 0.48 s, the whole of it in 1.9 s — the second
+    number was what everybody used to wait for.
+
+    Only Fish streams here, directly or through OpenRouter; anything else is
+    said plainly rather than faked. Pieces are always whole samples: a byte
+    split across two pieces is a click.
+    """
+    text = spoken(text, sounds=makes_sounds())
+    if not text:
+        raise ValueError("Nothing to say — empty text passed to stream().")
+    provider = config.voice_provider()
+    if provider == "openrouter" and config.OPENROUTER_API_KEY:
+        url, headers, payload = _router_request(text, voice, "pcm")
+    elif provider == "fish" and config.FISH_API_KEY:
+        url, headers, payload = _fish_request(text, voice, "pcm")
+    else:
+        raise RuntimeError(
+            "The live channel needs a voice that streams — Fish, directly (FISH_API_KEY)"
+            f" or through OpenRouter (OPENROUTER_API_KEY); TTS_PROVIDER={config.TTS_PROVIDER!r}."
+        )
+    async with _line().stream("POST", url, headers=headers, json=payload) as resp:
         if resp.status_code != 200:
-            raise RuntimeError(
-                f"OpenRouter voice failed ({resp.status_code}): {resp.text[:300]}"
-            )
-        return resp.content
+            detail = (await resp.aread()).decode("utf-8", "replace")
+            raise RuntimeError(f"The voice failed ({resp.status_code}): {detail[:300]}")
+        found = _RATE.search(resp.headers.get("content-type", ""))
+        rate = int(found.group(1)) if found else PCM_RATE
+        carry = b""
+        async for chunk in resp.aiter_bytes():
+            data = carry + chunk
+            whole = len(data) - len(data) % 2
+            carry = data[whole:]
+            if whole:
+                yield rate, data[:whole]
 
 
 async def _synthesize_openai(text: str, voice: str | None = None, *, rate: float = 1.0) -> bytes:

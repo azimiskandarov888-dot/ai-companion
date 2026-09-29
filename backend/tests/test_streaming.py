@@ -86,6 +86,19 @@ def test_what_is_ready_only_ever_grows():
         previous = cut
 
 
+def test_a_long_first_sentence_starts_at_its_first_pause():
+    """The voice starts while the rest of the sentence is still being written."""
+    text = "Понимаю, городская езда выматывает сильнее, чем кажется: постоянно остановки. "
+    cut = tts.ready_split(text, first=True)
+    assert text[:cut].strip() == "Понимаю, городская езда выматывает сильнее,"
+
+
+def test_a_short_first_sentence_is_never_split():
+    """«Ну,» on its own would be a stammer."""
+    text = "Ну, бывает. Потом ещё "
+    assert text[:tts.ready_split(text, first=True)].strip() == "Ну, бывает."
+
+
 def test_an_unfinished_sentence_is_never_spoken():
     # No whitespace after the full stop yet → it might still be «т. д.»
     assert tts.ready_split("Доброе утро.", first=True) == 0

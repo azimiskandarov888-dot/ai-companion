@@ -44,6 +44,24 @@ BRAIN_MODEL: str = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-5")
 CHAT_MODEL: str = os.getenv("CHAT_MODEL", "openai/gpt-5.6-luna")
 #: The key for every «vendor/model» id — the voice above, and the owner's tools.
 OPENROUTER_API_KEY: str | None = os.getenv("OPENROUTER_API_KEY")
+#: WHERE OpenRouter sends him, in order. It serves Luna from several places,
+#: and left to itself picked whichever it liked: first words came back in 1.46 s
+#: (median of three, the real prompt, 2026-09-29), against 0.79 s from OpenAI's
+#: «fast» tier and 0.94 s from Azure in Europe. Fast costs twice per token,
+#: which for Luna is about $0.0004 a reply. Fallbacks stay allowed, so a tier
+#: that is down costs speed, never the answer. Ignored for any model these
+#: providers do not serve.
+CHAT_PROVIDERS: list[str] = [
+    p.strip() for p in os.getenv(
+        "CHAT_PROVIDERS", "openai/fast,azure/eu,openai,amazon-bedrock/us-east-1"
+    ).split(",") if p.strip()
+]
+#: How long he thinks before he speaks: not at all. Luna reasoned silently
+#: before answering — 43–91 tokens of it on a second turn, a second of silence —
+#: and «minimal» did NOT stop it (the first turn fooled an earlier test into
+#: thinking it had). «none»: no reasoning, first words in 0.79–0.86 s on the
+#: same prompt (2026-09-29). Empty leaves it to the model.
+CHAT_REASONING: str = os.getenv("CHAT_REASONING", "none").strip()
 
 # READING him — once, before he even exists. The deepest work the app does:
 # understanding a person from HOW they wrote, not just what they wrote (see
@@ -123,6 +141,34 @@ EMERGENCY_NUMBER: str = os.getenv("EMERGENCY_NUMBER", "103")
 OPENAI_API_KEY: str | None = os.getenv("OPENAI_API_KEY")
 WHISPER_MODEL: str = os.getenv("WHISPER_MODEL", "whisper-1")
 
+# --- The ears, live: Deepgram Flux (the live channel — live.py) ------------
+#
+# Whisper hears a FINISHED recording: the phone waited 1.2 s of silence, sent
+# the file, and only then did 0.75–1.5 s of recognising begin. Flux hears while
+# the person is still talking, and says itself when they have finished — by
+# what was said and how, not by a timer. Measured on Russian through the
+# European address (2026-09-29): «похоже, договорил» 0.34 s after the last
+# word, «договорил» 0.63 s after it. See docs/LATENCY.md.
+DEEPGRAM_API_KEY: str | None = os.getenv("DEEPGRAM_API_KEY")
+#: Europe: 80 ms there and back from Tashkent, against 240 for the US address.
+DEEPGRAM_URL: str = os.getenv("DEEPGRAM_URL", "wss://api.eu.deepgram.com/v2/listen")
+#: Russian lives in the multilingual model; the hint is COMPANION_LANGUAGE.
+FLUX_MODEL: str = os.getenv("FLUX_MODEL", "flux-general-multi")
+#: How sure Flux must be that somebody has finished. Deepgram's own default.
+FLUX_EOT_THRESHOLD: float = float(os.getenv("FLUX_EOT_THRESHOLD", "0.7"))
+#: The earlier, less certain «похоже, договорил» — the brain starts writing
+#: then, and the draft is thrown away if they carry on. Lower is earlier and
+#: more drafts wasted (Deepgram: 0.3–0.5 costs 50–70% more calls — for Luna,
+#: fractions of a cent).
+FLUX_EAGER_EOT_THRESHOLD: float = float(os.getenv("FLUX_EAGER_EOT_THRESHOLD", "0.4"))
+#: The most silence that can still mean «not finished». Five seconds: an old
+#: man gathering a thought is not a man who has stopped.
+FLUX_EOT_TIMEOUT_MS: int = int(os.getenv("FLUX_EOT_TIMEOUT_MS", "5000"))
+#: Deepgram bills every second the line is open, silence included. A tab left
+#: open all night must not be a night of billing: after this long with nobody
+#: speaking, the live channel closes itself.
+LIVE_IDLE_SECONDS: float = float(os.getenv("LIVE_IDLE_SECONDS", "120"))
+
 # --- Memory: embeddings for semantic story recall (reuses the OpenAI key) --
 EMBEDDING_MODEL: str = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
 # Smaller dimension = lighter storage + faster similarity, still strong for one user.
@@ -144,7 +190,9 @@ EMBEDDING_DIM: int = int(os.getenv("EMBEDDING_DIM", "512"))
 #                  the most Russian-sounding. See docs/HIS-VOICE.md.
 #   "openai"     — same key as the ears; takes a direction on HOW to speak.
 #   "fish"       — Fish Audio. Excellent, but bills UTF-8 BYTES, so Russian
-#                  costs double the headline. The current default.
+#                  costs double the headline. The current default — and with
+#                  no Fish key but an OpenRouter one, the same voice through
+#                  OpenRouter (voice_provider, below).
 #   "elevenlabs" — warmest, several times the price.
 #   "openrouter" — Fish Audio (FISH_MODEL) through OpenRouter, on the one key
 #                  the owner has. Exactly how his sounds were tested (docs/SOUNDS.md).
@@ -156,15 +204,17 @@ TTS_PROVIDER: str = os.getenv("TTS_PROVIDER", "fish").strip().lower()
 
 # Fish Audio (https://fish.audio) — the default voice.
 FISH_API_KEY: str | None = os.getenv("FISH_API_KEY")
-# The voice to speak in — a "reference_id" from the Fish Audio voice library:
-# pick a warm Russian voice on fish.audio and paste its id here. Empty string
-# uses Fish's default voice.
-FISH_VOICE_ID: str = os.getenv("FISH_VOICE_ID", "")
-#: The voice for a companion who turns out to be a woman. Fish has no
-#: sensible default here — pick a second id from fish.audio/discovery. Left
-#: empty, a female character speaks in the voice above, which is wrong and
-#: audible.
-FISH_VOICE_ID_FEMALE: str = os.getenv("FISH_VOICE_ID_FEMALE", "")
+# The voice to speak in — a "reference_id" from the Fish Audio voice library
+# (the same ids through OpenRouter). UNTIL THE OWNER CHOOSES BY EAR, two
+# generic library voices, neither of them anybody's clone by name: «Молодой
+# Русский Рассказчик» and «Молодой Женский Голос» — the second is plainly a
+# woman (≈210 Hz, heard as one); the «Спокойный женский голос» the sound tests
+# used is heard as a man. Empty would be whatever Fish defaults to — a voice
+# nobody chose, which is no voice for somebody's friend.
+FISH_VOICE_ID: str = os.getenv("FISH_VOICE_ID", "c962ed46edfd419abc530d1e33a7435f")
+#: The voice for a companion who turns out to be a woman. Left empty, a female
+#: character speaks in the voice above, which is wrong and audible.
+FISH_VOICE_ID_FEMALE: str = os.getenv("FISH_VOICE_ID_FEMALE", "d567e990d9ad433892ed15ecfd70ce54")
 # Fish model version — the `model` HTTP header, or «fish-audio/<it>» through
 # OpenRouter. s2.1-pro — Fish's own production model, S1 is legacy — at the
 # same $15 per million bytes. It is the one that can make his SOUNDS: a
@@ -233,23 +283,41 @@ OPENAI_VOICE_STYLE: str = os.getenv(
 )
 
 
+def voice_provider() -> str:
+    """Which voice actually speaks: TTS_PROVIDER, with one substitution.
+
+    «fish» with no Fish key but an OpenRouter one is the SAME voice — Fish
+    S2.1, the same voice ids — reached through OpenRouter. The owner has only
+    that key, and without this the server said nothing at all: every reply went
+    to the phone's own free voice, and his sounds went nowhere.
+    """
+    if TTS_PROVIDER == "fish" and not FISH_API_KEY and OPENROUTER_API_KEY:
+        return "openrouter"
+    return TTS_PROVIDER
+
+
 def tts_configured() -> bool:
     """Is the selected voice provider set up? If not, the client speaks free."""
-    if TTS_PROVIDER == "fish":
+    provider = voice_provider()
+    if provider == "fish":
         return bool(FISH_API_KEY)
-    if TTS_PROVIDER == "openrouter":
+    if provider == "openrouter":
         return bool(OPENROUTER_API_KEY)
-    if TTS_PROVIDER == "openai":
+    if provider == "openai":
         return bool(OPENAI_API_KEY)
-    if TTS_PROVIDER == "yandex":
+    if provider == "yandex":
         return bool(YANDEX_API_KEY) and bool(YANDEX_FOLDER_ID)
-    if TTS_PROVIDER == "elevenlabs":
+    if provider == "elevenlabs":
         return bool(ELEVENLABS_API_KEY) and bool(ELEVENLABS_VOICE_ID)
     return False
 
 # --- General ----------------------------------------------------------------
 LANGUAGE: str = os.getenv("COMPANION_LANGUAGE", "ru")
-COMPANION_NAME: str = os.getenv("COMPANION_NAME", "Соня")
+#: The name of the FALLBACK companion only (persona.DEFAULT_PERSONA) — whoever
+#: has no friend of their own yet. He is an 87-year-old man, so «Боб»: the old
+#: default «Соня» gave a man's life, a man's grammar and a man's voice a
+#: woman's name, and the model mixed them («Я Соня… гулял»).
+COMPANION_NAME: str = os.getenv("COMPANION_NAME", "Боб")
 # Who the companion is talking to (used in greetings). Optional.
 ELDER_NAME: str = os.getenv("ELDER_NAME", "")
 
@@ -294,5 +362,8 @@ def service_status() -> dict[str, bool]:
         # key the CONVERSATION needs — OpenRouter's once the voice is there.
         "brain_claude": bool(OPENROUTER_API_KEY if "/" in CHAT_MODEL else ANTHROPIC_API_KEY),
         "ears_whisper": bool(OPENAI_API_KEY),
+        # The live channel's ears (live.py). Without them /api/live says so
+        # and the file-by-file path above is all there is.
+        "ears_live": bool(DEEPGRAM_API_KEY),
         "mouth": tts_configured(),
     }

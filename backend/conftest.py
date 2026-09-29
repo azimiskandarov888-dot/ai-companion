@@ -25,5 +25,12 @@ def temp_data(tmp_path, monkeypatch):
     # seventh, which then fails for a reason that has nothing to do with it.
     allowance._asleep.clear()
     allowance._stray.clear()
+    # NO TEST REACHES A REAL SERVICE. config reads the developer's own .env,
+    # and a key sitting there would otherwise turn an unpatched test into a
+    # paid call — the voice, since «fish» with an OpenRouter key speaks through
+    # OpenRouter (config.voice_provider). A test that needs a key sets a fake one.
+    for key in ("OPENROUTER_API_KEY", "DEEPGRAM_API_KEY", "FISH_API_KEY", "OPENAI_API_KEY",
+                "ANTHROPIC_API_KEY", "ELEVENLABS_API_KEY", "YANDEX_API_KEY"):
+        monkeypatch.setattr(config, key, None)
     db.init_db()
     yield

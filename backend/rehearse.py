@@ -217,12 +217,13 @@ _client: httpx.AsyncClient | None = None
 _spent = {"voice": 0.0, "scribe": 0.0, "player": 0.0}
 
 
-async def _chat(model: str, system: str, messages: list[dict], *, max_tokens: int,
-                bill: str, whole: bool = False) -> str:
+async def _chat(model: str, system: str | None, messages: list[dict], *, max_tokens: int,
+                bill: str, whole: bool = False, extra: dict | None = None) -> str:
     assert _client is not None
     r = await _client.post(f"{tryout._URL}/chat/completions", json={
         "model": model, "max_tokens": max_tokens, "usage": {"include": True},
-        "messages": [{"role": "system", "content": system}, *messages],
+        "messages": ([{"role": "system", "content": system}] if system else []) + messages,
+        **(extra or {}),
     })
     if r.status_code != 200:
         raise RuntimeError(tryout._plain(r.status_code, r.text))
@@ -235,10 +236,13 @@ async def _chat(model: str, system: str, messages: list[dict], *, max_tokens: in
 
 
 async def _speak(history, system_stable, system_variable="", *, fresh_info=False):
-    """brain.generate_reply — тот же промпт и та же история, другая модель."""
-    system = f"{system_stable}\n\n{system_variable}".strip()
-    return await _chat(_voice.get(), system, brain._conversation(history),
-                       max_tokens=config.MAX_REPLY_TOKENS, bill="voice", whole=True)
+    """brain.generate_reply — ровно тот запрос, что шлёт приложение
+    (brain._router_body: порядок промпта, куда и сколько думать), другая модель."""
+    same = brain._router_body(history, system_stable, system_variable)
+    said = await _chat(_voice.get(), None, same["messages"],
+                       max_tokens=config.MAX_REPLY_TOKENS, bill="voice", whole=True,
+                       extra={k: same[k] for k in ("reasoning", "provider") if k in same})
+    return brain.without_glitches(said)   # as the app's own stream does
 
 
 class _Scribe:

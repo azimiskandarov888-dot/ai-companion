@@ -34,12 +34,24 @@ import time
 
 from . import db, embeddings
 
-# How many recent turns to feed the brain as live conversation. 12 covers the
-# thread of a spoken chat; anything older that mattered has been distilled into
-# memory and comes back through recall. Every extra turn here is tokens the
-# brain re-reads before EVERY reply — this is spoken conversation, where that
-# wait is a silence — so the window stays small on purpose.
+# The default for recent_turns — a short look back, for callers that want the
+# last few lines. What the BRAIN is given before a reply is conversation(),
+# below, and it is longer on purpose.
 RECENT_TURNS = 12
+#: THE CONVERSATION HE IS GIVEN before every reply: at least WINDOW_MIN lines,
+#: and the window's START moves only every WINDOW_STEP lines.
+#:
+#: It used to be the last twelve lines, and a first meeting is longer than
+#: that: eight exchanges in, the moment they told each other their names had
+#: fallen out of it, and he introduced himself again — «Ты чего, забыл уже? Я ж
+#: Тимур» (rehearsal, 2026-09-29; Gemini had done the same). Twelve was chosen
+#: because every line is re-read before every reply; but the conversation now
+#: sits in the part of the prompt the provider CACHES (brain._router_body), and
+#: a cached line costs a tenth and almost no time — as long as the beginning
+#: stays the same from one turn to the next. A window that slid one line a turn
+#: would change its beginning every turn; this one changes it once in twenty.
+WINDOW_MIN = 20
+WINDOW_STEP = 20
 # How many semantically-recalled stories to surface per reply.
 RECALL_K = 4
 # Only keep recalled stories at least this related (cosine) to what he just said.
@@ -139,6 +151,25 @@ def words_said(user_id: str) -> int:
             "SELECT words FROM acquaintance WHERE user_id=?", (user_id,)
         ).fetchone()
     return int(row["words"]) if row else 0
+
+
+def conversation(user_id: str, pending: str | None = None) -> list[dict[str, str]]:
+    """The conversation as he is given it before a reply (WINDOW_MIN above).
+
+    `pending`: the person's line that is not in the log yet — a draft of the
+    live channel (live.py). It is counted and placed exactly where the log will
+    put it, so a draft and the turn it becomes see the same window.
+    """
+    with db.connect() as conn:
+        logged = int(conn.execute(
+            "SELECT COUNT(*) n FROM turns WHERE user_id=?", (user_id,)
+        ).fetchone()["n"])
+    total = logged + (1 if pending is not None else 0)
+    start = max(0, (total - WINDOW_MIN) // WINDOW_STEP * WINDOW_STEP)
+    lines = recent_turns(user_id, limit=total - start - (1 if pending is not None else 0))
+    if pending is not None:
+        lines.append({"role": "user", "content": pending})
+    return lines
 
 
 def recent_turns(user_id: str, limit: int = RECENT_TURNS) -> list[dict[str, str]]:
@@ -651,8 +682,35 @@ def _rows(user_id: str, kinds: tuple[str, ...], owner: str = "elder") -> list:
         ).fetchall()
 
 
+def _recalled(ids: list[int], marks: list | None) -> None:
+    """Mark these as recalled now — or, for a draft, write down that they will be.
+
+    See apply_marks: a draft is a reply the live channel starts writing before
+    it is sure the person has finished, and a draft that is thrown away must
+    leave no trace. A story «recalled» for a reply nobody heard is a story he
+    will not bring up for a while for no reason at all.
+    """
+    if marks is None:
+        _mark_recalled(ids)
+    elif ids:
+        marks.append(("recalled", list(ids)))
+
+
+def apply_marks(user_id: str, marks: list) -> None:
+    """What a draft recalled and raised, written now that it is really said."""
+    for kind, what in marks:
+        if kind == "recalled":
+            _mark_recalled(what)
+        elif kind == "follow_up":
+            surface_follow_up(user_id, what)
+
+
 async def recall_relevant(
-    user_id: str, query_text: str, k: int = RECALL_K, exclude: set[int] | None = None
+    user_id: str,
+    query_text: str,
+    k: int = RECALL_K,
+    exclude: set[int] | None = None,
+    marks: list | None = None,
 ) -> list[dict]:
     """Semantically recall the stories/health notes most relevant right now."""
     exclude = exclude or set()
@@ -678,11 +736,13 @@ async def recall_relevant(
         # No embeddings → fall back to the most recent stories.
         picked = sorted(rows, key=lambda r: r["created_ts"], reverse=True)[:k]
 
-    _mark_recalled([r["id"] for r in picked])
+    _recalled([r["id"] for r in picked], marks)
     return [dict(r) for r in picked]
 
 
-def resurface(user_id: str, exclude: set[int] | None = None) -> dict | None:
+def resurface(
+    user_id: str, exclude: set[int] | None = None, marks: list | None = None
+) -> dict | None:
     """Pick a warm story he hasn't been reminded of in a while (spaced recall)."""
     exclude = exclude or set()
     with db.connect() as conn:
@@ -697,7 +757,7 @@ def resurface(user_id: str, exclude: set[int] | None = None) -> dict | None:
     if not candidates:
         return None
     chosen = candidates[0]
-    _mark_recalled([chosen["id"]])
+    _recalled([chosen["id"]], marks)
     return dict(chosen)
 
 
@@ -812,16 +872,23 @@ def counts(user_id: str, owner: str = "elder") -> dict[str, int]:
 # --------------------------------------------------------------------------- #
 # Assemble the memory block for the system prompt
 # --------------------------------------------------------------------------- #
-async def build_memory_context(user_id: str, query_text: str) -> str:
+async def build_memory_context(
+    user_id: str, query_text: str, marks: list | None = None
+) -> str:
     """Recalled stories + (sometimes) a resurfaced memory + a due follow-up + mood.
 
     Facts are fetched separately (facts_context). He always speaks first; this is
     what the companion should have in mind when he answers.
+
+    `marks`: for a DRAFT (the live channel writing before it is sure the person
+    has finished), what would be marked as recalled or raised is written into
+    this list instead of the database — apply_marks does it once the reply is
+    really going to be said, and nothing is done if it never is.
     """
     used: set[int] = set()
     sections: list[str] = []
 
-    relevant = await recall_relevant(user_id, query_text, exclude=used)
+    relevant = await recall_relevant(user_id, query_text, exclude=used, marks=marks)
     used.update(r["id"] for r in relevant)
     if relevant:
         lines = "\n".join(f"- {_fmt(r)}" for r in relevant)
@@ -831,7 +898,7 @@ async def build_memory_context(user_id: str, query_text: str) -> str:
 
     # A gentle, spaced "а помнишь…" — sometimes, out of nowhere.
     if random.random() < RESURFACE_CHANCE:
-        r = resurface(user_id, exclude=used)
+        r = resurface(user_id, exclude=used, marks=marks)
         if r:
             used.add(r["id"])
             sections.append(
@@ -845,7 +912,10 @@ async def build_memory_context(user_id: str, query_text: str) -> str:
             "По-доброму поинтересуйся, как дела с тем, о чём он говорил раньше:\n"
             f"- {fup['content']}"
         )
-        surface_follow_up(user_id, fup["id"])
+        if marks is None:
+            surface_follow_up(user_id, fup["id"])
+        else:
+            marks.append(("follow_up", fup["id"]))
 
     # How he is against HIS OWN normal, not a word with nothing to compare it
     # to. This is the section companion.py's «перемена важнее самого тона»

@@ -145,9 +145,14 @@ def test_only_fish_s2_speaking_from_the_server_makes_them(monkeypatch):
     # The old model plays nothing.
     monkeypatch.setattr(config, "FISH_MODEL", "s1")
     assert not tts.makes_sounds()
-    # No server voice: the phone speaks, and it cannot.
+    # «fish» with no Fish key but an OpenRouter one is the same voice through
+    # OpenRouter — it still plays them (config.voice_provider).
     monkeypatch.setattr(config, "FISH_MODEL", "s2.1-pro")
     monkeypatch.setattr(config, "FISH_API_KEY", None)
+    assert config.voice_provider() == "openrouter"
+    assert tts.makes_sounds()
+    # No server voice at all: the phone speaks, and it cannot.
+    monkeypatch.setattr(config, "OPENROUTER_API_KEY", None)
     assert not tts.makes_sounds()
     monkeypatch.setattr(config, "TTS_PROVIDER", "openai")
     monkeypatch.setattr(config, "OPENAI_API_KEY", "test-key")
@@ -199,3 +204,74 @@ def test_openrouter_is_configured_by_its_key(monkeypatch):
     assert tts.configured()
     monkeypatch.setattr(config, "OPENROUTER_API_KEY", None)
     assert not tts.configured()
+
+
+# --------------------------------------------------------------------------- #
+# His voice as it is made — the live channel (live.py)
+# --------------------------------------------------------------------------- #
+class _Chunks(httpx.AsyncByteStream):
+    def __init__(self, parts: list[bytes]) -> None:
+        self.parts = parts
+
+    async def __aiter__(self):
+        for part in self.parts:
+            yield part
+
+
+def test_his_voice_arrives_as_it_is_made_in_whole_samples(monkeypatch):
+    """A byte split across two pieces is a click; the rate is the one the
+    voice says it is sending."""
+    _fish_s2(monkeypatch)
+    sent: list[httpx.Request] = []
+
+    def answer(request: httpx.Request) -> httpx.Response:
+        sent.append(request)
+        return httpx.Response(200, headers={"content-type": "audio/pcm;rate=22050;channels=1"},
+                              stream=_Chunks([b"\x01", b"\x02\x03", b"\x04\x05\x06"]))
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(answer))
+    monkeypatch.setattr(tts, "_line", lambda: client)
+
+    async def hear():
+        return [piece async for piece in tts.stream(f"Горло {body.MARK_COUGH} извини.", "voice-id")]
+
+    pieces = asyncio.run(hear())
+    assert pieces == [(22050, b"\x01\x02"), (22050, b"\x03\x04\x05\x06")]
+    assert json.loads(sent[0].content) == {
+        "model": "fish-audio/s2.1-pro",
+        "input": "Горло [cough] извини.",
+        "response_format": "pcm",
+        "voice": "voice-id",
+    }
+
+
+def test_a_voice_that_cannot_stream_is_said_plainly(monkeypatch):
+    monkeypatch.setattr(config, "TTS_PROVIDER", "openai")
+    monkeypatch.setattr(config, "OPENAI_API_KEY", "test-key")
+
+    async def hear():
+        return [piece async for piece in tts.stream("Привет.")]
+
+    import pytest
+
+    with pytest.raises(RuntimeError, match="streams"):
+        asyncio.run(hear())
+
+
+def test_one_line_to_the_voice_stays_open(monkeypatch):
+    """A fresh connection is 0.4 s of handshakes from Tashkent before a byte is
+    asked for — and the old code paid it for every sentence."""
+    monkeypatch.setattr(tts, "_client", None)
+    monkeypatch.setattr(tts, "_client_loop", None)
+
+    async def twice():
+        return tts._line(), tts._line()
+
+    first, second = asyncio.run(twice())
+    assert first is second
+
+    async def once():
+        return tts._line()
+
+    # …and made again only once the loop it belonged to is gone.
+    assert asyncio.run(once()) is not first

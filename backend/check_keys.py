@@ -84,11 +84,15 @@ def shape_report() -> None:
             problems.append(f"looks short ({len(value)} chars) — pasted incompletely?")
 
         status = "; ".join(problems) if problems else "looks right"
-        print(f"  {name:<20} {len(value)} chars, starts {value[:7]}…  → {status}")
+        # Only a PUBLIC prefix is ever shown («sk-ant-», «sk-or-»). A key with
+        # none, like Deepgram's, is all secret from its first character.
+        starts = f", starts {value[:len(expect)]}…" if expect else ""
+        print(f"  {name:<20} {len(value)} chars{starts}  → {status}")
 
     describe("ANTHROPIC_API_KEY", config.ANTHROPIC_API_KEY, "sk-ant-")
     describe("OPENAI_API_KEY", config.OPENAI_API_KEY, "sk-")
     describe("OPENROUTER_API_KEY", config.OPENROUTER_API_KEY, "sk-or-")
+    describe("DEEPGRAM_API_KEY", config.DEEPGRAM_API_KEY, "")
     if config.FISH_API_KEY:
         describe("FISH_API_KEY", config.FISH_API_KEY, "")
     print()
@@ -160,6 +164,46 @@ def check_conversation() -> bool:
         return False
 
 
+def check_live_ears() -> bool:
+    """The live channel's ears answer: open a line to Deepgram Flux, give it a
+    quarter of a second of silence, hang up. Costs a quarter of a second of
+    Deepgram's credit."""
+    from app import hearing
+
+    if not config.DEEPGRAM_API_KEY:
+        print("👂 Живой канал (Deepgram): нет ключа в .env  → добавьте DEEPGRAM_API_KEY")
+        return False
+
+    async def probe() -> bool:
+        ears = await hearing.Ears.open()
+        try:
+            await ears.hear(bytes(hearing.CHUNK * 3))
+            async for message in ears.events():
+                if message.get("type") in ("Connected", "TurnInfo"):
+                    return True
+            return False
+        finally:
+            await ears.close()
+
+    try:
+        heard = asyncio.run(asyncio.wait_for(probe(), 15))
+    except Exception as error:  # noqa: BLE001 — friendly report, not a crash
+        reason = _classify(error)
+        if reason == "rejected":
+            print("👂 Живой канал (Deepgram): ❌ ключ ОТКЛОНЁН — неверный или устаревший")
+        elif reason == "no_credit":
+            print("👂 Живой канал (Deepgram): ⚠️ ключ верный, но НЕТ КРЕДИТОВ — console.deepgram.com")
+        else:
+            print("👂 Живой канал (Deepgram): ⚠️ не отвечает")
+        print(f"           {error}")
+        return False
+    if heard:
+        print("👂 Живой канал (Deepgram): ✅ слышит")
+    else:
+        print("👂 Живой канал (Deepgram): ⚠️ открылся, но ничего не сказал")
+    return heard
+
+
 def check_openai() -> bool:
     if not config.OPENAI_API_KEY:
         print("👂 Whisper (ears): нет ключа в .env  → добавьте OPENAI_API_KEY")
@@ -201,7 +245,8 @@ def check_voice() -> bool:
         print("🗣️ Голос: пусто → браузер озвучит бесплатно (для MVP это нормально).")
         return True  # not an error: the client speaks instead
 
-    provider = config.TTS_PROVIDER
+    provider = config.voice_provider()   # who actually speaks — «fish» with only
+                                          # an OpenRouter key is Fish through it
     try:
         audio = asyncio.run(tts.synthesize("Проверка связи."))
         if not audio:
@@ -242,10 +287,13 @@ def main() -> None:
     brain_ok = check_claude()
     talk_ok = check_conversation()
     ears_ok = check_openai()
+    live_ok = check_live_ears()
     voice_ok = check_voice()
 
     print()
-    if brain_ok and talk_ok and ears_ok and voice_ok:
+    # Either pair of ears will do: Whisper for the file-by-file path, Deepgram
+    # for the live channel (/live).
+    if brain_ok and talk_ok and (ears_ok or live_ok) and voice_ok:
         print("✅ Всё готово — откройте http://localhost:8000 и поговорите с Бобом.")
     else:
         print("Исправьте пункт(ы) с ❌/⚠️ выше и запустите проверку снова.")

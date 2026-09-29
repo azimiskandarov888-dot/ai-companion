@@ -1,0 +1,302 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Живой канал — тест</title>
+    <style>
+      :root {
+        --bg: #0f1226;
+        --panel: rgba(255, 255, 255, 0.05);
+        --border: rgba(255, 255, 255, 0.1);
+        --text: #eef0ff;
+        --dim: #a6a9c8;
+        --accent: #7c9cff;
+        --accent-2: #59d3a8;
+        --user: #2a3566;
+        --rec: #ff6b6b;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+        background: radial-gradient(900px 500px at 70% -10%, rgba(124, 156, 255, 0.18), transparent 60%), var(--bg);
+        color: var(--text);
+        display: flex;
+        justify-content: center;
+      }
+      .wrap { width: 100%; max-width: 680px; padding: 24px 16px 60px; }
+      header { text-align: center; }
+      h1 { font-size: 22px; margin: 0; }
+      .sub { color: var(--dim); font-size: 14px; margin-top: 6px; line-height: 1.5; }
+      .status {
+        margin: 18px 0 12px; padding: 12px 14px; background: var(--panel);
+        border: 1px solid var(--border); border-radius: 12px; font-size: 14px; color: var(--dim);
+      }
+      .status b { color: var(--text); }
+      .controls { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; align-items: center; }
+      button {
+        border: none; cursor: pointer; border-radius: 12px; padding: 12px 18px;
+        font-size: 15px; font-weight: 600; color: white;
+        background: linear-gradient(135deg, var(--accent) 0%, #a06bff 100%);
+      }
+      button.live { background: linear-gradient(135deg, var(--rec) 0%, #ff9a6b 100%); }
+      button.quiet { background: var(--panel); border: 1px solid var(--border); color: var(--text); }
+      button:disabled { opacity: 0.4; cursor: default; }
+      label { color: var(--dim); font-size: 14px; display: flex; gap: 6px; align-items: center; }
+      .hearing {
+        margin: 16px 0 0; min-height: 22px; font-size: 15px; color: var(--accent-2); text-align: center;
+      }
+      .convo { margin-top: 18px; display: flex; flex-direction: column; gap: 10px; }
+      .msg { padding: 11px 14px; border-radius: 16px; line-height: 1.5; font-size: 15px; max-width: 88%; white-space: pre-wrap; }
+      .msg.user { align-self: flex-end; background: var(--user); border-bottom-right-radius: 5px; }
+      .msg.bot { align-self: flex-start; background: var(--panel); border: 1px solid var(--border); border-bottom-left-radius: 5px; }
+      .msg.note { align-self: center; color: var(--dim); font-size: 13px; background: none; }
+      .who { font-size: 11px; color: var(--dim); margin-bottom: 3px; }
+      .timing { font-size: 12px; color: var(--dim); margin-top: 6px; }
+      .timing b { color: var(--accent-2); font-size: 14px; }
+      .foot { margin-top: 26px; color: var(--dim); font-size: 12px; text-align: center; line-height: 1.6; }
+      kbd { border: 1px solid var(--border); border-radius: 5px; padding: 0 5px; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <h1>🎙️ Живой канал</h1>
+        <div class="sub">Он слышит тебя, пока ты говоришь, и отвечает, как только ты договорил.<br />
+          Говори обычно — нажимать ничего не нужно.</div>
+      </header>
+
+      <div class="status" id="status">Нажми «Начать разговор».</div>
+
+      <div class="controls">
+        <button id="start">Начать разговор</button>
+        <button id="done" class="quiet" disabled title="Пробел">Готово <kbd>␣</kbd></button>
+        <button id="fresh" class="quiet">Новая встреча</button>
+        <label><input type="checkbox" id="duplex" /> в наушниках — можно перебивать</label>
+      </div>
+
+      <div class="hearing" id="hearing"></div>
+      <div class="convo" id="convo"></div>
+
+      <div class="foot">
+        Страница для проверки на Mac: живой канал /api/live — уши Deepgram Flux, мозг Luna, голос Fish.<br />
+        «Новая встреча» — новый человек: он встретит тебя как незнакомца.<br />
+        Без наушников микрофон на время его речи выключается, чтобы он не услышал сам себя.
+      </div>
+    </div>
+
+    <script>
+      const $ = (id) => document.getElementById(id);
+      const statusEl = $("status"), hearingEl = $("hearing"), convo = $("convo");
+      const startBtn = $("start"), doneBtn = $("done"), freshBtn = $("fresh"), duplexBox = $("duplex");
+
+      // A stable test identity of its own — never the anonymous user the old page uses.
+      function token() {
+        let t = null;
+        try { t = localStorage.getItem("live_token"); } catch (e) {}
+        if (!t) {
+          t = (crypto.randomUUID ? crypto.randomUUID() : String(Math.random()).slice(2)) + "-live";
+          try { localStorage.setItem("live_token", t); } catch (e) {}
+        }
+        return t;
+      }
+
+      function add(kind, label, text) {
+        const el = document.createElement("div");
+        el.className = "msg " + kind;
+        if (label) {
+          const who = document.createElement("div");
+          who.className = "who"; who.textContent = label; el.appendChild(who);
+        }
+        const body = document.createElement("div");
+        body.textContent = text; el.appendChild(body);
+        convo.appendChild(el);
+        el.scrollIntoView({ behavior: "smooth", block: "end" });
+        return el;
+      }
+
+      // ── the microphone: 16 kHz, 80 ms frames, straight onto the line ──────
+      const WORKLET = `
+        class Mic extends AudioWorkletProcessor {
+          constructor() { super(); this.ratio = sampleRate / 16000; this.acc = 0; this.sum = 0; this.n = 0;
+                          this.frame = new Int16Array(1280); this.fill = 0; }
+          process(inputs) {
+            const input = inputs[0] && inputs[0][0];
+            if (!input) return true;
+            for (let i = 0; i < input.length; i++) {
+              this.sum += input[i]; this.n += 1; this.acc += 1;
+              if (this.acc >= this.ratio) {           // one 16 kHz sample: the average of what it spans
+                this.acc -= this.ratio;
+                const v = Math.max(-1, Math.min(1, this.sum / this.n));
+                this.sum = 0; this.n = 0;
+                this.frame[this.fill++] = v < 0 ? v * 0x8000 : v * 0x7fff;
+                if (this.fill === this.frame.length) {
+                  this.port.postMessage(this.frame.buffer, [this.frame.buffer]);
+                  this.frame = new Int16Array(1280); this.fill = 0;
+                }
+              }
+            }
+            return true;
+          }
+        }
+        registerProcessor("mic", Mic);`;
+
+      let ws = null, ctx = null, stream = null, micNode = null, source = null;
+      let nextAt = 0, playing = [], rate = 44100, pendingPlayed = false;
+      let turn = null;   // timing of the current turn, on this page's clock
+
+      function setStatus(html) { statusEl.innerHTML = html; }
+
+      function scheduleAudio(buf) {
+        const samples = new Int16Array(buf);
+        if (!samples.length) return;
+        const audio = ctx.createBuffer(1, samples.length, rate);
+        const ch = audio.getChannelData(0);
+        for (let i = 0; i < samples.length; i++) ch[i] = samples[i] / 0x8000;
+        const src = ctx.createBufferSource();
+        src.buffer = audio; src.connect(ctx.destination);
+        const at = Math.max(ctx.currentTime + 0.04, nextAt);
+        src.start(at);
+        nextAt = at + audio.duration;
+        if (turn && turn.firstSound == null && turn.heardAt != null) {
+          turn.firstSound = performance.now() + (at - ctx.currentTime) * 1000;
+        }
+        playing.push(src);
+        pendingPlayed = true;
+        src.onended = () => {
+          playing = playing.filter((s) => s !== src);
+          if (!playing.length && pendingPlayed && ws && ws.readyState === 1) {
+            pendingPlayed = false;
+            ws.send(JSON.stringify({ type: "played" }));
+          }
+        };
+      }
+
+      function silenceHim() {
+        for (const s of playing) { try { s.stop(); } catch (e) {} }
+        playing = []; nextAt = 0; pendingPlayed = false;
+      }
+
+      async function start() {
+        startBtn.disabled = true;
+        setStatus("Включаю микрофон…");
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({
+            audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 },
+          });
+        } catch (e) {
+          setStatus("<b>Нет доступа к микрофону.</b> Разреши его в браузере и попробуй снова.");
+          startBtn.disabled = false; return;
+        }
+        ctx = new (window.AudioContext || window.webkitAudioContext)();
+        await ctx.resume();
+        const url = URL.createObjectURL(new Blob([WORKLET], { type: "application/javascript" }));
+        await ctx.audioWorklet.addModule(url);
+        source = ctx.createMediaStreamSource(stream);
+        micNode = new AudioWorkletNode(ctx, "mic");
+        source.connect(micNode);
+
+        const scheme = location.protocol === "https:" ? "wss" : "ws";
+        ws = new WebSocket(`${scheme}://${location.host}/api/live`);
+        ws.binaryType = "arraybuffer";
+        ws.onopen = () => {
+          ws.send(JSON.stringify({ type: "start", token: token(), hello: true, duplex: duplexBox.checked }));
+          setStatus("Подключаюсь…");
+        };
+        ws.onmessage = (event) => {
+          if (typeof event.data !== "string") { scheduleAudio(event.data); return; }
+          const m = JSON.parse(event.data);
+          if (m.kind === "ready") {
+            micNode.port.onmessage = (e) => { if (ws && ws.readyState === 1) ws.send(e.data); };
+            setStatus("<b>Слушаю.</b> Говори.");
+            startBtn.textContent = "Закончить"; startBtn.className = "live"; startBtn.disabled = false;
+            doneBtn.disabled = false;
+          } else if (m.kind === "hearing") {
+            hearingEl.textContent = m.text;
+          } else if (m.kind === "heard") {
+            hearingEl.textContent = "";
+            add("user", "Ты", m.transcript);
+            const behind = (m.timing && m.timing.end_of_turn) || 0;
+            turn = { heardAt: performance.now(), speechEnd: performance.now() - behind * 1000, firstSound: null,
+                     endOfTurn: behind, reused: m.timing && m.timing.draft_reused };
+          } else if (m.kind === "say") {
+            rate = m.rate || rate;
+          } else if (m.kind === "interrupted") {
+            silenceHim();
+          } else if (m.kind === "alarm") {
+            add("note", "", "🚨 Тревога: " + (m.alarm.numbers || []).join(", "));
+          } else if (m.kind === "done") {
+            const el = add("bot", "Он", m.reply || "…");
+            if (turn && turn.firstSound != null) {
+              const total = (turn.firstSound - turn.speechEnd) / 1000;
+              const t = m.timing || {};
+              const line = document.createElement("div");
+              line.className = "timing";
+              line.innerHTML = `<b>${total.toFixed(2)} с</b> от конца твоей фразы до его первого звука` +
+                ` · понял, что ты договорил: ${fmt(turn.endOfTurn)}` +
+                (t.first_words != null ? ` · первые слова мозга: ${fmt(t.first_words)}` : "") +
+                (t.first_audio != null ? ` · первый звук ушёл: ${fmt(t.first_audio)}` : "") +
+                (turn.reused ? " · начал думать заранее" : "");
+              el.appendChild(line);
+            }
+            turn = null;
+            if (m.farewell) setStatus("Он попрощался.");
+          } else if (m.kind === "asleep") {
+            add("note", "", "Он задремал. Нажми «Начать разговор», чтобы разбудить.");
+            wakeOnNextStart = true;
+          } else if (m.kind === "daily_limit") {
+            add("note", "", m.reply || "На сегодня всё.");
+          } else if (m.kind === "idle") {
+            add("note", "", "Долго тихо — линия закрыта, чтобы не платить за тишину.");
+          } else if (m.kind === "replaced") {
+            add("note", "", "Разговор открыт в другом окне.");
+          } else if (m.kind === "trouble") {
+            add("note", "", "⚠️ " + m.detail);
+          }
+        };
+        ws.onclose = () => stop(true);
+      }
+
+      let wakeOnNextStart = false;
+
+      function fmt(s) { return s == null ? "—" : `${Number(s).toFixed(2)} с`; }
+
+      function stop(fromServer) {
+        if (ws && !fromServer && ws.readyState === 1) {
+          try { ws.send(JSON.stringify({ type: "stop" })); } catch (e) {}
+          ws.close();
+        }
+        ws = null;
+        if (micNode) { micNode.port.onmessage = null; micNode.disconnect(); micNode = null; }
+        if (source) { source.disconnect(); source = null; }
+        if (stream) { stream.getTracks().forEach((t) => t.stop()); stream = null; }
+        setTimeout(() => { if (ctx && !ws) { ctx.close(); ctx = null; } }, 4000);
+        hearingEl.textContent = "";
+        startBtn.textContent = "Начать разговор"; startBtn.className = ""; startBtn.disabled = false;
+        doneBtn.disabled = true;
+        if (!statusEl.textContent.startsWith("Он попрощался")) setStatus("Разговор закончен.");
+      }
+
+      startBtn.onclick = async () => {
+        if (ws) { stop(false); return; }
+        if (wakeOnNextStart) {
+          wakeOnNextStart = false;
+          try { await fetch("/api/wake", { method: "POST", headers: { Authorization: "Bearer " + token() } }); } catch (e) {}
+        }
+        start();
+      };
+      doneBtn.onclick = () => { if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: "done_talking" })); };
+      document.addEventListener("keydown", (e) => {
+        if (e.code === "Space" && ws && e.target === document.body) { e.preventDefault(); doneBtn.click(); }
+      });
+      freshBtn.onclick = () => {
+        if (ws) stop(false);
+        try { localStorage.removeItem("live_token"); } catch (e) {}
+        convo.innerHTML = "";
+        add("note", "", "Новая встреча: нажми «Начать разговор» — он поздоровается первым.");
+      };
+    </script>
+  </body>
+</html>

@@ -3,8 +3,11 @@
 Everything a new session needs to work on this project without re-deriving it
 or re-litigating decisions that are already made. Written 2026-09-17 on branch
 `claude/gallant-bardeen-0l6ff0`; revised through 2026-09-23 on
-`claude/awesome-planck-wdj4hu`, which is where all current work lives.
-**1035 tests pass.** Every number below was measured by running the code, not
+`claude/awesome-planck-wdj4hu`, and since then on
+`claude/ai-companion-next-steps-c593db`, which is where all current work lives
+(it is ahead of the other two; the owner's main checkout may still be on
+`awesome-planck` — run the server from this branch).
+**1086 tests pass.** Every number below was measured by running the code, not
 estimated; where something is an estimate it says so.
 
 **What the last stretch was about.** Nine of the ten must-fix items are closed.
@@ -22,6 +25,7 @@ the others were written earlier and some of them have drifted.
 
 | Document | Trust |
 |---|---|
+| `LATENCY.md` | **how fast he answers, measured, and the plan in four stages** — stage 1, the live channel, built 2026-09-30: 1.6–2.2 s from the end of the person's words to his first sound, against ~6.5 s before; where every tenth of a second goes, what was found on the way, stages 2–4 and what each needs from the owner |
 | `VOICE-MODELS-REHEARSAL.md` | **which voice for the conversation**, from 24 rehearsed first meetings — each model's pros and cons in plain words; GPT-5.6 Luna best, Gemini 3.5 Flash-Lite second (2026-09-27). **The owner chose Luna; it is the voice since 2026-09-28** |
 | `SOUNDS.md` | his coughs, «кхм», sighs, laughs and yawns made by the voice itself (our markers → Fish S2.1 tags) — **layer 1 built 2026-09-28**, and what listening showed; layer 2, the world around him as a quiet loop played by the phone, waits for the iOS screen |
 | `FIRST-MEETING.md` | **the plan that replaces the intake interview** — owner's decisions of 2026-09-26; step 1 (the conversation) built and rehearsed 2026-09-27, steps 2–3 ahead |
@@ -214,10 +218,10 @@ These are not style preferences. They have each been earned by a bug.
 
 | | Part | Model | Notes |
 |---|---|---|---|
-| ① | **Ears** — speech to text | `whisper-1` | **stale**; Deepgram Nova-3 Flux recommended, needs a key |
+| ① | **Ears** — speech to text | Deepgram Flux `flux-general-multi` (live channel, `hearing.py`); `whisper-1` (`/api/talk`) | Flux hears while they speak and says itself when they have finished — «похоже, договорил» ~0.36 s after the last word, «договорил» ~0.63 s; European address; `mip_opt_out=true`, so the audio is not kept. Whisper stays for the file-at-a-time path the iPhone app still uses |
 | ② | **Watchman** — danger in the person's words | Haiku 4.5 | runs as a task; **does not hold up the answer** |
-| ③ | **Voice** — the companion speaking | GPT-5.6 Luna, via OpenRouter | ~1.0 s to first words (short prompt, 2026-09-28); to measure on the real one |
-| ④ | **Mouth** — text to speech | Fish Audio `s2.1-pro` | #1 on TTS-Arena2; makes his sounds. Direct (`fish`) or on the OpenRouter key (`TTS_PROVIDER=openrouter`) |
+| ③ | **Voice** — the companion speaking | GPT-5.6 Luna, via OpenRouter | OpenAI's «fast» tier first (`CHAT_PROVIDERS`), no reasoning (`CHAT_REASONING=none`): 0.8–1.1 s to first words on the real prompt, the prompt ~all cached (2026-09-29/30). «minimal» reasoning still thought, a second of silence |
+| ④ | **Mouth** — text to speech | Fish Audio `s2.1-pro` | #1 on TTS-Arena2; makes his sounds. Direct (`fish`) or through OpenRouter — which `fish` becomes by itself when there is an OpenRouter key and no Fish one (`config.voice_provider`). Streams raw PCM to the live channel (`tts.stream`): first sound ~0.46 s after the first piece of text, through OpenRouter |
 
 **The watchman never blocks.** It used to be awaited before the prompt could be
 assembled, so every person who was fine paid for it in silence. Now the reply
@@ -241,6 +245,35 @@ streams `{"kind": "alarm", "alarm": {"danger": …, "numbers": […]}}` — this
 person's own country's number, ready to dial — and the app puts it under a
 button that goes nowhere on a timer. Hearing a number, holding it, leaving the
 app and typing it correctly is a great deal to ask of somebody on the floor.
+
+### The live channel — `live.py`, `hearing.py`, `/api/live` (2026-09-30)
+
+One WebSocket for the whole conversation, sound both ways. The phone streams
+the microphone (16 kHz PCM, 80 ms frames); Flux hears it as it is said. On the
+early «похоже, договорил» a reply is **drafted** — `main._assemble(pending=True)`
+builds exactly the prompt the turn would get and writes nothing: not their
+line, not what memory recalled (gathered as marks), no watcher. On the sure
+«договорил» the draft becomes the turn (`main._commit`); if they carried on it
+is thrown away without a trace. From there it is the same turn as every other
+path — the vows between pieces, the watcher breaking in between sentences, the
+farewell, the body, the remembering. The answer is voiced piece by piece
+(`tts.ready_split`: the first piece ends at a sentence end of ≥10 characters or
+a comma/pause of ≥40) and the sound goes out as it is made; the next piece's
+voice is started while this one plays.
+
+He must not hear himself: by default, while he speaks and 0.3 s after, Flux
+is sent silence instead of the microphone. `duplex` (headphones) keeps the
+microphone open, and talking over him stops him. Flux has no KeepAlive, so a
+quiet line is fed silence; after `LIVE_IDLE_SECONDS` (120) of nobody speaking
+it closes itself, because Deepgram bills every open second.
+
+**Measured 2026-09-30, end to end with the real services: 1.57–2.16 s from
+the end of the person's words to his first sound (median 1.83), against ~6.5 s
+on `/api/talk`.** Where it goes: the early signal 0.36 s, the prompt 0.03, Luna
+0.94, the first piece 0.12, the voice through OpenRouter 0.46. Heard in a
+browser at `/live` (the page is a developer tool). The iPhone app still uses
+`/api/talk` — the live channel reaches it in stage 3. Everything else, and what
+is next: `docs/LATENCY.md`.
 
 ### In the background (nobody is waiting)
 
@@ -332,9 +365,18 @@ Three things worth knowing:
    $0.29 in Russian and $0.21 in English.
 
 These were measured with Haiku as the voice. Luna, the voice since 2026-09-28,
-spoke its first words in ~1.0 s through OpenRouter on a short prompt and is
-among the cheapest of the rehearsed five; both still want measuring on the
-real prompt, in the app.
+is among the cheapest of the rehearsed five; its cost per conversation still
+wants measuring in the app. **Its speed is measured** (2026-09-29/30, real
+prompt): 0.8–1.1 s to first words with no reasoning.
+
+**Time to first sound, end to end** — from the end of the person's words to
+his first sound, with the real services, measured the same way for both:
+**~6.5 s** on the file-at-a-time path (`/api/talk`) and **1.6–2.2 s** on the
+live channel (§6). The ~1.9 s in the table above is older (2026-09-17) and
+nothing records which stretch of the path it covered; quote the end-to-end
+ones. The live ears
+add Deepgram at $0.0078 a minute the line is open — ~$4.7 per person per month
+at 20 minutes a day, with $200 of free credit to start (`docs/LATENCY.md`).
 
 ---
 
@@ -452,8 +494,10 @@ lose; and self-hosting — GPUs idle at our size.
 | `situations.py` | Rules that apply only to this turn (games, news, and — after two of his replies in a row ended with a question — a nudge to end this one without) |
 | `occasions.py` | What day it is, and whose birthday |
 | `allowance.py` | Daily spend per person; dozing |
-| `brain.py` | The model calls: `generate_reply`, `stream_reply`, `think`, `generate_text` |
-| `main.py` | The turn: assemble → race the watcher → stream → remember |
+| `brain.py` | The model calls: `generate_reply`, `stream_reply`, `think`, `generate_text`; `without_glitches` (a word in an alphabet that is neither Russian nor Latin never reaches voice, screen or memory) |
+| `main.py` | The turn: assemble → race the watcher → stream → remember. `_assemble(pending=True)` / `_commit` are the live channel's draft and its becoming real |
+| `hearing.py` | The live ears: one line to Deepgram Flux per conversation, and what it is told (`mip_opt_out`, the language, his name as a word to expect) |
+| `live.py` | The live channel, `/api/live`: drafts on the early signal, voice in pieces, he does not hear himself; the protocol is in its header |
 | `identity.py` | Hash-only user ids from the token — done properly |
 
 ### The iOS side
@@ -578,16 +622,20 @@ the reason the tests that now hold them exist.
     `learn.SCRIBE_TOKENS` is 2,500; only what is written is paid for.
 16. ~~**Luna now and then ends a reply with letters Russian does not have**~~
     — «…видно особенно ясно.АҞӘА», read aloud as gibberish. Fixed
-    2026-09-28: `brain._NOT_RUSSIAN` takes such a word out whole, before
-    anybody hears, sees or remembers it.
+    2026-09-28, widened 2026-09-29 when a Thai «อ่านข้อความเต็ม» got past a
+    filter that only knew Cyrillic: `brain.without_glitches` takes out whole
+    any word with letters that are neither Russian nor Latin, before anybody
+    hears, sees or remembers it.
 17. ~~**OpenAI's own web search cites its sources as links**~~, asked not to
     or not — «([nuz.uz](https://…))» on the first real search turn. Fixed:
     `brain._uncited` takes them out of a search turn's reply.
 18. **Choose his two voices by ear** (`FISH_VOICE_ID`, `FISH_VOICE_ID_FEMALE`).
-    Both are empty: with no id Fish picks its own voice, and every woman
-    companion speaks as a man. Listening showed the «Спокойный женский голос»
-    the sound tests used (`2a1036d6…`) comes out low and is heard as a man;
-    «Молодой Женский Голос» (`d567e990…`) is plainly a woman.
+    Until then the defaults are two generic library voices, nobody's clone:
+    «Молодой Русский Рассказчик» (`c962ed46…`) and «Молодой Женский Голос»
+    (`d567e990…`, plainly a woman). They used to be empty — Fish then picked a
+    voice nobody chose, and every woman companion spoke as a man. The
+    «Спокойный женский голос» the sound tests used (`2a1036d6…`) comes out low
+    and is heard as a man. Stage 2 of `docs/LATENCY.md` needs this choice.
 
 ## 11. Deliberately NOT done, and why
 
@@ -603,9 +651,10 @@ the reason the tests that now hold them exist.
   fixed by ordering instead. The hypothesis that would have justified the
   module ("his body doesn't know about his week") was **checked and found
   false**: `life.block` already emits «Как это слышно: гнусавит, шмыгает».
-- **Model swaps** (Deepgram for ears, Mistral Large for the reader). Both need
-  vendor keys and measurement. Untested vendor code is worse than none. (Luna
-  for the voice is done — 24 rehearsed meetings first, 2026-09-28.)
+- **Model swaps** (Mistral Large for the reader). Needs a vendor key and
+  measurement. Untested vendor code is worse than none. (Luna for the voice is
+  done — 24 rehearsed meetings first, 2026-09-28; Deepgram Flux for the ears
+  is done for the live channel — measured on real Russian first, 2026-09-30.)
 - ~~**Cutting the constitution.**~~ **Done** 2026-09-23 (§4). What changed the answer was working out where the win actually
   is: 12,500 tokens per request today, ~5,500 after the cut, ~2,400 if the
   rules were baked into weights. **The first step is bigger than the second**,
@@ -657,7 +706,8 @@ the reason the tests that now hold them exist.
 
 ## 12. How to work here
 
-- **Branch:** `claude/awesome-planck-wdj4hu`. Push with
+- **Branch:** `claude/ai-companion-next-steps-c593db` (earlier work:
+  `claude/awesome-planck-wdj4hu`, an ancestor of it). Push with
   `git push -u origin <branch>`, retry network failures with backoff
   (2s/4s/8s/16s). **Never open a PR unless explicitly asked.**
 - **Keys live only in `backend/.env`** (gitignored). Never paste one into a
@@ -669,7 +719,7 @@ the reason the tests that now hold them exist.
   Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
   Claude-Session: https://claude.ai/code/session_018PiV38FZMupJ19foghBRZm
   ```
-- **Tests:** `cd backend && python -m pytest -q`. **1035 pass.** The suite is the
+- **Tests:** `cd backend && python -m pytest -q`. **1086 pass.** The suite is the
   design record — test docstrings carry the *reasoning*, including what went
   wrong before. Read the docstring before changing an assertion; several tests
   exist because a previous fix was subtly wrong.
@@ -704,6 +754,11 @@ the reason the tests that now hold them exist.
   `main._think_and_speak` themselves, on a throwaway database), so they cannot
   drift from the app. All keep their output on disk so a judgement can be
   revisited a day later rather than trusted to memory of the third one.
+- **The live channel by ear:** `./run.sh` in `backend/` of this branch, then
+  `http://localhost:8000/live` in Chrome or Safari on the Mac. «Новая встреча»
+  makes him a stranger again (a new token); the headphones box lets him be
+  interrupted; every answer shows its own timing. `python check_keys.py`
+  checks every key — the live ears included — and prints none of them.
 - **Setup is one command per platform:** `setup.sh` (macOS/Linux), `setup.ps1`
   (Windows). Both refuse to run if a real key is sitting in `.env.example` —
   that file is deliberately NOT hidden from git (`!.env.example` in
@@ -753,12 +808,18 @@ the reason the tests that now hold them exist.
    turn. Left alone deliberately until the voice was chosen — it is now
    (Luna, 2026-09-28), so this is the next question.
 8. **One key for everything?** The voice and his sounds now run on the
-   OpenRouter key. The ears (Whisper), the watcher, the scribe, the reader and
-   the writer still need OpenAI and Anthropic keys of their own. Move them to
-   OpenRouter too, or keep those vendors direct?
-9. **The history window.** He is given the last twelve lines; at the end of a
-   long first meeting that is why a model re-asks and introduces itself again.
-   Twelve → thirty? (Asked 2026-09-27, still open.)
+   OpenRouter key. The live ears have Deepgram's own key (since 2026-09-29).
+   The file-path ears (Whisper), the watcher, the
+   scribe, the reader and the writer still need OpenAI and Anthropic keys of
+   their own. Move them to OpenRouter too, or keep those vendors direct?
+9. ~~**The history window.**~~ Answered 2026-09-29: twelve lines was why he
+   introduced himself again at his eighth reply. He is given 20 to 39 now
+   (`memory.conversation`) — the start moves in steps of 20, so the cached
+   head stays the same between steps.
+10. **The live channel's next stages** (`docs/LATENCY.md`) each need
+    something only the owner can do: a Fish account and key and his two
+    voices chosen by ear (stage 2), an iPhone connected to the Mac and Xcode
+    signed in (stage 3), a hosting account in Europe (stage 4).
 
 ---
 

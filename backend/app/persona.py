@@ -31,6 +31,9 @@ from . import config, identity
 # to data/persona.json and edit.
 DEFAULT_PERSONA: dict = {
     "name": config.COMPANION_NAME or "Боб",
+    # Said, not left to the name: the name can be changed in .env, and a model
+    # guessing its own grammar from a name guesses wrong (see config).
+    "gender": "мужской",
     "address": "ты",  # "ты" (close friend) or "вы" (respectful)
     "one_liner": "тёплый, живой друг-собеседник, немного с юмором",
     "age": "87 лет",
