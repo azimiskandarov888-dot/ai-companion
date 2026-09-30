@@ -7,7 +7,7 @@ or re-litigating decisions that are already made. Written 2026-09-17 on branch
 `claude/ai-companion-next-steps-c593db`, which is where all current work lives
 (it is ahead of the other two; the owner's main checkout may still be on
 `awesome-planck` — run the server from this branch).
-**1092 tests pass.** Every number below was measured by running the code, not
+**1114 tests pass.** Every number below was measured by running the code, not
 estimated; where something is an estimate it says so.
 
 **What the last stretch was about.** Nine of the ten must-fix items are closed.
@@ -263,9 +263,9 @@ voice is started while this one plays.
 
 His goodbye does not hang up at once: the line stays open `_FAREWELL_GRACE` (8 s) after it plays, and somebody who carries on is answered. Without reasoning the voice sometimes marks a goodbye nobody said («Домой сразу. Спать.»; in 2 of 6 rehearsals of 2026-09-29).
 
-He must not hear himself: by default, while he speaks and 0.3 s after, Flux
-is sent silence instead of the microphone. `duplex` (headphones) keeps the
-microphone open, and talking over him stops him. Flux has no KeepAlive, so a
+**He can be interrupted — the default since 2026-09-30** (`duplex`; the owner, after ChatGPT's voice: «it was really good that I can interrupt him»). The microphone stays open while he speaks. What echo cancellation misses comes back as HIS words, and `live.talks_over` tells those — and an «угу» — from somebody talking; a stop word («подожди») or two words of their own stop him. A turn that BEGAN over his voice is judged so to its end (the ears decide a turn is over a second after the room goes quiet, when he has already stopped), and `live.their_part` cuts the tail of his echo off the start of the person's turn. Tested in the worst room — no echo cancellation at all, his voice back into the microphone at a third of its level, real Deepgram: he never stopped himself, his echo never became a turn, and «Подожди, подожди…» stopped him in 0.55–0.89 s. With `duplex` the end-of-turn threshold is 0.8 (`FLUX_EOT_THRESHOLD_DUPLEX`): a turn taken too early is mended by carrying on. Without it — a room where he keeps hearing himself anyway — Flux is sent silence while he speaks and 0.3 s after, and the threshold is the patient 0.85.
+
+Live words are HEARD, and the ears mishear («бассейн» → «Басанин», «Азим» → «Азима»): every live draft carries `companion.BY_EAR` — take a strange word by its sense and never say it back, take the person's gender from their own words and not from a name. Flux has no KeepAlive, so a
 quiet line is fed silence; after `LIVE_IDLE_SECONDS` (120) of nobody speaking
 it closes itself, because Deepgram bills every open second.
 
@@ -721,7 +721,7 @@ the reason the tests that now hold them exist.
   Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
   Claude-Session: https://claude.ai/code/session_018PiV38FZMupJ19foghBRZm
   ```
-- **Tests:** `cd backend && python -m pytest -q`. **1092 pass.** The suite is the
+- **Tests:** `cd backend && python -m pytest -q`. **1114 pass.** The suite is the
   design record — test docstrings carry the *reasoning*, including what went
   wrong before. Read the docstring before changing an assertion; several tests
   exist because a previous fix was subtly wrong.

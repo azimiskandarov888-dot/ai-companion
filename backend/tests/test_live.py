@@ -40,16 +40,17 @@ class FakeEars:
 
     made: list[FakeEars] = []
 
-    def __init__(self, keyterms=()) -> None:
+    def __init__(self, keyterms=(), eot_threshold=None) -> None:
         self.keyterms = keyterms
+        self.eot_threshold = eot_threshold
         self.heard: list[bytes] = []
         self.inbox: queue.Queue = queue.Queue()
         self.ends = 0
         self.closed = False
 
     @classmethod
-    async def open(cls, keyterms=()):
-        ears = cls(keyterms)
+    async def open(cls, keyterms=(), eot_threshold=None):
+        ears = cls(keyterms, eot_threshold)
         cls.made.append(ears)
         return ears
 
@@ -246,6 +247,20 @@ def test_a_draft_begun_on_a_guess_becomes_the_answer(env):
     assert roles() == ["user", "assistant"]
 
 
+def test_he_is_told_their_words_were_heard_and_may_be_misheard(monkeypatch):
+    """Flux heard «бассейн» as «Басанин» and «Азим» as «Азима», and he said
+    «Басанин» back and «ты исчезла» to the owner (2026-09-30). Every live
+    draft is told the words were HEARD; the text path is not."""
+    async def run():
+        heard = await main._assemble(UID, "но басанин это не море", pending=True, marks=[], by_ear=True)
+        typed = await main._assemble(UID, "но бассейн это не море", pending=True, marks=[])
+        return heard[1], typed[1]
+
+    heard, typed = asyncio.run(run())
+    assert companion.BY_EAR in heard and companion.BY_EAR not in typed
+    assert "не по имени" in companion.BY_EAR and "вслух не повторяй" in companion.BY_EAR
+
+
 def test_a_draft_they_talked_past_leaves_no_trace(env):
     env.mind.delay = 0.05
     with talk(env) as line:
@@ -337,6 +352,110 @@ def test_over_headphones_talking_over_him_stops_him(env):
         wait_until(lambda: roles()[-1:] == ["assistant"])
     kept = memory.recent_turns(UID)[-1]["content"]
     assert kept == "Первое предложение тут."        # what got out, nothing more
+
+
+def test_he_can_be_interrupted_by_default(env):
+    """What the owner liked in ChatGPT's voice (2026-09-30): talk, and it
+    stops and listens. A phone that says nothing about it gets that."""
+    with env.client.websocket_connect("/api/live") as ws:
+        ws.send_json({"type": "start", "token": TOKEN})
+        Line(ws).expect("ready")
+        assert live._open[UID].duplex is True
+    with talk(env, duplex=False) as line:
+        assert live._open[UID].duplex is False
+
+
+def test_a_turn_ended_too_early_is_mended_so_it_may_end_sooner(env):
+    """Where they can talk over him, a turn he took too early is mended by
+    carrying on — so the ears may decide sooner. Where they cannot, patience."""
+    with talk(env, duplex=True) as line:
+        assert line.ears().eot_threshold == config.FLUX_EOT_THRESHOLD_DUPLEX
+    with talk(env, duplex=False) as line:
+        assert line.ears().eot_threshold == config.FLUX_EOT_THRESHOLD
+    assert config.FLUX_EOT_THRESHOLD_DUPLEX < config.FLUX_EOT_THRESHOLD
+
+
+def test_his_own_voice_back_from_the_speaker_does_not_stop_him(env):
+    """Without headphones his voice comes back into the open microphone, and
+    what echo cancellation misses Flux hears as HIS words. Those — and an
+    «угу» — neither stop him nor become a turn of theirs."""
+    env.mind.replies = ["Море сегодня тихое, ветер почти улёгся. А у тебя как погода, тепло ли?"]
+    env.voice.delay = 0.15
+    with talk(env, duplex=True) as line:
+        line.ears().send(turn("EndOfTurn", "как там у тебя"))
+        line.expect("say")
+        line.ears().send(turn("StartOfTurn", "море сегодня"), turn("Update", "море сегодня тихое"),
+                         turn("EndOfTurn", "морю сегодня тихо"))
+        line.ears().send(turn("StartOfTurn", "угу"), turn("EndOfTurn", "угу"))
+        done = line.expect("done")
+        assert "interrupted" not in line.kinds()
+    assert done["reply"].startswith("Море сегодня тихое")
+    assert len(env.mind.calls) == 1                     # nothing of his was answered
+    assert [t["role"] for t in memory.recent_turns(UID)] == ["user", "assistant"]
+
+
+def test_somebody_talking_over_him_stops_him_without_headphones(env):
+    env.mind.replies = ["Первое предложение тут. Второе предложение тоже тут. Третье предложение тоже."]
+    env.voice.delay = 0.15
+    with talk(env, duplex=True) as line:
+        line.ears().send(turn("EndOfTurn", "ну давай"))
+        line.expect("say")
+        line.ears().send(turn("StartOfTurn", "первое"))          # his own word: nothing
+        line.ears().send(turn("Update", "первое а я вот хотел"))  # theirs: he stops
+        line.expect("interrupted")
+        line.ears().send(turn("EndOfTurn", "а я вот хотел сказать"))
+        line.expect("heard")
+    assert env.mind.calls[-1][-1]["content"] == "а я вот хотел сказать"
+
+
+@pytest.mark.parametrize("heard, over", [
+    ("море сегодня тихое", False),          # his words
+    ("морю сегодня тихо", False),           # his words, heard in other endings
+    ("угу", False), ("ага да", False),     # listening, not taking the turn
+    ("", False),
+    ("подожди", True), ("стоп", True),     # a stop word, however short
+    ("а я вот", False),                    # nothing of theirs long enough yet
+    ("а я вот хотел", True),               # one long word of their own
+    ("мне надо идти", True),               # two of their own
+])
+def test_what_is_heard_over_him_is_told_apart(heard, over):
+    said = ["Море сегодня тихое, ветер почти улёгся."]
+    assert live.talks_over(heard, said) is over
+
+
+@pytest.mark.parametrize("heard, theirs", [
+    # the tail of his echo glued to what they say next (seen live, 2026-09-30)
+    ("Ветер почти улёгся. Я водителем работаю.", "Я водителем работаю."),
+    ("Море сегодня -- Подожди, я не договорил.", "Подожди, я не договорил."),
+    ("море а я вот хотел", "а я вот хотел"),          # their «а я» is kept
+    ("а я вот хотел сказать", "а я вот хотел сказать"),
+    ("море сегодня тихое", ""),                       # none of it theirs
+])
+def test_his_echo_is_taken_off_the_start_of_their_turn(heard, theirs):
+    said = ["Море сегодня тихое, ветер почти улёгся."]
+    assert live.their_part(heard, said) == theirs
+
+
+def test_his_echo_ending_after_he_stopped_is_still_his(env):
+    """The ears decide a turn is over a second or so after the room goes
+    quiet — by which time he has stopped. A turn that BEGAN over his voice is
+    judged as possibly his voice to its end: in the worst room (no echo
+    cancellation at all) his own «После работы усталость» came back as the
+    person's turn, and he answered it (2026-09-30)."""
+    env.mind.replies = ["После работы усталость честная. Отдохни."]
+    with talk(env, duplex=True) as line:
+        line.ears().send(turn("EndOfTurn", "устал немного"))
+        line.expect("done")
+        session = live._open[UID]
+        session._playing_until = time.monotonic() + 0.3      # still in the room
+        line.ears().send(turn("StartOfTurn", "после работы"))
+        wait_until(lambda: session._over_him)
+        session._playing_until = 0.0                         # …and now he has stopped
+        line.ears().send(turn("EagerEndOfTurn", "после работы усталость честная"),
+                         turn("EndOfTurn", "после работы усталость честная"))
+        time.sleep(0.2)
+    assert len(env.mind.calls) == 1                           # not answered
+    assert [t["role"] for t in memory.recent_turns(UID)] == ["user", "assistant"]
 
 
 def test_somebody_who_goes_on_before_he_answers_is_answered_once(env):

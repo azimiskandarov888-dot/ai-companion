@@ -167,6 +167,12 @@ FLUX_MODEL: str = os.getenv("FLUX_MODEL", "flux-general-multi")
 #: ambiguous at any threshold; the real answer to that is letting them talk
 #: over him (the live channel's `duplex`).
 FLUX_EOT_THRESHOLD: float = float(os.getenv("FLUX_EOT_THRESHOLD", "0.85"))
+#: The same when they CAN talk over him (the live channel's `duplex`, now the
+#: default): a turn ended too early is mended by carrying on — he stops and
+#: listens — so it can be quicker. 0.8 still cuts in less than 0.7 did, and
+#: its «договорил» (0.5–1.3 s after the last word) almost always comes while
+#: the brain is still writing.
+FLUX_EOT_THRESHOLD_DUPLEX: float = float(os.getenv("FLUX_EOT_THRESHOLD_DUPLEX", "0.8"))
 #: The earlier, less certain «похоже, договорил» — the brain starts writing
 #: then, and the draft is thrown away if they carry on. Lower is earlier and
 #: more drafts wasted (Deepgram: 0.3–0.5 costs 50–70% more calls — for Luna,

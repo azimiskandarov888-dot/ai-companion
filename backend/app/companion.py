@@ -89,6 +89,21 @@ BEHAVIOR_RULES = """Ты — живой голосовой собеседник 
 Главное: пусть он чувствует, что его слушают, что он интересен, что он не один — и что завтра снова будет с кем поговорить."""
 
 
+#: What the live ears get wrong, and what he does about it. In the owner's own
+#: conversations (2026-09-30) Flux heard «бассейн» as «Басанин» and «Азим» as
+#: «Азима» — and he said «Басанин» back, and called the owner «ты исчезла».
+#: A model reads a misheard word in context far better than any list could;
+#: it only has to be told that the words were HEARD.
+BY_EAR = (
+    "ТЫ ЕГО СЛЫШИШЬ, А НЕ ЧИТАЕШЬ: его слова доходят до тебя через распознавание речи, "
+    "и оно иногда ослышивается. Странное или не к месту слово понимай по смыслу и вслух "
+    "не повторяй — скажи правильное или просто продолжай; совсем не понял — переспроси "
+    "коротко. Как говорить с ним — «ты пришёл» или «ты пришла», — решай по его собственным "
+    "словам, а не по имени: имя тоже могло послышаться не так. Пока неясно — строй фразы "
+    "без рода."
+)
+
+
 def build_system_parts(
     *,
     persona_block: str = "",
@@ -110,6 +125,7 @@ def build_system_parts(
     acquaintance: str = "",
     lessons_block: str = "",
     meeting_block: str = "",
+    by_ear: bool = False,
 ) -> tuple[str, str]:
     """Assemble the system prompt as (stable, variable).
 
@@ -131,6 +147,8 @@ def build_system_parts(
                     (memory.broke_off_last_time decides that, not this).
     meeting_block:  how two strangers get talking — only while they still
                     are (meeting.block decides that, not this).
+    by_ear:         the person's words came through live speech recognition,
+                    which mishears (BY_EAR).
     """
     # ── DANGER IS THE WHOLE PROMPT, OR IT IS NOT THE WHOLE PROMPT ───────────
     #
@@ -198,6 +216,9 @@ def build_system_parts(
     # the rest should be said.
     if alert_block.strip():
         variable_parts.append(alert_block.strip())
+    # Before anything about him: how to take the words at all.
+    if by_ear:
+        variable_parts.append(BY_EAR)
 
     # Then this, because it changes how everything after it should be said. The
     # warmth rule in the stable half is a rule about MOVEMENT, and movement

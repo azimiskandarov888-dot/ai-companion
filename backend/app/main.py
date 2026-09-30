@@ -203,6 +203,7 @@ async def _assemble(
     *,
     pending: bool = False,
     marks: list | None = None,
+    by_ear: bool = False,
 ) -> tuple[str, str, list, str | None, asyncio.Task | None]:
     """Recall everything he should have in mind, and log that he was spoken to.
 
@@ -221,6 +222,9 @@ async def _assemble(
     would get: their line is added to the history here rather than read back
     from the log, and counted where the log would have counted it. _commit
     writes the rest once the turn is really theirs.
+
+    `by_ear`: their words came through live speech recognition, which
+    mishears — he is told so (companion.BY_EAR).
     """
     if pending and user_text is None:
         raise ValueError("Only somebody's line can be pending — he never drafts a hello.")
@@ -339,6 +343,7 @@ async def _assemble(
         meeting_block=meeting.block(
             words, named=named, heard=memory.times_heard(user_id) + (1 if pending else 0)
         ),
+        by_ear=by_ear and user_text is not None,
     )
 
     return (

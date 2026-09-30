@@ -21,8 +21,9 @@ the first message. Never in the URL: a URL is printed in every server log.
   phone → server
     {"type": "start", "token"?: "...", "hello"?: bool, "duplex"?: bool}
                                    first, once. `hello`: he greets them if they
-                                   have never talked. `duplex`: headphones —
-                                   he may be interrupted (see below).
+                                   have never talked. `duplex` (true unless
+                                   said otherwise): he may be interrupted —
+                                   see below.
     binary                         the microphone: 16-bit mono PCM, 16 kHz
                                    (hearing.RATE), 80 ms a frame is ideal
     {"type": "played"}             everything he sent has finished playing
@@ -51,14 +52,20 @@ all at once — and from there it is the same turn as on every other path: the
 same filters, the same watcher breaking in between sentences, the same
 remembering.
 
-── HE DOES NOT HEAR HIMSELF ────────────────────────────────────────────────
+── HE CAN BE INTERRUPTED, AND DOES NOT HEAR HIMSELF ─────────────────────────
 
-A speaker and a microphone in one room: his voice comes back into the
-microphone, and Flux would take it for the person and start a turn. So while his
-voice is playing — and a moment after, for the room — Flux is sent silence
-instead of the microphone. Over headphones (`duplex`) there is no echo, the
-microphone stays open, and a person who starts talking over him stops him:
-that is what a conversation is.
+`duplex` (the default since 2026-09-30): the microphone stays open while he
+speaks, and somebody who talks over him stops him — what the owner liked in
+ChatGPT's voice, and what a conversation is. A speaker and a microphone in one
+room, though: his voice comes back into the microphone. Echo cancellation in
+the phone or the browser takes most of it out; what it misses, Flux hears as
+HIS words, and talks_over tells those — and an «угу» — from somebody talking.
+
+Without `duplex` (a room where he keeps hearing himself anyway): while his
+voice plays, and a moment after, Flux is sent silence instead of the
+microphone, and he cannot be interrupted. The end-of-turn threshold is then
+more patient (config.FLUX_EOT_THRESHOLD), because a turn he ends too early
+cannot be mended by carrying on.
 """
 
 from __future__ import annotations
@@ -66,10 +73,11 @@ from __future__ import annotations
 import asyncio
 import json
 import random
+import re
 import sys
 import time
 from collections import deque
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Iterable
 
 from fastapi import BackgroundTasks, WebSocket
 
@@ -100,6 +108,67 @@ _REWARM_AFTER = 20.0
 #: school (rehearsals and a scripted meeting, 2026-09-29/30). Somebody who
 #: carries on talking is answered, not hung up on.
 _FAREWELL_GRACE = 8.0
+
+#: Said over him, these keep a person listening rather than take the turn…
+_BACKCHANNEL = frozenset({"а", "ага", "угу", "ну", "да", "мм", "м", "хм", "эм", "э",
+                          "ой", "ок", "окей", "так", "ясно", "понятно", "ладно"})
+#: …and these take it at once, however short.
+_STOP = frozenset({"стоп", "стой", "подожди", "подождите", "погоди", "погодите",
+                   "постой", "постойте", "хватит", "извини", "слушай"})
+
+
+_WORD = re.compile(r"[a-zA-Zа-яА-ЯёЁ]+")
+
+
+def _words(text: str) -> list[str]:
+    return [w.lower().replace("ё", "е") for w in _WORD.findall(text)]
+
+
+def _stem(word: str) -> str:
+    """Enough of a word to know it again in another ending — «море», «морю» —
+    or half-heard back from the speaker: «автобусе», «автоматии»."""
+    return word[:3] if len(word) <= 4 else word[:4]
+
+
+def talks_over(heard: str, said: Iterable[str]) -> bool:
+    """Is what the ears caught while he was speaking somebody talking over
+    him — and not his own voice coming back from the speaker, nor a «угу»?
+
+    Echo cancellation in the phone or browser takes his voice out of the
+    microphone; what it misses, Flux hears as words — HIS words, which is how
+    they are told apart. A stop word interrupts at once; otherwise two words
+    of their own, or one long one. Words under three letters do not count: a
+    garbled echo is made of them as easily as «а я» is."""
+    his = _stems(said)
+    new = [w for w in _words(heard) if _theirs(w, his)]
+    if any(w in _STOP for w in new):
+        return True
+    return len(new) >= 2 or any(len(w) >= 5 for w in new)
+
+
+def their_part(heard: str, said: Iterable[str]) -> str:
+    """A turn with his own voice caught at its start — the ears glue the tail
+    of his echo to what the person says next — from the person's first word
+    on. Empty if none of it is theirs."""
+    his = _stems(said)
+    start = 0                        # where their part begins
+    for m in _WORD.finditer(heard):
+        word = m.group(0).lower().replace("ё", "е")
+        if _theirs(word, his):
+            break                    # their first word: what is before it is his
+        if len(word) >= 3 and _stem(word) in his:
+            start = m.end()          # still his voice; a short word after it may be theirs
+    else:
+        return ""
+    return heard[start:].lstrip(" ,.;:!?…—–-").strip()
+
+
+def _stems(said: Iterable[str]) -> set[str]:
+    return {_stem(w) for text in said for w in _words(text)}
+
+
+def _theirs(word: str, his: set[str]) -> bool:
+    return len(word) >= 3 and word not in _BACKCHANNEL and _stem(word) not in his
 
 #: One live channel per person. A second one — another tab, a reconnect —
 #: replaces the first, so two conversations never write one diary.
@@ -150,6 +219,7 @@ class Draft:
                 self.transcript,
                 pending=self.transcript is not None,
                 marks=self.marks,
+                by_ear=True,
             )
             self.voice = voice
             self.ready.set()
@@ -253,6 +323,13 @@ class Session:
         self._arrivals: deque[tuple[float, float]] = deque(maxlen=4000)
         #: When the lines to the brain and the voice were last opened ahead of need.
         self._warmed = 0.0
+        #: What he has said aloud lately — to know his own voice when the
+        #: microphone brings it back (talks_over).
+        self._said: deque[str] = deque(maxlen=8)
+        #: The turn the ears are in began while his voice was in the room — so
+        #: it is judged as possibly his voice to its very end, which comes a
+        #: second or so after the room goes quiet, when he is no longer audible.
+        self._over_him = False
         #: The line closing after his goodbye — called off if they carry on.
         self._leaving: asyncio.Task | None = None
 
@@ -280,6 +357,10 @@ class Session:
             return True
         return not self._voicing and time.monotonic() >= self._playing_until + _ECHO_TAIL
 
+    def _audible(self) -> bool:
+        """His voice is in the room — playing, or still dying away."""
+        return self._voicing or time.monotonic() < self._playing_until + _ECHO_TAIL
+
     # ── the conversation ────────────────────────────────────────────────────
 
     async def run(self, *, hello: bool) -> None:
@@ -295,7 +376,10 @@ class Session:
                 return
             try:
                 name = persona.persona_name(self.who)
-                self.ears = await hearing.Ears.open(keyterms=(name.split()[0],) if name else ())
+                threshold = (config.FLUX_EOT_THRESHOLD_DUPLEX if self.duplex
+                             else config.FLUX_EOT_THRESHOLD)
+                self.ears = await hearing.Ears.open(
+                    keyterms=(name.split()[0],) if name else (), eot_threshold=threshold)
             except Exception as e:  # noqa: BLE001
                 _log("👂 the live ears (Deepgram)", e)
                 await self._send({"kind": "trouble", "detail": f"the ears: {e}"})
@@ -425,6 +509,22 @@ class Session:
                 continue
             event = message.get("event")
             text = (message.get("transcript") or "").strip()
+            if event == "StartOfTurn":
+                self._over_him = self.duplex and self._audible()
+            if self._over_him and event != "TurnResumed":
+                # The microphone is open while he speaks: what it heard may be
+                # his own voice back from the speaker, or an «угу». Neither is
+                # a turn. Somebody talking over him is — and he stops.
+                if not talks_over(text, self._said):
+                    if event in ("EagerEndOfTurn", "EndOfTurn"):
+                        self._drop_draft()
+                    if event == "EndOfTurn":
+                        # That turn was his voice, and it is over. Not on the
+                        # «похоже» before it: the same turn's EndOfTurn follows.
+                        self._over_him = False
+                    continue
+                await self._on_start_of_turn()
+                text = their_part(text, self._said)
             if text:
                 self._last_life = time.monotonic()
                 if event in ("StartOfTurn", "Update") and text != self._heard_so_far:
@@ -438,6 +538,7 @@ class Session:
                 self._drop_draft()
             elif event == "EndOfTurn":
                 self._heard_so_far = ""
+                self._over_him = False
                 await self._on_end_of_turn(text, message)
 
     # ── turns ───────────────────────────────────────────────────────────────
@@ -461,7 +562,7 @@ class Session:
             self._leaving.cancel()   # he said goodbye, and they are still talking
             self._leaving = None
         reply = self._reply
-        if reply is None or reply.done():
+        if reply is None or reply.done() or reply.cancelling():
             return
         if self._voicing and not self.duplex:
             return   # cannot be them: the microphone is closed while he speaks
@@ -632,6 +733,7 @@ class Session:
                 async for rate, pcm in voicing.chunks():
                     if not announced:
                         announced = True
+                        self._said.append(tts.spoken(piece))
                         await self._send({"kind": "say", "text": tts.spoken(piece), "rate": rate})
                         if "first_audio" not in timing:
                             timing["first_audio"] = _after(time.monotonic(), start)
@@ -739,6 +841,7 @@ class Session:
             async for rate, pcm in tts.stream(piece, voice):
                 if not announced:
                     announced = True
+                    self._said.append(tts.spoken(piece))
                     await self._send({"kind": "say", "text": tts.spoken(piece), "rate": rate})
                 await self._send_audio(pcm, rate)
                 sounded = True
@@ -816,5 +919,5 @@ async def serve(ws: WebSocket) -> None:
     given = start.get("token")
     token = header if header else (f"Bearer {given}" if isinstance(given, str) and given else None)
     user_id = identity.user_id_from_token(token)
-    session = Session(ws, user_id, duplex=bool(start.get("duplex")))
+    session = Session(ws, user_id, duplex=start.get("duplex") is not False)
     await session.run(hello=bool(start.get("hello")))

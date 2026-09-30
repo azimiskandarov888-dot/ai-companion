@@ -39,6 +39,14 @@ def test_it_is_told_the_language_and_the_format_it_is_sent(monkeypatch):
     assert q["eot_timeout_ms"] == [str(config.FLUX_EOT_TIMEOUT_MS)]
 
 
+def test_a_session_may_be_quicker_or_more_patient_than_the_default():
+    """The live channel asks for a quicker end of turn when they can talk over
+    him (config.FLUX_EOT_THRESHOLD_DUPLEX) — and gets exactly that."""
+    parsed = parse_qs(urlparse(hearing.url((), eot_threshold=0.8)).query)
+    assert parsed["eot_threshold"] == ["0.8"]
+    assert _query()["eot_threshold"] == [str(config.FLUX_EOT_THRESHOLD)]
+
+
 def test_it_goes_to_europe_by_default():
     """80 ms there and back from Tashkent, against 240 ms for the US address."""
     assert config.DEEPGRAM_URL.startswith("wss://api.eu.deepgram.com/v2/listen")

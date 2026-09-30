@@ -56,13 +56,15 @@ RATE = 16000
 CHUNK = RATE * 2 * 80 // 1000
 
 
-def url(keyterms: tuple[str, ...] = ()) -> str:
-    """The address of one conversation's line, with everything it is told."""
+def url(keyterms: tuple[str, ...] = (), eot_threshold: float | None = None) -> str:
+    """The address of one conversation's line, with everything it is told.
+    `eot_threshold`: how sure Flux must be that they have finished — the
+    caller's, when it knows better (config.FLUX_EOT_THRESHOLD_DUPLEX)."""
     params = [
         ("model", config.FLUX_MODEL),
         ("encoding", "linear16"),
         ("sample_rate", str(RATE)),
-        ("eot_threshold", str(config.FLUX_EOT_THRESHOLD)),
+        ("eot_threshold", str(eot_threshold if eot_threshold is not None else config.FLUX_EOT_THRESHOLD)),
         ("eot_timeout_ms", str(config.FLUX_EOT_TIMEOUT_MS)),
         ("mip_opt_out", "true"),
     ]
@@ -86,13 +88,13 @@ class Ears:
         self._sending = asyncio.Lock()
 
     @classmethod
-    async def open(cls, keyterms: tuple[str, ...] = ()) -> Ears:
+    async def open(cls, keyterms: tuple[str, ...] = (), eot_threshold: float | None = None) -> Ears:
         if not config.DEEPGRAM_API_KEY:
             raise RuntimeError(
                 "DEEPGRAM_API_KEY is not set — the live ears (Deepgram) are not configured."
             )
         ws = await connect(
-            url(keyterms),
+            url(keyterms, eot_threshold),
             additional_headers={"Authorization": f"Token {config.DEEPGRAM_API_KEY}"},
             open_timeout=10,
             max_size=2**22,
