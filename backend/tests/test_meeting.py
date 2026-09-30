@@ -87,9 +87,23 @@ def test_names_come_once_it_is_going_and_his_comes_first():
     """People offer their own name rather than ask for the other's (Pillet-Shore
     2011) — so he says his first, and asks theirs in the same breath, the way
     it is done in Russian: «Я, кстати, Андрей. А тебя как?»"""
-    first = meeting.block(0)
+    first = meeting.block(0, named=False)
     assert "Как его зовут, он тебе ещё не говорил" in first
     assert "назовись сам, между делом, и спроси, как зовут его" in first
+
+
+def test_once_he_has_said_his_name_he_does_not_say_it_again():
+    """The name line used to ask for his name on every turn of the meeting,
+    said or not. A person who answered «Я Боб, кстати. А тебя как зовут?» with
+    their work instead of their name heard «Я Боб, кстати» again in the very
+    next reply (the live channel, 2026-09-30; the same in the rehearsals of
+    2026-09-27 and 09-29). Once it is said he is told so — and not to press for
+    theirs either: he is shy, and they will say it when they want to."""
+    said = meeting.block(0, named=True)
+    assert "назовись сам" not in said and "спроси, как зовут его" not in said
+    assert "второй раз не называйся" in said
+    assert "не выспрашивай, скажет сам" in said
+    assert "Узнал имя — зови по нему изредка" in said
 
 
 def test_if_he_has_not_said_his_name_he_is_told_to():
