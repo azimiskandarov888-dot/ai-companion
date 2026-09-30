@@ -148,14 +148,25 @@ WHISPER_MODEL: str = os.getenv("WHISPER_MODEL", "whisper-1")
 # the person is still talking, and says itself when they have finished — by
 # what was said and how, not by a timer. Measured on Russian through the
 # European address (2026-09-29): «похоже, договорил» 0.34 s after the last
-# word, «договорил» 0.63 s after it. See docs/LATENCY.md.
+# word, «договорил» 0.63 s after it at the 0.7 threshold — 0.8–1.6 s at the
+# 0.85 it uses now, which cuts people off less (below). See docs/LATENCY.md.
 DEEPGRAM_API_KEY: str | None = os.getenv("DEEPGRAM_API_KEY")
 #: Europe: 80 ms there and back from Tashkent, against 240 for the US address.
 DEEPGRAM_URL: str = os.getenv("DEEPGRAM_URL", "wss://api.eu.deepgram.com/v2/listen")
 #: Russian lives in the multilingual model; the hint is COMPANION_LANGUAGE.
 FLUX_MODEL: str = os.getenv("FLUX_MODEL", "flux-general-multi")
-#: How sure Flux must be that somebody has finished. Deepgram's own default.
-FLUX_EOT_THRESHOLD: float = float(os.getenv("FLUX_EOT_THRESHOLD", "0.7"))
+#: How sure Flux must be that somebody has finished. Deepgram's default, 0.7,
+#: cut the owner off in the middle of what he was saying (2026-09-30). Measured
+#: on six phrases with a pause in the middle, streamed in real time: 0.7 ended
+#: the turn inside the pause in four of the five that had one, 0.8 in three,
+#: 0.85 in two, 0.9 in none — but 0.9 then waited out the whole five-second
+#: timeout at the real end as well. 0.85 answers a finished phrase 0.8–1.6 s
+#: after its last word, which is mostly time the brain is still writing
+#: anyway (its first words take ~1.3 s from the end), so it costs at most
+#: ~0.2 s, on long phrases only. A pause after a finished sentence stays
+#: ambiguous at any threshold; the real answer to that is letting them talk
+#: over him (the live channel's `duplex`).
+FLUX_EOT_THRESHOLD: float = float(os.getenv("FLUX_EOT_THRESHOLD", "0.85"))
 #: The earlier, less certain «похоже, договорил» — the brain starts writing
 #: then, and the draft is thrown away if they carry on. Lower is earlier and
 #: more drafts wasted (Deepgram: 0.3–0.5 costs 50–70% more calls — for Luna,

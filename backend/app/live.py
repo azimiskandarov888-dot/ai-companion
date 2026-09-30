@@ -94,6 +94,12 @@ _START_TIMEOUT = 10.0
 #: The lines to the brain and the voice are opened again when somebody starts
 #: talking after this long — a provider may have closed them meanwhile.
 _REWARM_AFTER = 20.0
+#: After his goodbye, how long the line stays open before it closes. The
+#: goodbye is his reading of the moment, and the reading can be wrong: the
+#: voice marked «Домой сразу. Спать.» as a goodbye, and a plain answer about
+#: school (rehearsals and a scripted meeting, 2026-09-29/30). Somebody who
+#: carries on talking is answered, not hung up on.
+_FAREWELL_GRACE = 8.0
 
 #: One live channel per person. A second one — another tab, a reconnect —
 #: replaces the first, so two conversations never write one diary.
@@ -247,6 +253,8 @@ class Session:
         self._arrivals: deque[tuple[float, float]] = deque(maxlen=4000)
         #: When the lines to the brain and the voice were last opened ahead of need.
         self._warmed = 0.0
+        #: The line closing after his goodbye — called off if they carry on.
+        self._leaving: asyncio.Task | None = None
 
     # ── talking to the phone ────────────────────────────────────────────────
 
@@ -449,6 +457,9 @@ class Session:
         headphones, whatever he is saying."""
         if time.monotonic() - self._warmed > _REWARM_AFTER:
             self._warm()
+        if self._leaving is not None:
+            self._leaving.cancel()   # he said goodbye, and they are still talking
+            self._leaving = None
         reply = self._reply
         if reply is None or reply.done():
             return
@@ -745,12 +756,16 @@ class Session:
                          "seconds_left": verdict.seconds_left})
 
     def _leave_after_playing(self) -> None:
-        """A goodbye: the line closes once the phone has played it."""
+        """A goodbye: the line closes once the phone has played it and nobody
+        has said anything more for _FAREWELL_GRACE — if they do, it stays open."""
         async def later() -> None:
-            await asyncio.sleep(max(0.0, self._playing_until - time.monotonic()) + 1.5)
+            await asyncio.sleep(max(0.0, self._playing_until - time.monotonic()) + _FAREWELL_GRACE)
             self._stopping.set()
 
-        _track(asyncio.create_task(later()))
+        if self._leaving is not None:
+            self._leaving.cancel()
+        self._leaving = asyncio.create_task(later())
+        _track(self._leaving)
 
 
 def _after(moment: float | None, start: float | None) -> float | None:

@@ -381,6 +381,35 @@ def test_a_goodbye_ends_the_conversation(env):
     assert all(companion.FAREWELL_MARKER not in text for text in line.says())
 
 
+def test_his_goodbye_does_not_hang_up_on_somebody_still_talking(env, monkeypatch):
+    """His goodbye is his reading of the moment, and without reasoning the
+    voice misread «Домой сразу. Спать.» and a plain answer about school as
+    goodbyes (2026-09-29/30). The line used to close 1.5 s after it played.
+    Somebody who carries on is answered, and the line stays open after."""
+    monkeypatch.setattr(live, "_FAREWELL_GRACE", 0.5)
+    env.mind.replies = [f"Ну, отдыхай тогда. {companion.FAREWELL_MARKER}",
+                        "Конечно, рассказывай.", "Слушаю."]
+    with talk(env) as line:
+        line.ears().send(turn("EndOfTurn", "домой сразу спать"))
+        assert line.expect("done")["farewell"] is True
+        line.ears().send(turn("StartOfTurn", "а"), turn("EndOfTurn", "а знаешь что было"))
+        done = line.expect("done")
+        assert done["reply"] == "Конечно, рассказывай." and done["farewell"] is False
+        time.sleep(0.8)                  # longer than the grace: still open
+        line.ears().send(turn("EndOfTurn", "ну так вот"))
+        assert line.expect("done")["reply"] == "Слушаю."
+
+
+def test_after_his_goodbye_a_quiet_line_closes(env, monkeypatch):
+    monkeypatch.setattr(live, "_FAREWELL_GRACE", 0.1)
+    env.mind.replies = [f"Ну давай, до завтра. {companion.FAREWELL_MARKER}"]
+    with talk(env) as line:
+        line.ears().send(turn("EndOfTurn", "ну всё пока"))
+        line.expect("done")
+        with pytest.raises(Closed):
+            line.expect("nothing more", timeout=3)
+
+
 def test_his_cough_is_heard_and_never_shown(env):
     env.mind.replies = [f"Доброе утро. {body.MARK_COUGH} Как спалось?"]
     with talk(env) as line:

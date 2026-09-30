@@ -6,7 +6,10 @@ Flux hears while the person is still talking and says itself when they have
 finished — by what was said and how it was said, not by a timer. Measured on
 Russian through the European address (2026-09-29): «похоже, договорил» 0.34 s
 after the last word, «договорил» 0.63 s after it, and a pause in the middle of
-a sentence correctly not taken for the end. See docs/LATENCY.md.
+a sentence correctly not taken for the end. That «договорил» was at Deepgram's
+default threshold, 0.7, which cut the owner off mid-thought; at the 0.85 used
+now it comes 0.8–1.6 s after the last word (config.FLUX_EOT_THRESHOLD).
+See docs/LATENCY.md.
 
 ── WHAT COMES BACK ─────────────────────────────────────────────────────────
 

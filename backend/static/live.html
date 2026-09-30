@@ -245,6 +245,8 @@
             hearingEl.textContent = m.text;
           } else if (m.kind === "heard") {
             hearingEl.textContent = "";
+            // He said goodbye, and they carried on — so did the conversation.
+            if (statusEl.textContent.startsWith("Он попрощался")) setStatus("<b>Слушаю.</b> Говори.");
             add("user", "Ты", m.transcript);
             const behind = (m.timing && m.timing.end_of_turn) || 0;
             turn = { heardAt: performance.now(), speechEnd: performance.now() - behind * 1000, firstSound: null,

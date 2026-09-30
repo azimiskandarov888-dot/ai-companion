@@ -49,30 +49,68 @@ def test_the_meeting_is_for_strangers_only():
 
 
 def test_it_is_a_conversation_and_not_an_interview():
-    """Not the tone, the structure. Both tell (Sprecher 2013; Lee 2020); a
-    story gets a short one back (Sacks); topics grow out of what was said
-    (Jefferson 1984); one question at a time."""
+    """Not the tone, the structure: topics grow out of what was said
+    (Jefferson 1984), one question at a time, and a reply that answers THEIR
+    words is often enough without one. (A story used to get a short one of
+    his own back — Sacks's second stories — until the owner heard it live,
+    2026-09-30: see the next test.)"""
     first = meeting.block(0)
     assert "а не расспросами" in first
-    assert "на его рассказ — своё, коротко" in first
+    assert "часто хватает отозваться на его слова, без вопроса" in first
     assert "не больше одного вопроса за раз и не два хода подряд одними вопросами" in first
     assert "Тема растёт из сказанного" in first
     # He talked more than they did — two-thirds of the words, long enough to
     # be cut off by the length limit — and asked twice what he had been told.
-    assert "реплики короткие — две-три фразы" in first
+    # Two-three sentences was still too many to the owner's ear (2026-09-30).
+    assert "реплики короткие — одна-две фразы" in first
     assert "Что он уже рассказал, не переспрашивай" in first
 
 
-def test_the_arc_of_two_strangers():
-    """The moment, then where from and what do you do — both ways — then what
-    they share, which decides whether anyone wants to go on (Kellermann 1991;
-    Sunnafrank 1986). His own weather and small news may be brought up
-    unasked: the constitution keeps NEWS for when he is asked, and this is
-    his life, not the news."""
+def test_the_meeting_is_about_him_and_not_about_himself():
+    """The owner, after his first live conversation (2026-09-30): he opened
+    with his coffee and the view from his window, answered «обычный день» with
+    his own day that nobody had asked about, and said twice that he was having
+    coffee — «it's weird that you are talking about yourself without knowing
+    that the person you're talking to is even interested in it». Derber's
+    shift response, as against the support response. About himself only when
+    asked or plainly wanted, in a phrase, and never the same thing twice."""
     first = meeting.block(0)
-    assert first.index("про то, что сейчас") < first.index("откуда вы") < first.index("Главное во встрече")
-    assert "про неё можно и самому" in first
-    assert "О себе тоже" in first
+    assert "Разговор — о нём, а не о тебе" in first
+    assert "На себя не переводи — ни свой день, ни погоду у тебя, ни чем ты сейчас занят" in first
+    assert "О себе — когда он спросит или видно, что ему интересно" in first
+    assert "одна фраза, одно-два дела, а не весь свой день" in first
+    assert "Что уже сказал о себе, не повторяй" in first
+    assert "про неё можно и самому" not in first and "О себе тоже" not in first
+
+
+def test_his_first_words_are_about_them():
+    """He used to open with «одна маленькая вещь про то, что у тебя сейчас» —
+    the coffee, the sea, the cat — before the person had said a word."""
+    assert "спроси, как он или как у него день" in meeting.HELLO
+    assert "о себе в ней ничего" in meeting.HELLO
+    assert "что у тебя сейчас" not in meeting.HELLO
+    assert "Не называйся" in meeting.HELLO
+
+
+def test_he_does_not_say_goodbye_first_at_a_meeting():
+    """Without reasoning the voice put its end-of-conversation mark on
+    «Домой сразу. Спать.» and on a plain answer about school (rehearsals
+    2026-09-29, a scripted meeting 2026-09-30) — and the mark closes the line.
+    A first meeting is not ended by him."""
+    first = meeting.block(0)
+    assert "Первым не прощайся: вы только разговорились" in first
+    assert "Короткий ответ — не прощание" in first
+    assert "только когда прощается он" in first
+
+
+def test_the_arc_of_two_strangers():
+    """Their moment, then where they are from and what they do, then what they
+    share, which decides whether anyone wants to go on (Kellermann 1991;
+    Sunnafrank 1986). His side of it — where HE is from, his own day — only
+    when asked (the owner, 2026-09-30)."""
+    first = meeting.block(0)
+    assert first.index("Начало — как у него день") < first.index("откуда он и чем занят") \
+        < first.index("Главное во встрече")
 
 
 def test_what_they_share_is_one_thing_and_his_own():
@@ -372,8 +410,9 @@ def test_the_meeting_sits_late_with_the_instructions(monkeypatch):
         < variable.index("СИТУАЦИЯ") < variable.index("ПОДРОСТОК")
 
 
-def test_the_constitutions_news_rule_is_not_contradicted_but_excepted():
-    """«Новости и погоду узнаёшь, только когда он правда спросил» stays; the
-    meeting only says that HIS weather and HIS day are his life."""
+def test_the_constitutions_news_rule_is_not_contradicted():
+    """«Новости и погоду узнаёшь, только когда он правда спросил» stands. The
+    meeting used to except HIS weather and HIS day from it («это твоя жизнь,
+    про неё можно и самому»); since 2026-09-30 it asks even less of him."""
     assert "Новости и погоду узнаёшь, только когда он правда спросил" in companion.BEHAVIOR_RULES
-    assert "Это твоя жизнь, про неё можно и самому" in meeting.block(0)
+    assert "Это твоя жизнь, про неё можно и самому" not in meeting.block(0)
