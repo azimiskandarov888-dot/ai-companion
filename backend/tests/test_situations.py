@@ -308,3 +308,29 @@ def test_after_two_questions_in_a_row_the_next_reply_is_asked_to_have_none():
     told = asked[:2] + [{"role": "assistant", "content": "У меня дед так же сидел."},
                         {"role": "user", "content": "угу"}]
     assert "КОНЧАЛИСЬ ВОПРОСОМ" not in situations.block("угу", told)
+
+
+@pytest.mark.parametrize("said", ["Нормально.", "Да так, ничего.", "норм", "Да."])
+def test_a_reply_that_says_nothing_is_picked_up_not_consoled(said):
+    """Asked in the rules to pick the conversation up, the voice filled the
+    pause with «иногда и такой день нужен» (a scripted A/B, 2026-09-30). The
+    turn's own rule, at the end, is what holds."""
+    assert "ОДНИМ-ДВУМЯ СЛОВАМИ" in situations.block(said)
+    assert "спроси о нём что-нибудь простое" in situations.block(said)
+    # Listing what to ask about turned into one questionnaire line, word for word.
+    assert "(" not in situations.block(said)
+
+
+@pytest.mark.parametrize("said", ["спал плохо", "щука", "привет", "ну пока", "А ты?"])
+def test_short_is_not_the_same_as_saying_nothing(said):
+    """Two words can be news that wants sympathy, a greeting, a goodbye, or a
+    question — none of them is a pause to fill."""
+    assert "ОДНИМ-ДВУМЯ СЛОВАМИ" not in situations.block(said)
+
+
+def test_after_two_questions_a_reply_that_says_nothing_gets_something_of_his():
+    asked = [{"role": "assistant", "content": "А ты откуда?"},
+             {"role": "user", "content": "из Ташкента"},
+             {"role": "assistant", "content": "Давно там?"}]
+    said = situations.block("Да.", asked + [{"role": "user", "content": "Да."}])
+    assert "без вопросительного знака" in said and "КОНЧАЛИСЬ ВОПРОСОМ" not in said

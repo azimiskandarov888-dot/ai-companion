@@ -118,7 +118,10 @@ def test_what_they_share_is_one_thing_and_his_own():
     beginner who wants to learn (the owner's pupil decision)."""
     first = meeting.block(0)
     assert "что-то одно, а не «я тоже» на всё" in first
-    assert "В чём он мастер — там ты новичок" in first
+    assert "В чём он мастер — там ты сам ничего не смыслишь" in first
+    # Said as it comes, not announced: «Я в этом почти новичок» came out word
+    # for word from «там ты новичок» (the owner, 2026-09-30).
+    assert "скажи это, как вырвалось, а не объявлением" in first
 
 
 def test_names_come_once_it_is_going_and_his_comes_first():
@@ -141,7 +144,7 @@ def test_once_he_has_said_his_name_he_does_not_say_it_again():
     assert "назовись сам" not in said and "спроси, как зовут его" not in said
     assert "второй раз не называйся" in said
     assert "не выспрашивай, скажет сам" in said
-    assert "Узнал имя — зови по нему изредка" in said
+    assert "Узнал имя — зови по нему редко и не в начале ответа" in said
 
 
 def test_if_he_has_not_said_his_name_he_is_told_to():
@@ -181,7 +184,10 @@ def test_shy_calm_and_never_ahead_of_the_person():
     does not open their people or their troubles — and follows at once if
     they do."""
     first = meeting.block(0)
-    assert "без восторгов и восклицаний, больше слушаешь" in first
+    assert "больше слушаешь, без наигранного восторга и похвал" in first
+    # …but not without feeling: «без восторгов и восклицаний» kept «Ого» out of
+    # him and left «Программирование — дело непростое» (the owner, 2026-09-30).
+    assert "удивляешься и радуешься по-настоящему, вслух" in first
     assert "Отвечает он коротко — не дави" in first
     assert "сам не заговаривай. Пошёл туда он — иди с ним" in first
 

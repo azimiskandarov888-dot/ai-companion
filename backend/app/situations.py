@@ -36,6 +36,8 @@ file could cause.
 
 from __future__ import annotations
 
+import re
+
 from . import brain
 
 #: Phrases that mean a game is being PROPOSED or PLAYED right now.
@@ -125,7 +127,37 @@ def _playing(user_text: str, history: list[dict] | None) -> bool:
 #: first rehearsals of the first meeting (2026-09-27) ran to nine in a row with
 #: a man who answered in one word. Counting is the server's job.
 _ASKED_TWICE = ("ДВЕ ТВОИ ПОСЛЕДНИЕ РЕПЛИКИ КОНЧАЛИСЬ ВОПРОСОМ. Эту — лучше без "
-                "вопроса: отзовись на его слова или расскажи своё. Пусть спросит и он.")
+                "вопроса: отзовись на его слова — или скажи, что это для тебя, в полфразы. "
+                "Пусть спросит и он.")
+
+#: He answered in a word or two. Asked in the rules to pick the conversation up
+#: himself, the voice instead filled the pause with a general truth about days
+#: like that — «иногда и такой день нужен» — on every such turn of a scripted
+#: A/B (2026-09-30, six of six); a rule for THIS turn, at the end, is what holds.
+_TERSE = ("ОН ОТВЕТИЛ ОДНИМ-ДВУМЯ СЛОВАМИ — значит, об этом ему рассказывать нечего. "
+          "Не утешай и не рассуждай про такие дни: поверни разговор к другому и спроси о "
+          "нём что-нибудь простое, как спросил бы приятель.")
+#: …and when two questions have gone already: an invitation, not a third one.
+#: «Скажи что-то своё» here got «у меня тоже бывают такие дни» and, once, the
+#: rules read back aloud — «можно просто посидеть в разговоре, без допроса»
+#: (2026-09-30) — and the owner does not want him on himself unasked anyway.
+_TERSE_NO_QUESTION = ("ОН ОТВЕТИЛ ОДНИМ-ДВУМЯ СЛОВАМИ, а две твои реплики подряд уже были "
+                      "вопросами. Не утешай, не рассуждай про такие дни и не переходи на "
+                      "себя: поверни разговор к другому и позови его рассказать о себе, как "
+                      "зовёт приятель, — без вопросительного знака.")
+#: What says nothing. Only these: two short words can be news — «спал плохо»
+#: wants sympathy, not a change of subject — and a goodbye in two words is a
+#: goodbye to answer.
+_SAYS_NOTHING = frozenset({"нормально", "норм", "нормас", "ничего", "ничё", "так", "да",
+                           "нет", "ну", "ага", "угу", "хорошо", "неплохо", "никак",
+                           "обычно", "потихоньку", "сойдет", "пойдет", "окей", "ок",
+                           "ладно", "понятно", "ясно", "вроде", "как", "всегда"})
+
+
+def _terse(user_text: str) -> bool:
+    words = re.findall(r"[а-яa-z]+", (user_text or "").lower().replace("ё", "е"))
+    return (0 < len(words) <= 3 and "?" not in user_text
+            and all(w in _SAYS_NOTHING for w in words))
 
 
 def _asking_in_a_row(history: list[dict] | None) -> bool:
@@ -136,7 +168,10 @@ def _asking_in_a_row(history: list[dict] | None) -> bool:
 def block(user_text: str, history: list[dict] | None = None) -> str:
     """The rules this particular turn actually needs. Usually empty."""
     parts = []
-    if _asking_in_a_row(history):
+    asked_twice = _asking_in_a_row(history)
+    if _terse(user_text):
+        parts.append(_TERSE_NO_QUESTION if asked_twice else _TERSE)
+    elif asked_twice:
         parts.append(_ASKED_TWICE)
     if _playing(user_text, history):
         parts.append(_GAMES)

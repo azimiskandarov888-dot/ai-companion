@@ -125,9 +125,13 @@ def test_build_system_prompt_injects_all_parts():
 
 
 def test_build_system_prompt_minimal():
-    # With nothing injected it still returns the behavior rules cleanly.
+    # With nothing injected it still returns the behavior rules cleanly — and
+    # how a live person answers, which rides on every turn (REACTING).
     prompt = companion.build_system_prompt()
-    assert prompt.strip() == companion.BEHAVIOR_RULES.strip()
+    assert prompt.strip().startswith(companion.BEHAVIOR_RULES.strip())
+    assert prompt.strip().endswith(companion.REACTING)
+    rest = prompt.strip()[len(companion.BEHAVIOR_RULES.strip()):-len(companion.REACTING)]
+    assert rest.strip() == ""
 
 
 def test_the_vanishing_note_only_appears_when_it_happened():
@@ -822,3 +826,25 @@ def test_who_he_is_stays_out_of_the_band_where_rules_are_followed_worst():
     rules = companion.BEHAVIOR_RULES
     where = rules.index("Ты ему друг, а не возлюбленный") / len(rules)
     assert not 0.35 < where < 0.65, f"правило встало на {where:.0%} — в худшей полосе"
+
+
+def test_how_a_live_person_answers_rides_on_every_turn():
+    """The owner, 2026-09-30: «Понял, Азим. Программирование — дело
+    непростое, там и терпение нужно…» where a person says «Ого, программу? А
+    про что?». On every turn, late in the prompt where the shape of a reply is
+    followed best, after the meeting and before the turn's own rules."""
+    stable, variable = companion.build_system_parts(meeting_block="ВСТРЕЧА", situation_block="СИТУАЦИЯ")
+    assert companion.REACTING not in stable
+    assert variable.index("ВСТРЕЧА") < variable.index(companion.REACTING) < variable.index("СИТУАЦИЯ")
+    for act in ("Сначала отклик", "его дело не называй с оценкой", "общих истин не говори",
+                "без вариантов на выбор", "не подтверждай, что понял",
+                "Говори, как говорят, а не как пишут", "совсем без себя, если ему тяжело"):
+        assert act in companion.REACTING, act
+
+
+def test_the_platitudes_are_described_and_never_quoted():
+    """Quoting «и такие дни нужны» in order to forbid it did not stop it — all
+    four one-word replies still got one — and brought «Понял» back to the head
+    of five replies in twenty (a scripted A/B, 2026-09-30). So no line is quoted
+    here at all; a reply that says nothing gets the turn's own rule."""
+    assert "«" not in companion.REACTING

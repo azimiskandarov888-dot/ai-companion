@@ -7,7 +7,7 @@ or re-litigating decisions that are already made. Written 2026-09-17 on branch
 `claude/ai-companion-next-steps-c593db`, which is where all current work lives
 (it is ahead of the other two; the owner's main checkout may still be on
 `awesome-planck` — run the server from this branch).
-**1114 tests pass.** Every number below was measured by running the code, not
+**1128 tests pass.** Every number below was measured by running the code, not
 estimated; where something is an estimate it says so.
 
 **What the last stretch was about.** Nine of the ten must-fix items are closed.
@@ -25,6 +25,7 @@ the others were written earlier and some of them have drifted.
 
 | Document | Trust |
 |---|---|
+| `SOUNDS-HUMAN.md` | **why he sounded like a robot, and what fixed it** (2026-09-30, the owner: «Понял, Азим. Программирование — дело непростое…» where a person says «Ого, программу? А про что?») — the research (Heritage's change-of-state token, Jones & Bergen's Turing tests, Reinhart et al. on instruction-tuned register), which of OUR rules caused half of it, the A/B on the real voice, what was tried and dropped (quoted prohibitions, example lines, a list of interjections, other models) |
 | `LATENCY.md` | **how fast he answers, measured, and the plan in four stages** — stage 1, the live channel, built 2026-09-30: 1.6–2.2 s from the end of the person's words to his first sound, against ~6.5 s before; where every tenth of a second goes, what was found on the way, stages 2–4 and what each needs from the owner |
 | `VOICE-MODELS-REHEARSAL.md` | **which voice for the conversation**, from 24 rehearsed first meetings — each model's pros and cons in plain words; GPT-5.6 Luna best, Gemini 3.5 Flash-Lite second (2026-09-27). **The owner chose Luna; it is the voice since 2026-09-28** |
 | `SOUNDS.md` | his coughs, «кхм», sighs, laughs and yawns made by the voice itself (our markers → Fish S2.1 tags) — **layer 1 built 2026-09-28**, and what listening showed; layer 2, the world around him as a quiet loop played by the phone, waits for the iOS screen |
@@ -175,6 +176,7 @@ Do not reopen these without being asked.
 | **The voice is GPT-5.6 Luna**, through OpenRouter — chosen from 24 rehearsed first meetings: the best Russian and the best listener, calm with somebody who answers in one word, among the cheapest. The watcher stays on Claude on purpose (`config.SAFETY_MODEL`) | done 2026-09-28 (`brain.py`, `docs/VOICE-MODELS-REHEARSAL.md`) |
 | **His sounds are PLAYED, not read** — a cough, «кхм», a sigh, a laugh, a yawn, made in his own voice (Fish S2.1) from our markers, never a recording of somebody else's; a sound no voice can make (a sneeze) is not offered at all | layer 1 done 2026-09-28 (`tts.SOUNDS`, `docs/SOUNDS.md`) |
 | **The model is chosen BY EAR, on the real prompt.** A 50-phrase scored set was proposed and the owner replaced it with listening himself — correctly: no published benchmark measures warm ordinary Russian said to a lonely person, and the ear is the instrument that does | owner's call (`tryout.py`) |
+| **He answers like a person, not an assistant** — a reaction first (surprise, gladness, pity — by the news), then something of HIS specific thing: a short live question or what it is to him, in half a sentence; no general truths about the activity («X — дело такое-то»), no receipts («Понял»), no name at the head of a reply, no menu of options, spoken rather than written Russian. The owner's call after his second live conversation; `companion.REACTING` on every turn, `situations._TERSE` for a reply that says nothing, `brain.without_receipt` as the code's guarantee | done 2026-09-30 (`docs/SOUNDS-HUMAN.md`) |
 | One background agent at a time — credits are limited | working constraint |
 
 On the last "left to the base model" row there is one honest caveat recorded in
@@ -721,7 +723,7 @@ the reason the tests that now hold them exist.
   Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
   Claude-Session: https://claude.ai/code/session_018PiV38FZMupJ19foghBRZm
   ```
-- **Tests:** `cd backend && python -m pytest -q`. **1114 pass.** The suite is the
+- **Tests:** `cd backend && python -m pytest -q`. **1128 pass.** The suite is the
   design record — test docstrings carry the *reasoning*, including what went
   wrong before. Read the docstring before changing an assertion; several tests
   exist because a previous fix was subtly wrong.

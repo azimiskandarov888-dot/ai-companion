@@ -186,6 +186,33 @@ def test_russian_latin_and_numbers_are_left_alone():
     assert brain.without_glitches(ordinary) == ordinary
 
 
+def test_a_scrap_of_markup_is_never_said(router):
+    """Without reasoning the voice glued «>xpath» onto a sentence (2026-09-30)
+    — and the voice would have read it out. What is glued to a code character
+    goes; his body's //МАРКЕРЫ// stay."""
+    router.body = _sse(_delta("Ноги, наверное, уже гудят."), _delta(">x"), _delta("path"),
+                       _delta("", "stop"))
+    assert _reply() == "Ноги, наверное, уже гудят."
+    assert all("xpath" not in text and ">" not in text for text in _streamed())
+    assert brain.without_glitches("Ну давай, до завтра. //КОНЕЦ//") == "Ну давай, до завтра. //КОНЕЦ//"
+    assert brain.without_glitches("Кхм //КАШЕЛЬ// ну вот.>xp дальше") == "Кхм //КАШЕЛЬ// ну вот. дальше"
+
+
+def test_a_lone_receipt_at_the_head_of_a_reply_is_never_said(router):
+    """«Понял, Азим.» opened the reply the owner called robotic (2026-09-30). It
+    is held back while it could still be one — so no piece of it is ever cut off
+    and spoken — and taken off once more follows."""
+    router.body = _sse(_delta("Понял"), _delta(", Азим"), _delta(". "), _delta("Программу"),
+                       _delta(" пишешь?"), _delta("", "stop"))
+    streamed = _streamed()
+    assert streamed[-1] == "Программу пишешь?"
+    assert all("Понял" not in text for text in streamed)
+    router.body = _sse(_delta("Понятно."), _delta("", "stop"))
+    assert _streamed() == ["Понятно."]                         # nothing else to say: said
+    assert brain.without_receipt("Понимаю, как тебе тяжело.") == "Понимаю, как тебе тяжело."
+    assert brain.without_receipt("Ясно, что ничего не ясно.") == "Ясно, что ничего не ясно."
+
+
 # ── when it goes wrong ─────────────────────────────────────────────────────
 
 def test_an_empty_account_is_named_for_what_it_is(router):

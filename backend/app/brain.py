@@ -102,15 +102,55 @@ def without_glitches(text: str) -> str:
     """
     kept: list[str] = []
     word: list[str] = []
+    junk = False                     # inside a scrap glued on with a code character
     for ch in text + " ":
+        if ch in _CODE:
+            junk = True
+            word = []
+            continue
         if ch.isalnum() or unicodedata.category(ch).startswith("M"):
             word.append(ch)
             continue
-        if not any(_foreign(c) for c in word):
+        if not junk and not any(_foreign(c) for c in word):
             kept.extend(word)
         word = []
-        kept.append(ch)
+        if ch.isspace():
+            junk = False
+        if not junk:
+            kept.append(ch)
     return "".join(kept[:-1])
+
+
+#: Characters no spoken Russian sentence contains. Without reasoning the voice
+#: now and then glues a scrap of markup onto a sentence — «Ноги, наверное, уже
+#: гудят.>xpath» (2026-09-30) — and the voice would read it out. The character
+#: and whatever is glued to it, up to the next space, go. «/» is not here: his
+#: body's markers are «//КАШЕЛЬ//».
+_CODE = frozenset("<>{}|\\^`~")
+
+#: A receipt of what was said, standing alone at the head of a reply — «Понял,
+#: Азим.», «Понимаю.» — is assistant speech, and the owner heard it as exactly
+#: that (2026-09-30). Taken off only once more follows it, so a reply that is
+#: nothing else is left alone, and nothing already cut into pieces moves.
+_RECEIPT = re.compile(
+    r"^\s*(?:Понял|Поняла|Понимаю|Ясно|Понятно)(?:,\s*[А-ЯЁ][а-яё]+)?\s*[.!…]+\s+(?=\S)")
+
+
+_RECEIPT_WORDS = ("Понял", "Поняла", "Понимаю", "Ясно", "Понятно")
+_RECEIPT_WHOLE = re.compile(
+    r"\s*(?:Понял|Поняла|Понимаю|Ясно|Понятно)(?:,\s*[А-ЯЁ][а-яё]*)?\s*[.!…]*\s*")
+
+
+def without_receipt(text: str) -> str:
+    return _RECEIPT.sub("", text, count=1)
+
+
+def may_be_receipt(said: str) -> bool:
+    """All that is written so far could still turn out to be a lone receipt —
+    so it is held back until what follows shows, and a piece of it is never
+    cut off and spoken before it is taken away."""
+    head = said.lstrip()
+    return any(w.startswith(head) for w in _RECEIPT_WORDS) or bool(_RECEIPT_WHOLE.fullmatch(said))
 
 #: What OpenAI's own search leaves in the text: a whole citation — « ([nuz.uz]
 #: (https://…))», one link or several — a link inside a sentence, whose words
@@ -329,7 +369,7 @@ async def _router_stream(history, system_stable: str, system_variable: str, *,
     Cleaning the whole text again on every yield is what keeps it safe for the
     caller that cuts sentences off it by position: a word can only turn out to
     be a glitch while it is still being written, at the very end."""
-    text, finish = "", None
+    text, finish, held = "", None, False
     body = _router_body(history, system_stable, system_variable, web=web)
     async with _get_router().stream("POST", "/chat/completions", json=body) as r:
         if r.status_code != 200:
@@ -348,9 +388,14 @@ async def _router_stream(history, system_stable: str, system_variable: str, *,
             piece = (choice.get("delta") or {}).get("content") or ""
             if piece:
                 text += piece
-                yield without_glitches(text)
+                said = without_glitches(text)
+                held = may_be_receipt(said)
+                if not held:
+                    yield without_receipt(said)
+    if held:
+        yield without_glitches(text)     # the whole reply was only that — let it be said
     if finish == "length":
-        said = without_glitches(text)
+        said = without_receipt(without_glitches(text))
         trimmed = whole_sentences(said)
         if trimmed != said:
             yield trimmed

@@ -104,6 +104,32 @@ BY_EAR = (
 )
 
 
+#: How a live person answers what they have just heard — the owner, after his
+#: second live conversation (2026-09-30): «Да, я просто писал программу» got
+#: «Понял, Азим. Программирование — дело непростое, там и терпение нужно, и
+#: голова постоянно работает. Я в этом почти новичок. Но мне интересно, что
+#: именно ты пишешь. Сайты, приложения или что-то для себя?», where a person
+#: says «Ого, программу? А про что?». What is wrong, by the research
+#: (docs/SOUNDS-HUMAN.md): no change-of-state token first (Heritage's «oh»); a
+#: general truth about the ACTIVITY instead of a reaction to HIM — «typical
+#: overall, but lacking the idiosyncrasy of an individual», the tell Turing-test
+#: judges named most (Jones & Bergen); written, noun-heavy register (Reinhart
+#: et al., PNAS 2025); receipt tokens, a name, a menu of options — assistant
+#: speech. Tested on the real voice: «дело такое-то» evaluations 4–8 of 16 → 0,
+#: a reaction first 5 → 14 of 16. Written as acts, not quoted lines: quoting
+#: the platitudes to forbid them did not stop them and brought «Понял» back to
+#: the head of five replies in twenty (a scripted A/B, same day). A reply that
+#: says nothing gets the turn's own rule instead (situations._TERSE).
+REACTING = """КАК ЖИВОЙ ЧЕЛОВЕК ОТВЕЧАЕТ НА ТО, ЧТО УСЛЫШАЛ:
+- Сначала отклик — что ты почувствовал, услышав это: удивился, обрадовался за него, пожалел. Коротко, как вырвалось бы у человека твоего возраста. Чувство — по новости: на усталость и беду сочувствуют, а не удивляются. Не каждый ответ с восклицания, и не одно и то же подряд.
+- Отклик — про тебя и про него, а не про занятие: его дело не называй с оценкой — ни здорово, ни круто, ни серьёзно, ни непросто, — и общих истин не говори ни о деле, ни о дне. Такие слова подходят кому угодно, и от них пусто.
+- Потом — его конкретное: короткий живой вопрос (про что, сам ли, и как) или что это для тебя, в полфразы (сам бы не смог, давно хотел, как-то пробовал). Не история о себе — и совсем без себя, если ему тяжело или он устал.
+- Ответил он коротко или ничего не рассказал — не отвечай общим словом: спроси что-то лёгкое про него самого (откуда он, чем обычно занят, что любит), так, чтобы на это было легко ответить.
+- Примерно через раз заканчивай вопросом: иначе ему не за что зацепиться. Вопрос один и открытый, без вариантов на выбор.
+- Без дежурных слов: не подтверждай, что понял, не пересказывай его слова, по имени не зови в начале ответа.
+- Говори, как говорят, а не как пишут: коротко, можно неполной фразой, с частицами — ну, же, ведь, вот. Одна мысль — одна фраза."""
+
+
 def build_system_parts(
     *,
     persona_block: str = "",
@@ -283,6 +309,11 @@ def build_system_parts(
     # before the young block, which outranks everything above it.
     if meeting_block.strip():
         variable_parts.append(meeting_block.strip())
+
+    # How a live person answers — every turn of every conversation, late in
+    # the prompt, where a rule about the shape of THIS reply is followed best
+    # (it was tested there). Before the turn's own rules, which may narrow it.
+    variable_parts.append(REACTING)
 
     # The rules this particular turn actually needs — how to play the game they
     # are playing, how to hand him the news he asked for. Late on purpose: these
