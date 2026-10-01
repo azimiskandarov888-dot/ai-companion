@@ -81,7 +81,7 @@ from collections.abc import AsyncIterator, Iterable
 
 from fastapi import BackgroundTasks, WebSocket
 
-from . import allowance, brain, config, hearing, identity, memory, persona, tts, vow
+from . import allowance, aloud, brain, config, hearing, identity, memory, persona, tts, vow
 
 #: Said the moment a question about the world is heard: the search takes
 #: seconds, and a friend who is looking something up says so.
@@ -656,7 +656,9 @@ class Session:
         dropped = False
         watcher: asyncio.Task | None = None
         final = ""
-        ahead: deque[tuple[str, _Voicing]] = deque()
+        #: (what he means, how he says it aloud, its voice being made) — see aloud.py.
+        ahead: deque[tuple[str, str, _Voicing]] = deque()
+        speaker = aloud.Speaker()
         pieces: asyncio.Queue = asyncio.Queue()
         cutter: asyncio.Task | None = None
 
@@ -706,7 +708,8 @@ class Session:
                 # Nothing but a stage direction: nothing to say.
                 if not tts.audible(piece):
                     continue
-                ahead.append((piece, _Voicing(piece, voice)))
+                heard = speaker.say(piece)
+                ahead.append((piece, heard, _Voicing(heard, voice)))
             return True
 
         def spent() -> None:
@@ -728,13 +731,13 @@ class Session:
             cutter = asyncio.create_task(cut())
             breaking, verdict = "", None
             while await ready_ahead(wait=True):
-                piece, voicing = ahead.popleft()
+                piece, heard, voicing = ahead.popleft()
                 announced = False
                 async for rate, pcm in voicing.chunks():
                     if not announced:
                         announced = True
-                        self._said.append(tts.spoken(piece))
-                        await self._send({"kind": "say", "text": tts.spoken(piece), "rate": rate})
+                        self._said.append(tts.spoken(heard))
+                        await self._send({"kind": "say", "text": tts.spoken(heard), "rate": rate})
                         if "first_audio" not in timing:
                             timing["first_audio"] = _after(time.monotonic(), start)
                             timing["brain_asked"] = _after(draft.asked, start)
@@ -753,7 +756,7 @@ class Session:
                 cutter.cancel()
             else:
                 await cutter   # a failure of the brain surfaces here
-            for _, voicing in ahead:
+            for *_, voicing in ahead:
                 voicing.cancel()
             ahead.clear()
             if watcher is not None and not breaking:
@@ -810,7 +813,7 @@ class Session:
     def _give_up(self, cutter: asyncio.Task | None, ahead: deque, draft: Draft) -> None:
         if cutter is not None:
             cutter.cancel()
-        for _, voicing in ahead:
+        for *_, voicing in ahead:
             voicing.cancel()
         ahead.clear()
         draft.drop()

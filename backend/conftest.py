@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import pytest
 
-from app import allowance, config, db
+from app import allowance, aloud, config, db
 
 
 @pytest.fixture(autouse=True)
@@ -32,5 +32,9 @@ def temp_data(tmp_path, monkeypatch):
     for key in ("OPENROUTER_API_KEY", "DEEPGRAM_API_KEY", "FISH_API_KEY", "OPENAI_API_KEY",
                 "ANTHROPIC_API_KEY", "ELEVENLABS_API_KEY", "YANDEX_API_KEY"):
         monkeypatch.setattr(config, key, None)
+    # How he says things aloud is chosen by chance (aloud.py): a test that
+    # compares what was said word for word would fail now and then for no
+    # reason of its own. Off by default; tests/test_aloud.py turns it on.
+    monkeypatch.setattr(aloud, "CHANCE", 0.0)
     db.init_db()
     yield

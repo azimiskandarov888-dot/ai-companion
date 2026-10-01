@@ -7,7 +7,7 @@ or re-litigating decisions that are already made. Written 2026-09-17 on branch
 `claude/ai-companion-next-steps-c593db`, which is where all current work lives
 (it is ahead of the other two; the owner's main checkout may still be on
 `awesome-planck` — run the server from this branch).
-**1128 tests pass.** Every number below was measured by running the code, not
+**1141 tests pass.** Every number below was measured by running the code, not
 estimated; where something is an estimate it says so.
 
 **What the last stretch was about.** Nine of the ten must-fix items are closed.
@@ -177,6 +177,7 @@ Do not reopen these without being asked.
 | **His sounds are PLAYED, not read** — a cough, «кхм», a sigh, a laugh, a yawn, made in his own voice (Fish S2.1) from our markers, never a recording of somebody else's; a sound no voice can make (a sneeze) is not offered at all | layer 1 done 2026-09-28 (`tts.SOUNDS`, `docs/SOUNDS.md`) |
 | **The model is chosen BY EAR, on the real prompt.** A 50-phrase scored set was proposed and the owner replaced it with listening himself — correctly: no published benchmark measures warm ordinary Russian said to a lonely person, and the ear is the instrument that does | owner's call (`tryout.py`) |
 | **He answers like a person, not an assistant** — a reaction first (surprise, gladness, pity — by the news), then something of HIS specific thing: a short live question or what it is to him, in half a sentence; no general truths about the activity («X — дело такое-то»), no receipts («Понял»), no name at the head of a reply, no menu of options, spoken rather than written Russian. The owner's call after his second live conversation; `companion.REACTING` on every turn, `situations._TERSE` for a reply that says nothing, `brain.without_receipt` as the code's guarantee | done 2026-09-30 (`docs/SOUNDS-HUMAN.md`) |
+| **He sounds spoken, not written** — the owner, 2026-10-01: too perfect is fake; live talk has stumbles and fillers. Prompting Luna for it does nothing measurable (six ways tried: 0.6–0.9 a reply against 0.4–0.6 untold); Claude Sonnet does it, a second slower and ~30× dearer. So a code layer puts them where speakers do, ~0.7 a reply (~1 with the voice's own «…»), the voice only | done 2026-10-01 (`aloud.py`, `docs/SOUNDS-HUMAN.md` part 2) |
 | One background agent at a time — credits are limited | working constraint |
 
 On the last "left to the base model" row there is one honest caveat recorded in
@@ -501,6 +502,7 @@ lose; and self-hosting — GPUs idle at our size.
 | `brain.py` | The model calls: `generate_reply`, `stream_reply`, `think`, `generate_text`; `without_glitches` (a word in an alphabet that is neither Russian nor Latin never reaches voice, screen or memory) |
 | `main.py` | The turn: assemble → race the watcher → stream → remember. `_assemble(pending=True)` / `_commit` are the live channel's draft and its becoming real |
 | `hearing.py` | The live ears: one line to Deepgram Flux per conversation, and what it is told (`mip_opt_out`, the language, his name as a word to expect) |
+| `aloud.py` | How a reply is SAID, not written: a hesitation or a filler where a speaker makes one (before a vague word, in an either-or question, a restart on «Я», «ну» while the next clause is planned) — about one a reply, never in a number or a warning. Only the voice gets it; memory keeps what he meant. Luna cannot be prompted into it (`docs/SOUNDS-HUMAN.md`, part 2) |
 | `live.py` | The live channel, `/api/live`: drafts on the early signal, voice in pieces, he does not hear himself; the protocol is in its header |
 | `identity.py` | Hash-only user ids from the token — done properly |
 
@@ -723,7 +725,7 @@ the reason the tests that now hold them exist.
   Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
   Claude-Session: https://claude.ai/code/session_018PiV38FZMupJ19foghBRZm
   ```
-- **Tests:** `cd backend && python -m pytest -q`. **1128 pass.** The suite is the
+- **Tests:** `cd backend && python -m pytest -q`. **1141 pass.** The suite is the
   design record — test docstrings carry the *reasoning*, including what went
   wrong before. Read the docstring before changing an assertion; several tests
   exist because a previous fix was subtly wrong.

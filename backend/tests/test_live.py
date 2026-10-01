@@ -21,8 +21,8 @@ import anyio
 import pytest
 from fastapi.testclient import TestClient
 
-from app import (allowance, body, brain, companion, config, db, hearing, identity, learn, live,
-                 main, meeting, memory, safety, tts, vow)
+from app import (allowance, aloud, body, brain, companion, config, db, hearing, identity, learn,
+                 live, main, meeting, memory, safety, tts, vow)
 
 TOKEN = "live-token-0123456789-abcdefghij"
 UID = identity.user_id_from_token(TOKEN)
@@ -527,6 +527,24 @@ def test_after_his_goodbye_a_quiet_line_closes(env, monkeypatch):
         line.expect("done")
         with pytest.raises(Closed):
             line.expect("nothing more", timeout=3)
+
+
+def test_he_says_it_aloud_and_is_remembered_as_he_meant_it(env, monkeypatch):
+    """The owner: too perfect is fake — so the voice gets a hesitation where a
+    speaker would make one (aloud.py). The phone is shown what it hears; what
+    is remembered, and read back later, is what he meant."""
+    monkeypatch.setattr(aloud, "CHANCE", 1.0)
+    meant = "Ого. Мне это всегда казалось каким-то фокусом, если честно."
+    env.mind.replies = [meant]
+    with talk(env) as line:
+        line.ears().send(turn("EndOfTurn", "я писал программу"))
+        done = line.expect("done")
+    heard = " ".join(line.says())
+    assert heard != meant
+    assert any(h in heard for h in (", ну, каким", "как бы каким", ", я не знаю, каким", "… каким"))
+    assert any("каким-то" in text and text not in meant for text in env.voice.texts)
+    assert done["reply"] == meant
+    assert memory.recent_turns(UID)[-1]["content"] == meant
 
 
 def test_his_cough_is_heard_and_never_shown(env):

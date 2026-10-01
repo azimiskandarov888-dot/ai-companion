@@ -68,6 +68,7 @@ from pydantic import BaseModel, Field
 
 from . import (
     allowance,
+    aloud,
     body,
     brain,
     companion,
@@ -539,7 +540,8 @@ async def _think_and_speak(
         reply = reply or vow.LAST_RESORT
     # What he SAYS keeps his markers, so the voice can play the cough; what is
     # remembered and shown never has them.
-    voiced = reply
+    # What he SAYS is also said the way people say things — see aloud.py.
+    voiced = aloud.said(reply)
     reply = _body(user_id, reply)
     # The watcher has been running this whole time, so this costs no wall clock
     # worth measuring — and on danger it replaces the answer outright. Nothing
@@ -645,6 +647,9 @@ async def _speak_as_he_thinks(
         # queue; this loop takes them to the voice. The model is never waiting
         # on the voice, and the voice is never waiting on the model.
         fragments: asyncio.Queue = asyncio.Queue()
+        #: How he says it aloud, piece by piece (aloud.py); what he MEANT —
+        #: the clean fragment — is what is remembered.
+        speaker = aloud.Speaker()
 
         async def write() -> None:
             nonlocal reply
@@ -718,9 +723,10 @@ async def _speak_as_he_thinks(
                 elif not speak or tts.audible(fragment):
                     # The phone is sent the words; the voice gets them WITH his
                     # sounds. A marker is heard, never shown.
+                    heard = speaker.say(fragment)
                     yield _said(
-                        tts.spoken(fragment),
-                        await tts.synthesize(fragment, voice, rate=rate) if speak else None,
+                        tts.spoken(heard),
+                        await tts.synthesize(heard, voice, rate=rate) if speak else None,
                     )
                     spoken.append(fragment)
                 # BETWEEN SENTENCES, never before one: has the watcher come

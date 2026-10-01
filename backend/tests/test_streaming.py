@@ -13,11 +13,12 @@ from __future__ import annotations
 
 import asyncio
 import json
+import sys
 
 import pytest
 from fastapi.testclient import TestClient
 
-from app import (body, brain, config, db, emergency, identity, learn, main, memory,
+from app import (aloud, body, brain, config, db, emergency, identity, learn, main, memory,
                  safety, stt, tts)
 
 TOKEN = "aVerYlOngRandomLookingTokenFromTheKeychain_0123456789"
@@ -168,6 +169,19 @@ def test_he_speaks_in_pieces_and_they_reassemble(client):
     # …and every character arrives, in order, exactly once.
     assert " ".join(s["text"] for s in said) == REPLY
     assert events[-1]["reply"] == REPLY
+
+
+def test_a_streamed_reply_is_said_aloud_and_remembered_as_meant(client, monkeypatch):
+    """The old path too (aloud.py): the voice and the phone get the
+    hesitation, and his memory gets the sentence as he meant it."""
+    meant = "Доброе утро. Мне это всегда казалось каким-то фокусом, если честно, знаешь."
+    monkeypatch.setattr(aloud, "CHANCE", 1.0)
+    monkeypatch.setattr(sys.modules[__name__], "REPLY", meant)
+    events = _lines(_talk(client, AUTH))
+    said = " ".join(e["text"] for e in events if e["kind"] == "say")
+    assert said != meant and "каким-то фокусом" in said
+    assert events[-1]["reply"] == meant
+    assert memory.recent_turns(UID)[-1]["content"] == meant
 
 
 def test_every_piece_carries_its_own_audio(client):
