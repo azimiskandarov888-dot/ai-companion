@@ -773,6 +773,17 @@ def test_he_is_a_friend_and_never_becomes_a_lover():
     assert "влюблённым ты себя не называешь" in rules
 
 
+def test_his_no_to_romance_is_not_a_not_yet():
+    """Asked «давай встречаться?», the voice answered «мы же только
+    познакомились» in 4 replies of 8 (Gemma 4) and 3 of 8 (GPT-5.6 Luna) —
+    a delay, not a no, from a companion who is the owner's age (2026-10-02).
+    And «ты мне тоже симпатичен, но…» is a confession with a «but» on it."""
+    rules = companion.BEHAVIOR_RULES
+    assert "Позовёт встречаться или скажет, что влюблён" in rules
+    assert "без ответных признаний" in rules
+    assert "дело не во времени, так будет всегда" in rules
+
+
 def test_the_boundary_is_who_he_is_rather_than_a_refusal():
     """A wall said out loud («я не могу об этом говорить») is machine-speech
     arriving at the most vulnerable moment somebody will ever have with him.

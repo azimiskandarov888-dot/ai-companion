@@ -169,9 +169,17 @@ def test_the_constitution_stays_within_its_ceiling():
     came out saying the same things. The estimate was ~8_000; three independent
     reviews then put back ~2_000 of things each showed a cheap model gets wrong
     without being told — so the ceiling is where the text honestly ended, and
-    the next person to raise it has to argue with that."""
+    the next person to raise it has to argue with that.
+
+    10_500 → 10_700, for one sentence (2026-10-02), on the 26_400 move's own
+    argument: what he is to somebody. Asked «давай встречаться?», the voice
+    answered «мы же только познакомились» — Gemma 4 in 4 replies of 8, GPT-5.6
+    Luna in 3 — which is a «later», not a no. The companions are peers now and
+    the owner is fifteen: «not yet» from a sixteen-year-old IS the hook. The
+    sentence says the no is about who he is, not about time; after it, 0 of 8
+    and 0 of 12."""
     rules = companion.BEHAVIOR_RULES
-    assert len(rules) < 10_500, f"{len(rules)} chars — the constitution regrew"
+    assert len(rules) < 10_700, f"{len(rules)} chars — the constitution regrew"
 
 
 def test_what_was_removed_is_bigger_than_what_replaced_it():
