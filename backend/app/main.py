@@ -305,6 +305,8 @@ async def _assemble(
         # Empty for every grown-up, which is nearly everybody. It changes how
         # he speaks rather than what he may hear — see young.py.
         young_block=young.block(user_id),
+        # Which language his words come out in (COMPANION_LANGUAGE).
+        language=config.LANGUAGE,
         # Empty on virtually every turn. The one thing allowed to override the
         # character, so it is placed before everything else — see safety.py.
         alert_block=safety.block(carried, user_id),

@@ -208,6 +208,31 @@ PEOPLE: dict[str, dict] = {
     },
 }
 
+#: Та же встреча по-английски (--english). Владелец, 2.10.2026: через русские
+#: голоса он не различил мозги на слух — английские голоса у Fish лучше. Возраст
+#: и пол — по-русски, как их читают persona.py и young.py; остальное — английское.
+COMPANIONS["lily"] = {
+    "name": "Lily", "gender": "женский", "age": "шестнадцать лет",
+    "one_liner": "a schoolgirl who moved to Dublin with her parents two years ago",
+    "home": "Dublin, Phibsborough, an old terraced house, her window over the back gardens",
+    "roots": "from Manchester — they moved when her mum got a job here",
+    "personality": "calm, observant; a bit shy with new people at first",
+    "current_life": "fifth year at school, mock exams coming up; helps at her aunt's little café "
+                    "on Saturdays",
+    "intention": "to finish her sketchbook — twelve pages left",
+    "address": "ты",
+}
+PEOPLE["tim"] = {
+    "with": "lily", "name": "Tim", "age": "15", "english": True,
+    "who": "You are Tim, fifteen, living in Leeds. You talk like a teenager: short and simple, "
+           "sometimes 'like', 'kinda', 'honestly'. The truth about you: Year 10; after school you "
+           "sit at your computer making your own little game; you listen to phonk and sometimes old "
+           "rock; you've wanted to learn guitar for ages; you cook well — your chilli is the best at "
+           "home. You have friends, but with them it's only banter, you don't talk about serious "
+           "stuff with anyone. At first you answer dryly, then, if the other person seems alright, "
+           "more willingly.",
+}
+
 #: Как говорят люди в репетиции. Раньше — «одной репликой, как сказал бы
 #: вслух», и они говорили, как модели: длинно, гладко, по три дела в реплике.
 #: Вживую реплика — несколько слов, рассказ идёт кусками, а распознавание
@@ -217,6 +242,10 @@ _PLAYER_SYSTEM = """Ты играешь живого человека, кото�
 {who}
 Это разговор вслух, а не переписка: тебя слышат, а не читают. Говори, как говорят в жизни: обычно несколько слов, часто неполной фразой; иногда просто угу, ага или ну. Рассказываешь — кусками, а не всё сразу: можешь начать с того, что сейчас расскажешь, и подождать; можешь оборвать фразу на полуслове — тогда закончи реплику запятой, как её записало бы распознавание речи, и договори в следующей. Без ремарок, без смайликов, без кавычек. Держись своего характера и не выкладывай всё сразу — рассказывай столько, сколько рассказал бы незнакомому. Иногда можешь и сам что-то спросить. Разговор длится минут десять-пятнадцать; когда тебе пора или надоело — попрощайся по-своему."""
 
+_PLAYER_SYSTEM_EN = """You are playing a real person talking out loud with a stranger. You are not an assistant and not an AI — you are this person.
+{who}
+This is a spoken conversation, not texting: you are heard, not read. Talk the way people really talk: usually a few words, often an unfinished sentence; sometimes just yeah, mm or uh-huh. Tell things in pieces, not all at once: you can say you're about to tell something and wait; you can break off mid-sentence — then end your line with a comma, the way speech recognition would write it, and finish in your next line. No stage directions, no emoji, no quotation marks. Stay in character and don't lay everything out at once — tell as much as you'd tell a stranger. Sometimes ask something yourself. The conversation lasts ten to fifteen minutes; when you have to go or you're bored, say goodbye your own way."""
+
 # ── вызовы моделей ──────────────────────────────────────────────────────────
 
 _voice: contextvars.ContextVar[str] = contextvars.ContextVar("voice")
@@ -224,6 +253,8 @@ _voice: contextvars.ContextVar[str] = contextvars.ContextVar("voice")
 #: записи на слух нужны два разных голоса — ровесница для Тимура звучит иначе,
 #: чем он сам.
 _companion = ""
+#: Кто играет людей (--player): модель, «same» — та же, что голос, или PLAYER.
+_player = ""
 _scribe_model = SCRIBE
 _client: httpx.AsyncClient | None = None
 #: Секунд на один вызов модели, целиком.
@@ -303,11 +334,21 @@ def _patch(data_dir: Path) -> None:
 # ── одна встреча ────────────────────────────────────────────────────────────
 
 async def _play(person: dict, log: list[tuple[str, str, int | None]]) -> str:
-    before = "\n".join(f"{'ОН' if who == 'он' else 'ТЫ'}: {text}" for who, text, _ in log[:-1])
-    user = (f"Разговор до сих пор:\n{before or '(только начался)'}\n\n"
-            f"ОН сейчас сказал: {log[-1][1]}\n\nТвой ответ — одна реплика:")
-    return await _chat(PLAYER, _PLAYER_SYSTEM.format(who=person["who"]),
-                       [{"role": "user", "content": user}], max_tokens=3000, bill="player")
+    # Кто играет человека: PLAYER, или (--player same) та же модель, что голос —
+    # тогда в записи с обеих сторон одна модель, и ни одна не играет за другую.
+    model = _voice.get() if _player == "same" else (_player or PLAYER)
+    if person.get("english"):
+        before = "\n".join(f"{'THEY' if who == 'он' else 'YOU'}: {text}" for who, text, _ in log[:-1])
+        user = (f"The conversation so far:\n{before or '(it has just started)'}\n\n"
+                f"THEY just said: {log[-1][1]}\n\nYour reply — one line:")
+        system = _PLAYER_SYSTEM_EN.format(who=person["who"])
+    else:
+        before = "\n".join(f"{'ОН' if who == 'он' else 'ТЫ'}: {text}" for who, text, _ in log[:-1])
+        user = (f"Разговор до сих пор:\n{before or '(только начался)'}\n\n"
+                f"ОН сейчас сказал: {log[-1][1]}\n\nТвой ответ — одна реплика:")
+        system = _PLAYER_SYSTEM.format(who=person["who"])
+    return await _chat(model, system, [{"role": "user", "content": user}], max_tokens=3000,
+                       bill="player")
 
 
 async def meet(key: str, voice: str, exchanges: int, paper) -> list[tuple[str, str, int | None]]:
@@ -397,10 +438,14 @@ def measure(log, his_name: str, their_name: str) -> dict:
 
 
 async def run(args) -> None:
-    global _client, _scribe_model, _companion
+    global _client, _scribe_model, _companion, _player
     _scribe_model = args.scribe or SCRIBE
     _companion = args.companion or ""
-    people = args.people.split(",") if args.people else list(PEOPLE)
+    _player = args.player or ""
+    if args.english:
+        config.LANGUAGE = "en"   # his side: companion.IN_ENGLISH
+    people = (args.people.split(",") if args.people
+              else [k for k, p in PEOPLE.items() if bool(p.get("english")) == args.english])
     voices = args.models.split(",") if args.models else [VOICE]
     stamp = time.strftime("%Y-%m-%d-%H%M%S")
     out = OUT_DIR / stamp
@@ -438,6 +483,10 @@ def main_() -> None:
     ap.add_argument("--models", help="голос — модели OpenRouter через запятую")
     ap.add_argument("--exchanges", type=int, default=14, help="потолок обменов")
     ap.add_argument("--companion", help="кого встречают все: " + ",".join(COMPANIONS))
+    ap.add_argument("--english", action="store_true",
+                    help="разговор по-английски (люди с english, его — companion.IN_ENGLISH)")
+    ap.add_argument("--player", help=f"кто играет людей: модель OpenRouter или same — та же, "
+                                     f"что голос (по умолчанию {PLAYER})")
     ap.add_argument("--scribe", help=f"другой писарь (по умолчанию {SCRIBE}, как в приложении): "
                                      "дешевле, когда сравниваются голоса, а не память")
     asyncio.run(run(ap.parse_args()))

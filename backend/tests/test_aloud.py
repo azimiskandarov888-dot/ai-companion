@@ -151,3 +151,11 @@ def test_a_whole_reply_said_at_once_keeps_its_shape(monkeypatch):
     assert aloud.said(text, random.Random(2)) == "Ого.  Сам учишься или там кто-то помогает?\nДавно?"
     monkeypatch.setattr(aloud, "CHANCE", 0.0)
     assert aloud.said(text, random.Random(2)) == text
+
+
+def test_english_is_said_as_written(monkeypatch):
+    """Every stumble here is Russian; an English sentence got «ну» in its middle."""
+    monkeypatch.setattr(aloud, "CHANCE", 1.0)
+    line = "Honestly, I tried drawing pixel art once, and it was way harder than I thought, like every square matters."
+    for seed in range(20):
+        assert aloud.said(line, random.Random(seed)) == line

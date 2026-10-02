@@ -148,6 +148,22 @@ REACTING = """КАК ГОВОРЯТ ВЖИВУЮ, А НЕ ПИШУТ В ПЕРЕ
 - Говори, как говорят, а не как пишут: простые фразы встык, можно неполные, с частицами — ну, же, ведь, вот; без двоеточий и перечислений."""
 
 
+#: The conversation is in English (config.LANGUAGE — COMPANION_LANGUAGE in
+#: .env). Everything above is written in Russian, and a model told in Russian
+#: how to talk answers in Russian; this says which language his words are in,
+#: and that the rules about HOW to talk hold in it too. The owner, 2026-10-02:
+#: the Russian voices are too poor to hear the brains apart — «change
+#: everything to English». Only the conversation: the words written down for
+#: danger (safety.py) and for sleep and the day's end (allowance.py) are still
+#: Russian, so this is for listening to him, not yet for strangers.
+IN_ENGLISH = (
+    "LANGUAGE: you and he talk in English. Speak only English — natural spoken English, the way "
+    "people your age actually talk out loud, never written or bookish. Everything above about how "
+    "you talk holds in English too: one move a turn, a few words, a real reaction first, no lists, "
+    "no letter-phrases. Where the rules name Russian words, use what an English speaker says instead."
+)
+
+
 def build_system_parts(
     *,
     persona_block: str = "",
@@ -170,6 +186,7 @@ def build_system_parts(
     lessons_block: str = "",
     meeting_block: str = "",
     by_ear: bool = False,
+    language: str = "",
 ) -> tuple[str, str]:
     """Assemble the system prompt as (stable, variable).
 
@@ -193,6 +210,7 @@ def build_system_parts(
                     are (meeting.block decides that, not this).
     by_ear:         the person's words came through live speech recognition,
                     which mishears (BY_EAR).
+    language:       the language of the conversation; "en…" adds IN_ENGLISH.
     """
     # ── DANGER IS THE WHOLE PROMPT, OR IT IS NOT THE WHOLE PROMPT ───────────
     #
@@ -366,6 +384,10 @@ def build_system_parts(
             "- Если он начал с чего-то тяжёлого, или ему сейчас явно не до того — "
             "промолчи и просто будь рядом."
         )
+
+    # The very last line: what language every word above is to come out in.
+    if language.lower().startswith("en"):
+        variable_parts.append(IN_ENGLISH)
 
     return "\n".join(stable_parts), "\n\n".join(variable_parts)
 

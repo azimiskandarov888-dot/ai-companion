@@ -178,6 +178,11 @@ def _listed(left: str, right: str) -> bool:
     return len(left) > 3 and len(right) > 3 and left[-2:].lower() == right[-2:].lower()
 
 
+#: The stumbles are Russian speech, and an English sentence got «…than I
+#: thought, ну, like…» (2026-10-02, the first English rehearsal).
+_RUSSIAN = re.compile(r"[А-Яа-яЁё]")
+
+
 class Speaker:
     """One reply, said aloud: how many small imperfections it has had so far,
     and which. Give it the reply's pieces in order."""
@@ -197,6 +202,8 @@ class Speaker:
             return piece
         if self._left <= 0 or len(_WORD.findall(piece)) < 5:
             return piece
+        if not _RUSSIAN.search(piece):
+            return piece                   # every edit here is Russian: «ну», «я… я», «или там»
         options = [e for e in (_hedges(piece) + _there(piece) + _restarts(piece, first)
                                + _turns(piece) + _commas(piece))
                    if e.marker not in self._used]

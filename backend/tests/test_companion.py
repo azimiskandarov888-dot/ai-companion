@@ -859,3 +859,13 @@ def test_the_platitudes_are_described_and_never_quoted():
     of five replies in twenty (a scripted A/B, 2026-09-30). So no line is quoted
     here at all; a reply that says nothing gets the turn's own rule."""
     assert "«" not in companion.REACTING
+
+
+def test_an_english_conversation_is_told_so_last_and_a_russian_one_is_not():
+    """The rules are written in Russian, and a model told in Russian how to talk
+    answers in Russian. The owner, 2026-10-02: «change everything to English»."""
+    _, english = companion.build_system_parts(language="en")
+    _, russian = companion.build_system_parts(language="ru")
+    _, unset = companion.build_system_parts()
+    assert english.endswith(companion.IN_ENGLISH)
+    assert companion.IN_ENGLISH not in russian and companion.IN_ENGLISH not in unset
