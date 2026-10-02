@@ -145,19 +145,75 @@ _TERSE_NO_QUESTION = ("ОН ОТВЕТИЛ ОДНИМ-ДВУМЯ СЛОВАМИ,
                       "вопросами. Не утешай, не рассуждай про такие дни и не переходи на "
                       "себя: поверни разговор к другому и позови его рассказать о себе, как "
                       "зовёт приятель, — без вопросительного знака.")
-#: What says nothing. Only these: two short words can be news — «спал плохо»
+#: What says nothing: an answer with nothing in it — «нормально», «да так»,
+#: «ничего особенного». Only these: two short words can be news — «спал плохо»
 #: wants sympathy, not a change of subject — and a goodbye in two words is a
 #: goodbye to answer.
-_SAYS_NOTHING = frozenset({"нормально", "норм", "нормас", "ничего", "ничё", "так", "да",
-                           "нет", "ну", "ага", "угу", "хорошо", "неплохо", "никак",
-                           "обычно", "потихоньку", "сойдет", "пойдет", "окей", "ок",
-                           "ладно", "понятно", "ясно", "вроде", "как", "всегда"})
+#:
+#: «Да», «ага», «угу» on their own are not here any more (2026-10-02). Out
+#: loud they are not empty: «да» answers his question — «Сам учишься?» «Да.» —
+#: and the topic is alive, yet this rule turned it every time into «а чем ещё
+#: любишь заниматься?», which is how an interview moves on, not a friend
+#: (spoken_check, two of two); «угу» after something of his is a listener
+#: handing the turn back (Jefferson's «mm hm»).
+_EMPTY = frozenset({"нормально", "норм", "нормас", "ничего", "ничё", "хорошо", "неплохо",
+                    "никак", "обычно", "потихоньку", "сойдет", "пойдет", "особенного",
+                    "особо", "такого", "нового"})
+_EMPTY_TOO = frozenset({"да", "ну", "так", "вроде", "как", "всегда", "всё", "все", "в", "целом",
+                        "нет", "ага", "угу", "тоже", "а"})
 
 
 def _terse(user_text: str) -> bool:
     words = re.findall(r"[а-яa-z]+", (user_text or "").lower().replace("ё", "е"))
-    return (0 < len(words) <= 3 and "?" not in user_text
-            and all(w in _SAYS_NOTHING for w in words))
+    empty = any(w in _EMPTY for w in words) or words in (["да", "так"], ["так", "себе"])
+    return (0 < len(words) <= 4 and "?" not in user_text and empty
+            and all(w in _EMPTY | _EMPTY_TOO or w == "себе" for w in words))
+
+
+#: He has not finished — stopped mid-sentence, or only announced a story.
+#: Asked for a reply, the voice gave a whole one: «И что там? Уже звучит так,
+#: будто без сюрпризов не обошлось» on «я прихожу в школу, а там,»; «О,
+#: заинтриговал. Что случилось?» on «знаешь, что сегодня было?»
+#: (spoken_check, 2026-10-02). A listener says «ну?» and waits: «uh-huh» is
+#: a turn on its own in a telling, and an LLM almost never produces one
+#: (Mayor et al. 2025); a story preface is answered with a go-ahead and then
+#: the teller has the floor until the story is done (Sacks 1974).
+#: «Дай знать, что слушаешь» was taken literally — «О, правда? Я слушаю.»
+#: (spoken_check, 2026-10-02) — so the act is shown by the words a listener
+#: actually uses. Unquoted: they are the words to say, and saying them every
+#: time is exactly what listeners do.
+_LISTENING = ("ОН ЕЩЁ НЕ ДОСКАЗАЛ — оборвал на полуслове или только начинает рассказывать. "
+              "Не отвечай всерьёз и не переводи на себя: подтолкни его одним-двумя словами, "
+              "как подталкивает слушающий, — что? ну? а дальше? — и всё.")
+
+#: Where a sentence is left hanging. The live ears keep the comma where the
+#: person stopped — the owner's «Эй,» (2026-09-30) — and drop the full stop.
+_HANGS = (",", "…", "...", "—", "–", "-", ":")
+#: A last word no sentence ends on — only without a full stop after it: «Ну и
+#: что.» is finished.
+_HANGING = frozenset({"и", "а", "но", "или", "что", "чтобы", "потому", "когда", "если", "где",
+                      "который", "которая", "которое", "которые", "в", "во", "на", "с", "со",
+                      "у", "к", "ко", "по", "за", "из", "о", "об", "про", "для", "от", "до",
+                      "без", "короче"})
+#: A story announced and not begun: «а знаешь, что сегодня было?», «прикинь».
+#: Only a happening — «знаешь, как плов готовить?» is a question to answer.
+_PREFACE = re.compile(
+    r"^(?:(?:слушай|а|ну|короче|кстати|блин|ой)[,.!]?\s+)*"
+    r"(?:знаешь|угадай|прикинь|представляешь)[,]?\s+(?:что|чего|кого|как|где|куда)\b[^.!?]*"
+    r"\b(?:было|случилось|произошло|приключилось|сделал\w*|узнал\w*|увидел\w*|видел\w*|"
+    r"встретил\w*|нашел\w*|нашёл|купил\w*|сказал\w*|думаю|подумал\w*|решил\w*|понял\w*)\b[^.!?]*\?\s*$"
+    r"|^(?:(?:слушай|а|ну|ой)[,.!]?\s+)*(?:прикинь|представляешь|угадай|короче|слушай"
+    r"|у меня новость|есть новость|(?:щас|сейчас|ща) расскажу)[.!?…]*\s*$")
+
+
+def _listening(user_text: str) -> bool:
+    said = (user_text or "").strip().lower().replace("ё", "е")
+    if not said or said.endswith("?") and not _PREFACE.search(said):
+        return False
+    if said.endswith(_HANGS) or _PREFACE.search(said):
+        return True
+    words = re.findall(r"[а-яa-z]+", said)
+    return bool(words) and said[-1].isalpha() and words[-1] in _HANGING
 
 
 def _asking_in_a_row(history: list[dict] | None) -> bool:
@@ -169,7 +225,11 @@ def block(user_text: str, history: list[dict] | None = None) -> str:
     """The rules this particular turn actually needs. Usually empty."""
     parts = []
     asked_twice = _asking_in_a_row(history)
-    if _terse(user_text):
+    # Somebody who has not finished is not answered at all yet — that comes
+    # before what to do about the questions.
+    if _listening(user_text):
+        parts.append(_LISTENING)
+    elif _terse(user_text):
         parts.append(_TERSE_NO_QUESTION if asked_twice else _TERSE)
     elif asked_twice:
         parts.append(_ASKED_TWICE)

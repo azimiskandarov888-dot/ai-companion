@@ -310,7 +310,8 @@ def test_after_two_questions_in_a_row_the_next_reply_is_asked_to_have_none():
     assert "КОНЧАЛИСЬ ВОПРОСОМ" not in situations.block("угу", told)
 
 
-@pytest.mark.parametrize("said", ["Нормально.", "Да так, ничего.", "норм", "Да."])
+@pytest.mark.parametrize("said", ["Нормально.", "Да так, ничего.", "норм", "Да так.",
+                                  "Да ничего особенного.", "Как обычно."])
 def test_a_reply_that_says_nothing_is_picked_up_not_consoled(said):
     """Asked in the rules to pick the conversation up, the voice filled the
     pause with «иногда и такой день нужен» (a scripted A/B, 2026-09-30). The
@@ -321,16 +322,77 @@ def test_a_reply_that_says_nothing_is_picked_up_not_consoled(said):
     assert "(" not in situations.block(said)
 
 
-@pytest.mark.parametrize("said", ["спал плохо", "щука", "привет", "ну пока", "А ты?"])
+@pytest.mark.parametrize("said", ["спал плохо", "щука", "привет", "ну пока", "А ты?",
+                                  "Да.", "Угу.", "ага"])
 def test_short_is_not_the_same_as_saying_nothing(said):
     """Two words can be news that wants sympathy, a greeting, a goodbye, or a
-    question — none of them is a pause to fill."""
+    question — none of them is a pause to fill. Nor is «да» or «угу» out loud:
+    «Сам учишься?» «Да.» leaves the topic alive, and the rule turned it into
+    «а чем ещё любишь заниматься?» two times of two (spoken_check,
+    2026-10-02) — an interview moving on."""
     assert "ОДНИМ-ДВУМЯ СЛОВАМИ" not in situations.block(said)
 
 
 def test_after_two_questions_a_reply_that_says_nothing_gets_something_of_his():
     asked = [{"role": "assistant", "content": "А ты откуда?"},
              {"role": "user", "content": "из Ташкента"},
+             {"role": "assistant", "content": "И как там сейчас?"}]
+    said = situations.block("Да нормально.", asked + [{"role": "user", "content": "Да нормально."}])
+    assert "без вопросительного знака" in said and "КОНЧАЛИСЬ ВОПРОСОМ" not in said
+
+
+def test_a_yes_to_his_question_after_two_questions_is_asked_for_none():
+    """«Давно там?» «Да.» is an answer, not an empty turn — but the third
+    question in a row is still the interview's shape."""
+    asked = [{"role": "assistant", "content": "А ты откуда?"},
+             {"role": "user", "content": "из Ташкента"},
              {"role": "assistant", "content": "Давно там?"}]
     said = situations.block("Да.", asked + [{"role": "user", "content": "Да."}])
-    assert "без вопросительного знака" in said and "КОНЧАЛИСЬ ВОПРОСОМ" not in said
+    assert "КОНЧАЛИСЬ ВОПРОСОМ" in said and "ОДНИМ-ДВУМЯ СЛОВАМИ" not in said
+
+
+@pytest.mark.parametrize("said", [
+    "Короче, я прихожу сегодня в школу, а там,",   # the live ears keep the comma
+    "Эй,",                                         # the owner's own, 2026-09-30
+    "Мы с братом ходили на рыбалку и",
+    "Ну не знаю…",
+    "Слушай, а знаешь, что сегодня было?",
+    "А знаешь, кого я встретил?",
+    "Знаешь, что я думаю?",
+    "Угадай, что я купил?",
+    "Прикинь!",
+    "Слушай.",
+    "У меня новость!",
+    "Сейчас расскажу.",
+])
+def test_somebody_who_has_not_finished_is_listened_to(said):
+    """A listener says «ну?» and waits; a story announced gets «что?» and the
+    floor. Asked for a reply, the voice gave a whole one — «И что там? Уже
+    звучит так, будто без сюрпризов не обошлось» (spoken_check, 2026-10-02)."""
+    block = situations.block(said)
+    assert "ОН ЕЩЁ НЕ ДОСКАЗАЛ" in block
+    assert "одним-двумя словами" in block and "Я слушаю" not in block
+
+
+@pytest.mark.parametrize("said", [
+    "Знаешь, как плов готовить?",      # a question to answer, not a story
+    "Слушай, а ты сам откуда?",
+    "Ну и что.",                        # finished: the full stop is there
+    "А там вообще никого.",
+    "Короче, такая история.",
+    "Ладно, мне пора, давай.",
+    "да ничего, чай пью",
+    "А ты?",
+])
+def test_a_finished_turn_is_answered(said):
+    assert "ОН ЕЩЁ НЕ ДОСКАЗАЛ" not in situations.block(said)
+
+
+def test_an_unfinished_turn_is_not_also_pushed_for_a_question():
+    """Two questions in a row behind him change nothing while the person is
+    still telling: the listening comes first and alone."""
+    asked = [{"role": "assistant", "content": "А ты откуда?"},
+             {"role": "user", "content": "из Ташкента"},
+             {"role": "assistant", "content": "Давно там?"}]
+    said = situations.block("Да лет пять, а до этого,", asked)
+    assert "ОН ЕЩЁ НЕ ДОСКАЗАЛ" in said and "КОНЧАЛИСЬ ВОПРОСОМ" not in said

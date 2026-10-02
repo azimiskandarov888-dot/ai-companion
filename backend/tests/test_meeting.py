@@ -61,8 +61,9 @@ def test_it_is_a_conversation_and_not_an_interview():
     assert "Тема растёт из сказанного" in first
     # He talked more than they did — two-thirds of the words, long enough to
     # be cut off by the length limit — and asked twice what he had been told.
-    # Two-three sentences was still too many to the owner's ear (2026-09-30).
-    assert "реплики короткие — одна-две фразы" in first
+    # Two-three sentences was still too many to the owner's ear (2026-09-30);
+    # how short a spoken turn is, is said once, for every turn (REACTING).
+    assert "реплики короткие" in first
     assert "Что он уже рассказал, не переспрашивай" in first
 
 
