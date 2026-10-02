@@ -7,7 +7,7 @@ or re-litigating decisions that are already made. Written 2026-09-17 on branch
 `claude/ai-companion-next-steps-c593db`, which is where all current work lives
 (it is ahead of the other two; the owner's main checkout may still be on
 `awesome-planck` — run the server from this branch).
-**1141 tests pass.** Every number below was measured by running the code, not
+**1168 tests pass.** Every number below was measured by running the code, not
 estimated; where something is an estimate it says so.
 
 **What the last stretch was about.** Nine of the ten must-fix items are closed.
@@ -26,7 +26,7 @@ the others were written earlier and some of them have drifted.
 | Document | Trust |
 |---|---|
 | `ALIVE-BRAIN.md` | **which brain could sound alive** (2026-10-01): not only Claude — ~20 candidates on OpenRouter worth a bake-off (GPT-6 Luna is newer and half Luna 5.6's price), and the case for training our own fast open model on a lively teacher's replies (~$50–120; also faster than Luna). Plan: bake-off first (~$2–3), own model only if nothing is alive and fast. Waiting for the owner's top-up and decision |
-| `SOUNDS-HUMAN.md` | **why he sounded like a robot, and what fixed it** (2026-09-30, the owner: «Понял, Азим. Программирование — дело непростое…» where a person says «Ого, программу? А про что?») — the research (Heritage's change-of-state token, Jones & Bergen's Turing tests, Reinhart et al. on instruction-tuned register), which of OUR rules caused half of it, the A/B on the real voice, what was tried and dropped (quoted prohibitions, example lines, a list of interjections, other models) |
+| `SOUNDS-HUMAN.md` | **why he sounded like a robot, and what fixed it** (2026-09-30, the owner: «Понял, Азим. Программирование — дело непростое…» where a person says «Ого, программу? А про что?») — the research (Heritage's change-of-state token, Jones & Bergen's Turing tests, Reinhart et al. on instruction-tuned register), which of OUR rules caused half of it, the A/B on the real voice, what was tried and dropped (quoted prohibitions, example lines, a list of interjections, other models); part 3 (2026-10-02) — live talk versus messaging: turn length, listeners' «угу» and «что?», one question, goodbyes, with the measurements |
 | `LATENCY.md` | **how fast he answers, measured, and the plan in four stages** — stage 1, the live channel, built 2026-09-30: 1.6–2.2 s from the end of the person's words to his first sound, against ~6.5 s before; where every tenth of a second goes, what was found on the way, stages 2–4 and what each needs from the owner |
 | `VOICE-MODELS-REHEARSAL.md` | **which voice for the conversation**, from 24 rehearsed first meetings — each model's pros and cons in plain words; GPT-5.6 Luna best, Gemini 3.5 Flash-Lite second (2026-09-27). **The owner chose Luna; it is the voice since 2026-09-28** |
 | `SOUNDS.md` | his coughs, «кхм», sighs, laughs and yawns made by the voice itself (our markers → Fish S2.1 tags) — **layer 1 built 2026-09-28**, and what listening showed; layer 2, the world around him as a quiet loop played by the phone, waits for the iOS screen |
@@ -178,6 +178,7 @@ Do not reopen these without being asked.
 | **His sounds are PLAYED, not read** — a cough, «кхм», a sigh, a laugh, a yawn, made in his own voice (Fish S2.1) from our markers, never a recording of somebody else's; a sound no voice can make (a sneeze) is not offered at all | layer 1 done 2026-09-28 (`tts.SOUNDS`, `docs/SOUNDS.md`) |
 | **The model is chosen BY EAR, on the real prompt.** A 50-phrase scored set was proposed and the owner replaced it with listening himself — correctly: no published benchmark measures warm ordinary Russian said to a lonely person, and the ear is the instrument that does | owner's call (`tryout.py`) |
 | **He answers like a person, not an assistant** — a reaction first (surprise, gladness, pity — by the news), then something of HIS specific thing: a short live question or what it is to him, in half a sentence; no general truths about the activity («X — дело такое-то»), no receipts («Понял»), no name at the head of a reply, no menu of options, spoken rather than written Russian. The owner's call after his second live conversation; `companion.REACTING` on every turn, `situations._TERSE` for a reply that says nothing, `brain.without_receipt` as the code's guarantee | done 2026-09-30 (`docs/SOUNDS-HUMAN.md`) |
+| **He talks the way people talk out loud, not the way they message** — the owner, 2026-10-02: «the conversation of people in massanger and in real life are very very different. and here we are trying recreate not the masanger, but the real life convo». In his own live conversations his turns had a median of 5 words and the companion's 22 — a composed message (react, comment, tell, introduce, ask) where a speaker takes one turn. Now: one move a turn, usually under ten words; one question and then silence; no letter-language («надеюсь…», «хорошо, что…»); no echo; when the person stops mid-sentence or announces a story he only nudges («Что?», «А там что?» — `situations._LISTENING`); «да»/«угу» are no longer an «empty answer» that switched the topic; goodbyes in a few words. Measured with `spoken_check.py` (14 places in a conversation, lines as the live ears deliver them): on Luna, places handled as a person would 50% → 86%, median words 13 → 9, replies with a question 71% → 57% | done 2026-10-02 (`docs/SOUNDS-HUMAN.md` part 3) |
 | **He sounds spoken, not written** — the owner, 2026-10-01: too perfect is fake; live talk has stumbles and fillers. Prompting Luna for it does nothing measurable (six ways tried: 0.6–0.9 a reply against 0.4–0.6 untold); Claude Sonnet does it, a second slower and ~30× dearer. So a code layer puts them where speakers do, ~0.7 a reply (~1 with the voice's own «…»), the voice only | done 2026-10-01 (`aloud.py`, `docs/SOUNDS-HUMAN.md` part 2) |
 | One background agent at a time — credits are limited | working constraint |
 
@@ -726,7 +727,7 @@ the reason the tests that now hold them exist.
   Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
   Claude-Session: https://claude.ai/code/session_018PiV38FZMupJ19foghBRZm
   ```
-- **Tests:** `cd backend && python -m pytest -q`. **1141 pass.** The suite is the
+- **Tests:** `cd backend && python -m pytest -q`. **1168 pass.** The suite is the
   design record — test docstrings carry the *reasoning*, including what went
   wrong before. Read the docstring before changing an assertion; several tests
   exist because a previous fix was subtly wrong.
@@ -746,6 +747,11 @@ the reason the tests that now hold them exist.
   not because the code was right, and the full suite eventually caught one out.
   Both now stop the clock. Look for this shape anywhere a test asserts on a
   value that decays.
+- **`spoken_check.py` — live talk or messaging**: the next reply in 14 places
+  where the two differ (a story announced, a sentence broken off, «угу», a
+  mishearing, a goodbye…), lines as the live ears deliver them, each checked
+  for what a person would do; `--models` compares brains on it (round one of
+  the bake-off, `docs/ALIVE-BRAIN.md`). Numbers are a sieve, not the verdict.
 - **Four tools, all meant to be run by a person with ears**, not by CI:
   `audition.py` (voices, side by side), `tryout.py` (brains, §7b),
   `myself.py` — every agent tested on the owner himself, stage by stage in the
@@ -763,8 +769,8 @@ the reason the tests that now hold them exist.
   revisited a day later rather than trusted to memory of the third one.
 - **The live channel by ear:** `./run.sh` in `backend/` of this branch, then
   `http://localhost:8000/live` in Chrome or Safari on the Mac. «Новая встреча»
-  makes him a stranger again (a new token); the headphones box lets him be
-  interrupted; every answer shows its own timing. `python check_keys.py`
+  makes him a stranger again (a new token); he can be interrupted (on by
+  default, «можно перебивать»); every answer shows its own timing. `python check_keys.py`
   checks every key — the live ears included — and prints none of them.
 - **Setup is one command per platform:** `setup.sh` (macOS/Linux), `setup.ps1`
   (Windows). Both refuse to run if a real key is sitting in `.env.example` —

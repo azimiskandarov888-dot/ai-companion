@@ -122,18 +122,19 @@ BY_EAR = (
 #: says nothing gets the turn's own rule instead (situations._TERSE).
 #:
 #: And it is SPOKEN, not messaged — the owner, 2026-10-02: «the conversation
-#: of people in messenger and in real life are very very different, and we
-#: are recreating the real life one». In his own live conversations his turns
-#: had a median of five words and his companion's twenty-two, three and a half
-#: sentences a turn: a composed message — react, comment, tell, introduce,
-#: ask — where a speaker takes ONE turn and gives the floor back. Strangers
-#: on the phone use five words a turn opening and closing a call and fourteen
-#: in the talk itself; LLM-written calls used seventeen to eighty-four, asked
-#: more questions, and almost never just said «uh-huh» (Switchboard, in Mayor
-#: et al., Cognitive Science 2025). A listener keeps a telling going with
-#: «ну?» and «угу» and holds his own until it is done (Jefferson 1984;
-#: Stivers 2008). «Надеюсь…» and «Хорошо, что…» stood in 17% and 9% of 698
-#: of his test replies: the language of letters. docs/SOUNDS-HUMAN.md, part 3.
+#: of people in massanger and in real life are very very different. and here
+#: we are trying recreate not the masanger, but the real life convo». In his
+#: own live conversations his turns had a median of five words and his
+#: companion's twenty-two, three and a half sentences a turn: a composed
+#: message — react, comment, tell, introduce, ask — where a speaker takes ONE
+#: turn and gives the floor back. Strangers on the phone use five words a turn
+#: opening and closing a call and fourteen in the talk itself; LLM-written
+#: calls used seventeen to eighty-four, asked more questions, and almost never
+#: just said «uh-huh» (Switchboard, in Mayor et al., Cognitive Science 2025).
+#: A listener keeps a telling going with «ну?» and «угу» and holds his own
+#: until it is done (Jefferson 1984; Stivers 2008). «Надеюсь…» and «Хорошо,
+#: что…» stood in 17% and 9% of 698 of his test replies: the language of
+#: letters. docs/SOUNDS-HUMAN.md, part 3.
 REACTING = """КАК ГОВОРЯТ ВЖИВУЮ, А НЕ ПИШУТ В ПЕРЕПИСКЕ — он тебя слышит, а не читает: один раз и сразу.
 - Реплика — один ход, а не сообщение: отозвался — и, может, одно своё или один вопрос. Не всё сразу. Обычно это одна короткая фраза, слов до десяти; длиннее — когда он сам попросил рассказать, и тогда короткими кусками, по одной мысли.
 - Сначала отклик — что ты почувствовал, услышав это: удивился, обрадовался за него, пожалел. Коротко, как вырвалось бы у человека твоего возраста. Чувство — по новости: на усталость и беду сочувствуют, а не удивляются. Не каждый ответ с восклицания, и не одно и то же подряд.
