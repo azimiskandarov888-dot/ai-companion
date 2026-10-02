@@ -220,19 +220,36 @@ _PLAYER_SYSTEM = """Ты играешь живого человека, кото�
 # ── вызовы моделей ──────────────────────────────────────────────────────────
 
 _voice: contextvars.ContextVar[str] = contextvars.ContextVar("voice")
+#: Кого он встречает вместо того, кто записан у человека (--companion): для
+#: записи на слух нужны два разных голоса — ровесница для Тимура звучит иначе,
+#: чем он сам.
+_companion = ""
 _scribe_model = SCRIBE
 _client: httpx.AsyncClient | None = None
+#: Секунд на один вызов модели, целиком.
+_CALL_LIMIT = 90.0
 _spent = {"voice": 0.0, "scribe": 0.0, "player": 0.0}
 
 
 async def _chat(model: str, system: str | None, messages: list[dict], *, max_tokens: int,
                 bill: str, whole: bool = False, extra: dict | None = None) -> str:
     assert _client is not None
-    r = await _client.post(f"{tryout._URL}/chat/completions", json={
+    body = {
         "model": model, "max_tokens": max_tokens, "usage": {"include": True},
         "messages": ([{"role": "system", "content": system}] if system else []) + messages,
         **(extra or {}),
-    })
+    }
+    # A whole limit, not a read limit: OpenRouter keeps a slow call alive with
+    # blank lines, so a hung provider never trips httpx's own timeout — two
+    # rehearsals sat on one call for a quarter of an hour (2026-10-02).
+    for attempt in (1, 2):
+        try:
+            r = await asyncio.wait_for(_client.post(f"{tryout._URL}/chat/completions", json=body),
+                                       timeout=_CALL_LIMIT)
+            break
+        except asyncio.TimeoutError:
+            if attempt == 2:
+                raise RuntimeError(f"{model}: нет ответа {_CALL_LIMIT:.0f} с, дважды") from None
     if r.status_code != 200:
         raise RuntimeError(tryout._plain(r.status_code, r.text))
     data = r.json()
@@ -298,7 +315,8 @@ async def meet(key: str, voice: str, exchanges: int, paper) -> list[tuple[str, s
     _voice.set(voice)
     person = PEOPLE[key]
     uid = f"rehearsal-{key}-{re.sub(r'[^a-z0-9]+', '-', voice.lower())}"
-    who = {**COMPANIONS[person["with"]], **({"address": person["address"]} if "address" in person else {})}
+    sketch = COMPANIONS[_companion or person["with"]]
+    who = {**sketch, **({"address": person["address"]} if "address" in person else {})}
     persona.save_persona(uid, who)
     young.remember(uid, person["age"])
 
@@ -379,8 +397,9 @@ def measure(log, his_name: str, their_name: str) -> dict:
 
 
 async def run(args) -> None:
-    global _client, _scribe_model
+    global _client, _scribe_model, _companion
     _scribe_model = args.scribe or SCRIBE
+    _companion = args.companion or ""
     people = args.people.split(",") if args.people else list(PEOPLE)
     voices = args.models.split(",") if args.models else [VOICE]
     stamp = time.strftime("%Y-%m-%d-%H%M%S")
@@ -394,7 +413,7 @@ async def run(args) -> None:
         for voice in voices:
             for key in people:
                 person = PEOPLE[key]
-                companion = COMPANIONS[person["with"]]
+                companion = COMPANIONS[_companion or person["with"]]
                 path = out / f"{key}--{voice.replace('/', '_')}.md"
                 print(f"… {person['name']} и {companion['name']} — {voice}", flush=True)
                 with open(path, "w", encoding="utf-8") as paper:
@@ -418,6 +437,7 @@ def main_() -> None:
     ap.add_argument("--people", help="кто: " + ",".join(PEOPLE))
     ap.add_argument("--models", help="голос — модели OpenRouter через запятую")
     ap.add_argument("--exchanges", type=int, default=14, help="потолок обменов")
+    ap.add_argument("--companion", help="кого встречают все: " + ",".join(COMPANIONS))
     ap.add_argument("--scribe", help=f"другой писарь (по умолчанию {SCRIBE}, как в приложении): "
                                      "дешевле, когда сравниваются голоса, а не память")
     asyncio.run(run(ap.parse_args()))
