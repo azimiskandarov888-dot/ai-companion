@@ -27,12 +27,23 @@ ANTHROPIC_API_KEY: str | None = os.getenv("ANTHROPIC_API_KEY")
 #
 # One model for both means either slow conversation or a shallow character.
 #
-# THE VOICE IS GPT-5.6 LUNA, through OpenRouter — the owner's choice
-# (2026-09-28) from 24 rehearsed first meetings (docs/VOICE-MODELS-REHEARSAL.md):
-# the best Russian and the best listener of the five, calm with somebody who
-# answers in one word, and among the cheapest. Haiku 4.5, the voice before it,
-# was the most expensive and the least careful of them. A model id with a «/»
-# is sent to OpenRouter; set CHAT_MODEL=claude-haiku-4-5 to go back to Claude.
+# THE VOICE IS GEMMA 4, through OpenRouter — the owner's choice by ear
+# (2026-10-02, docs/ALIVE-BRAIN.md, round 3): four whole conversations, the
+# same model on both sides, voiced blind as A–D — he picked D; and against a
+# version of itself with a short prompt: «the conversation D is much, better».
+# What was known when it was chosen, so nobody has to find it again:
+#   · fast — 0.8–0.9 s to first words on the real prompt (live-talk check);
+#   · in Russian it slips: «такой пекло» in round 1, «Чем обычнось
+#     занимаешься» in its first call through the app — it was chosen by ear
+#     in ENGLISH, so a Russian conversation wants listening to;
+#   · its hosts keep no cache, so every turn pays for the whole prompt:
+#     ~$0.0026 a reply, ~$2 a person a month at 25 exchanges a day — 4–5×
+#     what Luna cost;
+#   · at the provider's own temperature it gave the same reply word for word
+#     twice in a row on the same prompt.
+# Before it: GPT-5.6 Luna (2026-09-28, from 24 rehearsed first meetings). A
+# model id with a «/» is sent to OpenRouter; CHAT_MODEL=openai/gpt-5.6-luna
+# brings Luna back, CHAT_MODEL=claude-haiku-4-5 goes back to Claude.
 #
 # EVERY MODEL ID HERE IS THE UNDATED ALIAS, and that is a rule, not a
 # preference. A dated id pins this app to one snapshot: it keeps answering in
@@ -41,20 +52,21 @@ ANTHROPIC_API_KEY: str | None = os.getenv("ANTHROPIC_API_KEY")
 # front of the person, with no way for them to tell it from the friend having
 # gone. The alias moves; the friend keeps talking.
 BRAIN_MODEL: str = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-5")
-CHAT_MODEL: str = os.getenv("CHAT_MODEL", "openai/gpt-5.6-luna")
+CHAT_MODEL: str = os.getenv("CHAT_MODEL", "google/gemma-4-31b-it")
 #: The key for every «vendor/model» id — the voice above, and the owner's tools.
 OPENROUTER_API_KEY: str | None = os.getenv("OPENROUTER_API_KEY")
-#: WHERE OpenRouter sends him, in order. It serves Luna from several places,
-#: and left to itself picked whichever it liked: first words came back in 1.46 s
-#: (median of three, the real prompt, 2026-09-29), against 0.79 s from OpenAI's
-#: «fast» tier and 0.94 s from Azure in Europe. Fast costs twice per token,
-#: which for Luna is about $0.0004 a reply. Fallbacks stay allowed, so a tier
-#: that is down costs speed, never the answer. Ignored for any model these
-#: providers do not serve.
+#: WHERE OpenRouter sends him. Left to itself it picks a place by price, not
+#: speed: Luna's first words came back in 1.46 s (median of three, the real
+#: prompt, 2026-09-29), against 0.79 s from OpenAI's «fast» tier and 0.94 s
+#: from Azure in Europe. So an OpenAI model goes to OpenAI's own places, in
+#: this order (fast costs twice per token — about $0.0004 a Luna reply);
+#: any other model — Gemma 4 is served by several hosts and none of these —
+#: to whichever of its hosts is fastest right now. CHAT_PROVIDERS, when set,
+#: is the order for any model. Fallbacks stay allowed either way: a host that
+#: is down costs speed, never the answer (brain._where).
+OPENAI_PROVIDERS: list[str] = ["openai/fast", "azure/eu", "openai", "amazon-bedrock/us-east-1"]
 CHAT_PROVIDERS: list[str] = [
-    p.strip() for p in os.getenv(
-        "CHAT_PROVIDERS", "openai/fast,azure/eu,openai,amazon-bedrock/us-east-1"
-    ).split(",") if p.strip()
+    p.strip() for p in os.getenv("CHAT_PROVIDERS", "").split(",") if p.strip()
 ]
 #: How long he thinks before he speaks: not at all. Luna reasoned silently
 #: before answering — 43–91 tokens of it on a second turn, a second of silence —

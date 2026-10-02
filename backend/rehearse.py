@@ -69,7 +69,7 @@ from app import brain, config, db, learn, main, meeting, memory, persona, safety
 import tryout
 
 #: Голос приложения сегодня (config.CHAT_MODEL) — под именем OpenRouter.
-VOICE = "openai/gpt-5.6-luna"
+VOICE = config.CHAT_MODEL
 #: Писарь приложения (config.BRAIN_MODEL): из встречи он выносит имя, откуда
 #: человек и что он сам о себе рассказал, и без него к концу встречи голос
 #: знал бы только последние двенадцать реплик.

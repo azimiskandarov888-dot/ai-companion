@@ -319,6 +319,16 @@ async def warm() -> None:
         pass
 
 
+def _where(model: str) -> dict:
+    """Where OpenRouter sends him (config.CHAT_PROVIDERS): an order that was
+    set, OpenAI's own places for an OpenAI model, and for any other model the
+    host that is fastest right now. Never without fallbacks."""
+    order = config.CHAT_PROVIDERS or (config.OPENAI_PROVIDERS if model.startswith("openai/") else [])
+    if order:
+        return {"order": list(order), "allow_fallbacks": True}
+    return {"sort": "latency", "allow_fallbacks": True}
+
+
 def _router_body(history, system_stable: str, system_variable: str, *,
                  web: bool = False) -> dict:
     """The Claude path's prompt and history, in OpenAI's shape — with what is
@@ -346,8 +356,7 @@ def _router_body(history, system_stable: str, system_variable: str, *,
     }
     if config.CHAT_REASONING:
         body["reasoning"] = {"effort": config.CHAT_REASONING}
-    if config.CHAT_PROVIDERS:
-        body["provider"] = {"order": list(config.CHAT_PROVIDERS), "allow_fallbacks": True}
+    body["provider"] = _where(config.CHAT_MODEL)
     if web:
         body["plugins"] = [{"id": "web", "max_results": 3, "search_prompt": _WEB_PROMPT}]
     return body

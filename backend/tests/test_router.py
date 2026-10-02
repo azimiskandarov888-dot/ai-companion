@@ -19,6 +19,7 @@ import pytest
 from app import brain, config
 
 LUNA = "openai/gpt-5.6-luna"
+GEMMA = "google/gemma-4-31b-it"
 HEARD = [{"role": "user", "content": "привет"}]
 
 
@@ -72,16 +73,31 @@ def _streamed() -> list[str]:
 
 # ── who is speaking ─────────────────────────────────────────────────────────
 
-def test_the_voice_is_luna_and_the_watcher_stays_on_claude():
+def test_the_voice_is_gemma_and_the_watcher_stays_on_claude():
+    """Gemma 4 since 2026-10-02 — the owner's ear, four blind conversations
+    (config.CHAT_MODEL). The router tests below talk to Luna on purpose: what
+    they pin is how a reply is sent and read, whoever the model is."""
     if "CHAT_MODEL" not in os.environ:
-        assert config.CHAT_MODEL == LUNA
-    assert brain.via_openrouter(LUNA)
+        assert config.CHAT_MODEL == GEMMA
+    assert brain.via_openrouter(GEMMA) and brain.via_openrouter(LUNA)
     assert not brain.via_openrouter("claude-haiku-4-5")
     # The watcher has its own default. Following the voice, it would have gone
     # to a Claude client that cannot call it — and safety.look never raises,
     # so it would have answered «no danger» to everybody, quietly.
     if "SAFETY_MODEL" not in os.environ:
         assert not brain.via_openrouter(config.SAFETY_MODEL)
+
+
+def test_each_model_goes_to_its_own_fastest_place(monkeypatch):
+    """OpenAI's places serve only OpenAI's models. Sent there, Gemma would
+    have fallen back to wherever OpenRouter liked — chosen by price, not
+    speed — so any other model goes to whichever of its hosts is fastest."""
+    monkeypatch.setattr(config, "CHAT_PROVIDERS", [])
+    assert brain._where(LUNA)["order"][0] == "openai/fast"
+    assert brain._where(GEMMA) == {"sort": "latency", "allow_fallbacks": True}
+    # An order set by hand is an order for any model, still with fallbacks.
+    monkeypatch.setattr(config, "CHAT_PROVIDERS", ["deepinfra"])
+    assert brain._where(GEMMA) == {"order": ["deepinfra"], "allow_fallbacks": True}
 
 
 # ── what he is sent ─────────────────────────────────────────────────────────

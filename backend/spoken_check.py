@@ -64,7 +64,7 @@ from app import body, brain, companion, config, db, main, memory, persona, safet
 from rehearse import COMPANIONS
 
 #: Голос приложения сегодня — под именем OpenRouter (rehearse.VOICE).
-VOICE = "openai/gpt-5.6-luna"
+VOICE = config.CHAT_MODEL
 OUT_DIR = config.DATA_DIR / "spoken"
 
 #: Ровесник владельца, как в rehearse.py и myself.py meet.
