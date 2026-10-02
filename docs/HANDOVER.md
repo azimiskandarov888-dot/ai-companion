@@ -73,6 +73,15 @@ The live page (`/live`) works without them: the voice, the ears and the mouth ha
 
 My recommendation is OpenRouter.
 
+### Changed the same evening — Russian voices first
+
+The owner, 2026-10-02:
+- «the most importantly, we must find a really, really good quality collection of Russian AI voices. Because those that we were using, they are horrible»;
+- for Russian, Russian brains are allowed: «we can really use Russian models for that»;
+- the brain comparison comes after the voices.
+
+Round 1 of the voices — 21 voices reachable through the OpenRouter key, blind, the same words, loudness-matched — is in `docs/VOICES-RU.md`.
+
 ### What's next — the plan, in order
 
 1. **Keys, or one key** (above).
