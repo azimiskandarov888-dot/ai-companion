@@ -30,7 +30,7 @@ import time
 
 from anthropic import AsyncAnthropic
 
-from . import config, db, embeddings, emergency, feeling, memory, mood
+from . import config, db, embeddings, emergency, feeling, lang, memory, mood
 
 _client: AsyncAnthropic | None = None
 
@@ -325,7 +325,8 @@ async def _extract(user_id: str, said: str) -> dict:
         # at all was kept, least of all his own words about himself, which come
         # last (bob_facts, taught_bob). Only what is written is paid for.
         max_tokens=SCRIBE_TOKENS,
-        system=_EXTRACTION_SYSTEM,
+        # What it keeps is read back to him later: in the conversation's language.
+        system=_EXTRACTION_SYSTEM + lang.write_in(),
         messages=[{"role": "user", "content": extraction_prompt(
             known_elder, known_bob, topics, said)}],
     )

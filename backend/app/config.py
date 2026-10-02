@@ -232,6 +232,12 @@ FISH_VOICE_ID: str = os.getenv("FISH_VOICE_ID", "c962ed46edfd419abc530d1e33a7435
 #: The voice for a companion who turns out to be a woman. Left empty, a female
 #: character speaks in the voice above, which is wrong and audible.
 FISH_VOICE_ID_FEMALE: str = os.getenv("FISH_VOICE_ID_FEMALE", "d567e990d9ad433892ed15ecfd70ce54")
+#: The voices of a conversation in English (COMPANION_LANGUAGE=en): Fish's own
+#: English companion voices, not anybody's clone — «Kai — Male companion (EN)»
+#: and «Mila — Female companion (EN)» from the Fish Official library
+#: (2026-10-02). The Russian voices above would read English with an accent.
+FISH_VOICE_ID_EN: str = os.getenv("FISH_VOICE_ID_EN", "0db6e93af420470b9d9b9a886dbaa954")
+FISH_VOICE_ID_FEMALE_EN: str = os.getenv("FISH_VOICE_ID_FEMALE_EN", "7f3375b90d3e4494bbb1a3cbbf56c607")
 # Fish model version — the `model` HTTP header, or «fish-audio/<it>» through
 # OpenRouter. s2.1-pro — Fish's own production model, S1 is legacy — at the
 # same $15 per million bytes. It is the one that can make his SOUNDS: a

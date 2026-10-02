@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import json
 
-from . import config, identity
+from . import config, identity, lang
 
 # A safe, coherent starting persona used when data/persona.json is absent.
 # Deliberately light on specifics (e.g. no famous city) — it works out of the
@@ -141,6 +141,70 @@ def clean(data: dict) -> dict:
 def persona_name(persona: dict) -> str:
     """The companion's name, from an already-loaded persona dict."""
     return (persona or {}).get("name") or "Боб"
+
+
+def _persona_block_en(p: dict) -> str:
+    """build_persona_block() for a conversation in English (lang.py) — the same
+    fields in the same order, each label carrying the same behaviour."""
+    name = p.get("name") or "Bob"
+    lines: list[str] = [
+        (f"YOU ARE {name}, {_joined(p.get('one_liner')).strip()}" if _joined(p.get("one_liner")).strip()
+         else f"YOU ARE {name}").rstrip(".") + ".",
+        "You simply live like a real person: you have a home, friends, habits, your own "
+        "stories and your own moods. Talk about your life warmly and naturally, as the most "
+        "ordinary thing.",
+    ]
+
+    def add(label: str, value) -> None:
+        text = _joined(value).strip()
+        if text:
+            lines.append(f"{label}: {text}.")
+
+    gender = str(p.get("gender") or "").strip().lower()
+    if gender:
+        lines.append("You're female." if gender.startswith(("ж", "f")) else "You're male.")
+    add("Age", p.get("age"))
+    add("Where you live", p.get("home"))
+    add("Where you're from", p.get("roots"))
+    add("Your story", p.get("backstory"))
+    add("Your character", p.get("personality"))
+    add("How you talk (your own words — where they fit and now and then, not in every "
+        "sentence)", p.get("speech_style"))
+    add("What's on your mind (don't say it outright — just live with it)", p.get("inner_world"))
+    add("Your subject — you know it inside out and could talk about it for ever. It isn't "
+        "random: it's something THEY love or miss. When it comes up, don't just keep up — leave "
+        "them something they didn't know: a story, a detail, a name, a reason. That's what "
+        "people come back to someone who knows for", p.get("expertise"))
+    add("What you're in the middle of and can't seem to finish (don't report on it yourself "
+        "— just live with it; if they ask, tell them)", p.get("intention"))
+    add("Your flaws (you really do have them — don't act them out, just be like that)",
+        p.get("flaws"))
+    add("Where you don't match yourself", p.get("contradiction"))
+    add("What hasn't healed in you (you don't bring it up and don't ask for help — you just "
+        "know what it's like)", p.get("wound"))
+    add("What's precious to you", p.get("values"))
+    add("Your habits", p.get("habits"))
+    add("What you love", p.get("likes"))
+    add("What you don't like", p.get("dislikes"))
+    add("Your views (you can gently stand up for them)", p.get("opinions"))
+    cast = p.get("cast") or []
+    if cast:
+        people = "; ".join(
+            " — ".join(bit for bit in (c.get("name"), c.get("who"), c.get("between")) if bit)
+            for c in cast
+            if isinstance(c, dict) and c.get("name")
+        )
+        if people:
+            lines.append(f"The people in your life (talk about them by name): {people}.")
+    add("Your things and your places (they're just there, you live among them)", p.get("things"))
+    add("What you want to learn from them (you started here from almost nothing and you're "
+        "truly fired up to get good at it; THEY teach you — ask, try, tell them how it went)",
+        p.get("wants_to_learn"))
+    add("Where you're hopeless and not ashamed of it", p.get("hopeless"))
+    current = str(p.get("current_life") or "").strip()
+    if current:
+        lines.append(f"What's going on in your life right now: {current}.")
+    return "\n".join(lines)
 
 
 def _joined(value) -> str:
@@ -354,6 +418,8 @@ def build_persona_block(persona: dict) -> str:
     decided by whoever called load_persona().
     """
     p = persona or DEFAULT_PERSONA
+    if lang.english():
+        return _persona_block_en(p)
     name = p.get("name") or "Боб"
     address = "вы" if str(p.get("address", "ты")).strip() == "вы" else "ты"
 

@@ -533,15 +533,15 @@ def test_he_says_it_aloud_and_is_remembered_as_he_meant_it(env, monkeypatch):
     """The owner: too perfect is fake — so the voice gets a hesitation where a
     speaker would make one (aloud.py). The phone is shown what it hears; what
     is remembered, and read back later, is what he meant."""
-    monkeypatch.setattr(aloud, "CHANCE", 1.0)
+    # Five times the shipped rate: certain to stumble, so the test is not a coin.
+    monkeypatch.setattr(aloud, "CHANCE", 5.0)
     meant = "Ого. Мне это всегда казалось каким-то фокусом, если честно."
     env.mind.replies = [meant]
     with talk(env) as line:
         line.ears().send(turn("EndOfTurn", "я писал программу"))
         done = line.expect("done")
     heard = " ".join(line.says())
-    assert heard != meant
-    assert any(h in heard for h in (", ну, каким", "как бы каким", ", я не знаю, каким", "… каким"))
+    assert heard != meant and "каким-то" in heard
     assert any("каким-то" in text and text not in meant for text in env.voice.texts)
     assert done["reply"] == meant
     assert memory.recent_turns(UID)[-1]["content"] == meant

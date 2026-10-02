@@ -61,7 +61,7 @@ from __future__ import annotations
 import json
 import time
 
-from . import brain, config, db, identity, mood
+from . import brain, config, db, identity, lang, mood
 
 # ── The method ──────────────────────────────────────────────────────────────
 
@@ -643,6 +643,9 @@ def standing_block(
     if not r:
         return ""
 
+    if lang.english():
+        return _standing_en(r, lifts_confirmed=lifts_confirmed,
+                            closeness_confirmed=closeness_confirmed)
     parts = []
     # WHAT HE LACKS, first. It used to reach only the writer, once — so every
     # re-read that corrected it over weeks of conversation reached nobody, and
@@ -726,6 +729,50 @@ def standing_block(
         "никогда не говори этого вслух и не показывай, что «понял его»):\n"
         + "\n".join(parts)
     )
+
+
+def _standing_en(r: dict, *, lifts_confirmed: bool, closeness_confirmed: bool) -> str:
+    """standing_block() for a conversation in English (lang.py)."""
+    parts = []
+    if _said(r.get("verdict")):
+        parts.append(f"The main thing about them: {_said(r['verdict'])}")
+    if _said(r.get("register")):
+        parts.append(f"How to talk to them: {_said(r['register'])}")
+    if _said(r.get("would_ring_false")):
+        parts.append(f"What would ring false to them (avoid it): {_said(r['would_ring_false'])}")
+    if _said(r.get("do_not_touch")):
+        parts.append(
+            "SORE SPOTS. Don't go there yourself: don't bring it up first, don't argue, don't "
+            "tease. But if they bring it up themselves, follow them and talk, calmly and "
+            "plainly, for as long as they need; don't steer them away or shield them from their "
+            "own words: they chose to say it to you. This is: " + _said(r["do_not_touch"])
+        )
+    if _said(r.get("closeness")) and not closeness_confirmed:
+        parts.append(
+            "How they want to matter (decide by this how your \"I was waiting for you\" "
+            "sounds — and whether it sounds at all):\n" + _said(r["closeness"])
+        )
+    if _said(r.get("what_lifts_him")) and not lifts_confirmed:
+        parts.append("What lifts them when it's hard (don't guess — do this):\n"
+                     + _said(r["what_lifts_him"]))
+    if _said(r.get("hurt_by")):
+        parts.append(
+            "WHAT DEFINITELY DOESN'T WORK WITH THEM (tested — it has happened, more than once; "
+            "just don't do it again, and don't announce it). This is about what YOU do, not "
+            "about what may be talked about: if they bring it up, talk with them:\n"
+            + _said(r["hurt_by"])
+        )
+    if _as_lines(r.get("learned")):
+        parts.append(
+            "What you've come to understand about them since you met (worth more than all the "
+            "rest — you got there together):\n"
+            + "\n".join(f"- {line}" for line in _as_lines(r["learned"]))
+        )
+    if not parts:
+        return ""
+    return ("WHAT YOU SENSE IN THEM (you simply know it, the way people close to someone know; "
+            "never say it out loud and never show that you've \"figured them out\"):\n"
+            + "\n".join(parts))
 
 
 def as_brief(reading: dict | None) -> str:

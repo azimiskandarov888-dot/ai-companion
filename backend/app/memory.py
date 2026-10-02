@@ -32,7 +32,7 @@ import random
 import re
 import time
 
-from . import db, embeddings
+from . import db, embeddings, lang
 
 # The default for recent_turns — a short look back, for callers that want the
 # last few lines. What the BRAIN is given before a reply is conversation(),
@@ -383,7 +383,20 @@ def how_long_since_last_time(user_id: str) -> str:
     gap = time.time() - (row["last"] or 0.0) if row and row["last"] else 0.0
     if gap < NOTICED_GAP:
         return ""
+    if lang.english():
+        return f"You haven't talked for {_days_en(gap / 86400.0)}."
     return f"Вы не разговаривали {_days(gap / 86400.0)}."
+
+
+def _days_en(days: float) -> str:
+    """«three days», «two weeks», «about two months» — never a number of hours."""
+    if days < 14:
+        n = int(round(days))
+        return f"{n} day" if n == 1 else f"{n} days"
+    if days < 60:
+        n = int(round(days / 7))
+        return f"about {n} weeks" if n >= 5 else f"{n} weeks"
+    return f"about {int(round(days / 30))} months"
 
 
 def _days(days: float) -> str:
@@ -550,7 +563,8 @@ def believes(user_id: str, owner: str = "elder") -> str:
         ).fetchall()
     out = []
     for r in rows:
-        mark = "собирается спросить: " if r["kind"] == "follow_up" else ""
+        mark = (lang.pick("собирается спросить: ", "you mean to ask: ")
+                if r["kind"] == "follow_up" else "")
         out.append(f"[{r['id']}] {mark}{r['content']}")
     return "\n".join(_within(out, BELIEFS_BUDGET))
 
@@ -622,6 +636,14 @@ def lessons_block(user_id: str) -> str:
     if not rows:
         return ""
     shown = _within([f"- {r['content']}" for r in rows], LESSONS_BUDGET)
+    if lang.english():
+        return (
+            f"WHAT THEY HAVE TAUGHT YOU (lessons from them: {len(rows)}). It's yours now: use "
+            "it, try it out between conversations, and now and then tell them how it went. "
+            "You really are getting it — not at once, but noticeably, and the more lessons, "
+            "the surer. And remember who you've got it from.\n"
+            + "\n".join(reversed(shown))
+        )
     return (
         f"ЧЕМУ ОН ТЕБЯ НАУЧИЛ (уроков от него: {len(rows)}). Это теперь твоё: "
         "пользуйся, пробуй между разговорами и иногда рассказывай, что вышло. "
@@ -893,7 +915,9 @@ async def build_memory_context(
     if relevant:
         lines = "\n".join(f"- {_fmt(r)}" for r in relevant)
         sections.append(
-            "Из ваших прошлых бесед (можешь мягко вспомнить, если к слову):\n" + lines
+            lang.pick("Из ваших прошлых бесед (можешь мягко вспомнить, если к слову):\n",
+                      "From your past conversations (you may gently bring these up, if it "
+                      "fits):\n") + lines
         )
 
     # A gentle, spaced "а помнишь…" — sometimes, out of nowhere.
@@ -902,15 +926,17 @@ async def build_memory_context(
         if r:
             used.add(r["id"])
             sections.append(
-                "Тёплый момент, о котором можешь вспомнить сам, даже без повода:\n"
-                f"- {_fmt(r)}"
+                lang.pick("Тёплый момент, о котором можешь вспомнить сам, даже без повода:\n",
+                          "A warm moment you can bring up yourself, even out of the blue:\n")
+                + f"- {_fmt(r)}"
             )
 
     # A caring follow-up that's due — check back on what he mentioned before.
     for fup in due_follow_ups(user_id, limit=1):
         sections.append(
-            "По-доброму поинтересуйся, как дела с тем, о чём он говорил раньше:\n"
-            f"- {fup['content']}"
+            lang.pick("По-доброму поинтересуйся, как дела с тем, о чём он говорил раньше:\n",
+                      "Kindly ask how things are going with what they mentioned before:\n")
+            + f"- {fup['content']}"
         )
         if marks is None:
             surface_follow_up(user_id, fup["id"])
@@ -928,7 +954,8 @@ async def build_memory_context(
     else:
         latest = latest_mood(user_id)
         if latest:
-            sections.append(f"Его настроение в последнее время: {latest}.")
+            sections.append(lang.pick(f"Его настроение в последнее время: {latest}.",
+                                      f"Their mood lately: {latest}."))
 
     return "\n\n".join(sections)
 
@@ -936,7 +963,9 @@ async def build_memory_context(
 def _fmt(row: dict) -> str:
     title = row.get("title")
     content = row.get("content", "")
-    return f"«{title}» — {content}" if title else content
+    if not title:
+        return content
+    return f'"{title}" — {content}' if lang.english() else f"«{title}» — {content}"
 
 
 def visits_so_far(user_id: str) -> int:

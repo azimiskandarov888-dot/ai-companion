@@ -132,13 +132,16 @@ _CODE = frozenset("<>{}|\\^`~")
 #: Азим.», «Понимаю.» — is assistant speech, and the owner heard it as exactly
 #: that (2026-09-30). Taken off only once more follows it, so a reply that is
 #: nothing else is left alone, and nothing already cut into pieces moves.
+_RECEIPTS = r"(?:Понял|Поняла|Понимаю|Ясно|Понятно|Got it|Gotcha|I see|Understood|I understand)"
 _RECEIPT = re.compile(
-    r"^\s*(?:Понял|Поняла|Понимаю|Ясно|Понятно)(?:,\s*[А-ЯЁ][а-яё]+)?\s*[.!…]+\s+(?=\S)")
+    rf"^\s*{_RECEIPTS}(?:,\s*[А-ЯЁA-Z][а-яёa-z]+)?\s*[.!…]+\s+(?=\S)")
 
 
-_RECEIPT_WORDS = ("Понял", "Поняла", "Понимаю", "Ясно", "Понятно")
+#: …and the same in an English conversation (lang.py): «Got it, Tim.», «I see.».
+_RECEIPT_WORDS = ("Понял", "Поняла", "Понимаю", "Ясно", "Понятно",
+                  "Got it", "Gotcha", "I see", "Understood", "I understand")
 _RECEIPT_WHOLE = re.compile(
-    r"\s*(?:Понял|Поняла|Понимаю|Ясно|Понятно)(?:,\s*[А-ЯЁ][а-яё]*)?\s*[.!…]*\s*")
+    rf"\s*{_RECEIPTS}(?:,\s*[А-ЯЁA-Z][а-яёa-z]*)?\s*[.!…]*\s*")
 
 
 def without_receipt(text: str) -> str:
@@ -239,6 +242,18 @@ _FRESH_INFO_HINTS = (
     "что в мире",
     "что происходит в мире",
     "что нового в мире",
+    # The same in an English conversation (lang.py). «News» alone is not one:
+    # «guess what, I've got news» is a story about to be told, not a search.
+    "the news",
+    "latest news",
+    "news today",
+    "weather",
+    "forecast",
+    "exchange rate",
+    "dollar rate",
+    "happening in the world",
+    "going on in the world",
+    "new in the world",
 )
 
 #: And the subject is not enough: he has to be ASKING. «Погода дрянь» is a man
@@ -247,6 +262,7 @@ _FRESH_INFO_HINTS = (
 _ASKING = (
     "?", "что ", "чего ", "как ", "кака", "какой", "какое", "какие",
     "скажи", "расскажи", "узна", "посмотри", "глянь", "не знаешь",
+    "tell me", "check", "look up", "do you know", "what's", "what is", "how's", "how is",
 )
 
 

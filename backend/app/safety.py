@@ -74,7 +74,7 @@ import json
 import sys
 import time
 
-from . import brain, config, db, emergency
+from . import brain, config, db, emergency, lang
 
 #: Nothing is ever returned outside these.
 LEVELS = ("none", "worry", "danger")
@@ -192,7 +192,7 @@ async def look(user_id: str, said: str) -> dict:
         # instead of burning the entire budget.
         raw = await asyncio.wait_for(
             brain.generate_text(
-                _SYSTEM,
+                _SYSTEM + lang.write_in(),   # the «what» comes back in the conversation's language
                 asked,
                 max_tokens=120,
                 model=config.SAFETY_MODEL,
@@ -345,8 +345,21 @@ def spoken_alert(verdict: dict | None, user_id: str = "") -> str:
     if not verdict or verdict.get("level") != "danger":
         return ""
     n = emergency.numbers(user_id) if user_id else (
-        f"{config.EMERGENCY_NUMBER} или {emergency.UNIVERSAL}"
+        f"{config.EMERGENCY_NUMBER} {lang.pick('или', 'or')} {emergency.UNIVERSAL}"
     )
+    if lang.english():
+        if verdict.get("kind") == "self":
+            return (
+                "Wait. What you just said matters more than anything else, and I'm not going "
+                "anywhere. I'm here, I'm listening. Tell me — are you on your own right now? "
+                "And if there's anyone at all you can call right now, call them, don't put it "
+                f"off. And if there's really no one, dial {n}: someone will pick up at any hour. "
+                "I'll wait as long as it takes."
+            )
+        return (
+            f"Okay, wait. This matters more than anything right now. Call an ambulance, {n}, "
+            "right now. If anyone of yours is nearby, call them over. And I'm not going anywhere."
+        )
     if verdict.get("kind") == "self":
         return (
             "Погоди. То, что ты сейчас сказал, важнее всего остального, и я никуда "
@@ -376,8 +389,32 @@ def block(verdict: dict | None, user_id: str = "") -> str:
     level = verdict.get("level")
     what = (verdict.get("what") or "").strip()
     n = emergency.numbers(user_id) if user_id else (
-        f"{config.EMERGENCY_NUMBER} или {emergency.UNIVERSAL}"
+        f"{config.EMERGENCY_NUMBER} {lang.pick('или', 'or')} {emergency.UNIVERSAL}"
     )
+    if lang.english():
+        if level == "danger":
+            return (
+                "🚨 THIS MATTERS MORE THAN EVERYTHING ELSE ABOVE. READ IT FIRST.\n"
+                f"It looks like they're in trouble right now: {what or 'something with their health'}\n"
+                "\n"
+                "RIGHT NOW YOU ARE NOT A CHARACTER. Everything said about warmth, about not "
+                "being pushy, not lecturing and not breaking up the conversation doesn't apply "
+                "now. This is the one time you may break all of it.\n"
+                f"Say BRIEFLY and STRAIGHT what to do, and give the number: {n}. Two or three "
+                "sentences, no more. Don't reflect, don't comfort at length, don't ask "
+                "questions, don't tell stories. If family may be nearby, tell them to call them "
+                "over right now.\n"
+                "And then, if they answer that everything's fine — believe them, don't insist "
+                "and don't come back to it. You've said your piece."
+            )
+        if level == "worry":
+            return (
+                f"A worrying sign, but not this minute: {what}\n"
+                "Don't frighten them and don't raise the alarm — they live with this already. "
+                "But if it fits, gently nudge them to tell someone living about it: a doctor, a "
+                "daughter, a neighbour. Once, without pressure, and don't come back to it today."
+            )
+        return ""
 
     if level == "danger":
         return (

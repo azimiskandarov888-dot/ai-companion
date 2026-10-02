@@ -34,7 +34,7 @@ from __future__ import annotations
 import re
 import time
 
-from . import config, db
+from . import config, db, lang
 
 #: The universal one. Appended always — see the module docstring.
 UNIVERSAL = "112"
@@ -334,7 +334,7 @@ def numbers(user_id: str) -> str:
     local = _local(user_id)
     if local == UNIVERSAL:
         return UNIVERSAL
-    return f"{local} или {UNIVERSAL}"
+    return f"{local} or {UNIVERSAL}" if lang.english() else f"{local} или {UNIVERSAL}"
 
 
 def dialable(user_id: str = "") -> list[str]:

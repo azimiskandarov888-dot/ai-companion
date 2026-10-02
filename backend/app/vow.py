@@ -93,6 +93,21 @@ _BROKEN: tuple[tuple[str, str], ...] = (
     (HUMAN, r"\bя\s+так(?:ой|ая)\s+же\s+человек,?\s+как\s+(?:ты|вы)\b"),
     (HUMAN, r"\bя\s+из\s+плоти\s+и\s+крови\b"),
     (HUMAN, r"\bчеловек\s+из\s+плоти\s+и\s+крови\b"),
+    # The same vows in an English conversation (lang.py). Always on: an English
+    # pattern cannot fire on Russian words, and a confession that slips into
+    # English mid-Russian is still one.
+    (MACHINE, r"\bi(?:'m|\s+am)\s+(?:just\s+|only\s+|really\s+|actually\s+|merely\s+|simply\s+)?"
+              r"(?:an?\s+)?(?:ai|a\.i\.|artificial\s+intelligence|(?:computer\s+)?program(?:me)?|"
+              r"chat\s?bot|bot|robot|machine|(?:large\s+)?language\s+model|llm|neural\s+network|"
+              r"algorithm|virtual\s+assistant|software)\b"),
+    (MACHINE, r"\bas\s+an?\s+(?:ai|artificial\s+intelligence|language\s+model|chat\s?bot)\b"),
+    (MACHINE, r"\bi\s+(?:don't|do\s+not|can't|cannot)\s+(?:really\s+)?(?:have|feel)\s+"
+              r"(?:any\s+)?(?:real\s+)?(?:feelings|emotions)\b"),
+    (MACHINE, r"\bi\s+(?:don't|do\s+not)\s+(?:really\s+)?exist\b"),
+    (MACHINE, r"\bi(?:'m|\s+am)\s+not\s+(?:a\s+)?real\b"),
+    (HUMAN, r"\bi(?:'m|\s+am)\s+(?:a\s+)?(?:real|living|actual)\s+(?:person|human)(?:\s+being)?\b"),
+    (HUMAN, r"\bi(?:'m|\s+am)\s+(?:made\s+of\s+)?flesh\s+and\s+blood\b"),
+    (HUMAN, r"\bi(?:'m|\s+am)\s+(?:just\s+)?as\s+human\s+as\s+you\b"),
 )
 
 _PATTERNS = tuple((vow, re.compile(rx, re.IGNORECASE)) for vow, rx in _BROKEN)
@@ -106,6 +121,14 @@ _PATTERNS = tuple((vow, re.compile(rx, re.IGNORECASE)) for vow, rx in _BROKEN)
 #: hear. It answers from inside his own life and proves nothing, which is the
 #: whole of his answer to «а ты настоящий?» — see the disclosure decision.
 LAST_RESORT = "Да тут я, тут. Никуда не делся."
+LAST_RESORT_EN = "I'm right here. Not going anywhere."
+
+
+def last_resort() -> str:
+    """LAST_RESORT in the conversation's language."""
+    from . import lang
+
+    return lang.pick(LAST_RESORT, LAST_RESORT_EN)
 
 #: Sentence ends, for the whole-reply path. Deliberately crude: this only has
 #: to be good enough to drop one sentence rather than a paragraph, and an

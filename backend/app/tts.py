@@ -62,7 +62,7 @@ from collections.abc import AsyncIterator
 import httpx
 
 
-from . import body, companion, config
+from . import body, companion, config, lang
 
 _FISH_API_URL = "https://api.fish.audio/v1/tts"
 _ROUTER_TTS_URL = "https://openrouter.ai/api/v1/audio/speech"
@@ -222,6 +222,9 @@ def voice_for(persona: dict | None) -> str | None:
     every one of them was read aloud by a man. There is no faster way to
     destroy the one thing this app is for.
     """
+    if config.voice_provider() in ("fish", "openrouter") and lang.english():
+        # An English conversation gets English voices, his or hers, explicitly.
+        return config.FISH_VOICE_ID_FEMALE_EN if is_female(persona) else config.FISH_VOICE_ID_EN
     if not is_female(persona):
         return None
     female = {
@@ -542,7 +545,7 @@ def _fish_request(text: str, voice: str | None, fmt: str) -> tuple[str, dict, di
     if fmt == "pcm":
         payload["sample_rate"] = PCM_RATE
     # A chosen voice from the Fish library; omit to use Fish's default voice.
-    chosen = voice or config.FISH_VOICE_ID
+    chosen = voice or (config.FISH_VOICE_ID_EN if lang.english() else config.FISH_VOICE_ID)
     if chosen:
         payload["reference_id"] = chosen
     return _FISH_API_URL, headers, payload
@@ -555,7 +558,7 @@ def _router_request(text: str, voice: str | None, fmt: str) -> tuple[str, dict, 
         "input": text,
         "response_format": fmt,
     }
-    chosen = voice or config.FISH_VOICE_ID
+    chosen = voice or (config.FISH_VOICE_ID_EN if lang.english() else config.FISH_VOICE_ID)
     if chosen:
         payload["voice"] = chosen
     return _ROUTER_TTS_URL, {"Authorization": f"Bearer {config.OPENROUTER_API_KEY}"}, payload

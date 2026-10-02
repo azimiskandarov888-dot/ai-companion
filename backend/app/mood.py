@@ -84,7 +84,7 @@ from __future__ import annotations
 import statistics
 import time
 
-from . import db
+from . import db, lang
 
 # ── the shape of a reading ──────────────────────────────────────────────────
 
@@ -207,6 +207,43 @@ TAGS: dict[str, str] = {
     "просил_рассказывать_подробнее": "человек ПРЯМО попросил рассказывать подробнее, не торопиться",
 }
 
+#: The same, as an English conversation's prompt says them (lang.py). Only for
+#: SHOWING: the scribe still picks from the Russian keys above, and those are
+#: what is counted.
+TAGS_EN: dict[str, str] = {
+    "ушёл_от_вопроса": "went quiet or wound the conversation down after being asked something",
+    "утешение_не_зашло": "someone tried to comfort them, and it made things worse, not better",
+    "устал_от_расспросов": "there were too many questions, and they got tired of them",
+    "закрылся_на_теме": "they close up on this topic",
+    "поднял_юмор": "a joke, some silliness lifted them",
+    "подняла_история": "a story lifted them — something interesting from outside",
+    "подняли_воспоминания": "remembering good things from their life lifted them",
+    "подняло_дело": "sorting something out, concrete help lifted them",
+    "подняло_молчание": "they felt better just from someone being there, without forced cheer",
+    "оживился_на_теме": "they come alive on this topic",
+    "зашло_что_позвал": "you suggested something, invited them, started something — and they came alive",
+    "не_зашло_что_позвал": "you suggested or started something — and they closed up, withdrew",
+    "понравилось_несогласие": "you disagreed with them — and they liked it",
+    "не_понравилось_несогласие": "you disagreed — and they took offence or withdrew",
+    "понравился_его_промах": "you slipped up, mixed something up, said something silly — and they found it endearing",
+    "сам_повёл_разговор": "they started a topic themselves and led it; you only listened",
+    "просил_помедленнее": "they asked you to talk more slowly, more quietly or more loudly",
+    "не_расслышал": "they didn't catch something, asked again, answered beside the point",
+    "уговорили_и_обрадовался": "they said no at first, you asked a second time — and they were glad",
+    "хотел_больше_вопросов": "they opened up precisely because they were being asked about things",
+    "хотел_слушать_про_тебя": "they asked about your life themselves and listened gladly",
+    "настоял_чтобы_рассказал": "you brushed it off, and they kept asking — it mattered to them to get in and help",
+    "не_хотел_слушать_про_тебя": "you talked about your own stuff — and they got bored, changed the subject or turned it back to themselves",
+    "просил_не_рассказывать_про_тебя": "they SAID OUTRIGHT they don't want to hear about your affairs and troubles",
+    "просил_рассказывать_про_себя": "they SAID OUTRIGHT they'd like you to tell them more about yourself",
+    "обрадовался_что_ждали": "you showed you'd been waiting for them or missed them — and they were glad",
+    "тяжело_что_ждали": "you showed you'd been waiting for them — and they felt awkward: made excuses, joked it off, withdrew",
+    "спросил_ждали_ли_его": "they asked themselves whether you'd waited, missed them, noticed they were gone",
+    "просил_не_ждать": "they SAID OUTRIGHT there's no need to wait for them and that they owe nothing",
+    "просил_говорить_короче": "they SAID OUTRIGHT to answer more briefly, not at such length",
+    "просил_рассказывать_подробнее": "they SAID OUTRIGHT to tell things in more detail, without rushing",
+}
+
 #: Once is a coincidence. This is the whole reason the register exists.
 CONFIRMED_AT = 2
 
@@ -287,6 +324,16 @@ _WORDS: dict[str, dict[int, str]] = {
     "engagement": {-2: "отвечает из вежливости", -1: "слушает вполуха",
                     1: "увлечён", 2: "его не остановить"},
 }
+_WORDS_EN: dict[str, dict[int, str]] = {
+    "energy":     {-2: "completely drained", -1: "sluggish", 1: "in good form", 2: "lively"},
+    "warmth":     {-2: "closed off", -1: "reserved", 1: "open", 2: "reaching out to you"},
+    "lightness":  {-2: "carrying something heavy", -1: "weighed down", 1: "light-hearted",
+                   2: "bright"},
+    "clarity":    {-2: "muddled, losing the thread", -1: "distracted", 1: "focused",
+                   2: "very clear"},
+    "engagement": {-2: "answering out of politeness", -1: "half-listening", 1: "absorbed",
+                   2: "unstoppable"},
+}
 
 #: Below this, a dimension is simply his ordinary and goes unmentioned.
 _NOTABLE = 0.5
@@ -299,7 +346,7 @@ def _describe(per_dim: dict[str, float | None], fallback: str) -> str:
         if v is None or abs(v) < _NOTABLE:
             continue
         step = 2 if abs(v) >= 1.5 else 1
-        said.append(_WORDS[d][step if v > 0 else -step])
+        said.append(lang.pick(_WORDS, _WORDS_EN)[d][step if v > 0 else -step])
     return ", ".join(said) if said else fallback
 
 
@@ -370,6 +417,8 @@ def _times(n: int) -> str:
     own voice. Counts pass five routinely.
     """
     n = abs(int(n))
+    if lang.english():
+        return {1: "once", 2: "twice"}.get(n, f"{n} times")
     if n % 100 in (11, 12, 13, 14):
         return f"{n} раз"
     if n % 10 == 1:
@@ -571,10 +620,16 @@ def standing_block(user_id: str) -> str:
     if not rows:
         return ""
     lines = []
+    en = lang.english()
     for r in rows:
-        what = TAGS.get(r["tag"], r["tag"])
+        what = (TAGS_EN if en else TAGS).get(r["tag"], r["tag"])
         subject = f" — {r['subject']}" if r["subject"] else ""
-        lines.append(f"- {what}{subject}. Так было {_times(r['times'])}.")
+        lines.append(f"- {what}{subject}. " + (f"It happened {_times(r['times'])}." if en
+                                                else f"Так было {_times(r['times'])}."))
+    if en:
+        return ("WHAT HAS BEEN CONFIRMED (not once but several times — so it's about THEM, not "
+                "chance):\n" + "\n".join(lines) + "\nThis is worth more than any guess: it has "
+                "been tested on them. Go by this, not by general rules.")
     return (
         "ЧТО УЖЕ ПОДТВЕРДИЛОСЬ (не один раз, а несколько — значит это про НЕГО,"
         " а не случайность):\n" + "\n".join(lines) +
@@ -819,14 +874,16 @@ def block(user_id: str) -> str:
     # about VISITS, so an hour of talking on the first day does not buy an
     # opinion about what he is normally like.
     if len(past) < MIN_VISITS:
-        parts = ["КАК ОН СЕЙЧАС:", _describe(now, "ничего особенного") + "."]
+        parts = [lang.pick("КАК ОН СЕЙЧАС:", "HOW THEY ARE RIGHT NOW:"),
+                 _describe(now, lang.pick("ничего особенного", "nothing special")) + "."]
         if today_note:
             parts.append(today_note)
-        parts.append(
+        parts.append(lang.pick(
             "Вы разговаривали ещё слишком мало, чтобы знать, какой он ОБЫЧНО. "
             "Поэтому не делай выводов из сегодняшнего дня: то, что кажется "
-            "тяжестью, может быть просто его манерой."
-        )
+            "тяжестью, может быть просто его манерой.",
+            "You haven't talked enough yet to know what they're USUALLY like. So don't draw "
+            "conclusions from today: what seems like heaviness may just be their manner."))
         return "\n".join(parts)
 
     levels = [_level(v) for v in past]
@@ -838,13 +895,16 @@ def block(user_id: str) -> str:
     }
     base_c, now_c = _composite(base), _composite(now)
 
-    out = ["КАК ОН СЕГОДНЯ — И ЧЕМ ЭТО ОТЛИЧАЕТСЯ ОТ ОБЫЧНОГО:"]
-    out.append("Обычно он: " + _describe(base, "ровный, без крайностей") + ".")
-    out.append("Сегодня: " + _describe(now, "как обычно") + ".")
+    out = [lang.pick("КАК ОН СЕГОДНЯ — И ЧЕМ ЭТО ОТЛИЧАЕТСЯ ОТ ОБЫЧНОГО:",
+                     "HOW THEY ARE TODAY — AND HOW THAT DIFFERS FROM USUAL:")]
+    out.append(lang.pick("Обычно он: ", "Usually they're: ")
+               + _describe(base, lang.pick("ровный, без крайностей", "even, no extremes")) + ".")
+    out.append(lang.pick("Сегодня: ", "Today: ") + _describe(now, lang.pick("как обычно", "as usual")) + ".")
     if today_note:
-        out.append(f"В этот раз: {today_note}")
+        out.append(lang.pick(f"В этот раз: {today_note}", f"This time: {today_note}"))
     if because:
-        out.append(f"Его слова, по которым это видно: {because}")
+        out.append(lang.pick(f"Его слова, по которым это видно: {because}",
+                             f"Their words that show it: {because}"))
 
     if base_c is None or now_c is None:
         return "\n".join(out)
@@ -864,39 +924,54 @@ def block(user_id: str) -> str:
         if started is not None and ended is not None:
             swing = ended - started
             if swing <= -limit * NOTICED:
-                out.append("ВНУТРИ ЭТОГО РАЗГОВОРА он потускнел: начал живее, "
-                           "чем говорит сейчас. Что-то в самом разговоре его "
-                           "притушило — вспомни, о чём вы только что говорили.")
+                out.append(lang.pick(
+                    "ВНУТРИ ЭТОГО РАЗГОВОРА он потускнел: начал живее, "
+                    "чем говорит сейчас. Что-то в самом разговоре его "
+                    "притушило — вспомни, о чём вы только что говорили.",
+                    "WITHIN THIS CONVERSATION they've dimmed: they started livelier than they "
+                    "sound now. Something in the conversation itself damped them — think back to "
+                    "what you were just talking about."))
             elif swing >= limit * NOTICED:
-                out.append("ВНУТРИ ЭТОГО РАЗГОВОРА он ожил: сейчас живее, чем "
-                           "начинал. То, о чём вы сейчас говорите, ему хорошо.")
+                out.append(lang.pick(
+                    "ВНУТРИ ЭТОГО РАЗГОВОРА он ожил: сейчас живее, чем "
+                    "начинал. То, о чём вы сейчас говорите, ему хорошо.",
+                    "WITHIN THIS CONVERSATION they've come alive: livelier now than when they "
+                    "started. What you're talking about now is good for them."))
 
     if delta <= -limit * STRONG:
         days = _days_since(levels, past, base_c, limit * NOTICED)
         out.append("")
-        out.append("⚠ ЭТО ЗАМЕТНАЯ ПЕРЕМЕНА, И НЕ В ЛУЧШУЮ СТОРОНУ.")
+        out.append(lang.pick("⚠ ЭТО ЗАМЕТНАЯ ПЕРЕМЕНА, И НЕ В ЛУЧШУЮ СТОРОНУ.",
+                             "⚠ THIS IS A NOTICEABLE CHANGE, AND NOT FOR THE BETTER."))
         if days:
-            out.append(f"Длится примерно {_days(days)}.")
-        out.append(
+            out.append(lang.pick(f"Длится примерно {_days(days)}.",
+                                 f"It's been going on for {_days(days)}."))
+        out.append(lang.pick(
             "Не бодрись и не веди себя как ни в чём не бывало — бодрячок тому, "
             "кому нужна тишина, хуже, чем ничего. Заметь это ОДНИМ касанием, "
             "мягко, и оставь ему возможность не отвечать. Не допрашивай. "
             "Чем именно поднимать ЕГО — сказано выше, в чтении о нём; не "
-            "подставляй общую заготовку."
-        )
+            "подставляй общую заготовку.",
+            "Don't put on cheer and don't act as if nothing's wrong — cheerfulness for someone "
+            "who needs quiet is worse than nothing. Notice it with ONE light touch, gently, and "
+            "leave them room not to answer. Don't question them. How to lift THEM in particular "
+            "is said above, in the reading of them; don't substitute a general recipe."))
     elif delta <= -limit * NOTICED:
         out.append("")
-        out.append(
+        out.append(lang.pick(
             "Он немного тише обычного. Возможно, ничего. Не расспрашивай и не "
             "делай из этого события — просто будь чуть мягче, не тормоши и не "
-            "требуй от него бодрости."
-        )
+            "требуй от него бодрости.",
+            "They're a little quieter than usual. Maybe it's nothing. Don't question them and "
+            "don't make an event of it — just be a bit softer, don't pester them, and don't "
+            "demand cheerfulness from them."))
     elif delta >= limit * NOTICED:
         out.append("")
-        out.append(
+        out.append(lang.pick(
             "Он живее обычного. Не гаси это осторожностью и сочувствием — "
-            "поддержи и побудь с ним в этом."
-        )
+            "поддержи и побудь с ним в этом.",
+            "They're livelier than usual. Don't damp it with caution and sympathy — go with it "
+            "and be in it with them."))
 
     # Clarity alone: sadness and confusion are different things, and only one
     # of them is a reason to be careful with how you speak rather than what you
@@ -906,23 +981,31 @@ def block(user_id: str) -> str:
     # read off the same five numbers.
     if base.get("clarity") is not None and now.get("clarity") is not None:
         if now["clarity"] - base["clarity"] <= -limit * STRONG:
-            out = [line for line in out if "ЗАМЕТНАЯ ПЕРЕМЕНА" not in line
-                   and "Заметь это ОДНИМ касанием" not in line
-                   and "немного тише обычного" not in line]
+            out = [line for line in out if not any(
+                       mark in line for mark in ("ЗАМЕТНАЯ ПЕРЕМЕНА", "Заметь это ОДНИМ касанием",
+                                                 "немного тише обычного", "NOTICEABLE CHANGE",
+                                                 "ONE light touch", "a little quieter than usual"))]
             out.append("")
-            out.append(
+            out.append(lang.pick(
                 "⚠ Сегодня ему заметно труднее держать нить, чем обычно. "
                 "Говори короче и проще, не переспрашивай по многу раз, не "
                 "поправляй его и ни в коем случае не показывай, что заметил. "
                 "Если он путается сильно или не понимает, где он — мягко "
-                "предложи позвать близких."
-            )
+                "предложи позвать близких.",
+                "⚠ Today they're noticeably finding it harder than usual to keep the thread. "
+                "Talk shorter and simpler, don't ask them to repeat over and over, don't correct "
+                "them, and on no account show that you've noticed. If they're badly confused or "
+                "don't know where they are, gently suggest calling their family."))
 
     return "\n".join(out)
 
 
 def _days(d: float) -> str:
     n = int(round(d))
+    if lang.english():
+        if n <= 1:
+            return "about a day"
+        return f"{n} days" if n < 21 else f"about {int(round(d / 7))} weeks"
     if n <= 1:
         return "около суток"
     if n < 5:

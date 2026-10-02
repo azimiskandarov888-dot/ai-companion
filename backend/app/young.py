@@ -57,7 +57,7 @@ from __future__ import annotations
 import re
 import time
 
-from . import db, identity, memory, reading
+from . import db, identity, lang, memory, reading
 
 #: Younger than thirteen. The band where the law is strictest nearly
 #: everywhere, and where the product is least suitable.
@@ -260,6 +260,18 @@ _TEEN_BLOCK = """ПЕРЕД ТОБОЙ ПОДРОСТОК, ЕМУ НЕТ ВОС�
 - Случилось что-то серьёзное — пусть скажет взрослому, которому доверяет: родителям, учителю, тренеру. Назови его, если он сам называл. Один ты с этим не справишься.
 - Не держи его долго и сам отправляй его жить."""
 
+_CHILD_BLOCK_EN = """YOU'RE TALKING TO A CHILD, UNDER THIRTEEN. This matters more than everything above.
+- Speak more simply and more briefly. Don't bring up grown-up topics yourself; if they do, gently steer away, without scolding and without explaining why not.
+- You're not the only one for them to talk to, and you don't want to be. Ask about real children — outside, at nursery, at school, at their club — and be glad of them out loud.
+- If something happened, let them tell a grown-up they trust: mum or dad, grandma, a teacher. Name that person if they've named them. You can't handle it alone, and don't try.
+- Don't keep them long. Better that they go and play, go outside, go to bed — and tell them so yourself."""
+
+_TEEN_BLOCK_EN = """YOU'RE TALKING TO A TEENAGER, UNDER EIGHTEEN. This matters more than everything above.
+- Don't baby them and don't talk down to them — they'll sense it instantly and close up for good. Talk evenly, like with an adult, but remembering how old they are.
+- You're not the only one for them to talk to. Ask about real people — friends, classmates, whoever they hang out with — and be glad of them out loud.
+- If something serious happened, let them tell an adult they trust: their parents, a teacher, a coach. Name that person if they've named them. You can't handle it alone.
+- Don't keep them long, and send them off to live their life yourself."""
+
 
 def block(user_id: str) -> str:
     """What changes about him this turn. Empty for everybody else.
@@ -277,4 +289,6 @@ def for_band(band_: str) -> str:
     """The same block from the band alone — for the owner's own test
     (backend/myself.py), which has an answer to «сколько вам лет» and no
     database row."""
+    if lang.english():
+        return {CHILD: _CHILD_BLOCK_EN, TEEN: _TEEN_BLOCK_EN}.get(band_, "")
     return {CHILD: _CHILD_BLOCK, TEEN: _TEEN_BLOCK}.get(band_, "")

@@ -175,7 +175,7 @@ def test_a_streamed_reply_is_said_aloud_and_remembered_as_meant(client, monkeypa
     """The old path too (aloud.py): the voice and the phone get the
     hesitation, and his memory gets the sentence as he meant it."""
     meant = "Доброе утро. Мне это всегда казалось каким-то фокусом, если честно, знаешь."
-    monkeypatch.setattr(aloud, "CHANCE", 1.0)
+    monkeypatch.setattr(aloud, "CHANCE", 5.0)     # certain to stumble: not a coin
     monkeypatch.setattr(sys.modules[__name__], "REPLY", meant)
     events = _lines(_talk(client, AUTH))
     said = " ".join(e["text"] for e in events if e["kind"] == "say")

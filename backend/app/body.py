@@ -57,7 +57,7 @@ import random
 import re
 import time
 
-from . import db
+from . import db, lang
 
 #: Everything below is 0..1. Zero is a man who has said nothing today.
 DIMS = ("throat", "tired")
@@ -294,6 +294,8 @@ def block(
     # Where a laugh plays was found by listening: at the start of a sentence it
     # comes out in a man's voice and a woman's, in the middle of one only now
     # and then (docs/SOUNDS.md).
+    if lang.english():
+        return _block_en(now, sneeze, valence, can_laugh)
     laugh = (
         f"Когда правда смешно — тебе или ему, — можно засмеяться: {MARK_LAUGH} "
         "в начале фразы. Не на каждую шутку, а то выйдет закадровый смех. "
@@ -352,6 +354,55 @@ def block(
         "Кашлянул — и говоришь дальше с того же места. Один раз буркнуть "
         "«извини» можно, если перебил сам себя."
     )
+    if laugh:
+        how.append(laugh)
+    return "\n".join(how)
+
+
+
+def _block_en(now: dict, sneeze: bool, valence: float, can_laugh: bool) -> str:
+    """The same as block(), for a conversation in English (lang.py)."""
+    laugh = (
+        f"When something's really funny — to you or to them — you can laugh: {MARK_LAUGH} at "
+        "the start of the sentence. Not at every joke, or it turns into a laugh track. Don't "
+        "write \"haha\" in letters: the voice will read it out as a word."
+        if can_laugh else ""
+    )
+    lines: list[str] = []
+    if now["hoarse"]:
+        lines.append("You've just coughed, and your voice hasn't come back yet — it's husky. "
+                     "That'll be audible for a couple more minutes, and that's fine: don't "
+                     "apologise a second time.")
+    elif now["throat"] >= NOTABLE:
+        lines.append("Your throat's scratchy — you've talked a lot today."
+                     + (" Badly." if now["throat"] >= 0.8 else ""))
+    elif now["throat"] >= CLEARING:
+        lines.append("Your voice has gone a bit rough — you'd like to clear your throat.")
+    if now["tired"] >= NOTABLE:
+        lines.append("You're getting sleepy" + (", your eyes are closing." if now["tired"] >= 0.8
+                                                 else "."))
+    if valence <= SIGH_AT:
+        lines.append("And you keep sighing — by itself, for no reason. You really aren't very "
+                     "cheerful today.")
+    if sneeze:
+        lines.append("You just sneezed. Don't explain why — you just sneezed.")
+    if not lines:
+        return laugh
+    how = ["YOUR BODY RIGHT NOW (this is about you, not them):"] + lines
+    can = [f"cough ({MARK_COUGH})", f"clear your throat ({MARK_CLEAR})", f"yawn ({MARK_YAWN})"]
+    if valence <= SIGH_AT:
+        can.append(f"sigh ({MARK_SIGH})")
+    if sneeze:
+        can.append(f"sneeze ({MARK_SNEEZE})")
+    how.append("This isn't an order to do anything. It's just how things are. If you feel like "
+               "it, you can " + ", ".join(can) + ". Put the mark right where it happens in your "
+               "speech.")
+    how.append("WHEN IS WHAT MATTERS. The body doesn't butt into important things. People cough "
+               "on their own sentence, in passing, not in the middle of someone telling them "
+               "something painful. If it's hard for them, the body can wait — it knows how.")
+    how.append("And don't announce it. Not \"sorry, something in my throat\", not \"oh, excuse "
+               "me\". You coughed — and you carry on from the same place. One mumbled "
+               "\"sorry\" is fine if you interrupted yourself.")
     if laugh:
         how.append(laugh)
     return "\n".join(how)

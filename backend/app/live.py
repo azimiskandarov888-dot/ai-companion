@@ -81,11 +81,13 @@ from collections.abc import AsyncIterator, Iterable
 
 from fastapi import BackgroundTasks, WebSocket
 
-from . import allowance, aloud, brain, config, first_sound, hearing, identity, memory, persona, tts, vow
+from . import (allowance, aloud, brain, config, first_sound, hearing, identity, lang, memory,
+               persona, tts, vow)
 
 #: Said the moment a question about the world is heard: the search takes
 #: seconds, and a friend who is looking something up says so.
 _FILLERS = ("Сейчас гляну.", "Секунду, посмотрю.", "Дай гляну.")
+_FILLERS_EN = ("Let me look.", "One sec, I'll check.", "Hang on, let me see.")
 #: After his last sound, how long before the microphone counts again — the
 #: room's echo has to die away first.
 _ECHO_TAIL = 0.3
@@ -111,10 +113,15 @@ _FAREWELL_GRACE = 8.0
 
 #: Said over him, these keep a person listening rather than take the turn…
 _BACKCHANNEL = frozenset({"а", "ага", "угу", "ну", "да", "мм", "м", "хм", "эм", "э",
-                          "ой", "ок", "окей", "так", "ясно", "понятно", "ладно"})
+                          "ой", "ок", "окей", "так", "ясно", "понятно", "ладно",
+                          # and in an English conversation (lang.py)
+                          "yeah", "yep", "yes", "uh", "huh", "mm", "mhm", "hmm", "um", "oh",
+                          "ok", "okay", "right", "sure", "true", "wow", "cool", "nice", "ah",
+                          "aha"})
 #: …and these take it at once, however short.
 _STOP = frozenset({"стоп", "стой", "подожди", "подождите", "погоди", "погодите",
-                   "постой", "постойте", "хватит", "извини", "слушай"})
+                   "постой", "постойте", "хватит", "извини", "слушай",
+                   "stop", "wait", "hold", "hang", "sorry", "listen", "excuse", "hey"})
 
 
 _WORD = re.compile(r"[a-zA-Zа-яА-ЯёЁ]+")
@@ -729,7 +736,7 @@ class Session:
         final = ""
         #: (what he means, how he says it aloud, its voice being made) — see aloud.py.
         ahead: deque[tuple[str, str, _Voicing]] = deque()
-        speaker = aloud.Speaker()
+        speaker = aloud.Speaker(young=aloud.young(self.who))
         pieces: asyncio.Queue = asyncio.Queue()
         cutter: asyncio.Task | None = None
         late: asyncio.Task | None = None
@@ -812,7 +819,7 @@ class Session:
                 # From here it is their turn for keeps.
                 watcher = app_main._commit(user_id, draft.transcript, draft.marks)
             if draft.web:
-                filler = random.choice(_FILLERS)
+                filler = random.choice(lang.pick(_FILLERS, _FILLERS_EN))
                 if await self._speak_line(filler, voice):
                     spoken.append(filler)
                     sounded = True
@@ -864,9 +871,9 @@ class Session:
                 reply, leaving = app_main._farewell(final.strip())
                 reply, _slip = vow.keep(reply)
                 if dropped and not spoken and not reply:
-                    reply = vow.LAST_RESORT
+                    reply = vow.last_resort()
                     sounded = await self._speak_line(reply, voice) or sounded
-                if draft.web and spoken and spoken[0] in _FILLERS:
+                if draft.web and spoken and spoken[0] in _FILLERS + _FILLERS_EN:
                     reply = f"{spoken[0]} {reply}".strip()
                 reply = app_main._body(user_id, reply)
             self._remember(draft, reply, leaving, sounded)

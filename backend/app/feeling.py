@@ -64,7 +64,7 @@ from __future__ import annotations
 
 import time
 
-from . import db
+from . import db, lang
 
 #: How good he feels, and how lively — both -2..+2, both higher = better, so
 #: they can be reasoned about without remembering which way each one points.
@@ -194,24 +194,26 @@ def _describe(valence: float, arousal: float) -> str:
     was ordinary and arousal was not.
     """
     if valence <= -0.9:
-        good = "Тебе сегодня и самому невесело."
+        good = lang.pick("Тебе сегодня и самому невесело.", "You're a bit down yourself today.")
     elif valence <= -_NOTABLE:
-        good = "Ты сегодня смурной какой-то."
+        good = lang.pick("Ты сегодня смурной какой-то.", "You're kind of glum today.")
     elif valence >= 1.2:
-        good = "У тебя сегодня прекрасное настроение."
+        good = lang.pick("У тебя сегодня прекрасное настроение.", "You're in a great mood today.")
     elif valence >= _NOTABLE:
-        good = "Тебе сегодня хорошо."
+        good = lang.pick("Тебе сегодня хорошо.", "You feel good today.")
     else:
         good = ""
 
     if arousal <= -1.2:
-        live = "Сил совсем нет, тянет в тишину."
+        live = lang.pick("Сил совсем нет, тянет в тишину.",
+                         "No energy at all; you're craving quiet.")
     elif arousal <= -_NOTABLE:
-        live = "Двигаешься медленно, без затей."
+        live = lang.pick("Двигаешься медленно, без затей.", "You're moving slowly, keeping it simple.")
     elif arousal >= 1.2:
-        live = "Тебя распирает, не сидится на месте."
+        live = lang.pick("Тебя распирает, не сидится на месте.",
+                         "You're bursting with energy, can't sit still.")
     elif arousal >= _NOTABLE:
-        live = "Сил в тебе много."
+        live = lang.pick("Сил в тебе много.", "You've got plenty of energy.")
     else:
         live = ""
 
@@ -246,6 +248,8 @@ def block(user_id: str) -> str:
     if not said:
         return ""
 
+    if lang.english():
+        return _block_en(said, note, valence < 0 or arousal < 0)
     lines = ["КАК ТЫ СЕГОДНЯ САМ:", said]
     if note:
         lines.append(f"Отчего: {note}")
@@ -270,4 +274,23 @@ def block(user_id: str) -> str:
             "откликаешься и как охотно затеваешь. Но не тормоши его и не тащи "
             "в своё настроение: если ему тяжело, твоё хорошее подождёт."
         )
+    return "\n".join(lines)
+
+
+def _block_en(said: str, note: str, low: bool) -> str:
+    """block() for a conversation in English (lang.py)."""
+    lines = ["HOW YOU ARE TODAY YOURSELF:", said]
+    if note:
+        lines.append(f"Why: {note}")
+    lines.append("Don't open with it and don't report on it. But if they ask, answer honestly and "
+                 "for real, not \"yeah, fine\": brushing off a sincere question hurts more than "
+                 "answering it.")
+    if low:
+        lines.append("Don't complain — but don't put on a cheerfulness you don't have. Let it show "
+                     "by itself: slightly shorter sentences, a bit less fuss, more listening. It "
+                     "doesn't cancel the warmth — you're just quieter today.")
+    else:
+        lines.append("Don't show off — let it show by itself, in how easily you respond and how "
+                     "readily you start things. But don't pester them or drag them into your mood: "
+                     "if it's hard for them, your good mood can wait.")
     return "\n".join(lines)

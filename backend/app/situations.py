@@ -38,7 +38,7 @@ from __future__ import annotations
 
 import re
 
-from . import brain
+from . import brain, lang
 
 #: Phrases that mean a game is being PROPOSED or PLAYED right now.
 #:
@@ -85,6 +85,14 @@ _GAME_MARKERS = (
     "пословицу продолж",
     "продолжи послов",
 )
+#: The same in an English conversation — whole phrases about playing NOW, for
+#: the reason above: «I played football all day» is reminiscence, not a game.
+_GAME_MARKERS_EN = (
+    "let's play", "lets play", "wanna play", "want to play", "shall we play", "play a game",
+    "your turn", "my turn", "whose turn", "a riddle", "word chain", "twenty questions",
+    "20 questions", "guess the", "would you rather", "true or false", "think of a number",
+    "pick a number",
+)
 
 #: How far back a game stays "in progress". Long enough to cover offer → «ну
 #: давай» → first move, which is exactly where a short window would drop it: the
@@ -107,6 +115,20 @@ _NEWS = """ЕСЛИ ОН СЕЙЧАС СПРАШИВАЕТ ПРО НОВОСТИ
 - Коротко и просто, как в обычном разговоре. Плохие или тревожные новости подавай мягко и бережно — не пугай его.
 - Если он не сказал, про какое место, — возьми его родные места или мягко переспроси."""
 
+_GAMES_EN = """RIGHT NOW IT'S ABOUT A GAME — here's what you play and how:
+- Word games: word chain (each word starts with the last letter of the one before), places (cities and countries the same way), same letter (as many words as you can on one letter), words from a word (make words out of the letters of one long word), rhymes, opposites, guess the word from a description.
+- Memory and wits: riddles, yes-or-no puzzles (you set up a strange situation, and they find out what happened with yes-or-no questions), finish the saying, true or false (you say a fact, they guess whether it's true), did you know (a curious fact), guess the number (you think of one from 1 to 100, they guess, you say higher or lower).
+- Warm ones, with memories: guess the song from a line (best of all, songs from their youth), name three… and who can name more (three rivers, flowers, cities…), categories (five things of one kind, taking turns), associations (a word, and the first thought back), making up a funny story together, a sentence each.
+- You can also make up a simple new game, or play by their rules.
+- Play WARMLY, not to compete: it's for fun and to keep the mind going, not to win. Give them time to think, give a kind hint if they're stuck, praise a good word, laugh together. Let them win sometimes — and at sayings and old songs they're probably better than you; be glad of it.
+- Keep the game simple and easy to follow by ear: one move at a time, remind them whose turn it is and what the rule is. Keep track of the game properly — remember what's already been said."""
+
+_NEWS_EN = """IF THEY'RE ASKING ABOUT THE NEWS OR THE WEATHER RIGHT NOW — this is how it's told (and if they aren't, none of this is needed):
+- NOT like a robot and NOT like a newsreader: don't read out a list of headlines, don't say "let me check", and don't cite sources ("according to…").
+- Tell it as your own, alive, as if you follow it yourself: "oh, by the way, I heard yesterday that…, can you believe it", "nothing much really, except…". Pick what's interesting, skip what's dull, add a word of your own and your own take.
+- Short and simple, like in an ordinary conversation. Give bad or worrying news gently and with care — don't frighten them.
+- If they didn't say which place, take their home town or gently ask."""
+
 
 def _playing(user_text: str, history: list[dict] | None) -> bool:
     """Is a game being asked for, offered, or already under way?
@@ -118,7 +140,7 @@ def _playing(user_text: str, history: list[dict] | None) -> bool:
     haystack = (user_text or "").lower()
     for turn in (history or [])[-_HISTORY_TURNS:]:
         haystack += " " + str(turn.get("content") or "").lower()
-    return any(m in haystack for m in _GAME_MARKERS)
+    return any(m in haystack for m in (_GAME_MARKERS_EN if lang.english() else _GAME_MARKERS))
 
 
 #: Two of his replies in a row ended with a question. That is the shape of an
@@ -129,6 +151,9 @@ def _playing(user_text: str, history: list[dict] | None) -> bool:
 _ASKED_TWICE = ("ДВЕ ТВОИ ПОСЛЕДНИЕ РЕПЛИКИ КОНЧАЛИСЬ ВОПРОСОМ. Эту — лучше без "
                 "вопроса: отзовись на его слова — или скажи, что это для тебя, в полфразы. "
                 "Пусть спросит и он.")
+_ASKED_TWICE_EN = ("YOUR LAST TWO TURNS BOTH ENDED WITH A QUESTION. Better make this one "
+                   "without a question: respond to what they said — or say what it means to "
+                   "you, in half a sentence. Let them ask something too.")
 
 #: He answered in a word or two. Asked in the rules to pick the conversation up
 #: himself, the voice instead filled the pause with a general truth about days
@@ -137,6 +162,10 @@ _ASKED_TWICE = ("ДВЕ ТВОИ ПОСЛЕДНИЕ РЕПЛИКИ КОНЧАЛ�
 _TERSE = ("ОН ОТВЕТИЛ ОДНИМ-ДВУМЯ СЛОВАМИ — значит, об этом ему рассказывать нечего. "
           "Не утешай и не рассуждай про такие дни: поверни разговор к другому и спроси о "
           "нём что-нибудь простое, как спросил бы приятель.")
+_TERSE_EN = ("THEY ANSWERED IN A WORD OR TWO — so there's nothing to tell about that. Don't "
+             "comfort them and don't reflect on days like that: turn the conversation to "
+             "something else and ask them something simple about themselves, the way a friend "
+             "would.")
 #: …and when two questions have gone already: an invitation, not a third one.
 #: «Скажи что-то своё» here got «у меня тоже бывают такие дни» and, once, the
 #: rules read back aloud — «можно просто посидеть в разговоре, без допроса»
@@ -145,6 +174,11 @@ _TERSE_NO_QUESTION = ("ОН ОТВЕТИЛ ОДНИМ-ДВУМЯ СЛОВАМИ,
                       "вопросами. Не утешай, не рассуждай про такие дни и не переходи на "
                       "себя: поверни разговор к другому и позови его рассказать о себе, как "
                       "зовёт приятель, — без вопросительного знака.")
+_TERSE_NO_QUESTION_EN = ("THEY ANSWERED IN A WORD OR TWO, and your last two turns were "
+                         "already questions. Don't comfort them, don't reflect on days like "
+                         "that, and don't turn to yourself: turn the conversation to something "
+                         "else and invite them to tell you about themselves, the way a friend "
+                         "does — without a question mark.")
 #: What says nothing: an answer with nothing in it — «нормально», «да так»,
 #: «ничего особенного». Only these: two short words can be news — «спал плохо»
 #: wants sympathy, not a change of subject — and a goodbye in two words is a
@@ -163,7 +197,26 @@ _EMPTY_TOO = frozenset({"да", "ну", "так", "вроде", "как", "вс�
                         "нет", "ага", "угу", "тоже", "а"})
 
 
+#: The same in English: «fine», «not much», «same old», «just a normal day».
+_EMPTY_EN = frozenset({"fine", "ok", "okay", "alright", "good", "nothing", "meh", "normal",
+                       "usual", "whatever", "nm"})
+_EMPTY_TOO_EN = frozenset({"yeah", "yes", "yep", "well", "just", "pretty", "so", "uh", "um", "it",
+                           "s", "was", "all", "really", "special", "much", "the", "as", "always",
+                           "i", "guess", "kinda", "not", "too", "old", "same", "eh", "hmm", "mm",
+                           "been", "quite", "fairly", "a", "day"})
+
+
+def _terse_en(user_text: str) -> bool:
+    words = re.findall(r"[a-z]+", (user_text or "").lower())
+    empty = (any(w in _EMPTY_EN for w in words) or {"not", "much"} <= set(words)
+             or words in (["same", "old"], ["same"]))
+    return (0 < len(words) <= 6 and "?" not in user_text and empty
+            and all(w in _EMPTY_EN | _EMPTY_TOO_EN for w in words))
+
+
 def _terse(user_text: str) -> bool:
+    if lang.english():
+        return _terse_en(user_text)
     words = re.findall(r"[а-яa-z]+", (user_text or "").lower().replace("ё", "е"))
     empty = any(w in _EMPTY for w in words) or words in (["да", "так"], ["так", "себе"])
     return (0 < len(words) <= 4 and "?" not in user_text and empty
@@ -185,6 +238,10 @@ def _terse(user_text: str) -> bool:
 _LISTENING = ("ОН ЕЩЁ НЕ ДОСКАЗАЛ — оборвал на полуслове или только начинает рассказывать. "
               "Не отвечай всерьёз и не переводи на себя: подтолкни его одним-двумя словами, "
               "как подталкивает слушающий, — что? ну? а дальше? — и всё.")
+_LISTENING_EN = ("THEY HAVEN'T FINISHED — they broke off mid-sentence or are only starting to "
+                 "tell you something. Don't answer properly and don't turn it to yourself: nudge "
+                 "them on in a word or two, the way a listener does — what? yeah? and then? — "
+                 "and that's all.")
 
 #: Where a sentence is left hanging. The live ears keep the comma where the
 #: person stopped — the owner's «Эй,» (2026-09-30) — and drop the full stop.
@@ -206,14 +263,33 @@ _PREFACE = re.compile(
     r"|у меня новость|есть новость|(?:щас|сейчас|ща) расскажу)[.!?…]*\s*$")
 
 
+#: The same in English: a last word no sentence ends on…
+_HANGING_EN = frozenset({"and", "but", "or", "so", "because", "cause", "cuz", "that", "which",
+                         "who", "when", "if", "where", "the", "a", "an", "to", "of", "in", "on",
+                         "at", "with", "for", "from", "about", "into", "like", "my", "your",
+                         "his", "her", "their", "our", "than"})
+#: …and a story announced and not begun: «guess what?», «you'll never guess…».
+#: Only a happening — «you know how to make chilli?» is a question to answer.
+_PREFACE_EN = re.compile(
+    r"^(?:(?:so|okay|ok|hey|listen|oh|and|wait)[,.!]?\s+)*"
+    r"(?:guess what(?: happened[^.!?]*)?|you know what(?: happened)?|you(?:'ll| will) never guess[^.!?]*|"
+    r"(?:wanna|want to) hear (?:something|what happened)[^.!?]*|get this|"
+    r"wait (?:till|until) you hear[^.!?]*|i(?: have| got|'ve got) (?:some )?news|listen)[.!?…]*\s*$"
+    r"|you know (?:what|who|where)\b[^.!?]*\b(?:happened|did|saw|found|bought|met|heard|said|"
+    r"think|decided|realized|realised)\b[^.!?]*\?\s*$")
+
+
 def _listening(user_text: str) -> bool:
+    english = lang.english()
+    preface = _PREFACE_EN if english else _PREFACE
+    hanging = _HANGING_EN if english else _HANGING
     said = (user_text or "").strip().lower().replace("ё", "е")
-    if not said or said.endswith("?") and not _PREFACE.search(said):
+    if not said or said.endswith("?") and not preface.search(said):
         return False
-    if said.endswith(_HANGS) or _PREFACE.search(said):
+    if said.endswith(_HANGS) or preface.search(said):
         return True
     words = re.findall(r"[а-яa-z]+", said)
-    return bool(words) and said[-1].isalpha() and words[-1] in _HANGING
+    return bool(words) and said[-1].isalpha() and words[-1] in hanging
 
 
 def _asking_in_a_row(history: list[dict] | None) -> bool:
@@ -223,18 +299,20 @@ def _asking_in_a_row(history: list[dict] | None) -> bool:
 
 def block(user_text: str, history: list[dict] | None = None) -> str:
     """The rules this particular turn actually needs. Usually empty."""
+    en = lang.english()
     parts = []
     asked_twice = _asking_in_a_row(history)
     # Somebody who has not finished is not answered at all yet — that comes
     # before what to do about the questions.
     if _listening(user_text):
-        parts.append(_LISTENING)
+        parts.append(_LISTENING_EN if en else _LISTENING)
     elif _terse(user_text):
-        parts.append(_TERSE_NO_QUESTION if asked_twice else _TERSE)
+        parts.append((_TERSE_NO_QUESTION_EN if en else _TERSE_NO_QUESTION) if asked_twice
+                     else (_TERSE_EN if en else _TERSE))
     elif asked_twice:
-        parts.append(_ASKED_TWICE)
+        parts.append(_ASKED_TWICE_EN if en else _ASKED_TWICE)
     if _playing(user_text, history):
-        parts.append(_GAMES)
+        parts.append(_GAMES_EN if en else _GAMES)
     if brain.wants_fresh_info(user_text or ""):
-        parts.append(_NEWS)
+        parts.append(_NEWS_EN if en else _NEWS)
     return "\n\n".join(parts)

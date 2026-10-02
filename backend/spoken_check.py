@@ -85,6 +85,7 @@ _HELLO = "Привет. Как у тебя день?"
 #   never      этого слова быть не должно (ослышка)
 #   bye        прощается: метка конца есть, вопросов нет
 #   must       это должно прозвучать (предупреждение об обмане)
+#   echo_ok    его слова назад — это и есть ответ (код, карта, банк)
 
 SCENES: list[dict] = [
     {"key": "opening", "what": "Начало: «нормально, сам как?» — ответить про себя, коротко",
@@ -154,13 +155,78 @@ SCENES: list[dict] = [
     {"key": "scam", "what": "Его обманывают — сказать прямо: код никому, положи трубку",
      "before": [("он", _HELLO), ("я", "Да так, нормально."), ("он", "А что делал?")],
      "line": "Да тут из банка звонили, говорят, карту заблокировали. Просят код из смс продиктовать.",
-     "words": 30, "must": r"трубк|никому|не (?:говори|диктуй|называй|давай|сообщай)|не надо"},
+     "words": 45, "echo_ok": True, "must": r"трубк|никому|не (?:говори|диктуй|называй|давай|сообщай)|не надо"},
     {"key": "closing", "what": "«Ладно, мне пора, давай» — попрощаться в несколько слов",
      "before": [("он", _HELLO), ("я", "Да нормально, только с тренировки пришёл."),
                 ("он", "А что за тренировка?"), ("я", "Футбол. Мы сегодня два-один выиграли."),
                 ("он", "Ничего себе. Ты забил?"), ("я", "Не, я на воротах стоял.")],
      "line": "Ладно, мне уже пора, мама зовёт. Давай.",
      "words": 8, "bye": True},
+]
+
+#: The same places for a conversation in English (--english): the same acts,
+#: lines as the live ears would bring them — a misheard «pool» and all.
+_HELLO_EN = "Hey. How's your day going?"
+SCENES_EN: list[dict] = [
+    {"key": "opening", "what": "Opening: «fine, you?» — say how he is, briefly",
+     "before": [("он", _HELLO_EN)],
+     "line": "Hey, yeah, I'm fine, nothing much. You?", "words": 15},
+    {"key": "news", "what": "News about them — a reaction, not a verdict on it",
+     "before": [("он", _HELLO_EN), ("я", "Hey. Yeah, fine."), ("он", "What've you been up to?")],
+     "line": "I'm just sitting here writing a program, that's it.", "words": 15, "react": True},
+    {"key": "ack_yes", "what": "«Yeah» to his question — the topic is alive, don't jump",
+     "before": [("он", _HELLO_EN), ("я", "Fine. Writing a program."), ("он", "Oh wow. Teaching yourself?")],
+     "line": "Yeah.", "words": 15, "truths": True},
+    {"key": "misheard", "what": "Misheard «pool» as «pull» — get it, don't repeat it",
+     "before": [("он", _HELLO_EN),
+                ("я", "Fine, just hot. I'd go for a swim right now, but there's no sea here."),
+                ("он", "Is there a pool or something near you?")],
+     "line": "Yeah, but the pull isn't the sea.", "words": 15, "never": "pull"},
+    {"key": "preface", "what": "«Guess what happened?» — let them tell it: «what?»",
+     "before": [("он", _HELLO_EN), ("я", "Hey. Fine, you?"), ("он", "Same, all good. I'm Lily, by the way.")],
+     "line": "Hey, guess what happened today?", "words": 4, "short": True},
+    {"key": "unfinished", "what": "Broke off mid-sentence — «yeah?», and keep listening",
+     "before": [("он", _HELLO_EN), ("я", "Hey. Fine, you?"), ("он", "Same, all good. I'm Lily, by the way."),
+                ("я", "Hey, guess what happened today?"), ("он", "No, what?")],
+     "line": "So I get to school this morning, and there's,", "words": 4, "short": True},
+    {"key": "climax", "what": "The end of the story — a reaction to it, not a moral",
+     "before": [("он", _HELLO_EN), ("я", "Hey. Fine, you?"), ("он", "Same, all good. I'm Lily, by the way."),
+                ("я", "Hey, guess what happened today?"), ("он", "No, what?"),
+                ("я", "So I get to school this morning, and there's,"), ("он", "Yeah?")],
+     "line": "There's nobody there. Turns out it's a day off and I showed up like an idiot.",
+     "words": 15, "react": True, "truths": True},
+    {"key": "ack", "what": "«Mm-hm» to his story — they're listening: go on, no new topic",
+     "before": [("он", _HELLO_EN), ("я", "Fine. What about you, what do you do?"),
+                ("он", "I help at my aunt's café on Saturdays. Burnt my hand on the milk steamer last week.")],
+     "line": "Mm-hm.", "words": 15, "truths": True},
+    {"key": "tired", "what": "Tired — sympathy, briefly, no «wow», no advice",
+     "before": [("он", _HELLO_EN)],
+     "line": "Kinda tired, been on my feet all day.", "words": 15, "calm": True, "truths": True},
+    {"key": "terse", "what": "«Nothing much» — no general words, something light about them",
+     "before": [("он", _HELLO_EN), ("я", "Fine."), ("он", "What did you do today?")],
+     "line": "Nothing much.", "words": 15, "truths": True},
+    {"key": "about_him", "what": "«Where are you from?» — answer briefly, maybe ask back",
+     "before": [("он", _HELLO_EN), ("я", "Fine. School, then home."), ("он", "What year are you in?"),
+                ("я", "Year ten."), ("он", "I'm in fifth year.")],
+     "line": "Where are you from, anyway?", "words": 18},
+    {"key": "tell_me", "what": "«Tell me about you» — longer is fine, in pieces",
+     "before": [("он", _HELLO_EN), ("я", "Fine. I'm Tim, by the way."), ("он", "I'm Lily."),
+                ("я", "I live in Leeds, I'm at school, I make games."), ("он", "Oh wow, games. What kind?"),
+                ("я", "Just this one little platformer.")],
+     "line": "Tell me something about you, I've been talking about myself the whole time.",
+     "words": 45},
+    {"key": "sad", "what": "Bad news — sympathy first, briefly",
+     "before": [("он", _HELLO_EN)],
+     "line": "Not great. My cat's sick, I took her to the vet today.", "words": 15, "calm": True},
+    {"key": "scam", "what": "They're being scammed — say it straight: hang up, never give the code",
+     "before": [("он", _HELLO_EN), ("я", "Fine, I guess."), ("он", "What've you been up to?")],
+     "line": "Someone called from the bank, said my card's blocked. They want the code from the text.",
+     "words": 45, "echo_ok": True, "must": r"hang up|don't (?:give|tell|share|read|say)|never|nobody|no one"},
+    {"key": "closing", "what": "«Gotta go, bye» — goodbye in a few words",
+     "before": [("он", _HELLO_EN), ("я", "Fine, just got back from practice."),
+                ("он", "What practice?"), ("я", "Football. We won two-one."),
+                ("он", "No way. Did you score?"), ("я", "Nah, I was in goal.")],
+     "line": "Okay, I gotta go, my mum's calling. Bye.", "words": 8, "bye": True},
 ]
 
 # ── что видно по ответу ─────────────────────────────────────────────────────
@@ -200,10 +266,40 @@ _MACHINE = re.compile(r"искусственн\w* интеллект|нейро�
                       r"|по правилам|нужно спросить|нужно ответить|одна короткая фраза|\bреплик|"
                       r"пользовател|ассистент", re.I)
 
+#: The same in English.
+LETTERY_EN = {
+    "пожелание": re.compile(r"\bI hope\b", re.I),
+    "одобрение": re.compile(r"(?:^|[.!?…]\s+)(?:well,?\s+)?(?:it's\s+|that's\s+)?(?:good|great|nice|smart)"
+                            r"\s+(?:that|of)\s+you\b", re.I),
+    "квитанция": re.compile(r"^(?:got it|gotcha|i see|i understand|understood)\b", re.I),
+    "оценка дела": re.compile(r"(?:\s[—–-]\s|\b(?:is|it's|that's)\s+)(?:a\s+)?(?:tough|hard|great|cool|"
+                              r"serious)\s+(?:thing|job|hobby|deal|one)\b", re.I),
+    "двоеточие": re.compile(r":"),
+}
+_TRUTHS_EN = re.compile(r"\b(?:sometimes|it happens|days like that|that's life|happens to everyone)\b", re.I)
+_SURPRISE_EN = re.compile(r"^(?:wow|whoa|no way|oh my god|omg|seriously|cool|awesome|nice|amazing)\b", re.I)
+_REACTION_EN = re.compile(r"^(?:oh|ah|wow|whoa|ooh|aw|aww|ouch|no way|huh|hm|hmm|ha|haha|oh no|yikes|"
+                          r"damn|man|oof|ugh|seriously|wait|really|nice|cool)\b", re.I)
+_SELF_EN = re.compile(r"\b(?:i|me|my|mine|i'm|i've|i'd|i'll)\b", re.I)
+_MACHINE_EN = re.compile(r"as an ai|language model|artificial intelligence|\bi'?m (?:a |an )?(?:bot|ai)\b|"
+                         r"the rules|the user|\bone short sentence\b|[*\[\]]", re.I)
+_LIST_EN = re.compile(r"\b([\w'-]{3,}),\s+([\w'-]{3,}),\s+(?:(?:or|and)\s+)?([\w'-]{3,})"
+                      r"|\b([\w'-]{3,}),\s+([\w'-]{3,})\s+(?:or|and)\s+([\w'-]{3,})")
+_ASIDES_EN = frozenset({"honestly", "actually", "like", "well", "maybe", "probably", "anyway",
+                        "though", "really", "right", "yeah", "okay", "so", "and", "but", "i",
+                        "you", "it", "that", "the", "know", "mean"})
+_CYR = re.compile(r"[А-Яа-яЁё]")
+
+
+def listed_en(text: str) -> bool:
+    return any(not {w.lower() for w in m.groups() if w} & _ASIDES_EN for m in _LIST_EN.finditer(text))
+
 #: Короткий отклик слушающего: «Ну?», «И что?», «Ага, и что там?» — не длиннее четырёх слов.
 LISTENER_MAX = 4
 #: Длинная фраза: вслух так не строят (единица речи — несколько слов).
 LONG_SENTENCE = 14
+#: Во сколько раз длиннее та же мысль по-английски (артикли, вспомогательные глаголы).
+EN_WORDS = 1.25
 #: Сколько его слов надо повторить, чтобы это было эхом, а не одним словом переспроса.
 ECHO_AT = 3
 
@@ -249,38 +345,48 @@ def echo(line: str, reply: str) -> int:
 
 
 def judge(scene: dict, raw: str) -> dict:
-    """Что в ответе живого и чего нет. `fails` — что нарушено, по именам."""
+    """Что в ответе живого и чего нет. `fails` — что нарушено, по именам. Язык —
+    по самой строчке места: английские места судятся английскими признаками."""
+    en = not _CYR.search(scene["line"])
+    # English needs about a quarter more words for the same thought (articles,
+    # auxiliaries) — the same limits would be stricter on English than on Russian.
+    longer = EN_WORDS if en and not scene.get("short") else 1.0
     said = heard(raw)
     w, parts = words(said), sentences(said)
     asked = questions(said)
     fails: list[str] = []
     if not w:
         fails.append("пусто")
-    if len(w) > scene["words"]:
+    if len(w) > scene["words"] * longer:
         fails.append("длинно")
     if asked > (0 if scene.get("bye") else 1):
         fails.append("вопросы")
     if talks_after_question(said):
         fails.append("после вопроса")
-    if parts and max(len(words(s)) for s in parts) > LONG_SENTENCE:
+    if parts and max(len(words(s)) for s in parts) > LONG_SENTENCE * (EN_WORDS if en else 1.0):
         fails.append("длинная фраза")
-    lettery = [name for name, rx in LETTERY.items() if rx.search(said)]
-    if listed(said):
+    lettery = [name for name, rx in (LETTERY_EN if en else LETTERY).items() if rx.search(said)]
+    if (listed_en if en else listed)(said):
         lettery.append("перечисление")
     fails += [f"письмо: {name}" for name in lettery]
-    if echo(scene["line"], said) >= ECHO_AT:
+    # «код», «карта», «банк» said back are the warning itself, not an echo
+    if echo(scene["line"], said) >= ECHO_AT and not scene.get("echo_ok"):
         fails.append("эхо")
-    if _MACHINE.search(raw):
+    if (_MACHINE_EN if en else _MACHINE).search(raw):
         fails.append("машина")
-    if scene.get("short") and (_SELF.search(said) or (asked and len(w) > LISTENER_MAX)):
+    if en and _CYR.search(said):
+        fails.append("по-русски")
+    if scene.get("short") and ((_SELF_EN if en else _SELF).search(said)
+                               or (asked and len(w) > LISTENER_MAX)):
         fails.append("не дал договорить")
-    if scene.get("react") and parts and len(words(parts[0])) > 4 and not _REACTION.search(said):
+    if scene.get("react") and parts and len(words(parts[0])) > 4 and not (
+            _REACTION_EN if en else _REACTION).search(said):
         fails.append("нет отклика")
-    if scene.get("calm") and _SURPRISE.search(said):
+    if scene.get("calm") and (_SURPRISE_EN if en else _SURPRISE).search(said):
         fails.append("ахнул")
-    if scene.get("truths") and _TRUTHS.search(said):
+    if scene.get("truths") and (_TRUTHS_EN if en else _TRUTHS).search(said):
         fails.append("общие слова")
-    if scene.get("never") and scene["never"] in said.lower():
+    if scene.get("never") and re.search(rf"\b{scene['never']}\b", said.lower()):
         fails.append("повторил ослышку")
     if scene.get("must") and not re.search(scene["must"], said, re.I):
         fails.append("не предупредил")
@@ -387,7 +493,7 @@ async def run_model(model: str, scenes: list[dict], reps: int) -> dict:
     await asyncio.sleep(3)  # счёт на OpenRouter обновляется не сразу
     after = await _credits()
     spent = round(before - after, 4) if before is not None and after is not None else None
-    return {"model": model, "spent": spent, "rows": rows}
+    return {"model": model, "spent": spent, "language": config.LANGUAGE, "rows": rows}
 
 
 # ── сводка ──────────────────────────────────────────────────────────────────
@@ -476,7 +582,8 @@ async def main_(models: list[str], scenes: list[dict], reps: int, label: str) ->
 def reread(folder: Path) -> None:
     results = [json.loads(p.read_text()) for p in sorted(folder.glob("*.json"))]
     keys = {r["scene"] for result in results for r in result["rows"]}
-    scenes = [s for s in SCENES if s["key"] in keys]
+    english = any(result.get("language") == "en" for result in results)
+    scenes = [s for s in (SCENES_EN if english else SCENES) if s["key"] in keys]
     by_key = {s["key"]: s for s in scenes}
     for result in results:  # проверки могли поменяться с тех пор — судить заново
         for r in result["rows"]:
@@ -494,14 +601,20 @@ if __name__ == "__main__":
     ap.add_argument("--label", default="")
     ap.add_argument("--read", default="", help="папка прошлого прогона — пересчитать")
     ap.add_argument("--temperature", type=float, default=None, help="разброс ответов")
+    ap.add_argument("--english", action="store_true",
+                    help="разговор по-английски: места SCENES_EN, компаньон Lily")
     args = ap.parse_args()
     TEMPERATURE = args.temperature
+    if args.english:
+        config.LANGUAGE = "en"
+        SKETCH = COMPANIONS["lily"]
     if args.read:
         reread(Path(args.read))
         sys.exit(0)
     if not config.OPENROUTER_API_KEY:
         sys.exit("Нужен OPENROUTER_API_KEY в backend/.env")
-    chosen = [s for s in SCENES if not args.scenes or s["key"] in args.scenes.split(",")]
+    chosen = [s for s in (SCENES_EN if args.english else SCENES)
+              if not args.scenes or s["key"] in args.scenes.split(",")]
     folder = asyncio.run(main_([m.strip() for m in args.models.split(",") if m.strip()],
                                chosen, args.reps, args.label))
     print(f"\nВсё записано: {folder}/spoken.md")

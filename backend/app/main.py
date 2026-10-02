@@ -81,6 +81,7 @@ from . import (
     fit,
     identity,
     intake,
+    lang,
     learn,
     life,
     live,
@@ -352,7 +353,8 @@ async def _assemble(
     return (
         system_stable,
         system_variable,
-        ([{"role": "user", "content": meeting.HELLO}] if user_text is None else recent),
+        ([{"role": "user", "content": lang.pick(meeting.HELLO, meeting.HELLO_EN)}]
+         if user_text is None else recent),
         tts.voice_for(who),
         watcher,
     )
@@ -539,11 +541,11 @@ async def _think_and_speak(
     reply, slip = vow.keep(reply)
     if slip:
         vow.note(user_id, slip, said)
-        reply = reply or vow.LAST_RESORT
+        reply = reply or vow.last_resort()
     # What he SAYS keeps his markers, so the voice can play the cough; what is
     # remembered and shown never has them.
     # What he SAYS is also said the way people say things — see aloud.py.
-    voiced = aloud.said(reply)
+    voiced = aloud.said(reply, young=aloud.young(persona.load_persona(user_id)))
     reply = _body(user_id, reply)
     # The watcher has been running this whole time, so this costs no wall clock
     # worth measuring — and on danger it replaces the answer outright. Nothing
@@ -651,7 +653,7 @@ async def _speak_as_he_thinks(
         fragments: asyncio.Queue = asyncio.Queue()
         #: How he says it aloud, piece by piece (aloud.py); what he MEANT —
         #: the clean fragment — is what is remembered.
-        speaker = aloud.Speaker()
+        speaker = aloud.Speaker(young=aloud.young(persona.load_persona(user_id)))
 
         async def write() -> None:
             nonlocal reply
@@ -778,7 +780,7 @@ async def _speak_as_he_thinks(
             # left to say. This is the only line here that is invented rather
             # than removed, and it is written down where it can be read.
             if dropped and not spoken and not reply:
-                reply = vow.LAST_RESORT
+                reply = vow.last_resort()
                 yield _said(
                     reply,
                     await tts.synthesize(reply, voice, rate=rate) if speak else None,
@@ -988,7 +990,7 @@ async def hello(user_id: str = Depends(_user)) -> JSONResponse:
     reply, slip = vow.keep(reply)
     if slip:
         vow.note(user_id, slip, said)
-        reply = reply or vow.LAST_RESORT
+        reply = reply or vow.last_resort()
     voiced = reply  # with his markers, for the voice — as in _think_and_speak
     reply = _body(user_id, reply)
     if not reply:

@@ -210,9 +210,9 @@ PEOPLE: dict[str, dict] = {
 
 #: Та же встреча по-английски (--english). Владелец, 2.10.2026: через русские
 #: голоса он не различил мозги на слух — английские голоса у Fish лучше. Возраст
-#: и пол — по-русски, как их читают persona.py и young.py; остальное — английское.
+#: — по-английски целиком; пол — «female», его читают persona.py и tts.py.
 COMPANIONS["lily"] = {
-    "name": "Lily", "gender": "женский", "age": "шестнадцать лет",
+    "name": "Lily", "gender": "female", "age": "16",
     "one_liner": "a schoolgirl who moved to Dublin with her parents two years ago",
     "home": "Dublin, Phibsborough, an old terraced house, her window over the back gardens",
     "roots": "from Manchester — they moved when her mum got a job here",

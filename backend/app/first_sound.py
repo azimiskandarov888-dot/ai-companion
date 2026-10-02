@@ -58,12 +58,16 @@ import random
 import re
 import sys
 
-from . import tts
+from . import lang, tts
 
 #: A listener's sound — in a pause of theirs, and before most of his answers.
 LISTENING = ("М-м…",)
 #: Before an answer to something they asked him to weigh.
 THINKING = ("Хм…", "Так…", "М-м…")
+#: The same sounds in an English conversation (lang.py) — said by an English
+#: voice, which would read «Так…» as a word.
+LISTENING_EN = ("Mm…",)
+THINKING_EN = ("Hmm…", "So…", "Mm…")
 #: How many versions of each sound are made.
 TAKES = 2
 #: How often a finished turn gets one. Not always: people do not.
@@ -84,7 +88,7 @@ PAUSE_AFTER_WORDS = 3
 
 #: (voice, text) → its takes, as (sample rate, 16-bit mono PCM).
 _made: dict[tuple[str | None, str], list[tuple[int, bytes]]] = {}
-_making: dict[str | None, asyncio.Task] = {}
+_making: dict[tuple[str | None, bool], asyncio.Task] = {}
 
 _WORD = re.compile(r"[a-zа-яё]+(?:-[a-zа-яё]+)*")
 _GOODBYE = re.compile(r"\b(?:пока|давай|до свидания|до завтра|до встречи|спокойной ночи|споки|"
@@ -93,6 +97,12 @@ _GOODBYE = re.compile(r"\b(?:пока|давай|до свидания|до за
 #: «Из Алматы» would be a man pondering where he is from.
 _WEIGH = re.compile(r"\b(?:думаешь|считаешь|по-твоему|посоветуешь|советуешь|почему|зачем|"
                     r"как лучше|что лучше|что делать|как быть|а если|стоит ли|стоит)\b")
+_GOODBYE_EN = re.compile(r"\b(?:bye|goodbye|good night|night night|see you|see ya|gotta go|"
+                         r"got to go|have to go|i'm off|i am off|talk later|talk to you later|"
+                         r"catch you later|take care)\b")
+_WEIGH_EN = re.compile(r"\b(?:what do you think|do you think|you think|should i|would you|"
+                       r"what would you|why|how come|which is better|what's better|"
+                       r"what should|is it worth|worth it)\b")
 
 
 def _words(text: str) -> list[str]:
@@ -100,7 +110,8 @@ def _words(text: str) -> list[str]:
 
 
 def goodbye(transcript: str) -> bool:
-    return bool(_GOODBYE.search((transcript or "").lower().replace("ё", "е")))
+    said = (transcript or "").lower().replace("ё", "е")
+    return bool(_GOODBYE.search(said) or _GOODBYE_EN.search(said))
 
 
 def at_end(transcript: str) -> str | None:
@@ -108,7 +119,8 @@ def at_end(transcript: str) -> str | None:
     said = (transcript or "").strip()
     if not _words(said) or goodbye(said):
         return None
-    if said.endswith("?") and _WEIGH.search(said.lower().replace("ё", "е")):
+    low = said.lower().replace("ё", "е")
+    if said.endswith("?") and (_WEIGH.search(low) or _WEIGH_EN.search(low)):
         return "thinking"
     return "listening"
 
@@ -119,6 +131,8 @@ def in_pause(transcript: str) -> bool:
 
 
 def _texts(kind: str) -> tuple[str, ...]:
+    if lang.english():
+        return THINKING_EN if kind == "thinking" else LISTENING_EN
     return THINKING if kind == "thinking" else LISTENING
 
 
@@ -135,21 +149,22 @@ def pick(voice: str | None, kind: str, rng: random.Random, avoid: str = "") -> t
 
 
 def ready(voice: str | None) -> bool:
-    return any(_made.get((voice, t)) for t in LISTENING)
+    return any(_made.get((voice, t)) for t in _texts("listening"))
 
 
 def prepare(voice: str | None) -> asyncio.Task:
     """Make his sounds in this voice, once — in the background; a conversation
     never waits for them, it just has none until they are there."""
-    task = _making.get(voice)
+    key = (voice, lang.english())
+    task = _making.get(key)
     if task is None or (task.done() and not ready(voice)):
         task = asyncio.create_task(_make_all(voice))
-        _making[voice] = task
+        _making[key] = task
     return task
 
 
 async def _make_all(voice: str | None) -> None:
-    texts = dict.fromkeys(LISTENING + THINKING)
+    texts = dict.fromkeys(_texts("listening") + _texts("thinking"))
     for text in texts:
         takes = []
         for _ in range(TAKES):
@@ -205,7 +220,7 @@ def without_repeat(piece: str, sound: str) -> str:
     if not sound:
         return piece
     word = _spoken_word(sound)
-    m = re.match(r"\s*([А-Яа-яЁё]+(?:-[А-Яа-яЁё]+)*)[\s,.!?…—–-]*", piece)
+    m = re.match(r"\s*([A-Za-zА-Яа-яЁё]+(?:-[A-Za-zА-Яа-яЁё]+)*)[\s,.!?…—–-]*", piece)
     if not m or m.group(1).lower().replace("-", "").replace("ё", "е") != word:
         return piece
     rest = piece[m.end():]

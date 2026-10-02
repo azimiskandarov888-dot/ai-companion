@@ -46,6 +46,8 @@ from __future__ import annotations
 import datetime as _dt
 import re as _re
 
+from . import lang
+
 #: Where the days below are the year's landmarks. Russian is spoken well beyond
 #: Russia, so this is the shared calendar of that world rather than one state's
 #: — and it is used only to stay QUIET somewhere it plainly does not apply.
@@ -128,8 +130,38 @@ OCCASIONS: dict[str, dict[str, str]] = {
     },
 }
 
+#: The days of an English conversation (lang.py): the English-speaking world's
+#: own landmarks, not the table above — «today is Defender of the Fatherland
+#: Day» would be a stranger's calendar read out to somebody in Leeds. Days
+#: whose date moves (Thanksgiving, Mother's Day) differ by country and are left
+#: out rather than guessed.
+OCCASIONS_EN: dict[str, dict[str, str]] = {
+    "01-01": {"name": "New Year's Day",
+              "note": "You could remember together how they used to see the New Year in, and "
+                      "who with."},
+    "02-14": {"name": "Valentine's Day",
+              "note": "A day for the people we love — friends and family too. Lightly, never "
+                      "about the two of you."},
+    "03-08": {"name": "International Women's Day",
+              "note": "It grew out of the women's movement at the start of the twentieth "
+                      "century. A warm word for the women in their life, if it fits."},
+    "05-08": {"name": "Odd Socks Day (a joke one)",
+              "note": "A silly day about mismatched socks. You could laugh about it kindly and "
+                      "wonder how people come up with these days at all."},
+    "12-24": {"name": "Christmas Eve",
+              "note": "A warm, busy evening for many. Ask how they're spending it, if they "
+                      "celebrate."},
+    "12-25": {"name": "Christmas Day",
+              "note": "A bright day. Warm wishes — if they celebrate it."},
+    "12-31": {"name": "New Year's Eve",
+              "note": "The mood before the holiday, hopes for the new year."},
+}
+
 _WEEKDAYS = ("понедельник", "вторник", "среда", "четверг", "пятница",
              "суббота", "воскресенье")
+_WEEKDAYS_EN = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
+_MONTHS_EN = ("January", "February", "March", "April", "May", "June", "July", "August",
+              "September", "October", "November", "December")
 _MONTHS = ("января", "февраля", "марта", "апреля", "мая", "июня", "июля",
            "августа", "сентября", "октября", "ноября", "декабря")
 
@@ -143,6 +175,8 @@ def occasion_for(
     costs a warm moment while a wrong guess costs nothing at all.
     """
     date = date or _dt.date.today()
+    if lang.english():
+        return OCCASIONS_EN.get(date.strftime("%m-%d"))
     occasion = OCCASIONS.get(date.strftime("%m-%d"))
     if not occasion:
         return None
@@ -160,6 +194,8 @@ def occasion_for(
 _DATE_HINTS = (
     "январ", "феврал", "март", "апрел", "мая", "май", "июн", "июл", "август",
     "сентябр", "октябр", "ноябр", "декабр", "годовщин",
+    "january", "february", "march", "april", "may ", "june", "july", "august", "september",
+    "october", "november", "december", "anniversary", "birthday",
 )
 _NUMERIC_DATE = _re.compile(r"\b\d{1,2}\s*[./-]\s*\d{1,2}\b")
 
@@ -183,6 +219,8 @@ def today_block(
     a prompt is paid for out of the live text beside it.
     """
     date = date or _dt.date.today()
+    if lang.english():
+        return _today_en(user_id, facts, date)
     lines = [
         f"СЕГОДНЯ {_WEEKDAYS[date.weekday()]}, "
         f"{date.day} {_MONTHS[date.month - 1]} {date.year} года."
@@ -216,4 +254,25 @@ def today_block(
             f"Сегодня ещё и {occasion['name']}. {occasion['note']} "
             "Если это к слову и ему это близко — тепло упомяни сам."
         )
+    return "\n".join(lines)
+
+
+def _today_en(user_id: str, facts: str, date: _dt.date) -> str:
+    """today_block() for a conversation in English."""
+    lines = [f"TODAY is {_WEEKDAYS_EN[date.weekday()]}, {_MONTHS_EN[date.month - 1]} "
+             f"{date.day}, {date.year}."]
+    if _has_dates(facts):
+        lines.append(
+            "You know what the date is today — like anyone does. So you'll notice the dates "
+            "from their life yourself: if today is a birthday, an anniversary or another day "
+            "of theirs — their own or someone close to them — mention it FIRST. Remembering "
+            "someone's date without being reminded is what people hope for most from a friend, "
+            "and what a lonely person most often goes without."
+        )
+        lines.append("And if it's a hard date, don't congratulate and don't be chirpy. Just let "
+                     "them know you remember, and be there.")
+    occasion = occasion_for(date)
+    if occasion:
+        lines.append(f"Today is also {occasion['name']}. {occasion['note']} If it fits and it "
+                     "means something to them, mention it warmly yourself.")
     return "\n".join(lines)

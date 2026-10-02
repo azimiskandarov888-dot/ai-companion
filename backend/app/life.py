@@ -59,7 +59,7 @@ import random
 import sys
 import time
 
-from . import brain, config, db
+from . import brain, config, db, lang
 
 DAY = 86400.0
 
@@ -139,6 +139,8 @@ def block(user_id: str) -> str:
     if not now or not now["state"]:
         return ""
 
+    if lang.english():
+        return _block_en(now)
     where = "Сегодня первый день." if now["day"] == 1 else f"Идёт {now['day']}-й день."
     lines = [
         "ЧТО У ТЕБЯ СЕЙЧАС В ЖИЗНИ:",
@@ -286,7 +288,8 @@ def _sweep(user_id: str) -> None:
 
     what = (row["what"] or "").strip()
     if what:
-        memory.add_memory(user_id, "fact", f"недавно у тебя было: {what}", owner="bob")
+        memory.add_memory(user_id, "fact", lang.pick(f"недавно у тебя было: {what}",
+                                                     f"recently you had: {what}"), owner="bob")
     with db.connect() as conn:
         conn.execute(
             "UPDATE life SET what='', arc='[]', ended_ts=? WHERE user_id=?",
@@ -305,7 +308,7 @@ async def _begin(user_id: str) -> None:
         + f"\n\nПридумай одно событие на {MIN_DAYS}–{MAX_DAYS} дней."
     )
     raw = await brain.generate_text(
-        _WRITER, prompt, max_tokens=1200, model=config.BRAIN_MODEL, timeout=30.0
+        _WRITER + lang.write_in(), prompt, max_tokens=1200, model=config.BRAIN_MODEL, timeout=30.0
     )
     event = _parse(raw)
     if not event:
@@ -378,3 +381,23 @@ def _parse(raw: str) -> dict | None:
 def clear(user_id: str) -> None:
     with db.connect() as conn:
         conn.execute("DELETE FROM life WHERE user_id=?", (user_id,))
+
+
+def _block_en(now: dict) -> str:
+    """block() for a conversation in English (lang.py)."""
+    where = "It's the first day." if now["day"] == 1 else f"It's day {now['day']}."
+    lines = ["WHAT'S GOING ON IN YOUR LIFE RIGHT NOW:", f"{now['state']} {where}"]
+    if now["shows"]:
+        lines.append(f"How it comes across: {now['shows']}")
+    lines.append(
+        "DON'T HINT AT IT SIDEWAYS: no meaningful sighs, no dropped \"oh, it's nothing\". "
+        "That's the same story told on the sly, and it's heard right through. Either tell it or "
+        "don't. But never lie that everything's great: if they ask, tell the truth, even briefly."
+    )
+    lines.append(
+        "AND NOT IN ONE HEAP. Silent, silent, then out it all comes at once — that frightens "
+        "people more than what came out: they realise it was kept from them. First half a "
+        "sentence, as if in passing. If they pick it up — a little more. If they ask further — "
+        "then the rest."
+    )
+    return "\n".join(lines)

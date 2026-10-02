@@ -220,6 +220,48 @@
 - **Люди в репетициях говорят, как модели** — длинно и гладко. Для второго круга им нужно говорить, как в жизни: коротко, обрывками.
 - **Английский.** Правила написаны по-русски. Английскому нужны свои места разговора.
 
+## Часть 4. Сбивок — сколько у живых людей (2.10.2026)
+
+Владелец: «реальный человек в настоящем разговоре очень часто тормозит, повторяет слова, и у него очень много этих слов-паразитов — добавь их в достаточном количестве».
+
+### Сколько их у людей
+
+- **6–10 сбивок на 100 слов** в живом разговоре: «э-э», повторы, поправки на ходу (Fox Tree 1995; Shriberg 1994, 2001). Bortfeld и др. (2001): 5,6–6,7. Из них повторов около 1,5 на 100 слов.
+- **Подростки 15–16 лет** сверху говорят «like» примерно раз в 20 слов, то есть около 5 на 100 (Tagliamonte 2005).
+- **В русской повседневной речи** около 60 прагматических маркеров, самый частый — «вот» (корпус «Один речевой день»).
+
+### Сколько было у Боба
+
+Слой `aloud.py` добавлял не больше двух на реплику, в среднем одну. На прежних 20-словных репликах это около 3 на 100 слов. Теперь реплики короче, и сбивок стало ещё меньше. Модель сама пишет около 3,8 на 100 слов, в основном «…», «ну», «вот». Вместе выходило около 6 — нижний край нормы.
+
+### Что сделано
+
+Слой теперь целится в саму частоту на 100 слов, а не в «одну на реплику». Видов стало больше, и каждый стоит там, где его ставят люди:
+- **заполненная пауза** «э-э…», «м-м…» / "uh", "um" — перед словом, которое ищешь, после маленького слова: «я с э… тренировки»;
+- **повтор** первого слова фразы: «Я… я тоже», "and… and it was";
+- **слова-паразиты по возрасту**: «ну», «вот», «как бы», «в общем», а у молодых ещё «типа» и «короче» / "well", "I mean", "you know", а у молодых "like", "honestly";
+- **английское «like»** у молодых после «was», «it's»: «it was like really hard»;
+- **прежние**: колебание перед расплывчатым словом («казалось, ну, каким-то»), «или там» в вопросе-выборе, «Я вот».
+
+**Никогда**:
+- первым словом ответа — сначала отклик, а первый звук уже прозвучал (`first_sound.py`);
+- внутри меток (//КАШЕЛЬ//), в перечислении, перед вводным словом («Я бы, как бы, наверное» — убрано), после короткого возгласа («Oh no, I mean» — убрано);
+- одно и то же слово дважды за реплику и больше двух в одной фразе;
+- в номере или предупреждении — с этого места до конца ответа.
+
+Имя после вставленного слова не теряет заглавную букву: «Ну, Азим», а не «ну, азим».
+
+### Замерено (640 ответов моделей)
+
+| | Слой добавляет | Модель пишет сама | Всего на 100 слов |
+|---|---|---|---|
+| Взрослый компаньон | 5,6 | ~3,8 | ~9 |
+| Компаньон до 26 лет | 7,4 | ~3,8 | ~11 |
+
+Примерно в половине реплик сбивок нет: реплики короткие, и так у людей тоже. В трети реплик одна, в остальных две-три.
+
+Частоту меняет одно число: `RATE` и `RATE_YOUNG` в `aloud.py`. Решает ухо владельца.
+
 ## Источники
 
 - Heritage J. (1984). A change-of-state token and aspects of its sequential placement. In: *Structures of Social Action* — «oh» как знак «узнал новое» ([PDF](https://www.researchgate.net/profile/John-Heritage/publication/244414507_A_Change-of-State_Token_and_Aspects_of_its_Sequential_Placement/links/57471d3908ae14040e28cc6e/A-Change-of-State-Token-and-Aspects-of-its-Sequential-Placement.pdf)).
@@ -247,3 +289,9 @@
 - Herring S. (1999). Interactional Coherence in CMC. *Journal of Computer-Mediated Communication* 4(4) — в переписке нет одновременного отклика, и ответы отходят от того, на что отвечают ([статья](https://www.researchgate.net/publication/227614326_Interactional_Coherence_in_CMC)).
 - Cho H. и др. (2024). Speechworthy Instruction-tuned Language Models. *EMNLP* — ответы, переделанные для слуха (короче, без списков), слушатели выбирали чаще ([ACL Anthology](https://aclanthology.org/2024.emnlp-main.595/)).
 - Bolden G. (2018). Nu-prefaced responses in Russian conversation. In: *Between Turn and Sequence* — «ну» в начале ответа помечает, что ответ не совпадает с вопросом; поэтому слой `aloud.py` ставит «ну» только перед неуверенными фразами ([PDF](https://www.researchgate.net/publication/290387981_Nu-prefaced_responses_in_Russian_conversation)).
+
+Часть 4:
+- Fox Tree J. E. (1995). The effects of false starts and repetitions on the processing of subsequent words in spontaneous speech. *Journal of Memory and Language* 34; Shriberg E. (1994, 2001) — 6–10 сбивок на 100 слов в разговоре ([обзор](https://www.cambridge.org/core/journals/studies-in-second-language-acquisition/article/disfluency-doesnt-happen-in-isolation/CD61D198FCEE38E178225AE2245AC2B0)).
+- Bortfeld H. и др. (2001). Disfluency Rates in Conversation. *Language and Speech* 44 — 5,6–6,7 на 100 слов, повторы около 1,5 ([PDF](https://heatherbortfeld.com/wp-content/uploads/2016/09/bortfeld_etal_ls2001.pdf)).
+- Clark H., Wasow T. (1998). Repeating words in spontaneous speech. *Cognitive Psychology* 37 — повторяют служебное слово, открывающее составляющую.
+- Tagliamonte S. (2005). So who? Like how? Just what? Discourse markers in the conversations of young Canadians. *Journal of Pragmatics* 37 — «like» у 15–16-летних примерно раз в 20 слов ([PDF](https://www.sfu.ca/sociolinks/summaries/Tagliamonte2005.pdf)).
