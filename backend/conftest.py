@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import pytest
 
-from app import allowance, aloud, config, db
+from app import allowance, aloud, config, db, first_sound
 
 
 @pytest.fixture(autouse=True)
@@ -36,5 +36,9 @@ def temp_data(tmp_path, monkeypatch):
     # compares what was said word for word would fail now and then for no
     # reason of its own. Off by default; tests/test_aloud.py turns it on.
     monkeypatch.setattr(aloud, "CHANCE", 0.0)
+    # His sounds (first_sound.py) are made once per voice and kept in the
+    # module — which is to say, between tests too. Each test starts with none.
+    first_sound._made.clear()
+    first_sound._making.clear()
     db.init_db()
     yield

@@ -21,8 +21,8 @@ import anyio
 import pytest
 from fastapi.testclient import TestClient
 
-from app import (allowance, aloud, body, brain, companion, config, db, hearing, identity, learn,
-                 live, main, meeting, memory, safety, tts, vow)
+from app import (allowance, aloud, body, brain, companion, config, db, first_sound, hearing,
+                 identity, learn, live, main, meeting, memory, safety, tts, vow)
 
 TOKEN = "live-token-0123456789-abcdefghij"
 UID = identity.user_id_from_token(TOKEN)
@@ -703,3 +703,118 @@ def test_the_header_says_who_it_is_when_there_is_one(env):
         line.expect("done")
     assert [t["role"] for t in memory.recent_turns(other)] == ["user", "assistant"]
     assert memory.recent_turns(UID) == []
+
+
+# ── his first sound (first_sound.py) ────────────────────────────────────────
+
+@pytest.fixture
+def sounds(monkeypatch):
+    """His sounds, made — the stand-in voice would make them as bytes too, but
+    then which bytes are which would be guesswork."""
+    for text, pcm in (("М-м…", b"MM"), ("Хм…", b"HM")):
+        first_sound._made[(None, text)] = [(16000, pcm)]
+    monkeypatch.setattr(first_sound, "CHANCE_AT_END", 1.0)
+    monkeypatch.setattr(first_sound, "CHANCE_IN_PAUSE", 1.0)
+    monkeypatch.setattr(first_sound, "LATE", None)
+
+
+def pull_until(line, condition, timeout: float = 3.0) -> None:
+    """Read what the phone is sent until `condition` holds."""
+    deadline = time.monotonic() + timeout
+    while not condition():
+        if time.monotonic() > deadline:
+            raise AssertionError("waited in vain")
+        try:
+            line.get(0.05)
+        except TimeoutError:
+            pass
+
+
+def after_heard(line) -> list[str]:
+    heard = line.kinds().index("heard")
+    return [m["text"] for m in line.messages[heard:] if m["kind"] == "say"]
+
+
+def test_he_gives_voice_at_once_and_it_is_not_what_he_said(env, sounds):
+    """The owner, 2026-10-02: «сделай чтобы он сразу подавал голос». A person
+    answers about 0.2 s after the other stops; his words take 1.6–2.3 s."""
+    with talk(env) as line:
+        line.ears().send(turn("StartOfTurn", "я сегодня"), turn("EndOfTurn", "я сегодня в школе был"))
+        line.expect("heard")
+        done = line.expect("done")
+    says = after_heard(line)
+    assert says[0] == "М-м…"                               # first, before any word
+    assert line.audio[0] == b"MM"
+    assert " ".join(says[1:]) == "Привет. Рад тебя слышать, как прошёл день?"
+    assert done["reply"] == "Привет. Рад тебя слышать, как прошёл день?"
+    assert memory.recent_turns(UID)[-1]["content"] == done["reply"]   # never remembered
+    assert done["timing"]["first_sound"] is not None
+
+
+def test_his_answer_does_not_say_the_sound_again(env, sounds):
+    first_sound._made.pop((None, "М-м…"))   # so the thinking sound is «Хм…»
+    env.mind.replies = ["Хм, ну я не знаю. Наверное, стоит."]
+    with talk(env) as line:
+        line.ears().send(turn("StartOfTurn", "а ты"), turn("EndOfTurn", "а ты как думаешь, стоит идти?"))
+        line.expect("heard")
+        done = line.expect("done")
+    says = after_heard(line)
+    assert says[0] == "Хм…"
+    assert says[1].startswith("Ну я не знаю")              # not «Хм» twice
+    assert done["reply"] == "Хм, ну я не знаю. Наверное, стоит."   # what he meant, kept whole
+
+
+def test_a_pause_gets_a_listeners_sound_where_he_can_be_talked_over(env, sounds):
+    """«М-м» into their pause: if they carry on, it was a listener's sound —
+    and the end of the turn does not get a second one straight after."""
+    with talk(env, duplex=True) as line:
+        line.ears().send(turn("StartOfTurn", "я сегодня"), turn("EagerEndOfTurn", "я сегодня в школу пришёл"))
+        pull_until(line, lambda: b"MM" in line.audio)
+        line.ears().send(turn("TurnResumed", "я сегодня в школу пришёл"),
+                         turn("EndOfTurn", "я сегодня в школу пришёл а там никого"))
+        line.expect("heard")
+        line.expect("done")
+    before = line.kinds().index("heard")
+    assert [m["text"] for m in line.messages[:before] if m["kind"] == "say"] == ["М-м…"]
+    assert "М-м…" not in after_heard(line)
+
+
+def test_without_being_interruptible_a_pause_gets_no_sound(env, sounds):
+    """The microphone is closed while he makes a sound: their next words would
+    be lost under it."""
+    with talk(env, duplex=False) as line:
+        line.ears().send(turn("StartOfTurn", "я сегодня"), turn("EagerEndOfTurn", "я сегодня в школу пришёл"))
+        wait_until(lambda: len(env.mind.calls) == 1)
+        line.ears().send(turn("EndOfTurn", "я сегодня в школу пришёл"))
+        line.expect("heard")
+        line.expect("done")
+    before = line.kinds().index("heard")
+    assert not [m for m in line.messages[:before] if m["kind"] == "say"]
+
+
+def test_a_goodbye_gets_no_sound(env, sounds):
+    env.mind.replies = ["Давай, пока!"]
+    with talk(env) as line:
+        line.ears().send(turn("StartOfTurn", "ладно"), turn("EndOfTurn", "ладно мне пора пока"))
+        line.expect("heard")
+        line.expect("done")
+    assert after_heard(line) == ["Давай, пока!"]
+
+
+def test_he_makes_no_sound_before_his_own_hello(env, sounds):
+    with talk(env, hello=True) as line:
+        line.expect("done")
+    assert "М-м…" not in line.says()
+
+
+def test_a_slow_answer_gets_one_more_sound_and_never_inside_his_words(env, sounds, monkeypatch):
+    monkeypatch.setattr(first_sound, "CHANCE_AT_END", 0.0)
+    monkeypatch.setattr(first_sound, "LATE", 0.05)
+    env.mind.delay = 0.03
+    with talk(env) as line:
+        line.ears().send(turn("StartOfTurn", "я сегодня"), turn("EndOfTurn", "я сегодня в школе был"))
+        line.expect("heard")
+        line.expect("done")
+    says = after_heard(line)
+    assert says[0] == "М-м…"
+    assert says.count("М-м…") == 1

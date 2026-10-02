@@ -81,7 +81,7 @@ from collections.abc import AsyncIterator, Iterable
 
 from fastapi import BackgroundTasks, WebSocket
 
-from . import allowance, aloud, brain, config, hearing, identity, memory, persona, tts, vow
+from . import allowance, aloud, brain, config, first_sound, hearing, identity, memory, persona, tts, vow
 
 #: Said the moment a question about the world is heard: the search takes
 #: seconds, and a friend who is looking something up says so.
@@ -332,6 +332,12 @@ class Session:
         self._over_him = False
         #: The line closing after his goodbye — called off if they carry on.
         self._leaving: asyncio.Task | None = None
+        #: His last sound (first_sound.py): when it went out, and which it was.
+        self._sound_at = 0.0
+        self._sound_text = ""
+        self._rng = random.Random()
+        #: His words are going out: no sound of his may cut into them.
+        self._answering_aloud = False
 
     # ── talking to the phone ────────────────────────────────────────────────
 
@@ -351,6 +357,27 @@ class Session:
         self._last_life = now
         async with self._send_lock:
             await self.ws.send_bytes(pcm)
+
+    async def _send_sound(self, text: str, rate: int, pcm: bytes) -> bool:
+        """One of his sounds (first_sound.py), whole and at once — never into
+        the middle of his words, which take the line first. It plays for a
+        known length, so it marks the room as his for exactly that long
+        without holding the microphone shut after it (_voicing)."""
+        async with self._send_lock:
+            if self._answering_aloud:
+                return False
+            now = time.monotonic()
+            try:
+                await self.ws.send_text(json.dumps({"kind": "say", "text": text, "rate": rate},
+                                                   ensure_ascii=False))
+                await self.ws.send_bytes(pcm)
+            except Exception:  # noqa: BLE001 — the phone left
+                return False
+            self._playing_until = max(self._playing_until, now) + len(pcm) / (2 * rate)
+            self._last_life = now
+            self._said.append(text)
+            self._sound_at, self._sound_text = now, text
+        return True
 
     def _mic_open(self) -> bool:
         if self.duplex:
@@ -385,6 +412,8 @@ class Session:
                 await self._send({"kind": "trouble", "detail": f"the ears: {e}"})
                 return
             self._warm()
+            if tts.configured():
+                first_sound.prepare(self.voice)   # in his voice, while they start talking
             await self._send({
                 "kind": "ready",
                 "listen": {"format": "pcm_s16le", "rate": hearing.RATE, "frame_ms": 80},
@@ -571,7 +600,9 @@ class Session:
         await self._send({"kind": "interrupted"})
 
     def _on_eager(self, text: str) -> None:
-        """«Похоже, договорил» — start writing, in case they have."""
+        """«Похоже, договорил» — start writing, in case they have; and, as a
+        listener does in a pause, perhaps say «м-м»."""
+        self._sound_in_pause(text)
         if not text or brain.wants_fresh_info(text):
             return   # a search is seconds and money; not on a guess
         if self._draft is not None and self._draft.transcript == text:
@@ -579,6 +610,46 @@ class Session:
         self._drop_draft()
         if allowance.check(self.user_id).allowed:
             self._draft = Draft(self, text)
+
+    def _sound_in_pause(self, text: str) -> None:
+        """A listener's «м-м» into their pause (first_sound.py) — only where they
+        can carry on over it: with the microphone closed while he makes a
+        sound, their next words would be lost."""
+        if not (self.duplex and first_sound.in_pause(text)) or self._audible():
+            return
+        if self._reply is not None and not self._reply.done():
+            return
+        if time.monotonic() - self._sound_at < first_sound.SPACING:
+            return
+        if self._rng.random() >= first_sound.CHANCE_IN_PAUSE:
+            return
+        made = first_sound.pick(self.voice, "listening", self._rng, avoid=self._sound_text)
+        if made:
+            _track(asyncio.create_task(self._send_sound(*made)))
+
+    async def _sound_at_end(self, transcript: str) -> None:
+        """Their turn is over: his first sound, at once — unless the «м-м» that
+        went into their last pause a moment ago already was it."""
+        kind = first_sound.at_end(transcript)
+        if kind is None or time.monotonic() - self._sound_at < first_sound.SPACING_AT_END:
+            return
+        if self._rng.random() >= first_sound.CHANCE_AT_END:
+            return
+        made = first_sound.pick(self.voice, kind, self._rng, avoid=self._sound_text)
+        if made:
+            await self._send_sound(*made)
+
+    async def _sound_if_late(self, ended: float, transcript: str) -> None:
+        """His words still not there LATE seconds after their turn: one more sound."""
+        if first_sound.LATE is None:
+            return
+        await asyncio.sleep(max(0.0, ended + first_sound.LATE - time.monotonic()))
+        if self._answering_aloud or time.monotonic() < self._playing_until:
+            return
+        made = first_sound.pick(self.voice, first_sound.at_end(transcript) or "listening",
+                                self._rng, avoid=self._sound_text)
+        if made:
+            await self._send_sound(*made)
 
     def _drop_draft(self) -> None:
         if self._draft is not None:
@@ -661,6 +732,10 @@ class Session:
         speaker = aloud.Speaker()
         pieces: asyncio.Queue = asyncio.Queue()
         cutter: asyncio.Task | None = None
+        late: asyncio.Task | None = None
+        #: A sound of his since their last word (first_sound.py) that the first
+        #: words of the answer must not say again.
+        echoed = ""
 
         async def cut() -> None:
             nonlocal final
@@ -675,13 +750,19 @@ class Session:
                             break
                         committed += at
                         piece = tail[:at].strip()
+                        if first and echoed:
+                            piece = first_sound.without_repeat(piece, echoed).strip()
                         if piece:
                             if first:
                                 timing["first_piece"] = _after(time.monotonic(), start)
                             await pieces.put(piece)
                             first = False
                 for piece in tts.speakable_chunks(final[committed:]):
-                    await pieces.put(piece)
+                    if first and echoed:
+                        piece = first_sound.without_repeat(piece, echoed).strip()
+                    if piece:
+                        await pieces.put(piece)
+                        first = False
             finally:
                 await pieces.put(None)
 
@@ -718,6 +799,13 @@ class Session:
 
         voice = self.voice
         try:
+            if not hello and not draft.web:
+                # Before anything is waited on: the sound IS the not waiting.
+                await self._sound_at_end(draft.transcript)
+                late = asyncio.create_task(self._sound_if_late(ended, draft.transcript))
+            if self._sound_at >= start:
+                echoed = self._sound_text
+                timing["first_sound"] = _after(self._sound_at, start)
             await draft.ready.wait()
             voice = draft.voice or self.voice
             if not hello:
@@ -736,6 +824,9 @@ class Session:
                 async for rate, pcm in voicing.chunks():
                     if not announced:
                         announced = True
+                        self._answering_aloud = True   # no «м-м» into his words from here
+                        if late is not None:
+                            late.cancel()
                         self._said.append(tts.spoken(heard))
                         await self._send({"kind": "say", "text": tts.spoken(heard), "rate": rate})
                         if "first_audio" not in timing:
@@ -808,6 +899,9 @@ class Session:
             spent()
             await self._send({"kind": "trouble", "detail": str(e)})
         finally:
+            if late is not None:
+                late.cancel()
+            self._answering_aloud = False
             self._voicing = False
 
     def _give_up(self, cutter: asyncio.Task | None, ahead: deque, draft: Draft) -> None:

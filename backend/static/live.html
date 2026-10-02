@@ -148,6 +148,9 @@
       let ws = null, ctx = null, stream = null, micNode = null, source = null;
       let nextAt = 0, playing = [], rate = 44100, pendingPlayed = false;
       let turn = null;   // timing of the current turn, on this page's clock
+      // His «м-м» into a pause can come before the server is sure the turn is
+      // over — before «heard» — and is still his first sound of that turn.
+      let soundBeforeHeard = null;
 
       function setStatus(html) { statusEl.innerHTML = html; }
 
@@ -162,8 +165,11 @@
         const at = Math.max(ctx.currentTime + 0.04, nextAt);
         src.start(at);
         nextAt = at + audio.duration;
+        const sounds = performance.now() + (at - ctx.currentTime) * 1000;
         if (turn && turn.firstSound == null && turn.heardAt != null) {
-          turn.firstSound = performance.now() + (at - ctx.currentTime) * 1000;
+          turn.firstSound = sounds;
+        } else if (!turn && hearingEl.textContent && soundBeforeHeard == null) {
+          soundBeforeHeard = sounds;
         }
         playing.push(src);
         pendingPlayed = true;
@@ -243,6 +249,7 @@
             startBtn.textContent = "Закончить"; startBtn.className = "live"; startBtn.disabled = false;
             doneBtn.disabled = false;
           } else if (m.kind === "hearing") {
+            if (!hearingEl.textContent) soundBeforeHeard = null;   // a new turn of theirs
             hearingEl.textContent = m.text;
           } else if (m.kind === "heard") {
             hearingEl.textContent = "";
@@ -252,6 +259,8 @@
             const behind = (m.timing && m.timing.end_of_turn) || 0;
             turn = { heardAt: performance.now(), speechEnd: performance.now() - behind * 1000, firstSound: null,
                      endOfTurn: behind, reused: m.timing && m.timing.draft_reused };
+            if (soundBeforeHeard != null && soundBeforeHeard >= turn.speechEnd) turn.firstSound = soundBeforeHeard;
+            soundBeforeHeard = null;
           } else if (m.kind === "say") {
             rate = m.rate || rate;
           } else if (m.kind === "interrupted") {
@@ -267,6 +276,7 @@
               line.className = "timing";
               line.innerHTML = `<b>${total.toFixed(2)} с</b> от конца твоей фразы до его первого звука` +
                 ` · понял, что ты договорил: ${fmt(turn.endOfTurn)}` +
+                (t.first_sound != null ? ` · подал голос: ${fmt(t.first_sound)}` : "") +
                 (t.first_words != null ? ` · первые слова мозга: ${fmt(t.first_words)}` : "") +
                 (t.first_audio != null ? ` · первый звук ушёл: ${fmt(t.first_audio)}` : "") +
                 (turn.reused ? " · начал думать заранее" : "");
