@@ -82,6 +82,12 @@ The owner, 2026-10-02:
 
 Round 1 of the voices — 21 voices reachable through the OpenRouter key, blind, the same words, loudness-matched — is in `docs/VOICES-RU.md`.
 
+**Chosen by ear the same evening: Gemini TTS.** All six voices the owner marked better were Gemini; every other voice, the current Fish ones included, was worse. Male: **Zubenelgenubi** («m08 is the best of all»). Female: **Callirrhoe** («w09 is the best»).
+
+Still open:
+- **Which version.** 3.8 Flash works now through OpenRouter and costs less than Fish, but it gives sound only whole — words come 1.5–2 s later. 3.1 streams through Google Cloud, but costs ~4× and is a preview. The owner heard both as «equally good», the newer one with the least emotion.
+- **The app still speaks with Fish.** Gemini is not in `tts.py` yet.
+
 ### What's next — the plan, in order
 
 1. **Keys, or one key** (above).
