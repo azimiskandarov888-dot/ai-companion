@@ -140,6 +140,12 @@
 
 Через OpenRouter 3.1 насчитал ~52 токена в секунду — вдвое больше, чем пишет Google. Настоящую цену покажет замер с ключом Google Cloud.
 
+## Решение владельца (3.10.2026)
+
+«Okay, we will be using Google Cloud if that would let us stream the voice. The same exact voices. And the version 3.1 is one of the best.»
+- Голоса — через Google Cloud, потоком, те же самые, версия 3.1 Flash.
+- **Условие — «if that would let us stream».** Разработчик на форуме Google пишет, что «поток» 3.1 Flash TTS выглядит как долгая тишина и потом весь звук разом. Поэтому сначала замер с ключом владельца. Если поток ненастоящий — Chirp 3 HD с теми же голосами, на слух (docs/WHY-LIVE-IS-FAST.md).
+
 ## Чего в круге 1 нет — нужен аккаунт владельца
 
 - **ElevenLabs v3.** Русские обзоры 2026 называют его лидером по естественности. Бесплатного тарифа хватит на пробу.
