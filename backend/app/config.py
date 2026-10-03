@@ -257,6 +257,12 @@ TTS_PROVIDER: str = os.getenv("TTS_PROVIDER", "gemini").strip().lower()
 #: version 3.1 is one of the best». 3.1 costs ~4× what 3.8 does through
 #: OpenRouter; only 3.8 can make voices from a description (docs/VOICES-RU.md).
 GEMINI_TTS_MODEL: str = os.getenv("GEMINI_TTS_MODEL", "google/gemini-3.1-flash-tts-preview")
+#: Google's own key for the same voices (aistudio.google.com → «Get API key»).
+#: With it the voice comes as a STREAM — the first sound while the rest is
+#: still being made — through the Gemini API (Interactions API); OpenRouter
+#: gives the same voice only whole (docs/WHY-LIVE-IS-FAST.md). Without it, or
+#: if Google refuses, the voice goes through OpenRouter as before.
+GEMINI_API_KEY: str | None = os.getenv("GEMINI_API_KEY")
 
 # Fish Audio (https://fish.audio) — the default voice.
 FISH_API_KEY: str | None = os.getenv("FISH_API_KEY")
@@ -362,7 +368,7 @@ def tts_configured() -> bool:
     """Is the selected voice provider set up? If not, the client speaks free."""
     provider = voice_provider()
     if provider == "gemini":
-        return bool(OPENROUTER_API_KEY)
+        return bool(GEMINI_API_KEY or OPENROUTER_API_KEY)
     if provider == "fish":
         return bool(FISH_API_KEY)
     if provider == "openrouter":

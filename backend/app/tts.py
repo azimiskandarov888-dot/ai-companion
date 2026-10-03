@@ -414,10 +414,12 @@ def mime() -> str:
 
 
 def streams() -> bool:
-    """Does the voice start sounding before the sentence is made? Fish does.
-    Gemini through OpenRouter makes the whole piece first — so the live channel
-    keeps more pieces in the making at once (live.py)."""
-    return config.voice_provider() in ("fish", "openrouter")
+    """Does the voice start sounding before the sentence is made? Fish does,
+    and Gemini on Google's own key. Gemini through OpenRouter makes the whole
+    piece first — so the live channel keeps more pieces in the making at once
+    (live.py)."""
+    provider = config.voice_provider()
+    return provider in ("fish", "openrouter") or (provider == "gemini" and bool(config.GEMINI_API_KEY))
 
 
 def provider_name() -> str:
@@ -486,9 +488,9 @@ async def synthesize(
 
     provider = config.voice_provider()
     if provider == "gemini":
-        if not config.OPENROUTER_API_KEY:
+        if not (config.GEMINI_API_KEY or config.OPENROUTER_API_KEY):
             raise RuntimeError(
-                "OPENROUTER_API_KEY is not set — the voice (Gemini) is not configured."
+                "GEMINI_API_KEY / OPENROUTER_API_KEY not set — the voice (Gemini) is not configured."
             )
         return await _synthesize_gemini(text, voice, rate=rate)
 
@@ -670,8 +672,118 @@ def wav(pcm: bytes, rate: int) -> bytes:
     return out.getvalue()
 
 
+_GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/interactions"
+
+
+def _gemini_direct_request(text: str, voice: str | None, *, rate: float = 1.0) -> tuple[str, dict, dict]:
+    """The same voice on Google's own key, as a stream (the Interactions API,
+    ai.google.dev — speech generation): raw 16-bit audio at 24 kHz in pieces."""
+    name, style = voices.parse(voice) or (GEMINI_DEFAULT, voices.MANNER)
+    if rate < 1.0:
+        style += _SLOWER_STYLE
+    model = config.GEMINI_TTS_MODEL.split("/", 1)[-1]
+    payload = {
+        "model": model,
+        "input": [{"type": "user_input", "content": [{
+            "type": "text", "text": text,
+            "annotations": [{"type": "speech_metadata", "style": style}],
+        }]}],
+        "response_format": {"type": "audio"},
+        "generation_config": {"speech_config": [{"voice": name}]},
+        "stream": True,
+    }
+    return _GEMINI_URL, {"x-goog-api-key": config.GEMINI_API_KEY or "", "Content-Type": "application/json"}, payload
+
+
+def _audio_in(event: dict) -> bytes:
+    """The audio one streamed event carries, if any: base64 in an «audio»
+    delta. Read tolerantly — what is not audio is no audio."""
+    import base64
+
+    delta = event.get("delta") if isinstance(event.get("delta"), dict) else {}
+    data = delta.get("data") if delta.get("type") == "audio" else None
+    if not isinstance(data, str):
+        return b""
+    try:
+        return base64.b64decode(data)
+    except (ValueError, TypeError):
+        return b""
+
+
+async def _gemini_direct_stream(text: str, voice: str | None, *, rate: float = 1.0) -> AsyncIterator[bytes]:
+    """Raw audio from Google as it is made. Raises before the first sound on
+    any refusal, so the caller can go the other way (OpenRouter)."""
+    import json as _json
+
+    url, headers, payload = _gemini_direct_request(text, voice, rate=rate)
+    async with _line().stream("POST", url, headers=headers, json=payload) as resp:
+        if resp.status_code != 200:
+            detail = (await resp.aread()).decode("utf-8", "replace")
+            raise RuntimeError(f"Gemini API voice failed ({resp.status_code}): {detail[:300]}")
+        async for line in resp.aiter_lines():
+            line = line.strip()
+            if not line.startswith("data:"):
+                continue
+            body = line[len("data:"):].strip()
+            if not body or body == "[DONE]":
+                continue
+            try:
+                event = _json.loads(body)
+            except ValueError:
+                continue
+            if isinstance(event, dict) and event.get("error"):
+                raise RuntimeError(f"Gemini API voice: {event['error']}")
+            if audio := _audio_in(event if isinstance(event, dict) else {}):
+                yield audio
+
+
+#: Said once per process when Google's own way refuses and OpenRouter takes
+#: over — loudly, because a fallback that is quietly always taken looks exactly
+#: like a fast voice that is working.
+_direct_refused = False
+
+
+async def _gemini_pcm(text: str, voice: str | None, *, rate: float = 1.0) -> AsyncIterator[tuple[int, bytes]]:
+    """A Gemini voice as (rate, raw audio) pieces: streamed on Google's key when
+    there is one, whole through OpenRouter otherwise — or when Google refuses
+    before the first sound."""
+    global _direct_refused
+    if config.GEMINI_API_KEY:
+        sent = False
+        try:
+            async for audio in _gemini_direct_stream(text, voice, rate=rate):
+                sent = True
+                yield GEMINI_RATE, audio
+            if sent:
+                return
+        except Exception as e:  # noqa: BLE001 — refused before a sound: the other way
+            if sent:
+                raise
+            if not _direct_refused:
+                _direct_refused = True
+                print(f"\n  ⚠ the Gemini API voice refused — going through OpenRouter\n    {e}\n",
+                      file=sys.stderr, flush=True)
+    if not config.OPENROUTER_API_KEY:
+        raise RuntimeError("The Gemini voice needs GEMINI_API_KEY or OPENROUTER_API_KEY.")
+    url, headers, payload = _gemini_request(text, voice, rate=rate)
+    async with _line().stream("POST", url, headers=headers, json=payload) as resp:
+        if resp.status_code != 200:
+            detail = (await resp.aread()).decode("utf-8", "replace")
+            raise RuntimeError(f"The Gemini voice failed ({resp.status_code}): {detail[:300]}")
+        found = _RATE.search(resp.headers.get("content-type", ""))
+        rate_out = int(found.group(1)) if found else GEMINI_RATE
+        async for chunk in resp.aiter_bytes():
+            if chunk:
+                yield rate_out, chunk
+
+
 async def _synthesize_gemini(text: str, voice: str | None = None, *, rate: float = 1.0) -> bytes:
     """A Gemini voice, the whole piece, as WAV."""
+    if config.GEMINI_API_KEY:
+        pcm, out_rate = b"", GEMINI_RATE
+        async for out_rate, piece in _gemini_pcm(text, voice, rate=rate):
+            pcm += piece
+        return wav(pcm, out_rate)
     url, headers, payload = _gemini_request(text, voice, rate=rate)
     resp = await _line().post(url, headers=headers, json=payload)
     if resp.status_code != 200:
@@ -720,10 +832,16 @@ async def stream(text: str, voice: str | None = None) -> AsyncIterator[tuple[int
         raise ValueError("Nothing to say — empty text passed to stream().")
     provider = config.voice_provider()
     default_rate = PCM_RATE
-    if provider == "gemini" and config.OPENROUTER_API_KEY:
-        url, headers, payload = _gemini_request(text, voice)
-        default_rate = GEMINI_RATE
-    elif provider == "openrouter" and config.OPENROUTER_API_KEY:
+    if provider == "gemini" and (config.GEMINI_API_KEY or config.OPENROUTER_API_KEY):
+        carry = b""
+        async for rate, chunk in _gemini_pcm(text, voice):
+            data = carry + chunk
+            whole = len(data) - len(data) % 2
+            carry = data[whole:]
+            if whole:
+                yield rate, data[:whole]
+        return
+    if provider == "openrouter" and config.OPENROUTER_API_KEY:
         url, headers, payload = _router_request(text, voice, "pcm")
     elif provider == "fish" and config.FISH_API_KEY:
         url, headers, payload = _fish_request(text, voice, "pcm")

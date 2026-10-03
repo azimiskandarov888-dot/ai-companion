@@ -348,3 +348,59 @@ def test_gemini_through_openrouter_is_whole_and_fish_streams(monkeypatch):
     assert not tts.streams()
     monkeypatch.setattr(config, "TTS_PROVIDER", "fish")
     assert tts.streams()
+
+
+def _google_and_router(monkeypatch, google_status: int = 200):
+    """Google's stream and OpenRouter, both answered here."""
+    import base64
+
+    asked: list[str] = []
+
+    def answer(request: httpx.Request) -> httpx.Response:
+        asked.append(request.url.host)
+        if request.url.host == "generativelanguage.googleapis.com":
+            if google_status != 200:
+                return httpx.Response(google_status, content=b'{"error": "nope"}')
+            events = [{"event_type": "step.start"},
+                      {"event_type": "step.delta", "delta": {"type": "audio", "data": base64.b64encode(b"\x01\x00" * 4).decode()}},
+                      {"event_type": "step.delta", "delta": {"type": "text", "text": "ignored"}},
+                      {"event_type": "step.delta", "delta": {"type": "audio", "data": base64.b64encode(b"\x02\x00" * 4).decode()}}]
+            body = "".join(f"data: {json.dumps(e)}\n\n" for e in events)
+            return httpx.Response(200, content=body.encode(), headers={"content-type": "text/event-stream"})
+        return httpx.Response(200, content=b"\x03\x00" * 4, headers={"content-type": "audio/pcm;rate=24000"})
+
+    monkeypatch.setattr(config, "TTS_PROVIDER", "gemini")
+    monkeypatch.setattr(config, "GEMINI_API_KEY", "google-key")
+    monkeypatch.setattr(config, "OPENROUTER_API_KEY", "router-key")
+    monkeypatch.setattr(tts, "_client", httpx.AsyncClient(transport=httpx.MockTransport(answer)))
+    monkeypatch.setattr(tts, "_client_loop", None)
+    monkeypatch.setattr(tts, "_direct_refused", False)
+    return asked
+
+
+def test_on_google_s_own_key_the_voice_streams(monkeypatch):
+    """The Interactions API, «stream»: the first sound while the rest is made."""
+    asked = _google_and_router(monkeypatch)
+    assert tts.streams()
+
+    async def hear():
+        return [piece async for piece in tts.stream("Ого, сам пишешь?")]
+
+    pieces = asyncio.run(hear())
+    assert pieces == [(24000, b"\x01\x00" * 4), (24000, b"\x02\x00" * 4)]
+    assert asked == ["generativelanguage.googleapis.com"]
+    url, headers, payload = tts._gemini_direct_request("Ого.", None)
+    assert headers["x-goog-api-key"] == "google-key" and payload["stream"] is True
+    assert payload["model"] == config.GEMINI_TTS_MODEL.split("/", 1)[-1]
+    assert payload["generation_config"]["speech_config"] == [{"voice": tts.GEMINI_DEFAULT}]
+
+
+def test_when_google_refuses_the_voice_goes_through_openrouter(monkeypatch):
+    """A refusal before the first sound costs the stream, never the voice."""
+    asked = _google_and_router(monkeypatch, google_status=400)
+
+    async def hear():
+        return [piece async for piece in tts.stream("Ого.")]
+
+    assert asyncio.run(hear()) == [(24000, b"\x03\x00" * 4)]
+    assert asked == ["generativelanguage.googleapis.com", "openrouter.ai"]

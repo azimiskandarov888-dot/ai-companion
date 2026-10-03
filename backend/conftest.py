@@ -30,7 +30,7 @@ def temp_data(tmp_path, monkeypatch):
     # paid call — the voice, since «fish» with an OpenRouter key speaks through
     # OpenRouter (config.voice_provider). A test that needs a key sets a fake one.
     for key in ("OPENROUTER_API_KEY", "DEEPGRAM_API_KEY", "FISH_API_KEY", "OPENAI_API_KEY",
-                "ANTHROPIC_API_KEY", "ELEVENLABS_API_KEY", "YANDEX_API_KEY"):
+                "ANTHROPIC_API_KEY", "ELEVENLABS_API_KEY", "YANDEX_API_KEY", "GEMINI_API_KEY"):
         monkeypatch.setattr(config, key, None)
     # How he says things aloud is chosen by chance (aloud.py): a test that
     # compares what was said word for word would fail now and then for no

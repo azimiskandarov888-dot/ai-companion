@@ -95,6 +95,8 @@ def shape_report() -> None:
     describe("DEEPGRAM_API_KEY", config.DEEPGRAM_API_KEY, "")
     if config.FISH_API_KEY:
         describe("FISH_API_KEY", config.FISH_API_KEY, "")
+    if config.GEMINI_API_KEY:
+        describe("GEMINI_API_KEY", config.GEMINI_API_KEY, "AIza")
     print()
 
 
@@ -280,6 +282,41 @@ def check_voice() -> bool:
         return False
 
 
+def check_gemini_stream() -> bool:
+    """The Gemini voice on Google's own key — and whether it really STREAMS:
+    the first sound must come well before the last, or it is only a slower way
+    to get the whole of it (docs/WHY-LIVE-IS-FAST.md)."""
+    import time
+
+    from app import tts
+
+    if not config.GEMINI_API_KEY:
+        print("🎙️ Голос Gemini потоком: нет ключа  → GEMINI_API_KEY из aistudio.google.com (необязательно)")
+        return True
+
+    async def probe() -> tuple[float, float, int]:
+        began, first, size = time.monotonic(), None, 0
+        async for audio in tts._gemini_direct_stream(
+                "Слушай, я вот тоже когда-то пробовал что-то такое написать, совсем простое.", None):
+            if first is None:
+                first = time.monotonic() - began
+            size += len(audio)
+        return first or 0.0, time.monotonic() - began, size
+
+    try:
+        first, whole, size = asyncio.run(probe())
+    except Exception as error:  # noqa: BLE001 — friendly report, not a crash
+        print(f"🎙️ Голос Gemini потоком: ❌ Google отказал\n           {error}")
+        return False
+    if not size:
+        print("🎙️ Голос Gemini потоком: ⚠️ ответ без звука")
+        return False
+    streamed = whole - first > 0.5
+    print(f"🎙️ Голос Gemini потоком: ✅ первый звук через {first:.2f} с, весь — через {whole:.2f} с"
+          f" — {'настоящий поток' if streamed else 'НЕ поток: звук пришёл разом'}")
+    return True
+
+
 def main() -> None:
     venv_report()
     shape_report()
@@ -289,6 +326,7 @@ def main() -> None:
     ears_ok = check_openai()
     live_ok = check_live_ears()
     voice_ok = check_voice()
+    check_gemini_stream()
 
     print()
     # Either pair of ears will do: Whisper for the file-by-file path, Deepgram
