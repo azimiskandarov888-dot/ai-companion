@@ -88,6 +88,10 @@ Still open:
 - **Which version.** 3.8 Flash works now through OpenRouter and costs less than Fish, but it gives sound only whole — words come 1.5–2 s later. 3.1 streams through Google Cloud, but costs ~4× and is a preview. The owner heard both as «equally good», the newer one with the least emotion.
 - **The app still speaks with Fish.** Gemini is not in `tts.py` yet.
 
+**Not one voice — a catalog** (the owner, 2026-10-03: «we need hundred of them voices, and atleast 10 out of them must be russian»):
+- Every companion gets a voice of his own, picked for his gender, age and temper when he is written, and kept in his `persona` for good.
+- The pool is Gemini's 30 voices, which all speak Russian, each with a «whom he plays» style line from his portrait. Round 3 — all 30, blind — waits for the owner's ear (`docs/VOICES-RU.md`).
+
 ### What's next — the plan, in order
 
 1. **Keys, or one key** (above).
