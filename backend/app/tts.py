@@ -1,7 +1,11 @@
 """The mouth: text-to-speech.
 
-Five providers, chosen by config.TTS_PROVIDER (config.voice_provider says which
+Six providers, chosen by config.TTS_PROVIDER (config.voice_provider says which
 one actually speaks — «fish» with only an OpenRouter key is Fish through it):
+  - "gemini"     Google's Gemini voices through OpenRouter — THE VOICE since
+                 2026-10-03, chosen by the owner's ear (docs/VOICES-RU.md). Each
+                 companion has a voice of his own and a line about whom it
+                 plays (voices.py). Raw audio, 24 kHz: the file path gets WAV.
   - "yandex"     Yandex SpeechKit — Russian voices made BY Russians for
                  Russian. Best prosody of the lot on Russian text, and by some
                  distance the cheapest for it. The right default for this app.
@@ -55,14 +59,16 @@ Fish Audio's speech-to-text doesn't support Russian (see stt.py).
 from __future__ import annotations
 
 import asyncio
+import io
 import re
 import sys
+import wave
 from collections.abc import AsyncIterator
 
 import httpx
 
 
-from . import body, companion, config, lang
+from . import body, companion, config, lang, voices
 
 _FISH_API_URL = "https://api.fish.audio/v1/tts"
 _ROUTER_TTS_URL = "https://openrouter.ai/api/v1/audio/speech"
@@ -168,6 +174,26 @@ def ready_split(text: str, *, first: bool) -> int:
     return 0
 
 
+#: The live channel's FIRST piece is shorter still: the earliest pause a
+#: speaker could take — «Ого,» — once it has this many letters. A voice that
+#: makes each piece whole takes ~1.4 s plus ~0.25 s a second of speech
+#: (docs/WHY-LIVE-IS-FAST.md), so the shorter the first piece, the sooner his
+#: first word; the rest is made while it plays. The owner, 2026-10-03: he
+#: should start talking «the same time it's thinking».
+LIVE_FIRST_LETTERS = 3
+_LETTER = re.compile(r"[^\W\d_]")
+
+
+def first_pause(text: str) -> int:
+    """Where the live channel's first piece ends in a reply still being
+    written: at its first pause with a word before it — or, failing one, where
+    `ready_split` would end it. 0 for «not yet». Never moves once found."""
+    for pause in _FIRST_PAUSES.finditer(text):
+        if len(_LETTER.findall(text[: pause.end()])) >= LIVE_FIRST_LETTERS:
+            return pause.end()
+    return ready_split(text, first=True)
+
+
 def speakable_chunks(text: str) -> list[str]:
     """Cut a FINISHED reply into pieces that can each be spoken on their own.
 
@@ -222,6 +248,9 @@ def voice_for(persona: dict | None) -> str | None:
     every one of them was read aloud by a man. There is no faster way to
     destroy the one thing this app is for.
     """
+    if config.voice_provider() == "gemini":
+        # His own, from the catalog — the same in either language.
+        return voices.key(voices.of(persona))
     if config.voice_provider() in ("fish", "openrouter") and lang.english():
         # An English conversation gets English voices, his or hers, explicitly.
         return config.FISH_VOICE_ID_FEMALE_EN if is_female(persona) else config.FISH_VOICE_ID_EN
@@ -294,20 +323,38 @@ SOUNDS: dict[str, str] = {
     body.MARK_YAWN: "[yawns]",
     body.MARK_LAUGH: "[laugh]",
 }
+#: …and what the Gemini voices play: Google's own tags, in angle brackets
+#: (ai.google.dev, speech generation). Put in a Russian sentence and heard back
+#: by Deepgram, none was read out as a word (2026-10-03). Whether each is the
+#: sound and not a hiccup is for the owner's ear — so only the three Google
+#: names, and no throat-clearing or yawn: there is no tag for them, and a
+#: marker with no tag is removed, never read aloud.
+GEMINI_SOUNDS: dict[str, str] = {
+    body.MARK_COUGH: "<cough>",
+    body.MARK_SIGH: "<sigh>",
+    body.MARK_LAUGH: "<laugh>",
+}
+
+
+def _sounds() -> dict[str, str]:
+    """The tags of the voice that will actually speak."""
+    return GEMINI_SOUNDS if config.voice_provider() == "gemini" else SOUNDS
 
 
 def makes_sounds() -> bool:
-    """Does the voice that will actually speak make his sounds? Fish S2 does —
-    directly or through OpenRouter. S1, the other providers, and the phone's
-    own voice (no server voice set up) do not."""
-    return (configured()
-            and config.voice_provider() in ("fish", "openrouter")
-            and config.FISH_MODEL.startswith("s2"))
+    """Does the voice that will actually speak make his sounds? Gemini does,
+    and Fish S2 — directly or through OpenRouter. S1, the other providers, and
+    the phone's own voice (no server voice set up) do not."""
+    if not configured():
+        return False
+    provider = config.voice_provider()
+    return provider == "gemini" or (provider in ("fish", "openrouter")
+                                    and config.FISH_MODEL.startswith("s2"))
 
 
 def makes(mark: str) -> bool:
     """Will this marker be HEARD — rather than quietly removed?"""
-    return makes_sounds() and mark in SOUNDS
+    return makes_sounds() and mark in _sounds()
 
 
 def audible(text: str) -> bool:
@@ -332,11 +379,12 @@ def spoken(text: str, *, sounds: bool = False) -> str:
     # touch — the stage-direction rule would otherwise eat its brackets — and
     # put back as the voice's tag once everything else is clean.
     held: dict[str, str] = {}
+    table = _sounds()
     for i, mark in enumerate(body.MARKERS):
-        if sounds and mark in SOUNDS:
+        if sounds and mark in table:
             token = f"\x00{i}\x00"
             if mark in text:
-                held[token] = SOUNDS[mark]
+                held[token] = table[mark]
             text = text.replace(mark, f" {token} ")
         else:
             text = text.replace(mark, " ")
@@ -357,6 +405,19 @@ def spoken(text: str, *, sounds: bool = False) -> str:
 def configured() -> bool:
     """Is the selected voice provider set up? (Single source of truth: config.)"""
     return config.tts_configured()
+
+
+def mime() -> str:
+    """What `synthesize` returns: WAV from the Gemini voices — they give raw
+    audio, and wrapping it costs nothing — MP3 from everybody else."""
+    return "audio/wav" if config.voice_provider() == "gemini" else "audio/mpeg"
+
+
+def streams() -> bool:
+    """Does the voice start sounding before the sentence is made? Fish does.
+    Gemini through OpenRouter makes the whole piece first — so the live channel
+    keeps more pieces in the making at once (live.py)."""
+    return config.voice_provider() in ("fish", "openrouter")
 
 
 def provider_name() -> str:
@@ -424,6 +485,13 @@ async def synthesize(
         raise ValueError("Nothing to say — empty text passed to synthesize().")
 
     provider = config.voice_provider()
+    if provider == "gemini":
+        if not config.OPENROUTER_API_KEY:
+            raise RuntimeError(
+                "OPENROUTER_API_KEY is not set — the voice (Gemini) is not configured."
+            )
+        return await _synthesize_gemini(text, voice, rate=rate)
+
     if provider == "fish":
         if not config.FISH_API_KEY:
             raise RuntimeError(
@@ -482,6 +550,8 @@ _client_loop: asyncio.AbstractEventLoop | None = None
 #: rate in its content type («audio/pcm;rate=44100;channels=1»), and that is
 #: what is believed; this is the rate asked of Fish directly, and the fallback.
 PCM_RATE = 44100
+#: …and the rate the Gemini voices give, when OpenRouter does not say.
+GEMINI_RATE = 24000
 _RATE = re.compile(r"rate=(\d+)")
 
 
@@ -511,7 +581,8 @@ async def warm() -> None:
     """Open the line to the voice before it is needed (see brain.warm). Never
     raises, costs nothing."""
     provider = config.voice_provider()
-    url = ("https://openrouter.ai/api/v1/models" if provider == "openrouter" and config.OPENROUTER_API_KEY
+    url = ("https://openrouter.ai/api/v1/models"
+           if provider in ("openrouter", "gemini") and config.OPENROUTER_API_KEY
            else "https://api.fish.audio/" if provider == "fish" and config.FISH_API_KEY
            else None)
     if url is None:
@@ -564,6 +635,51 @@ def _router_request(text: str, voice: str | None, fmt: str) -> tuple[str, dict, 
     return _ROUTER_TTS_URL, {"Authorization": f"Bearer {config.OPENROUTER_API_KEY}"}, payload
 
 
+#: What a line with no companion behind it speaks in (voice_for gives every
+#: companion his own): the owner's best of thirty.
+GEMINI_DEFAULT = "Zubenelgenubi"
+#: Added to whom the voice plays for somebody who has trouble following him
+#: (rate_for): the voice takes no speed, and is told instead.
+_SLOWER_STYLE = ", speaking a little slower and more clearly than usual"
+
+
+def _gemini_request(text: str, voice: str | None, *, rate: float = 1.0) -> tuple[str, dict, dict]:
+    """A Gemini voice through OpenRouter: the voice by name, whom it plays as
+    `speech_metadata.style` (voices.py), raw 16-bit audio back."""
+    name, style = voices.parse(voice) or (GEMINI_DEFAULT, voices.MANNER)
+    if rate < 1.0:
+        style += _SLOWER_STYLE
+    payload: dict = {
+        "model": config.GEMINI_TTS_MODEL,
+        "input": text,
+        "voice": name,
+        "response_format": "pcm",
+        "provider": {"options": {"google-ai-studio": {"speech_metadata": {"style": style}}}},
+    }
+    return _ROUTER_TTS_URL, {"Authorization": f"Bearer {config.OPENROUTER_API_KEY}"}, payload
+
+
+def wav(pcm: bytes, rate: int) -> bytes:
+    """Raw 16-bit mono audio as a WAV file — what a phone plays from a file."""
+    out = io.BytesIO()
+    with wave.open(out, "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(rate)
+        w.writeframes(pcm[: len(pcm) - len(pcm) % 2])
+    return out.getvalue()
+
+
+async def _synthesize_gemini(text: str, voice: str | None = None, *, rate: float = 1.0) -> bytes:
+    """A Gemini voice, the whole piece, as WAV."""
+    url, headers, payload = _gemini_request(text, voice, rate=rate)
+    resp = await _line().post(url, headers=headers, json=payload)
+    if resp.status_code != 200:
+        raise RuntimeError(f"The Gemini voice failed ({resp.status_code}): {resp.text[:300]}")
+    found = _RATE.search(resp.headers.get("content-type", ""))
+    return wav(resp.content, int(found.group(1)) if found else GEMINI_RATE)
+
+
 async def _synthesize_fish(text: str, voice: str | None = None) -> bytes:
     """Fish Audio TTS, the whole sentence as MP3."""
     url, headers, payload = _fish_request(text, voice, "mp3")
@@ -603,21 +719,25 @@ async def stream(text: str, voice: str | None = None) -> AsyncIterator[tuple[int
     if not text:
         raise ValueError("Nothing to say — empty text passed to stream().")
     provider = config.voice_provider()
-    if provider == "openrouter" and config.OPENROUTER_API_KEY:
+    default_rate = PCM_RATE
+    if provider == "gemini" and config.OPENROUTER_API_KEY:
+        url, headers, payload = _gemini_request(text, voice)
+        default_rate = GEMINI_RATE
+    elif provider == "openrouter" and config.OPENROUTER_API_KEY:
         url, headers, payload = _router_request(text, voice, "pcm")
     elif provider == "fish" and config.FISH_API_KEY:
         url, headers, payload = _fish_request(text, voice, "pcm")
     else:
         raise RuntimeError(
-            "The live channel needs a voice that streams — Fish, directly (FISH_API_KEY)"
-            f" or through OpenRouter (OPENROUTER_API_KEY); TTS_PROVIDER={config.TTS_PROVIDER!r}."
+            "The live channel needs a voice it can stream — Gemini or Fish through OpenRouter"
+            f" (OPENROUTER_API_KEY), or Fish directly (FISH_API_KEY); TTS_PROVIDER={config.TTS_PROVIDER!r}."
         )
     async with _line().stream("POST", url, headers=headers, json=payload) as resp:
         if resp.status_code != 200:
             detail = (await resp.aread()).decode("utf-8", "replace")
             raise RuntimeError(f"The voice failed ({resp.status_code}): {detail[:300]}")
         found = _RATE.search(resp.headers.get("content-type", ""))
-        rate = int(found.group(1)) if found else PCM_RATE
+        rate = int(found.group(1)) if found else default_rate
         carry = b""
         async for chunk in resp.aiter_bytes():
             data = carry + chunk

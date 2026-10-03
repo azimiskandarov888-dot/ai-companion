@@ -1,5 +1,6 @@
-"""The voice (TTS): provider selection (Fish Audio default, ElevenLabs, or none),
-and his sounds — played by a voice that can make them, removed by one that can't."""
+"""The voice (TTS): provider selection (Gemini by default since 2026-10-03, Fish,
+ElevenLabs, or none), and his sounds — played by a voice that can make them,
+removed by one that can't."""
 
 from __future__ import annotations
 
@@ -97,14 +98,32 @@ def _fish_s2(monkeypatch, provider: str = "openrouter") -> None:
     monkeypatch.setattr(config, "FISH_API_KEY", "test-key")
 
 
-def test_a_cough_is_played_not_read():
+def test_a_cough_is_played_not_read(monkeypatch):
+    monkeypatch.setattr(config, "TTS_PROVIDER", "fish")
     said = tts.spoken(f"Горло уже {body.MARK_COUGH} извини. Так вот.", sounds=True)
     assert said == "Горло уже [cough] извини. Так вот."
 
 
-def test_every_sound_is_one_of_his_markers_and_a_tag_in_brackets():
+def test_the_gemini_voices_get_their_own_tags_and_only_those(monkeypatch):
+    """Google's tags, in angle brackets — and a marker Gemini has no tag for
+    (a yawn, clearing the throat) is removed, never read out."""
+    monkeypatch.setattr(config, "TTS_PROVIDER", "gemini")
+    assert tts.spoken(f"Горло уже {body.MARK_COUGH} извини.", sounds=True) == "Горло уже <cough> извини."
+    for mark, tag in tts.GEMINI_SOUNDS.items():
+        assert mark in body.MARKERS and tag.startswith("<") and tag.endswith(">")
+        assert tts.spoken(f"Ну. {mark} Да.", sounds=True) == f"Ну. {tag} Да."
+    for mark in (body.MARK_YAWN, body.MARK_CLEAR, body.MARK_SNEEZE):
+        assert tts.spoken(f"Ну. {mark} Да.", sounds=True) == "Ну. Да."
+    # Angle brackets he writes himself never reach the voice as a tag.
+    assert tts.spoken("Ну <laugh> да.", sounds=True) == "Ну laugh да."
+    monkeypatch.setattr(config, "OPENROUTER_API_KEY", "test-key")
+    assert tts.makes_sounds() and tts.makes(body.MARK_LAUGH) and not tts.makes(body.MARK_YAWN)
+
+
+def test_every_sound_is_one_of_his_markers_and_a_tag_in_brackets(monkeypatch):
     """Brackets, never parentheses: «(clears throat)» came out as «Силле…
     строт», and «(yawning)» was spelled out letter by letter."""
+    monkeypatch.setattr(config, "TTS_PROVIDER", "fish")
     for mark, tag in tts.SOUNDS.items():
         assert mark in body.MARKERS
         assert tag.startswith("[") and tag.endswith("]")
@@ -254,7 +273,7 @@ def test_a_voice_that_cannot_stream_is_said_plainly(monkeypatch):
 
     import pytest
 
-    with pytest.raises(RuntimeError, match="streams"):
+    with pytest.raises(RuntimeError, match="stream"):
         asyncio.run(hear())
 
 
@@ -275,3 +294,57 @@ def test_one_line_to_the_voice_stays_open(monkeypatch):
 
     # …and made again only once the loop it belonged to is gone.
     assert asyncio.run(once()) is not first
+
+
+# --------------------------------------------------------------------------- #
+# The Gemini voices (the default since 2026-10-03)
+# --------------------------------------------------------------------------- #
+def test_a_gemini_voice_is_asked_for_by_name_with_whom_it_plays(monkeypatch):
+    """voices.py: a voice from the catalog and a line about him — sent as
+    Google's speech_metadata.style; raw audio back."""
+    from app import voices
+
+    monkeypatch.setattr(config, "TTS_PROVIDER", "gemini")
+    monkeypatch.setattr(config, "OPENROUTER_API_KEY", "test-key")
+    key = voices.key({"name": "Zubenelgenubi", "style": "a man of 68, " + voices.MANNER})
+    url, headers, payload = tts._gemini_request("Ого, сам пишешь?", key)
+    assert url.endswith("/audio/speech") and payload["model"] == config.GEMINI_TTS_MODEL
+    assert payload["voice"] == "Zubenelgenubi" and payload["response_format"] == "pcm"
+    style = payload["provider"]["options"]["google-ai-studio"]["speech_metadata"]["style"]
+    assert style.startswith("a man of 68")
+    # Somebody who has trouble following him: the voice takes no speed, so it is told.
+    _, _, slower = tts._gemini_request("Ого.", key, rate=tts.SLOWER)
+    assert "slower" in slower["provider"]["options"]["google-ai-studio"]["speech_metadata"]["style"]
+    # No voice of his own (the template): the owner's best of thirty.
+    _, _, plain = tts._gemini_request("Ого.", None)
+    assert plain["voice"] == tts.GEMINI_DEFAULT
+
+
+def test_the_gemini_voice_reaches_a_file_as_wav(monkeypatch):
+    """It gives raw audio; the phone plays files — so it is wrapped, and the
+    file is said to be what it is."""
+    import io
+    import wave
+
+    monkeypatch.setattr(config, "TTS_PROVIDER", "gemini")
+    monkeypatch.setattr(config, "OPENROUTER_API_KEY", "test-key")
+    pcm = b"\x01\x00" * 2400
+
+    def answer(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, content=pcm, headers={"content-type": "audio/pcm;rate=24000;channels=1"})
+
+    monkeypatch.setattr(tts, "_client", httpx.AsyncClient(transport=httpx.MockTransport(answer)))
+    monkeypatch.setattr(tts, "_client_loop", None)
+    made = asyncio.run(tts.synthesize("Привет."))
+    with wave.open(io.BytesIO(made)) as w:
+        assert w.getframerate() == 24000 and w.getnchannels() == 1 and w.readframes(10_000) == pcm
+    assert tts.mime() == "audio/wav"
+    monkeypatch.setattr(config, "TTS_PROVIDER", "fish")
+    assert tts.mime() == "audio/mpeg"
+
+
+def test_gemini_through_openrouter_is_whole_and_fish_streams(monkeypatch):
+    monkeypatch.setattr(config, "TTS_PROVIDER", "gemini")
+    assert not tts.streams()
+    monkeypatch.setattr(config, "TTS_PROVIDER", "fish")
+    assert tts.streams()

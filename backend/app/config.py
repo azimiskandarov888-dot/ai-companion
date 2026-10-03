@@ -65,6 +65,18 @@ OPENROUTER_API_KEY: str | None = os.getenv("OPENROUTER_API_KEY")
 #: is the order for any model. Fallbacks stay allowed either way: a host that
 #: is down costs speed, never the answer (brain._where).
 OPENAI_PROVIDERS: list[str] = ["openai/fast", "azure/eu", "openai", "amazon-bedrock/us-east-1"]
+#: …and the places for the other models, in order — measured, never left to
+#: OpenRouter. Asked to sort by latency, it sent Gemma 4 to SiliconFlow: first
+#: words in 2.0–3.5 s on the real prompt, the live channel's answer 3.7–4.3 s
+#: after the person stopped (2026-10-03). ModelRun: 0.33–0.45 s. And ONE host
+#: for the whole conversation is the point: its prompt cache lives there —
+#: 1.25 s cold, 0.32–0.54 s once it has read the instructions (5,120 of 5,177
+#: tokens cached). All three keep Gemma at 4 bits; the hosts that keep it at 8
+#: or 16 took 0.8–25 s or refused (rate-limited) — whether 4 bits costs her
+#: Russian is a question for the brains' Russian round (docs/ALIVE-BRAIN.md).
+CHAT_PROVIDERS_FOR: dict[str, list[str]] = {
+    "google/gemma-4-31b-it": ["modelrun/fp4", "deepinfra/turbo", "coreweave/fp4"],
+}
 CHAT_PROVIDERS: list[str] = [
     p.strip() for p in os.getenv("CHAT_PROVIDERS", "").split(",") if p.strip()
 ]
@@ -215,13 +227,21 @@ EMBEDDING_DIM: int = int(os.getenv("EMBEDDING_DIM", "512"))
 # it is. Leaving the female one empty falls back to the other — the old
 # behaviour, kept so nothing silently stops speaking.
 # Which voice provider speaks Bob's replies:
+#   "gemini"     — Google's Gemini voices (GEMINI_TTS_MODEL), through OpenRouter.
+#                  THE DEFAULT SINCE 2026-10-03: the owner heard 21 voices of
+#                  five makers blind, and all six he liked were Gemini's; then
+#                  all thirty of Gemini's: «all of them are briliant». Every
+#                  companion gets one of his own (voices.py). Through OpenRouter
+#                  the sound comes whole, not as a stream: ~1.4 s plus ~0.25 s
+#                  a second of speech (docs/VOICES-RU.md, docs/WHY-LIVE-IS-FAST.md).
 #   "yandex"     — Yandex SpeechKit. Cheapest for Russian by a distance, and
 #                  the most Russian-sounding. See docs/HIS-VOICE.md.
 #   "openai"     — same key as the ears; takes a direction on HOW to speak.
-#   "fish"       — Fish Audio. Excellent, but bills UTF-8 BYTES, so Russian
-#                  costs double the headline. The current default — and with
-#                  no Fish key but an OpenRouter one, the same voice through
-#                  OpenRouter (voice_provider, below).
+#   "fish"       — Fish Audio. Bills UTF-8 BYTES, so Russian costs double the
+#                  headline. The default until 2026-10-03; its Russian voices
+#                  were the ones the owner called «horrible». With no Fish key
+#                  but an OpenRouter one, the same voice through OpenRouter
+#                  (voice_provider, below).
 #   "elevenlabs" — warmest, several times the price.
 #   "openrouter" — Fish Audio (FISH_MODEL) through OpenRouter, on the one key
 #                  the owner has. Exactly how his sounds were tested (docs/SOUNDS.md).
@@ -229,7 +249,14 @@ EMBEDDING_DIM: int = int(os.getenv("EMBEDDING_DIM", "512"))
 #                  (the MVP path).
 # NOTE: this is only the VOICE. The EARS stay on Whisper above — Fish Audio's
 # speech-to-text does NOT support Russian, so it can't replace Whisper.
-TTS_PROVIDER: str = os.getenv("TTS_PROVIDER", "fish").strip().lower()
+TTS_PROVIDER: str = os.getenv("TTS_PROVIDER", "gemini").strip().lower()
+
+#: Which Gemini voice model (an OpenRouter id). The owner heard the same voice in
+#: three of them, blind: «Equally good. But they are different» — 3.8 Flash the
+#: calmest, 3.8 Flash-Lite neutral, 3.1 Flash the most emotional; then «the
+#: version 3.1 is one of the best». 3.1 costs ~4× what 3.8 does through
+#: OpenRouter; only 3.8 can make voices from a description (docs/VOICES-RU.md).
+GEMINI_TTS_MODEL: str = os.getenv("GEMINI_TTS_MODEL", "google/gemini-3.1-flash-tts-preview")
 
 # Fish Audio (https://fish.audio) — the default voice.
 FISH_API_KEY: str | None = os.getenv("FISH_API_KEY")
@@ -334,6 +361,8 @@ def voice_provider() -> str:
 def tts_configured() -> bool:
     """Is the selected voice provider set up? If not, the client speaks free."""
     provider = voice_provider()
+    if provider == "gemini":
+        return bool(OPENROUTER_API_KEY)
     if provider == "fish":
         return bool(FISH_API_KEY)
     if provider == "openrouter":

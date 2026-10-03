@@ -81,7 +81,7 @@ import random
 import re
 import sys
 
-from . import brain, config, erase, persona, reading
+from . import brain, config, erase, persona, reading, voices
 
 # ── The spark lexicon ───────────────────────────────────────────────────────
 # Plain, concrete, evocative words from the width of Russian life. They exist
@@ -495,4 +495,5 @@ async def create_companion(
     # used to survive being replaced, so a stranger arrived halfway through
     # another man's cold, on visit forty-one.
     erase.the_companion(user_id)
-    return persona.save_persona(user_id, created)
+    # His voice, chosen for who he turned out to be, and his for good (voices.py).
+    return persona.save_persona(user_id, {**created, "voice": voices.choose(created)})

@@ -321,12 +321,38 @@ async def warm() -> None:
 
 def _where(model: str) -> dict:
     """Where OpenRouter sends him (config.CHAT_PROVIDERS): an order that was
-    set, OpenAI's own places for an OpenAI model, and for any other model the
-    host that is fastest right now. Never without fallbacks."""
-    order = config.CHAT_PROVIDERS or (config.OPENAI_PROVIDERS if model.startswith("openai/") else [])
+    set, OpenAI's own places for an OpenAI model, the measured order for a
+    model that has one (config.CHAT_PROVIDERS_FOR), and only for anything else
+    the host that is fastest right now. Never without fallbacks."""
+    order = (config.CHAT_PROVIDERS
+             or (config.OPENAI_PROVIDERS if model.startswith("openai/") else [])
+             or config.CHAT_PROVIDERS_FOR.get(model, []))
     if order:
         return {"order": list(order), "allow_fallbacks": True}
     return {"sort": "latency", "allow_fallbacks": True}
+
+
+async def prewarm(history: list[dict[str, str]], system_stable: str) -> None:
+    """Let the host read his instructions and the conversation so far while the
+    person is still talking — so that when they stop, it reads only what is new.
+
+    Gemma 4's first words on the real prompt: 1.25 s when the host had not read
+    it before, 0.32–0.54 s when it had (ModelRun, 2026-10-03). A conversation
+    keeps that warm by itself, one turn after another; this is for the first
+    turn and after a long pause, when it would be cold. `history` is the
+    conversation as the next reply will be given it, minus the line the person
+    is saying now: the same prefix, so the host can reuse what it read.
+
+    One token, never awaited by anybody, and it never raises: a warm-up that
+    fails costs only the warm-up."""
+    if not (via_openrouter(config.CHAT_MODEL) and config.OPENROUTER_API_KEY):
+        return
+    body = _router_body(list(history) + [{"role": "user", "content": "…"}], system_stable, "")
+    body.update(stream=False, max_tokens=1)
+    try:
+        await _get_router().post("/chat/completions", json=body)
+    except Exception:  # noqa: BLE001 — see the docstring
+        pass
 
 
 def _router_body(history, system_stable: str, system_variable: str, *,

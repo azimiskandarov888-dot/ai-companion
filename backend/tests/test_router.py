@@ -89,15 +89,39 @@ def test_the_voice_is_gemma_and_the_watcher_stays_on_claude():
 
 
 def test_each_model_goes_to_its_own_fastest_place(monkeypatch):
-    """OpenAI's places serve only OpenAI's models. Sent there, Gemma would
-    have fallen back to wherever OpenRouter liked — chosen by price, not
-    speed — so any other model goes to whichever of its hosts is fastest."""
+    """OpenAI's places serve only OpenAI's models. Gemma has a measured order
+    of its own: asked to sort by latency, OpenRouter sent her to SiliconFlow —
+    first words in 2.0–3.5 s, against 0.33–0.45 s at ModelRun (2026-10-03) —
+    and one host for the whole conversation keeps its prompt cache warm."""
     monkeypatch.setattr(config, "CHAT_PROVIDERS", [])
     assert brain._where(LUNA)["order"][0] == "openai/fast"
-    assert brain._where(GEMMA) == {"sort": "latency", "allow_fallbacks": True}
+    assert brain._where(GEMMA) == {"order": config.CHAT_PROVIDERS_FOR[GEMMA], "allow_fallbacks": True}
+    assert brain._where(GEMMA)["order"][0] == "modelrun/fp4"
+    # A model nobody has measured: the fastest place right now.
+    assert brain._where("mistralai/some-new-model") == {"sort": "latency", "allow_fallbacks": True}
     # An order set by hand is an order for any model, still with fallbacks.
     monkeypatch.setattr(config, "CHAT_PROVIDERS", ["deepinfra"])
     assert brain._where(GEMMA) == {"order": ["deepinfra"], "allow_fallbacks": True}
+
+
+def test_he_reads_ahead_what_the_next_reply_will_begin_with(router):
+    """brain.prewarm: the instructions and the conversation so far, in the same
+    order and to the same host as the reply that follows, so the host can
+    reuse what it read — one token, nobody waiting on it."""
+    history = [{"role": "assistant", "content": "Привет. Как день?"},
+               {"role": "user", "content": "Нормально."},
+               {"role": "assistant", "content": "А чем занимался?"}]
+    router.body = json.dumps({"choices": [{"message": {"content": "О"}}]}).encode()
+    asyncio.run(brain.prewarm(history, "КТО ТЫ"))
+    [sent] = router.sent
+    assert sent["max_tokens"] == 1 and sent["stream"] is False
+    assert sent["messages"][0] == {"role": "system", "content": "КТО ТЫ"}
+    assert sent["messages"][1:-1] == [{"role": "user", "content": "…"}, *history]
+    assert sent["messages"][-1] == {"role": "user", "content": "…"}
+    assert sent["provider"] == brain._where(config.CHAT_MODEL)
+    # …and a host that is down costs nothing but the warm-up.
+    router.status = 500
+    asyncio.run(brain.prewarm(history, "КТО ТЫ"))
 
 
 # ── what he is sent ─────────────────────────────────────────────────────────

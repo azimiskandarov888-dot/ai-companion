@@ -333,19 +333,36 @@ def test_a_woman_is_not_read_aloud_by_a_man(monkeypatch):
     assert tts.voice_for({"name": "Zoya", "gender": "female"}) == "alena"
 
 
-def test_a_persona_written_before_this_existed_still_speaks():
+def test_a_persona_written_before_this_existed_still_speaks(monkeypatch):
     """No gender field means an older character. It keeps the configured
     voice — possibly wrong, definitely not silent."""
+    from app import config
+
+    monkeypatch.setattr(config, "TTS_PROVIDER", "fish")
     assert tts.voice_for({"name": "Фёдор"}) is None
     assert tts.voice_for({}) is None
     assert tts.voice_for(None) is None
+    # The Gemini voices: a man's voice from the catalog, never silence.
+    from app import voices
+
+    monkeypatch.setattr(config, "TTS_PROVIDER", "gemini")
+    for who in ({"name": "Фёдор"}, {}, None):
+        name, _style = voices.parse(tts.voice_for(who))
+        assert dict((n, g) for n, g, _ in voices.CATALOG)[name] == "male"
 
 
-def test_the_name_is_never_used_to_guess():
+def test_the_name_is_never_used_to_guess(monkeypatch):
     """Russian will not support the guess: Гриша, Никита, Илья and Саша all
     end in -а and are men. Only the persona's own statement counts."""
+    from app import config, voices
+
+    monkeypatch.setattr(config, "TTS_PROVIDER", "fish")
     assert tts.voice_for({"name": "Гриша"}) is None
     assert tts.voice_for({"name": "Никита"}) is None
+    monkeypatch.setattr(config, "TTS_PROVIDER", "gemini")
+    genders = dict((n, g) for n, g, _ in voices.CATALOG)
+    for name in ("Гриша", "Никита", "Саша"):
+        assert genders[voices.parse(tts.voice_for({"name": name}))[0]] == "male"
 
 
 def test_an_unset_female_voice_falls_back_rather_than_failing(monkeypatch):

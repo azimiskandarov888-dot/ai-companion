@@ -136,10 +136,13 @@ def _texts(kind: str) -> tuple[str, ...]:
     return THINKING if kind == "thinking" else LISTENING
 
 
-def pick(voice: str | None, kind: str, rng: random.Random, avoid: str = "") -> tuple[str, int, bytes] | None:
+def pick(voice: str | None, kind: str, rng: random.Random, avoid: str = "",
+         before: str = "") -> tuple[str, int, bytes] | None:
     """One of his sounds of this kind, as (what it is, rate, PCM) — not the
-    one he made last, when there is another. None until they are made."""
-    ready = [t for t in _texts(kind) if _made.get((voice, t))]
+    one he made last, when there is another, and never the word his answer
+    `before` opens with (live.Draft voices it ahead). None until they are made."""
+    ready = [t for t in _texts(kind) if _made.get((voice, t))
+             and not (before and without_repeat(before, t) != before)]
     if not ready:
         return None
     fresh = [t for t in ready if t != avoid] or ready

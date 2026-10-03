@@ -96,6 +96,7 @@ from . import (
     situations,
     stt,
     tts,
+    voices,
     vow,
     young,
 )
@@ -239,7 +240,8 @@ async def _assemble(
     words = memory.words_said(user_id)
     # Whether he has said his own name yet — the one thing a first meeting
     # owes that he did not do unasked (meeting.NAME_BY).
-    who = persona.load_persona(user_id)
+    # …and his voice, given once and kept (voices.py).
+    who = voices.ensure(user_id)
     named = memory.named_himself(user_id, who.get("name", ""))
     acquaintance = meeting.where(words, named=named)
     # …and HOW LONG HE HAS BEEN GONE, which nothing used to say. See
@@ -358,6 +360,22 @@ async def _assemble(
         tts.voice_for(who),
         watcher,
     )
+
+
+async def prewarm(user_id: str) -> None:
+    """What the next turn's prompt will begin with, handed to the brain to read
+    ahead (brain.prewarm) — his instructions and the conversation so far.
+
+    Built by _assemble itself, as a draft of a line nobody has said yet, so it
+    cannot drift from the real thing: the same stable half, the same window of
+    the history. A draft writes nothing (see _assemble), and the line is
+    dropped before anything is sent. Never raises."""
+    try:
+        stable, _variable, history, _voice, _watcher = await _assemble(
+            user_id, "…", pending=True, marks=[], by_ear=True)
+        await brain.prewarm(history[:-1], stable)
+    except Exception as e:  # noqa: BLE001 — reading ahead is never worth an error
+        print(f"[prewarm] {e}", file=sys.stderr, flush=True)
 
 
 def _commit(user_id: str, user_text: str, marks: list) -> asyncio.Task:
@@ -569,7 +587,7 @@ async def _think_and_speak(
         return {
             "reply": reply,
             "audio_base64": base64.b64encode(audio_bytes).decode("ascii"),
-            "audio_mime": "audio/mpeg",
+            "audio_mime": tts.mime(),
             "voice": "server",
             "farewell": leaving,
             **({"alarm": alarm} if alarm else {}),
@@ -700,7 +718,7 @@ async def _speak_as_he_thinks(
                     "audio_base64": (
                         base64.b64encode(audio).decode("ascii") if audio else ""
                     ),
-                    **({"audio_mime": "audio/mpeg"} if audio else {}),
+                    **({"audio_mime": tts.mime()} if audio else {}),
                 }
             )
 
@@ -951,7 +969,7 @@ async def say(
             "transcript": text,
             "reply": text,
             "audio_base64": base64.b64encode(audio_bytes).decode("ascii"),
-            "audio_mime": "audio/mpeg",
+            "audio_mime": tts.mime(),
             "voice": "server",
         })
 
@@ -1003,7 +1021,7 @@ async def hello(user_id: str = Depends(_user)) -> JSONResponse:
         except Exception as e:  # noqa: BLE001
             raise _unavailable("🗣️ the voice", e)
         spoken.update(audio_base64=base64.b64encode(audio_bytes).decode("ascii"),
-                      audio_mime="audio/mpeg", voice="server")
+                      audio_mime=tts.mime(), voice="server")
     # Logged only once it can be heard. Logged first, a voice that failed
     # would leave a hello nobody heard in the log — and then, because they
     # have «talked», no hello at all when the app asked again.
