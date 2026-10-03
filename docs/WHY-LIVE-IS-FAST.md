@@ -110,6 +110,23 @@
 
 Тогда решение будет по замерам, а не по рейтингам.
 
+## Ответ владельца и что сделано (3.10.2026)
+
+1. «If getting three separate models… would be much, much better quality… then it's okay to use different models».
+   → Остаёмся на трёх: уши, мозг, голос.
+2. «We need it to be fixed. This is one of the most important parts».
+   → **Мозг читает заранее.** Gemma теперь идёт к своим хостингам по порядку, один на весь разговор, — хостинг помнит прочитанное. Пока человек говорит, мозг читает разговор заранее. Первые слова мозга — через 0,7–1,2 с, было 3,2–3,6 (docs/LATENCY.md, «3.10»).
+3. «If it starts talking the same time it's thinking. It can say something wrong, then try to re-say correctly, exactly like humans do».
+   → **Первый кусок ответа — до первой паузы («Ого,»), а частые первые слова сделаны заранее** и звучат, как только мозг их написал: «Ого...» — через 1,05 с.
+   - Ошибиться и поправиться: модель пишет слева направо и сама не ошибается от того, что говорит раньше. Живые поправки — это слой запинок (`aloud.py`: «я… я», «ну, то есть») и правило в инструкциях «поправь себя на ходу».
+4. «It's okay because we gather the best of everything from around the world».
+   → Компании разные; сервер в Европе — этап 4.
+5. «They wait 0.8 seconds to understand that you have ended your speech. And right at that time, they already have everything ready to go».
+   - **У нас теперь именно так.** С первого «похоже, договорил» черновик пишется и его первый кусок озвучивается. Когда «договорил» точно, звук готов или почти.
+   - **У самой Gemini Live, судя по документации, не совсем так.** Google пишет, что если сразу сказать «договорил» и не ждать 800 мс тишины, ответ придёт «with minimal latency». Значит, эти 800 мс — именно ожидание. Готов к концу ожидания у неё прочитанный звук, а сам ответ — после.
+
+**Что осталось:** голос Gemini через OpenRouter отдаёт звук только целиком — 2–2,5 с на первом куске, если это не готовое слово. Тот же голос потоком — через ключ Gemini API; код готов (`tts._gemini_direct_stream`), `python check_keys.py` покажет, настоящий ли это поток.
+
 ## Источники
 
 - Google, Live API: голосовая активность и ожидание тишины ~800 мс по умолчанию, голоса, языки, 15 минут, 128 тыс. токенов ([документация](https://ai.google.dev/gemini-api/docs/live-api/capabilities)).

@@ -7,7 +7,7 @@ or re-litigating decisions that are already made. Written 2026-09-17 on branch
 `claude/ai-companion-next-steps-c593db`, which is where all current work lives
 (it is ahead of the other two; the owner's main checkout may still be on
 `awesome-planck` — run the server from this branch).
-**1229 tests pass** (2026-10-02). Every number below was measured by running
+**1255 tests pass** (2026-10-03). Every number below was measured by running
 the code, not estimated; where something is an estimate it says so.
 
 **Start with §0** — where things stand and what comes next, as of the end of
@@ -93,6 +93,30 @@ Still open:
 **Not one voice — a catalog** (the owner, 2026-10-03: «we need hundred of them voices, and atleast 10 out of them must be russian»):
 - Every companion gets a voice of his own, picked for his gender, age and temper when he is written, and kept in his `persona` for good.
 - The pool is Gemini's 30 voices, which all speak Russian, each with a «whom he plays» style line from his portrait. Round 3 — all 30, blind — waits for the owner's ear (`docs/VOICES-RU.md`).
+
+### Done 2026-10-03 — faster, and a voice for every companion
+
+The owner asked why Gemini Live answers in 0.8 s (`docs/WHY-LIVE-IS-FAST.md`), then: «everything must be fixed right now».
+
+Measured end to end with `backend/live_check/client.py` — three spoken turns, real services (`docs/LATENCY.md`, «3.10»):
+
+| | Before | After |
+|---|---|---|
+| Brain's first words | 3.2–3.6 s | 0.7–1.2 s |
+| His first word | 3.7–4.3 s | 2.4–3.5 s; 1.05 s when he opens with a ready first word |
+
+What changed:
+- **Gemma's hosts are pinned** — ModelRun, DeepInfra turbo, CoreWeave (`config.CHAT_PROVIDERS_FOR`). Asked to «sort by latency», OpenRouter had sent her to SiliconFlow. One host for a whole conversation keeps the prompt cached; it stays cached 2–4 minutes.
+- **The brain reads ahead** while they talk (`brain.prewarm`).
+- **The draft's first piece is voiced** while the turn may still go on (`live.Draft.voice_head`).
+- **The first piece ends at the first pause** (`tts.first_pause`).
+- **His thirty most common first words are made ahead** in his voice and kept on disk (`first_sound.REACTIONS`).
+- **The voice is Gemini, from a catalog** — every companion has his own voice and a «whom he plays» line, kept in his persona (`voices.py`).
+
+Still open:
+- **The rest of the wait is the Gemini voice through OpenRouter, which comes only whole.** The stream needs the owner's Gemini API key; the code is ready (`tts._gemini_direct_stream`, falling back to OpenRouter). `python check_keys.py` says whether it really streams.
+- **3.1 or 3.8?** Only 3.8 makes voices from a description (Voice Design) — the way to «hundred of them voices» (`docs/VOICES-RU.md`).
+- **Gemma's fast hosts all run her at 4 bits.** Whether that costs her Russian is for the brains' Russian round.
 
 ### What's next — the plan, in order
 
@@ -317,7 +341,7 @@ These are not style preferences. They have each been earned by a bug.
 | ① | **Ears** — speech to text | Deepgram Flux `flux-general-multi` (live channel, `hearing.py`); `whisper-1` (`/api/talk`) | Flux hears while they speak and says itself when they have finished — «похоже, договорил» ~0.36 s after the last word, «договорил» 0.8–1.6 s at the 0.85 threshold (~0.63 s at Deepgram's default 0.7, which cut people off mid-thought — measured 2026-09-30, `config.FLUX_EOT_THRESHOLD`); European address; `mip_opt_out=true`, so the audio is not kept. Whisper stays for the file-at-a-time path the iPhone app still uses |
 | ② | **Watchman** — danger in the person's words | Haiku 4.5 | runs as a task; **does not hold up the answer** |
 | ③ | **Voice** — the companion speaking | Gemma 4, via OpenRouter (since 2026-10-02) | the fastest of its hosts (`brain._where`: sort by latency; an OpenAI model goes to OpenAI's fast tier first), no reasoning (`CHAT_REASONING=none`): 0.8–0.9 s to first words on the real prompt in the live-talk check, 1.26 s in one cold call through the app. Its hosts keep no cache. Luna before it: 0.8–1.1 s, the prompt ~all cached |
-| ④ | **Mouth** — text to speech | Fish Audio `s2.1-pro` | #1 on TTS-Arena2; makes his sounds. Direct (`fish`) or through OpenRouter — which `fish` becomes by itself when there is an OpenRouter key and no Fish one (`config.voice_provider`). Streams raw PCM to the live channel (`tts.stream`). The owner's Fish key is in since 2026-09-30, so it goes directly, on Fish's starting credit. First sound ~0.45 s after a piece of text is sent — the same through OpenRouter (0.48 s; 10 phrases each), because the middleman costs nearly nothing. About 0.1 s of that is silence Fish puts at the start of every sound. Keep `latency=balanced`: `normal` took 0.78 s. `s2.1-pro-free` is slower (0.60–0.94 s) |
+| ④ | **Mouth** — text to speech | Gemini TTS through OpenRouter since 2026-10-03 (`voices.py`, a voice per companion); before it Fish Audio `s2.1-pro` | #1 on TTS-Arena2; makes his sounds. Direct (`fish`) or through OpenRouter — which `fish` becomes by itself when there is an OpenRouter key and no Fish one (`config.voice_provider`). Streams raw PCM to the live channel (`tts.stream`). The owner's Fish key is in since 2026-09-30, so it goes directly, on Fish's starting credit. First sound ~0.45 s after a piece of text is sent — the same through OpenRouter (0.48 s; 10 phrases each), because the middleman costs nearly nothing. About 0.1 s of that is silence Fish puts at the start of every sound. Keep `latency=balanced`: `normal` took 0.78 s. `s2.1-pro-free` is slower (0.60–0.94 s) |
 
 **The watchman never blocks.** It used to be awaited before the prompt could be
 assembled, so every person who was fine paid for it in silence. Now the reply
@@ -825,7 +849,7 @@ the reason the tests that now hold them exist.
   or any repo artifact. Chat replies only.
 - **Commit attribution:** end every commit with the attribution line(s) the
   session's own instructions give — nothing else names a model.
-- **Tests:** `cd backend && python -m pytest -q`. **1229 pass.** The suite is the
+- **Tests:** `cd backend && python -m pytest -q`. **1255 pass.** The suite is the
   design record — test docstrings carry the *reasoning*, including what went
   wrong before. Read the docstring before changing an assertion; several tests
   exist because a previous fix was subtly wrong.
