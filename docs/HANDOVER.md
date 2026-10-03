@@ -114,7 +114,11 @@ What changed:
 - **The voice is Gemini, from a catalog** — every companion has his own voice and a «whom he plays» line, kept in his persona (`voices.py`).
 
 Still open:
-- **The rest of the wait is the Gemini voice through OpenRouter, which comes only whole.** The stream needs the owner's Gemini API key; the code is ready (`tts._gemini_direct_stream`, falling back to OpenRouter). `python check_keys.py` says whether it really streams.
+- **The rest of the wait is the Gemini voice through OpenRouter, which comes only whole** (1.9 s).
+  - The owner's Gemini API key is in. Google's own stream (`streamGenerateContent`) measured 0.63–0.93 s to first sound on 3.8 Flash-Lite (`tts._gemini_direct_stream`, OpenRouter as the way back).
+  - **But the key is on the free tier: 10 requests a day per model.** Billing on the Google project is needed before the stream can carry a conversation.
+- **The voice is 3.8 Flash-Lite** (the owner: «3.8 for more voices and less price tag»; Lite of the two for speed and price).
+- **Gemini Live measured by us** (`live_check/gemini_live.py`, the same phrases, Bob's prompt): 3.8 Live median 1.63 s, 2.5 Native Audio 1.44–2.30 s. With Google's stream Bob's sum is ~1.8 s, and ~1.1 s when he opens with a ready word (`docs/WHY-LIVE-IS-FAST.md`).
 - **3.1 or 3.8?** Only 3.8 makes voices from a description (Voice Design) — the way to «hundred of them voices» (`docs/VOICES-RU.md`).
 - **Gemma's fast hosts all run her at 4 bits.** Whether that costs her Russian is for the brains' Russian round.
 
