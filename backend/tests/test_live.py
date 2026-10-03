@@ -936,3 +936,20 @@ def test_a_vow_his_voiced_head_breaks_is_never_said_and_noted_once_real(env, mon
         done = line.expect("done")
     assert noted == [vow.MACHINE]
     assert "программа" not in done["reply"]
+
+
+def test_his_usual_first_word_is_played_ready_made_without_asking_the_voice(env):
+    """first_sound.REACTIONS: «Ого,» is already made in his voice, so it plays
+    the moment the brain writes it — and only the rest goes to the voice."""
+    first_sound._made[(his_voice(), "Ого,")] = [(16000, b"OG")]
+    env.mind.replies = ["Ого, сам программу пишешь?"]
+    with talk(env) as line:
+        line.ears().send(turn("StartOfTurn", "я сам"), turn("EagerEndOfTurn", "я сам программу пишу"))
+        wait_until(lambda: live._open[UID]._draft is not None and live._open[UID]._draft.head is not None)
+        line.ears().send(turn("EndOfTurn", "я сам программу пишу"))
+        line.expect("heard")
+        done = line.expect("done")
+    assert "Ого," not in env.voice.texts                     # never asked of the voice
+    assert after_heard(line)[0] == "Ого," and b"OG" in line.audio
+    assert done["timing"]["head_ready"] is True
+    assert done["reply"] == "Ого, сам программу пишешь?"

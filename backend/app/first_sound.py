@@ -43,6 +43,22 @@ the periodicity of a vowel — so whatever it is, it is not obviously a breath.
 It is not here until the owner has heard it; adding it means a marker in
 tts.SOUNDS too, since the voice is never sent a bracket it does not know.
 
+── HIS FIRST WORD, READY TOO ───────────────────────────────────────────────
+
+Most answers open with a reaction — «Ого,», «Понимаю.», «Ну?», «А там что?»
+(the first pieces of 1,257 of his Russian replies: about a third are one of a
+few dozen). Those are made ahead in his voice as well (REACTIONS), and when the
+first piece of his answer is one of them, it is played as it is — at once,
+instead of after the voice has made it (live.Draft). The rest of the sentence
+is made meanwhile, as before. The owner, 2026-10-03: he should start talking
+«the same time it's thinking».
+
+── MADE ONCE, EVER ─────────────────────────────────────────────────────────
+
+What is made is kept on disk (DATA_DIR/sounds), by voice, words and model, so a
+companion's sounds are made the first time he speaks and never again — not
+in the next conversation, not after a restart.
+
 ── NEVER REMEMBERED ────────────────────────────────────────────────────────
 
 Like the stumbles of aloud.py, these are how he sounds, not what he said. They
@@ -54,11 +70,13 @@ from __future__ import annotations
 
 import array
 import asyncio
+import hashlib
 import random
 import re
 import sys
+import wave
 
-from . import lang, tts
+from . import config, lang, tts
 
 #: A listener's sound — in a pause of theirs, and before most of his answers.
 LISTENING = ("М-м…",)
@@ -68,6 +86,15 @@ THINKING = ("Хм…", "Так…", "М-м…")
 #: voice, which would read «Так…» as a word.
 LISTENING_EN = ("Mm…",)
 THINKING_EN = ("Hmm…", "So…", "Mm…")
+#: First words most of his answers open with (see the module docstring) —
+#: each with its own ending, since «Ого!» and «Ого…» are said differently.
+REACTIONS = ("Ого,", "Ого…", "Ого.", "Ого!", "Ой,", "Ой…", "Ой!", "Понимаю.", "Понимаю…",
+             "Ничего себе.", "Ничего себе!", "Да ты что!", "Ну да,", "Ну?", "Ну…", "Что?",
+             "Ага,", "Ага.", "А дальше?", "А там что?", "И что?", "Бывает.", "Круто.",
+             "Это точно.", "Слушай,", "Да ладно,", "Хм,", "Правда?", "Ладно,", "Нет,")
+REACTIONS_EN = ("Oh wow,", "Oh wow!", "Wow,", "Oh,", "Oh!", "Oh no,", "Yeah,", "Yeah?",
+                "Really?", "What?", "And then?", "I see.", "Right,", "Hmm,", "Huh,", "Nice!",
+                "No way!", "Okay,", "Well,", "Mm,")
 #: How many versions of each sound are made.
 TAKES = 2
 #: How often a finished turn gets one. Not always: people do not.
@@ -155,6 +182,20 @@ def ready(voice: str | None) -> bool:
     return any(_made.get((voice, t)) for t in _texts("listening"))
 
 
+def reaction(voice: str | None, piece: str) -> tuple[int, bytes] | None:
+    """His first piece, ready-made, if it is one of REACTIONS and has been made
+    in this voice: (rate, PCM), a different take each time. None otherwise."""
+    said = _normal(piece)
+    for text in (REACTIONS_EN if lang.english() else REACTIONS):
+        if _normal(text) == said and (takes := _made.get((voice, text))):
+            return random.choice(takes)
+    return None
+
+
+def _normal(text: str) -> str:
+    return re.sub(r"\s+", " ", (text or "").strip().replace("...", "…"))
+
+
 def prepare(voice: str | None) -> asyncio.Task:
     """Make his sounds in this voice, once — in the background; a conversation
     never waits for them, it just has none until they are there."""
@@ -167,21 +208,52 @@ def prepare(voice: str | None) -> asyncio.Task:
 
 
 async def _make_all(voice: str | None) -> None:
-    texts = dict.fromkeys(_texts("listening") + _texts("thinking"))
+    # His sounds first — they are wanted at once; his ready first words after.
+    reactions = REACTIONS_EN if lang.english() else REACTIONS
+    texts = dict.fromkeys(_texts("listening") + _texts("thinking") + reactions)
     for text in texts:
         takes = []
-        for _ in range(TAKES):
+        for take in range(TAKES):
             try:
-                rate, pcm = None, b""
-                async for rate, chunk in tts.stream(text, voice):
-                    pcm += chunk
-                if rate and (pcm := trimmed(pcm, rate)):
-                    takes.append((rate, pcm))
+                kept = _load(voice, text, take)
+                if kept is None:
+                    rate, pcm = None, b""
+                    async for rate, chunk in tts.stream(text, voice):
+                        pcm += chunk
+                    if not (rate and (pcm := trimmed(pcm, rate))):
+                        continue
+                    kept = (rate, pcm)
+                    _keep(voice, text, take, kept)
+                takes.append(kept)
             except Exception as e:  # noqa: BLE001 — a sound is a nicety, never a failure
                 print(f"[first_sound] could not make {text!r}: {e}", file=sys.stderr, flush=True)
                 break
         if takes:
             _made[(voice, text)] = takes
+
+
+def _path(voice: str | None, text: str, take: int):
+    """Where one take is kept — by everything that decides how it sounds."""
+    model = config.GEMINI_TTS_MODEL if config.voice_provider() == "gemini" else config.FISH_MODEL
+    name = hashlib.sha256(f"{config.voice_provider()}|{model}|{voice}|{text}|{take}".encode()).hexdigest()
+    return config.DATA_DIR / "sounds" / f"{name[:32]}.wav"
+
+
+def _load(voice: str | None, text: str, take: int) -> tuple[int, bytes] | None:
+    try:
+        with wave.open(str(_path(voice, text, take)), "rb") as w:
+            return w.getframerate(), w.readframes(w.getnframes())
+    except (OSError, EOFError, wave.Error):
+        return None
+
+
+def _keep(voice: str | None, text: str, take: int, made: tuple[int, bytes]) -> None:
+    try:
+        path = _path(voice, text, take)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(tts.wav(made[1], made[0]))
+    except OSError as e:  # a sound kept is a nicety too
+        print(f"[first_sound] could not keep {text!r}: {e}", file=sys.stderr, flush=True)
 
 
 #: Below this share of the loudest moment, a stretch counts as silence.

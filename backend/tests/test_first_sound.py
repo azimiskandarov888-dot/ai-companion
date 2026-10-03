@@ -95,11 +95,42 @@ def test_they_are_made_once_in_his_voice_and_kept(monkeypatch):
         await first
 
     asyncio.run(run())
-    texts = dict.fromkeys(first_sound.LISTENING + first_sound.THINKING)
+    texts = dict.fromkeys(first_sound.LISTENING + first_sound.THINKING + first_sound.REACTIONS)
     assert {t for t, _ in asked} == set(texts)
+    assert [t for t, _ in asked][:len(first_sound.LISTENING) * first_sound.TAKES] == [
+        t for t in first_sound.LISTENING for _ in range(first_sound.TAKES)]   # sounds first
     assert all(v == "her-voice" for _, v in asked)
     assert len(asked) == len(texts) * first_sound.TAKES
     assert first_sound.ready("her-voice") and not first_sound.ready(None)
+
+
+def test_what_is_made_is_kept_and_never_made_again(monkeypatch):
+    """A companion's sounds are made the first time he speaks — not again in
+    the next conversation, nor after a restart (DATA_DIR/sounds)."""
+    asked: list[str] = []
+
+    async def voice(text, voice=None):
+        asked.append(text)
+        yield 1000, _pcm([0] * 50 + [9000] * 100 + [0] * 50)
+
+    monkeypatch.setattr(tts, "stream", voice)
+    asyncio.run(first_sound._make_all("his-voice"))
+    made_first = len(asked)
+    kept = first_sound._made[("his-voice", "Понимаю.")]
+    first_sound._made.clear()                              # a restart
+    asyncio.run(first_sound._make_all("his-voice"))
+    assert len(asked) == made_first                        # nothing made again
+    assert first_sound._made[("his-voice", "Понимаю.")] == kept
+
+
+def test_his_usual_first_word_is_ready_made_and_nothing_else_is():
+    first_sound._made[("v", "Ого…")] = [(1000, b"OGO")]
+    first_sound._made[("v", "Понимаю.")] = [(1000, b"PON")]
+    assert first_sound.reaction("v", "Ого...") == (1000, b"OGO")       # «...» is «…»
+    assert first_sound.reaction("v", " Понимаю. ") == (1000, b"PON")
+    assert first_sound.reaction("v", "Ого!") is None                   # said differently
+    assert first_sound.reaction("v", "Ого… а ты как?") is None          # not only that
+    assert first_sound.reaction("other", "Ого…") is None               # not in this voice
 
 
 def test_a_voice_that_cannot_make_them_leaves_him_without_and_says_nothing_else(monkeypatch):

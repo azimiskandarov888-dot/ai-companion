@@ -370,7 +370,7 @@ class Draft:
         if not tts.audible(piece):
             return
         heard = self.speaker.say(piece)
-        self.head = (piece, heard, _Voicing(heard, self.voice or session.voice))
+        self.head = (piece, heard, _Voicing.first(heard, self.voice or session.voice))
 
 
 class _Voicing:
@@ -378,11 +378,24 @@ class _Voicing:
     order. The next piece's voice is asked for while this one is still
     playing, so there is no silence between sentences."""
 
-    def __init__(self, text: str, voice: str | None) -> None:
+    def __init__(self, text: str, voice: str | None, *, made: tuple[int, bytes] | None = None) -> None:
         self._chunks: asyncio.Queue = asyncio.Queue()
         #: Its first sound is in — or it has failed, which is as ready to play.
         self.sounding = asyncio.Event()
-        self._task = asyncio.create_task(self._make(text, voice))
+        if made is not None:
+            # Ready-made in his voice (first_sound.REACTIONS): nothing to wait for.
+            self._chunks.put_nowait(made)
+            self._chunks.put_nowait(_END)
+            self.sounding.set()
+            self._task = asyncio.create_task(asyncio.sleep(0))
+        else:
+            self._task = asyncio.create_task(self._make(text, voice))
+
+    @classmethod
+    def first(cls, text: str, voice: str | None) -> _Voicing:
+        """The voice of an answer's FIRST piece: ready-made when it is one of
+        his usual first words, made now when it is not."""
+        return cls(text, voice, made=first_sound.reaction(voice, text))
 
     async def _make(self, text: str, voice: str | None) -> None:
         try:
@@ -929,7 +942,8 @@ class Session:
                 if not tts.audible(piece):
                     continue
                 heard = speaker.say(piece)
-                ahead.append((piece, heard, _Voicing(heard, voice)))
+                opening = not spoken and not ahead and not sounded
+                ahead.append((piece, heard, _Voicing.first(heard, voice) if opening else _Voicing(heard, voice)))
             return True
 
         def spent() -> None:
