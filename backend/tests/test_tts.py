@@ -361,10 +361,12 @@ def _google_and_router(monkeypatch, google_status: int = 200):
         if request.url.host == "generativelanguage.googleapis.com":
             if google_status != 200:
                 return httpx.Response(google_status, content=b'{"error": "nope"}')
-            events = [{"event_type": "step.start"},
-                      {"event_type": "step.delta", "delta": {"type": "audio", "data": base64.b64encode(b"\x01\x00" * 4).decode()}},
-                      {"event_type": "step.delta", "delta": {"type": "text", "text": "ignored"}},
-                      {"event_type": "step.delta", "delta": {"type": "audio", "data": base64.b64encode(b"\x02\x00" * 4).decode()}}]
+            def audio(raw: bytes) -> dict:
+                return {"candidates": [{"content": {"parts": [{"inlineData": {
+                    "mimeType": "audio/L16;codec=pcm;rate=24000", "data": base64.b64encode(raw).decode()}}]}}]}
+
+            events = [audio(b"\x01\x00" * 4), {"candidates": [{"content": {"parts": [{"text": "x"}]}}]},
+                      audio(b"\x02\x00" * 4), {"usageMetadata": {}}]
             body = "".join(f"data: {json.dumps(e)}\n\n" for e in events)
             return httpx.Response(200, content=body.encode(), headers={"content-type": "text/event-stream"})
         return httpx.Response(200, content=b"\x03\x00" * 4, headers={"content-type": "audio/pcm;rate=24000"})
@@ -379,7 +381,7 @@ def _google_and_router(monkeypatch, google_status: int = 200):
 
 
 def test_on_google_s_own_key_the_voice_streams(monkeypatch):
-    """The Interactions API, «stream»: the first sound while the rest is made."""
+    """streamGenerateContent: the first sound while the rest is made."""
     asked = _google_and_router(monkeypatch)
     assert tts.streams()
 
@@ -390,9 +392,11 @@ def test_on_google_s_own_key_the_voice_streams(monkeypatch):
     assert pieces == [(24000, b"\x01\x00" * 4), (24000, b"\x02\x00" * 4)]
     assert asked == ["generativelanguage.googleapis.com"]
     url, headers, payload = tts._gemini_direct_request("Ого.", None)
-    assert headers["x-goog-api-key"] == "google-key" and payload["stream"] is True
-    assert payload["model"] == config.GEMINI_TTS_MODEL.split("/", 1)[-1]
-    assert payload["generation_config"]["speech_config"] == [{"voice": tts.GEMINI_DEFAULT}]
+    assert headers["x-goog-api-key"] == "google-key"
+    assert config.GEMINI_TTS_MODEL.split("/", 1)[-1] in url and url.endswith(":streamGenerateContent?alt=sse")
+    assert payload["generationConfig"]["speech_config"] == {"voice_config": {"voice": tts.GEMINI_DEFAULT}}
+    [part] = payload["contents"][0]["parts"]
+    assert part["text"] == "Ого." and part["speech_metadata"]["style"]   # whom he plays, never read
 
 
 def test_when_google_refuses_the_voice_goes_through_openrouter(monkeypatch):

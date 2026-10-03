@@ -251,12 +251,15 @@ EMBEDDING_DIM: int = int(os.getenv("EMBEDDING_DIM", "512"))
 # speech-to-text does NOT support Russian, so it can't replace Whisper.
 TTS_PROVIDER: str = os.getenv("TTS_PROVIDER", "gemini").strip().lower()
 
-#: Which Gemini voice model (an OpenRouter id). The owner heard the same voice in
-#: three of them, blind: «Equally good. But they are different» — 3.8 Flash the
-#: calmest, 3.8 Flash-Lite neutral, 3.1 Flash the most emotional; then «the
-#: version 3.1 is one of the best». 3.1 costs ~4× what 3.8 does through
-#: OpenRouter; only 3.8 can make voices from a description (docs/VOICES-RU.md).
-GEMINI_TTS_MODEL: str = os.getenv("GEMINI_TTS_MODEL", "google/gemini-3.1-flash-tts-preview")
+#: Which Gemini voice model (an OpenRouter id; Google's own is the part after
+#: the «/»). The owner heard the same voice in three of them, blind: «Equally
+#: good. But they are different» — 3.8 Flash the calmest, 3.8 Flash-Lite
+#: neutral, 3.1 Flash the most emotional; then, told that only 3.8 makes voices
+#: from a description and costs a quarter: «we will go with 3.8 for more voices
+#: and less price tag» (2026-10-03). Flash-Lite of the two: on Google's own
+#: stream its first sound came in 0.63–0.93 s, Flash's in 1.07–1.10 s, and it
+#: costs $6 a million sound tokens to Flash's $9.
+GEMINI_TTS_MODEL: str = os.getenv("GEMINI_TTS_MODEL", "google/gemini-3.8-flash-lite-tts")
 #: Google's own key for the same voices (aistudio.google.com → «Get API key»).
 #: With it the voice comes as a STREAM — the first sound while the rest is
 #: still being made — through the Gemini API (Interactions API); OpenRouter

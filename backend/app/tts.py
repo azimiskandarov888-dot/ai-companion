@@ -672,47 +672,57 @@ def wav(pcm: bytes, rate: int) -> bytes:
     return out.getvalue()
 
 
-_GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/interactions"
+_GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:streamGenerateContent?alt=sse"
+_PCM_RATE_IN = re.compile(r"rate=(\d+)", re.I)
 
 
 def _gemini_direct_request(text: str, voice: str | None, *, rate: float = 1.0) -> tuple[str, dict, dict]:
-    """The same voice on Google's own key, as a stream (the Interactions API,
-    ai.google.dev — speech generation): raw 16-bit audio at 24 kHz in pieces."""
+    """The same voice on Google's own key, as a stream — streamGenerateContent,
+    the voice in `speech_config.voice_config.voice` and whom it plays in the
+    text's own `speech_metadata.style` (ai.google.dev — generate-content
+    speech generation). Measured 2026-10-03 from Tashkent, «Ого, сам программу
+    пишешь?»: first sound in 0.63–0.93 s on 3.8 Flash-Lite and 1.07–1.10 s on
+    3.8 Flash — against 2.3–2.9 s by the newer Interactions API and ~2 s whole
+    through OpenRouter. The style is honoured (an old man read those words in
+    4.9–5.6 s, a student in 3.4–3.8 s) and never read out."""
     name, style = voices.parse(voice) or (GEMINI_DEFAULT, voices.MANNER)
     if rate < 1.0:
         style += _SLOWER_STYLE
     model = config.GEMINI_TTS_MODEL.split("/", 1)[-1]
     payload = {
-        "model": model,
-        "input": [{"type": "user_input", "content": [{
-            "type": "text", "text": text,
-            "annotations": [{"type": "speech_metadata", "style": style}],
-        }]}],
-        "response_format": {"type": "audio"},
-        "generation_config": {"speech_config": [{"voice": name}]},
-        "stream": True,
+        "contents": [{"role": "user", "parts": [{"text": text, "speech_metadata": {"style": style}}]}],
+        "generationConfig": {"responseModalities": ["AUDIO"],
+                             "speech_config": {"voice_config": {"voice": name}}},
     }
-    return _GEMINI_URL, {"x-goog-api-key": config.GEMINI_API_KEY or "", "Content-Type": "application/json"}, payload
+    return (_GEMINI_URL.format(model=model),
+            {"x-goog-api-key": config.GEMINI_API_KEY or "", "Content-Type": "application/json"}, payload)
 
 
-def _audio_in(event: dict) -> bytes:
-    """The audio one streamed event carries, if any: base64 in an «audio»
-    delta. Read tolerantly — what is not audio is no audio."""
+def _audio_in(event: dict) -> tuple[int, bytes]:
+    """(rate, audio) one streamed event carries: base64 in `inlineData` of its
+    parts. Read tolerantly — what is not audio is no audio."""
     import base64
 
-    delta = event.get("delta") if isinstance(event.get("delta"), dict) else {}
-    data = delta.get("data") if delta.get("type") == "audio" else None
-    if not isinstance(data, str):
-        return b""
-    try:
-        return base64.b64decode(data)
-    except (ValueError, TypeError):
-        return b""
+    rate, audio = GEMINI_RATE, b""
+    for candidate in event.get("candidates") or []:
+        for part in ((candidate or {}).get("content") or {}).get("parts") or []:
+            inline = (part or {}).get("inlineData") or {}
+            data = inline.get("data")
+            if not isinstance(data, str):
+                continue
+            if found := _PCM_RATE_IN.search(str(inline.get("mimeType") or "")):
+                rate = int(found.group(1))
+            try:
+                audio += base64.b64decode(data)
+            except (ValueError, TypeError):
+                continue
+    return rate, audio
 
 
-async def _gemini_direct_stream(text: str, voice: str | None, *, rate: float = 1.0) -> AsyncIterator[bytes]:
-    """Raw audio from Google as it is made. Raises before the first sound on
-    any refusal, so the caller can go the other way (OpenRouter)."""
+async def _gemini_direct_stream(text: str, voice: str | None, *,
+                                rate: float = 1.0) -> AsyncIterator[tuple[int, bytes]]:
+    """(rate, raw audio) from Google as it is made. Raises before the first
+    sound on any refusal, so the caller can go the other way (OpenRouter)."""
     import json as _json
 
     url, headers, payload = _gemini_direct_request(text, voice, rate=rate)
@@ -724,17 +734,17 @@ async def _gemini_direct_stream(text: str, voice: str | None, *, rate: float = 1
             line = line.strip()
             if not line.startswith("data:"):
                 continue
-            body = line[len("data:"):].strip()
-            if not body or body == "[DONE]":
-                continue
             try:
-                event = _json.loads(body)
+                event = _json.loads(line[len("data:"):].strip())
             except ValueError:
                 continue
-            if isinstance(event, dict) and event.get("error"):
+            if not isinstance(event, dict):
+                continue
+            if event.get("error"):
                 raise RuntimeError(f"Gemini API voice: {event['error']}")
-            if audio := _audio_in(event if isinstance(event, dict) else {}):
-                yield audio
+            out_rate, audio = _audio_in(event)
+            if audio:
+                yield out_rate, audio
 
 
 #: Said once per process when Google's own way refuses and OpenRouter takes
@@ -751,9 +761,9 @@ async def _gemini_pcm(text: str, voice: str | None, *, rate: float = 1.0) -> Asy
     if config.GEMINI_API_KEY:
         sent = False
         try:
-            async for audio in _gemini_direct_stream(text, voice, rate=rate):
+            async for out_rate, audio in _gemini_direct_stream(text, voice, rate=rate):
                 sent = True
-                yield GEMINI_RATE, audio
+                yield out_rate, audio
             if sent:
                 return
         except Exception as e:  # noqa: BLE001 — refused before a sound: the other way

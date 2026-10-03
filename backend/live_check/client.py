@@ -16,7 +16,19 @@ from websockets.asyncio.client import connect
 
 HERE = Path(__file__).parent
 FRAME = 2560           # 80 ms at 16 kHz, 16-bit
-URL = sys.argv[1] if len(sys.argv) > 1 else "ws://127.0.0.1:8765/api/live"
+ARGS = [a for a in sys.argv[1:] if not a.startswith("--")]
+URL = ARGS[0] if ARGS else "ws://127.0.0.1:8765/api/live"
+ROUNDS = int(next((a.split("=", 1)[1] for a in sys.argv[1:] if a.startswith("--rounds=")), "1"))
+#: His first sounds (first_sound.py) — not words.
+SOUNDS = {"М-м…", "Хм…", "Так…", "Mm…", "Hmm…", "So…"}
+#: The server's own marks, in the order they happen (live.Session._answer).
+STEPS = [("draft_started", "«похоже, договорил» — черновик начат"),
+         ("brain_asked", "промпт собран, мозг спрошен"),
+         ("first_words", "мозг: первые слова"),
+         ("first_piece", "первый кусок готов (до первой паузы)"),
+         ("voice_asked", "голос спрошен"),
+         ("voice_ready", "голос: первый звук"),
+         ("first_audio", "первое слово ушло на телефон")]
 
 
 async def main() -> None:
@@ -24,7 +36,8 @@ async def main() -> None:
     async with connect(URL, max_size=2**24) as ws:
         await ws.send(json.dumps({"type": "start", "token": token, "hello": True, "duplex": True}))
         state = {"audio": 0.0, "rate": 44100, "first_audio": None, "heard": None, "done": None,
-                 "speech_end": None, "timing_heard": None, "timing_done": None, "reply": "", "ready": False}
+                 "speech_end": None, "timing_heard": None, "timing_done": None, "reply": "", "ready": False,
+                 "word_said": False, "first_word": None}
         done_event = asyncio.Event()
 
         async def reader():
@@ -34,6 +47,8 @@ async def main() -> None:
                     state["audio"] += len(raw) / (2 * state["rate"])
                     if state["first_audio"] is None:
                         state["first_audio"] = now
+                    if state["word_said"] and state["first_word"] is None:
+                        state["first_word"] = now
                     continue
                 m = json.loads(raw)
                 kind = m.get("kind")
@@ -41,6 +56,8 @@ async def main() -> None:
                     state["ready"] = True
                 elif kind == "say":
                     state["rate"] = m.get("rate", state["rate"])
+                    if m["text"] not in SOUNDS:
+                        state["word_said"] = True
                     print(f"      say «{m['text']}» @{m.get('rate')}", flush=True)
                 elif kind == "heard":
                     state["heard"] = now
@@ -83,9 +100,10 @@ async def main() -> None:
         print(f"   hello: «{state['reply']}» (audio {state['audio']:.1f}s)", flush=True)
 
         results = []
-        for n in (1, 2, 3):
-            for k in ("first_audio", "heard", "done", "speech_end"):
+        for n in [1, 2, 3] * ROUNDS:
+            for k in ("first_audio", "heard", "done", "speech_end", "first_word"):
                 state[k] = None
+            state["word_said"] = False
             state["audio"] = 0.0
             done_event.clear()
             await silence(0.8)
@@ -100,6 +118,7 @@ async def main() -> None:
             r = {
                 "heard": state["heard"] - end if state["heard"] else None,
                 "first_audio": state["first_audio"] - end if state["first_audio"] else None,
+                "first_word": state["first_word"] - end if state["first_word"] else None,
                 "done": state["done"] - end if state["done"] else None,
                 "server_heard": state["timing_heard"], "server_done": state["timing_done"],
             }
@@ -112,6 +131,24 @@ async def main() -> None:
         read_task.cancel()
         firsts = sorted(r["first_audio"] for r in results if r["first_audio"])
         print("\nFIRST AUDIO after end of speech:", ", ".join(f"{x:.2f}s" for x in firsts))
+        report(results)
+
+
+def report(results: list[dict]) -> None:
+    """Each step's moment after the end of their speech: the median, and the range."""
+    def row(label: str, values: list[float]) -> str:
+        values = sorted(v for v in values if v is not None)
+        if not values:
+            return f"  {label:44} —"
+        mid = values[len(values) // 2]
+        return f"  {label:44} {mid:5.2f} с   ({values[0]:.2f}–{values[-1]:.2f})"
+
+    print("\nПО ШАГАМ — секунды от конца фразы человека (медиана, разброс):")
+    for key, label in STEPS:
+        print(row(label, [(r["server_done"] or {}).get(key) for r in results]))
+    print(row("«договорил» точно (уши)", [(r["server_heard"] or {}).get("end_of_turn") for r in results]))
+    print(row("телефон: первый звук («м-м» или слово)", [r["first_audio"] for r in results]))
+    print(row("телефон: первое СЛОВО", [r["first_word"] for r in results]))
 
 
 asyncio.run(main())

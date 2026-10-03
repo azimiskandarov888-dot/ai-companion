@@ -296,7 +296,7 @@ def check_gemini_stream() -> bool:
 
     async def probe() -> tuple[float, float, int]:
         began, first, size = time.monotonic(), None, 0
-        async for audio in tts._gemini_direct_stream(
+        async for _rate, audio in tts._gemini_direct_stream(
                 "Слушай, я вот тоже когда-то пробовал что-то такое написать, совсем простое.", None):
             if first is None:
                 first = time.monotonic() - began

@@ -382,7 +382,12 @@ class _Voicing:
         self._chunks: asyncio.Queue = asyncio.Queue()
         #: Its first sound is in — or it has failed, which is as ready to play.
         self.sounding = asyncio.Event()
+        #: When the voice was asked, and when its first sound came — the two
+        #: moments of the voice's own share of the wait (docs/LATENCY.md).
+        self.asked_at = time.monotonic()
+        self.first_at: float | None = None
         if made is not None:
+            self.first_at = self.asked_at
             # Ready-made in his voice (first_sound.REACTIONS): nothing to wait for.
             self._chunks.put_nowait(made)
             self._chunks.put_nowait(_END)
@@ -400,6 +405,8 @@ class _Voicing:
     async def _make(self, text: str, voice: str | None) -> None:
         try:
             async for rate, pcm in tts.stream(text, voice):
+                if self.first_at is None:
+                    self.first_at = time.monotonic()
                 self._chunks.put_nowait((rate, pcm))
                 self.sounding.set()
             self._chunks.put_nowait(_END)
@@ -996,6 +1003,8 @@ class Session:
                             timing["first_audio"] = _after(time.monotonic(), start)
                             timing["brain_asked"] = _after(draft.asked, start)
                             timing["first_words"] = _after(draft.first_words, start)
+                            timing["voice_asked"] = _after(voicing.asked_at, start)
+                            timing["voice_ready"] = _after(voicing.first_at, start)
                     await self._send_audio(pcm, rate)
                     sounded = True
                     await ready_ahead(wait=False)
