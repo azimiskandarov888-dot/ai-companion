@@ -182,6 +182,7 @@ def env(monkeypatch):
     # The stand-in voice streams, as Fish does; a voice that makes each piece
     # whole keeps more of them in the making (test_a_whole_voice_*).
     monkeypatch.setattr(tts, "streams", lambda: True)
+    monkeypatch.setattr(tts, "slow_start", lambda: False)
 
     async def quiet(*args, **kwargs):
         return None
@@ -839,8 +840,8 @@ def test_his_first_words_are_voiced_while_they_may_still_be_talking(env):
     env.mind.replies = ["Ого, сам программу пишешь? А про что она?"]
     with talk(env) as line:
         line.ears().send(turn("StartOfTurn", "я сам"), turn("EagerEndOfTurn", "я сам программу пишу"))
-        wait_until(lambda: env.voice.texts)
-        assert env.voice.texts == ["Ого,"]                   # his first pause, voiced ahead
+        wait_until(lambda: len(env.voice.texts) == 2)
+        assert env.voice.texts == ["Ого,", "сам программу пишешь?"]   # his first pieces, voiced ahead
         assert "say" not in line.kinds()                    # …and nothing played yet
         line.ears().send(turn("EndOfTurn", "я сам программу пишу"))
         line.expect("heard")
@@ -896,7 +897,7 @@ def test_a_whole_voice_keeps_two_pieces_in_the_making(env, monkeypatch):
     """A voice that makes each piece whole (Gemini through OpenRouter): while
     one plays, the next two are being made, so «Ого,» is not followed by a
     silence while the rest of the sentence is made."""
-    monkeypatch.setattr(tts, "streams", lambda: False)
+    monkeypatch.setattr(tts, "slow_start", lambda: True)
     env.mind.replies = ["Ого, сам? Слушай, это здорово. А про что она?"]
     env.voice.delay = 0.1
     with talk(env) as line:
@@ -953,3 +954,46 @@ def test_his_usual_first_word_is_played_ready_made_without_asking_the_voice(env)
     assert after_heard(line)[0] == "Ого," and b"OG" in line.audio
     assert done["timing"]["head_ready"] is True
     assert done["reply"] == "Ого, сам программу пишешь?"
+
+
+
+# ── thinking while they talk (2026-10-05) ───────────────────────────────────
+#
+# The owner: «Companion must be thinking while person is speaking». At a pause
+# of theirs he begins a draft for what they have said so far — before Flux has
+# even guessed they have finished — and throws it away if they go on.
+
+def _audio(line, seconds: float) -> None:
+    for _ in range(int(seconds / 0.08)):
+        line.ws.send_bytes(bytes(2560))
+
+
+def test_he_thinks_at_their_pause_before_they_are_done(env):
+    env.mind.replies = ["Ого, сам программу пишешь? А про что она?"]
+    with talk(env) as line:
+        line.ears().send(turn("StartOfTurn", "я сам"), turn("Update", "я сам программу пишу", end=0.5))
+        _audio(line, 0.8)                                   # a pause of theirs, nothing more said
+        wait_until(lambda: len(env.mind.calls) == 1)
+        assert memory.recent_turns(UID) == []               # a guess writes nothing
+        line.ears().send(turn("EagerEndOfTurn", "Я сам программу пишу."),
+                         turn("EndOfTurn", "Я сам программу пишу."))
+        heard = line.expect("heard")
+        done = line.expect("done")
+    assert heard["timing"]["draft_reused"] is True          # the pause's draft, not a new one
+    assert len(env.mind.calls) == 1
+    assert done["reply"] == "Ого, сам программу пишешь? А про что она?"
+
+
+def test_a_thought_they_talked_past_is_thrown_away(env):
+    env.mind.replies = ["Ого, сам?", "А, понятно. И как успехи?"]
+    with talk(env) as line:
+        line.ears().send(turn("StartOfTurn", "я сам"), turn("Update", "я сам программу пишу", end=0.5))
+        _audio(line, 0.8)
+        wait_until(lambda: len(env.mind.calls) == 1)
+        line.ears().send(turn("Update", "я сам программу пишу но уже бросил", end=2.0))
+        line.ears().send(turn("EndOfTurn", "я сам программу пишу но уже бросил"))
+        line.expect("heard")
+        done = line.expect("done")
+    assert done["reply"] == "А, понятно. И как успехи?"
+    assert "Ого," not in line.says()
+    assert roles() == ["user", "assistant"]

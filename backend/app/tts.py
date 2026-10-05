@@ -415,6 +415,13 @@ def mime() -> str:
     return "audio/wav" if config.voice_provider() == "gemini" else "audio/mpeg"
 
 
+def slow_start() -> bool:
+    """Does the voice take a while to make its first sound? Gemini does —
+    0.6–0.9 s, against Fish's ~0.45 — so the live channel starts the next
+    piece's voice sooner (live._AHEAD_WHOLE)."""
+    return config.voice_provider() == "gemini"
+
+
 def streams() -> bool:
     """Does the voice start sounding before the sentence is made? Fish and
     Gemini do; the other providers give a whole file."""
