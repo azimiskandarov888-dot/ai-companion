@@ -116,7 +116,7 @@ def test_the_gemini_voices_get_their_own_tags_and_only_those(monkeypatch):
         assert tts.spoken(f"Ну. {mark} Да.", sounds=True) == "Ну. Да."
     # Angle brackets he writes himself never reach the voice as a tag.
     assert tts.spoken("Ну <laugh> да.", sounds=True) == "Ну laugh да."
-    monkeypatch.setattr(config, "OPENROUTER_API_KEY", "test-key")
+    monkeypatch.setattr(config, "GEMINI_API_KEY", "test-key")
     assert tts.makes_sounds() and tts.makes(body.MARK_LAUGH) and not tts.makes(body.MARK_YAWN)
 
 
@@ -301,53 +301,49 @@ def test_one_line_to_the_voice_stays_open(monkeypatch):
 # --------------------------------------------------------------------------- #
 def test_a_gemini_voice_is_asked_for_by_name_with_whom_it_plays(monkeypatch):
     """voices.py: a voice from the catalog and a line about him — sent as
-    Google's speech_metadata.style; raw audio back."""
+    Google's speech_metadata.style, never read out."""
     from app import voices
 
     monkeypatch.setattr(config, "TTS_PROVIDER", "gemini")
-    monkeypatch.setattr(config, "OPENROUTER_API_KEY", "test-key")
+    monkeypatch.setattr(config, "GEMINI_API_KEY", "google-key")
     key = voices.key({"name": "Zubenelgenubi", "style": "a man of 68, " + voices.MANNER})
-    url, headers, payload = tts._gemini_request("Ого, сам пишешь?", key)
-    assert url.endswith("/audio/speech") and payload["model"] == config.GEMINI_TTS_MODEL
-    assert payload["voice"] == "Zubenelgenubi" and payload["response_format"] == "pcm"
-    style = payload["provider"]["options"]["google-ai-studio"]["speech_metadata"]["style"]
-    assert style.startswith("a man of 68")
+    url, headers, payload = tts._gemini_direct_request("Ого, сам пишешь?", key)
+    [part] = payload["contents"][0]["parts"]
+    assert payload["generationConfig"]["speech_config"] == {"voice_config": {"voice": "Zubenelgenubi"}}
+    assert part["speech_metadata"]["style"].startswith("a man of 68")
     # Somebody who has trouble following him: the voice takes no speed, so it is told.
-    _, _, slower = tts._gemini_request("Ого.", key, rate=tts.SLOWER)
-    assert "slower" in slower["provider"]["options"]["google-ai-studio"]["speech_metadata"]["style"]
+    _, _, slower = tts._gemini_direct_request("Ого.", key, rate=tts.SLOWER)
+    assert "slower" in slower["contents"][0]["parts"][0]["speech_metadata"]["style"]
     # No voice of his own (the template): the owner's best of thirty.
-    _, _, plain = tts._gemini_request("Ого.", None)
-    assert plain["voice"] == tts.GEMINI_DEFAULT
+    _, _, plain = tts._gemini_direct_request("Ого.", None)
+    assert plain["generationConfig"]["speech_config"]["voice_config"]["voice"] == tts.GEMINI_DEFAULT
 
 
 def test_the_gemini_voice_reaches_a_file_as_wav(monkeypatch):
-    """It gives raw audio; the phone plays files — so it is wrapped, and the
+    """The same stream, gathered and wrapped — the phone plays files — and the
     file is said to be what it is."""
     import io
     import wave
 
-    monkeypatch.setattr(config, "TTS_PROVIDER", "gemini")
-    monkeypatch.setattr(config, "OPENROUTER_API_KEY", "test-key")
-    pcm = b"\x01\x00" * 2400
-
-    def answer(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(200, content=pcm, headers={"content-type": "audio/pcm;rate=24000;channels=1"})
-
-    monkeypatch.setattr(tts, "_client", httpx.AsyncClient(transport=httpx.MockTransport(answer)))
-    monkeypatch.setattr(tts, "_client_loop", None)
+    _google_and_router(monkeypatch)
     made = asyncio.run(tts.synthesize("Привет."))
     with wave.open(io.BytesIO(made)) as w:
-        assert w.getframerate() == 24000 and w.getnchannels() == 1 and w.readframes(10_000) == pcm
+        assert w.getframerate() == 24000 and w.getnchannels() == 1
+        assert w.readframes(10_000) == b"\x01\x00" * 4 + b"\x02\x00" * 4
     assert tts.mime() == "audio/wav"
     monkeypatch.setattr(config, "TTS_PROVIDER", "fish")
     assert tts.mime() == "audio/mpeg"
 
 
-def test_gemini_through_openrouter_is_whole_and_fish_streams(monkeypatch):
+def test_the_gemini_voice_streams_or_is_not_there(monkeypatch):
+    """The owner: «We are never going to use non-streaming voice». No Google
+    key, no Gemini voice — and nothing whole stands in for it."""
     monkeypatch.setattr(config, "TTS_PROVIDER", "gemini")
-    assert not tts.streams()
-    monkeypatch.setattr(config, "TTS_PROVIDER", "fish")
-    assert tts.streams()
+    monkeypatch.setattr(config, "OPENROUTER_API_KEY", "router-key")
+    monkeypatch.setattr(config, "GEMINI_API_KEY", None)
+    assert not tts.configured()
+    monkeypatch.setattr(config, "GEMINI_API_KEY", "google-key")
+    assert tts.configured() and tts.streams()
 
 
 def _google_and_router(monkeypatch, google_status: int = 200):
@@ -376,7 +372,6 @@ def _google_and_router(monkeypatch, google_status: int = 200):
     monkeypatch.setattr(config, "OPENROUTER_API_KEY", "router-key")
     monkeypatch.setattr(tts, "_client", httpx.AsyncClient(transport=httpx.MockTransport(answer)))
     monkeypatch.setattr(tts, "_client_loop", None)
-    monkeypatch.setattr(tts, "_direct_refused", False)
     return asked
 
 
@@ -399,12 +394,16 @@ def test_on_google_s_own_key_the_voice_streams(monkeypatch):
     assert part["text"] == "Ого." and part["speech_metadata"]["style"]   # whom he plays, never read
 
 
-def test_when_google_refuses_the_voice_goes_through_openrouter(monkeypatch):
-    """A refusal before the first sound costs the stream, never the voice."""
-    asked = _google_and_router(monkeypatch, google_status=400)
+def test_when_google_refuses_it_is_said_and_nothing_whole_stands_in(monkeypatch):
+    """A refusal is the turn's trouble, told to the phone (live.py) — never a
+    slower voice made whole somewhere else."""
+    import pytest
+
+    asked = _google_and_router(monkeypatch, google_status=429)
 
     async def hear():
         return [piece async for piece in tts.stream("Ого.")]
 
-    assert asyncio.run(hear()) == [(24000, b"\x03\x00" * 4)]
-    assert asked == ["generativelanguage.googleapis.com", "openrouter.ai"]
+    with pytest.raises(RuntimeError, match="429"):
+        asyncio.run(hear())
+    assert asked == ["generativelanguage.googleapis.com"]

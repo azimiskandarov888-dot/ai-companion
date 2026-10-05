@@ -227,13 +227,12 @@ EMBEDDING_DIM: int = int(os.getenv("EMBEDDING_DIM", "512"))
 # it is. Leaving the female one empty falls back to the other — the old
 # behaviour, kept so nothing silently stops speaking.
 # Which voice provider speaks Bob's replies:
-#   "gemini"     — Google's Gemini voices (GEMINI_TTS_MODEL), through OpenRouter.
+#   "gemini"     — Google's Gemini voices (GEMINI_TTS_MODEL), streamed on Google's key.
 #                  THE DEFAULT SINCE 2026-10-03: the owner heard 21 voices of
 #                  five makers blind, and all six he liked were Gemini's; then
 #                  all thirty of Gemini's: «all of them are briliant». Every
-#                  companion gets one of his own (voices.py). Through OpenRouter
-#                  the sound comes whole, not as a stream: ~1.4 s plus ~0.25 s
-#                  a second of speech (docs/VOICES-RU.md, docs/WHY-LIVE-IS-FAST.md).
+#                  companion gets one of his own (voices.py). Streamed only —
+#                  the owner: «We are never going to use non-streaming voice».
 #   "yandex"     — Yandex SpeechKit. Cheapest for Russian by a distance, and
 #                  the most Russian-sounding. See docs/HIS-VOICE.md.
 #   "openai"     — same key as the ears; takes a direction on HOW to speak.
@@ -261,10 +260,10 @@ TTS_PROVIDER: str = os.getenv("TTS_PROVIDER", "gemini").strip().lower()
 #: costs $6 a million sound tokens to Flash's $9.
 GEMINI_TTS_MODEL: str = os.getenv("GEMINI_TTS_MODEL", "google/gemini-3.8-flash-lite-tts")
 #: Google's own key for the same voices (aistudio.google.com → «Get API key»).
-#: With it the voice comes as a STREAM — the first sound while the rest is
-#: still being made — through the Gemini API (Interactions API); OpenRouter
-#: gives the same voice only whole (docs/WHY-LIVE-IS-FAST.md). Without it, or
-#: if Google refuses, the voice goes through OpenRouter as before.
+#: The voice comes as a STREAM on it — the first sound while the rest is still
+#: being made (tts._gemini_direct_stream). Without it there is no server voice.
+#: Google's free tier allows 10 requests a day per model: a conversation needs
+#: billing on the Google project.
 GEMINI_API_KEY: str | None = os.getenv("GEMINI_API_KEY")
 
 # Fish Audio (https://fish.audio) — the default voice.
@@ -371,7 +370,7 @@ def tts_configured() -> bool:
     """Is the selected voice provider set up? If not, the client speaks free."""
     provider = voice_provider()
     if provider == "gemini":
-        return bool(GEMINI_API_KEY or OPENROUTER_API_KEY)
+        return bool(GEMINI_API_KEY)
     if provider == "fish":
         return bool(FISH_API_KEY)
     if provider == "openrouter":
