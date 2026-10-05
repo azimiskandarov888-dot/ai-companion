@@ -1237,7 +1237,16 @@ def _after(moment: float | None, start: float | None) -> float | None:
 
 
 def _log(stage: str, error: BaseException | None) -> None:
-    print(f"\n  ✗ {stage} failed\n    {error}\n", file=sys.stderr, flush=True)
+    # The kind as well as the words — a timeout says nothing in words at all —
+    # and where it came from: «the brain / the voice» is two suspects.
+    told = f"{type(error).__name__}: {error}" if error is not None else "—"
+    where = ""
+    if error is not None and error.__traceback__ is not None:
+        import traceback
+
+        frames = traceback.extract_tb(error.__traceback__)[-3:]
+        where = "".join(f"\n      at {f.filename.rsplit('/', 1)[-1]}:{f.lineno} {f.name}" for f in frames)
+    print(f"\n  ✗ {stage} failed\n    {told}{where}\n", file=sys.stderr, flush=True)
 
 
 def _track(task: asyncio.Task) -> None:

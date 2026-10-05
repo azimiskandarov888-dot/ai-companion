@@ -226,7 +226,8 @@ async def _make_all(voice: str | None) -> None:
                     _keep(voice, text, take, kept)
                 takes.append(kept)
             except Exception as e:  # noqa: BLE001 — a sound is a nicety, never a failure
-                print(f"[first_sound] could not make {text!r}: {e}", file=sys.stderr, flush=True)
+                print(f"[first_sound] could not make {text!r}: {type(e).__name__}: {e}",
+                      file=sys.stderr, flush=True)
                 break
         if takes:
             _made[(voice, text)] = takes

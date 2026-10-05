@@ -124,7 +124,7 @@ async def main() -> None:
             }
             results.append(r)
             print(f"   reply: «{state['reply']}»", flush=True)
-            if r["first_audio"] is not None:
+            if r["first_audio"] is not None and r["done"] is not None:
                 print(f"   → end of speech → heard {r['heard']:.2f}s, FIRST AUDIO {r['first_audio']:.2f}s, "
                       f"all sent {r['done']:.2f}s | server {r['server_done']}", flush=True)
         await ws.send(json.dumps({"type": "stop"}))
