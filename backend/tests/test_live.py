@@ -829,49 +829,54 @@ def test_a_slow_answer_gets_one_more_sound_and_never_inside_his_words(env, sound
     assert says.count("М-м…") == 1
 
 
-# ── ready before they have finished (2026-10-03) ────────────────────────────
+# ── a guess is written, never voiced (2026-10-05) ───────────────────────────
 #
-# The owner, of Gemini Live: in the wait to be sure you have finished, «they
-# already have everything ready to go». So the draft begun on «похоже,
-# договорил» voices its first piece while the turn may still go on — and when
-# it is certain, that voice is played at once, or thrown away with the draft.
+# The owner, 2026-10-03, of Gemini Live: in the wait to be sure you have
+# finished, «they already have everything ready to go». So the draft begun on
+# «похоже, договорил» is written while the turn may still go on — and only the
+# brain's: the owner, 2026-10-05, «будет тратить больше денег и лишней
+# энергии». Its voice is asked for once the turn is certain, which on the real
+# ears came before its first piece was even written (live.py).
 
-def test_his_first_words_are_voiced_while_they_may_still_be_talking(env):
+def test_a_guess_is_written_but_never_voiced(env):
     env.mind.replies = ["Ого, сам программу пишешь? А про что она?"]
     with talk(env) as line:
         line.ears().send(turn("StartOfTurn", "я сам"), turn("EagerEndOfTurn", "я сам программу пишу"))
-        wait_until(lambda: len(env.voice.texts) == 2)
-        assert env.voice.texts == ["Ого,", "сам программу пишешь?"]   # his first pieces, voiced ahead
-        assert "say" not in line.kinds()                    # …and nothing played yet
+        wait_until(lambda: live._open[UID]._draft is not None and live._open[UID]._draft._finished)
+        assert env.voice.texts == []                        # the brain wrote it; nobody voiced it
+        assert "say" not in line.kinds()
         line.ears().send(turn("EndOfTurn", "я сам программу пишу"))
-        line.expect("heard")
+        heard = line.expect("heard")
         done = line.expect("done")
+    assert heard["timing"]["draft_reused"] is True and heard["timing"]["guesses"] == 1
+    assert env.voice.texts[0] == "Ого," and env.voice.texts.count("Ого,") == 1
     assert after_heard(line)[0] == "Ого,"
-    assert env.voice.texts.count("Ого,") == 1               # made once, not again
     assert done["reply"] == "Ого, сам программу пишешь? А про что она?"
     assert done["timing"]["first_piece"] is not None
+    assert done["timing"]["head_waited"] > 0                # written before the turn was certain
 
 
-def test_a_draft_they_talked_past_throws_its_voice_away(env):
+def test_a_guess_they_talked_past_never_reached_the_voice(env):
     env.mind.replies = ["Ого, сам программу пишешь?", "А, понятно. И как успехи?"]
     with talk(env) as line:
         line.ears().send(turn("StartOfTurn", "я сам"), turn("EagerEndOfTurn", "я сам программу пишу"))
-        wait_until(lambda: env.voice.texts)
+        wait_until(lambda: live._open[UID]._draft is not None and live._open[UID]._draft.opening)
         line.ears().send(turn("TurnResumed", "я сам программу пишу"),
                          turn("EndOfTurn", "я сам программу пишу но уже бросил"))
         line.expect("heard")
         done = line.expect("done")
-    assert "Ого," not in line.says()                         # the guess was never heard
+    assert not any(text.startswith("Ого") for text in env.voice.texts)   # not even made
+    assert "Ого," not in line.says()
     assert done["reply"] == "А, понятно. И как успехи?"
     assert roles() == ["user", "assistant"]
 
 
 def test_a_first_word_that_is_ready_needs_no_sound_before_it(env, sounds):
+    first_sound._made[(his_voice(), "Ого,")] = [(16000, b"OG")]
     env.mind.replies = ["Ого, сам программу пишешь?"]
     with talk(env) as line:
         line.ears().send(turn("StartOfTurn", "я сам"), turn("EagerEndOfTurn", "я сам программу пишу"))
-        wait_until(lambda: env.voice.texts)
-        time.sleep(0.05)                                     # its first sound is in
+        wait_until(lambda: live._open[UID]._draft is not None and live._open[UID]._draft.opening)
         line.ears().send(turn("EndOfTurn", "я сам программу пишу"))
         line.expect("heard")
         done = line.expect("done")
@@ -879,18 +884,21 @@ def test_a_first_word_that_is_ready_needs_no_sound_before_it(env, sounds):
     assert done["timing"]["head_ready"] is True
 
 
-def test_his_sound_never_says_the_word_his_voiced_answer_opens_with(env, sounds):
+def test_a_written_answer_drops_the_word_his_sound_has_just_said(env, sounds):
+    """Nothing of a guess is voiced, so its first word can still go: «Хм…» at
+    once, then «Ну я не знаю» — not «Хм…» and then «Хм, ну»."""
     first_sound._made.pop((his_voice(), "М-м…"))             # only «Хм…» left to make
     env.mind.replies = ["Хм, ну я не знаю. Наверное, стоит."]
-    env.voice.delay = 0.2                                    # the head is not ready in time
     with talk(env) as line:
         line.ears().send(turn("StartOfTurn", "а ты"),
                          turn("EagerEndOfTurn", "а ты как думаешь, стоит идти?"))
-        wait_until(lambda: env.voice.texts)
+        wait_until(lambda: live._open[UID]._draft is not None and live._open[UID]._draft.opening)
         line.ears().send(turn("EndOfTurn", "а ты как думаешь, стоит идти?"))
         line.expect("heard")
-        line.expect("done")
-    assert "Хм…" not in after_heard(line)                    # not «Хм…» and then «Хм, ну»
+        done = line.expect("done")
+    says = after_heard(line)
+    assert says[0] == "Хм…" and says[1].startswith("Ну я не знаю")
+    assert done["reply"] == "Хм, ну я не знаю. Наверное, стоит."   # what he meant, kept whole
 
 
 def test_a_whole_voice_keeps_two_pieces_in_the_making(env, monkeypatch):
@@ -924,7 +932,7 @@ def test_the_brain_reads_ahead_on_the_first_turn_and_after_a_pause(env, monkeypa
         wait_until(lambda: len(read) == 2)
 
 
-def test_a_vow_his_voiced_head_breaks_is_never_said_and_noted_once_real(env, monkeypatch):
+def test_a_vow_a_guess_breaks_is_never_said_and_noted_once_real(env, monkeypatch):
     noted: list[str] = []
     monkeypatch.setattr(vow, "note", lambda user_id, slip, said: noted.append(slip))
     env.mind.replies = ["Я всего лишь программа, понимаешь. Но мне интересно."]
@@ -946,7 +954,7 @@ def test_his_usual_first_word_is_played_ready_made_without_asking_the_voice(env)
     env.mind.replies = ["Ого, сам программу пишешь?"]
     with talk(env) as line:
         line.ears().send(turn("StartOfTurn", "я сам"), turn("EagerEndOfTurn", "я сам программу пишу"))
-        wait_until(lambda: live._open[UID]._draft is not None and live._open[UID]._draft.head is not None)
+        wait_until(lambda: live._open[UID]._draft is not None and live._open[UID]._draft.opening)
         line.ears().send(turn("EndOfTurn", "я сам программу пишу"))
         line.expect("heard")
         done = line.expect("done")
@@ -957,43 +965,104 @@ def test_his_usual_first_word_is_played_ready_made_without_asking_the_voice(env)
 
 
 
-# ── thinking while they talk (2026-10-05) ───────────────────────────────────
+# ── thinking while they talk, and what it costs (2026-10-05) ────────────────
 #
-# The owner: «Companion must be thinking while person is speaking». At a pause
-# of theirs he begins a draft for what they have said so far — before Flux has
-# even guessed they have finished — and throws it away if they go on.
+# The owner: «Companion must be thinking while person is speaking» — and then,
+# of a draft at every pause: «будет тратить больше денег и лишней энергии».
+# He thinks where the ears say they may have finished, and nowhere else.
 
 def _audio(line, seconds: float) -> None:
     for _ in range(int(seconds / 0.08)):
         line.ws.send_bytes(bytes(2560))
 
 
-def test_he_thinks_at_their_pause_before_they_are_done(env):
+def test_a_pause_of_theirs_is_not_paid_for(env):
+    """Flux sends the words every quarter second, the last ending ~0.16 s
+    behind the voice, so a draft «at every 0.2 s pause» was a draft at nearly
+    every message: 69 for five turns on the real ears. A pause costs nothing
+    now."""
     env.mind.replies = ["Ого, сам программу пишешь? А про что она?"]
     with talk(env) as line:
         line.ears().send(turn("StartOfTurn", "я сам"), turn("Update", "я сам программу пишу", end=0.5))
         _audio(line, 0.8)                                   # a pause of theirs, nothing more said
-        wait_until(lambda: len(env.mind.calls) == 1)
-        assert memory.recent_turns(UID) == []               # a guess writes nothing
-        line.ears().send(turn("EagerEndOfTurn", "Я сам программу пишу."),
-                         turn("EndOfTurn", "Я сам программу пишу."))
+        time.sleep(0.2)
+        assert env.mind.calls == []                          # nobody asked the brain
+        line.ears().send(turn("EagerEndOfTurn", "Я сам программу пишу."))
+        wait_until(lambda: len(env.mind.calls) == 1)         # the ears' guess: now he thinks
+        line.ears().send(turn("EndOfTurn", "Я сам программу пишу."))
         heard = line.expect("heard")
-        done = line.expect("done")
-    assert heard["timing"]["draft_reused"] is True          # the pause's draft, not a new one
+        line.expect("done")
+    assert heard["timing"]["draft_reused"] is True
     assert len(env.mind.calls) == 1
-    assert done["reply"] == "Ого, сам программу пишешь? А про что она?"
 
 
-def test_a_thought_they_talked_past_is_thrown_away(env):
-    env.mind.replies = ["Ого, сам?", "А, понятно. И как успехи?"]
+def test_no_more_than_three_guesses_a_turn(env):
+    """A turn that keeps stopping and going on is not paid for at every stop
+    (LiveKit's max_retries, 3): after three, «договорил» begins the draft."""
+    env.mind.delay = 0.01
     with talk(env) as line:
-        line.ears().send(turn("StartOfTurn", "я сам"), turn("Update", "я сам программу пишу", end=0.5))
-        _audio(line, 0.8)
+        ears = line.ears()
+        said = "я"
+        ears.send(turn("StartOfTurn", said))
+        for n, word in enumerate(("думаю", "что", "завтра", "поеду"), start=1):
+            said = f"{said} {word}"
+            ears.send(turn("EagerEndOfTurn", said))
+            if n <= 3:
+                wait_until(lambda: len(env.mind.calls) == n)
+            else:
+                time.sleep(0.1)
+            ears.send(turn("TurnResumed", said))
+        time.sleep(0.05)
+        assert len(env.mind.calls) == 3                      # the fourth guess was not taken
+        said = f"{said} к маме"
+        ears.send(turn("EagerEndOfTurn", said), turn("EndOfTurn", said))
+        heard = line.expect("heard")
+        line.expect("done")
+    assert heard["timing"]["guesses"] == 3 and heard["timing"]["draft_reused"] is False
+    assert len(env.mind.calls) == 4
+    assert memory.recent_turns(UID)[0]["content"] == "я думаю что завтра поеду к маме"
+
+
+def test_the_next_turn_may_guess_again(env):
+    env.mind.delay = 0.01
+    with talk(env) as line:
+        ears = line.ears()
+        for n, word in enumerate(("раз", "два", "три"), start=1):
+            ears.send(turn("EagerEndOfTurn", f"ну {word}"))
+            wait_until(lambda: len(env.mind.calls) == n)
+            ears.send(turn("TurnResumed", f"ну {word}"))
+        ears.send(turn("EndOfTurn", "ну раз два три"))
+        line.expect("done")
+        ears.send(turn("StartOfTurn", "а"), turn("EagerEndOfTurn", "а теперь"))
+        wait_until(lambda: len(env.mind.calls) == 5)         # three guesses, an answer, a new guess
+
+
+def test_a_guess_thrown_away_opens_the_line_to_the_brain_again(env, monkeypatch):
+    """Cut off half-way, a reply takes its connection with it; the next one
+    would begin with a handshake (+0.2 s, measured) — so it is opened again at
+    once, while they are still talking."""
+    opened: list[str] = []
+
+    async def warm():
+        opened.append("brain")
+
+    monkeypatch.setattr(brain, "warm", warm)
+    env.mind.delay = 0.05
+    with talk(env) as line:
+        wait_until(lambda: opened == ["brain"])              # as the conversation opens
+        line.ears().send(turn("StartOfTurn", "я вот"), turn("EagerEndOfTurn", "я вот думаю"))
         wait_until(lambda: len(env.mind.calls) == 1)
-        line.ears().send(turn("Update", "я сам программу пишу но уже бросил", end=2.0))
-        line.ears().send(turn("EndOfTurn", "я сам программу пишу но уже бросил"))
-        line.expect("heard")
-        done = line.expect("done")
-    assert done["reply"] == "А, понятно. И как успехи?"
-    assert "Ого," not in line.says()
-    assert roles() == ["user", "assistant"]
+        line.ears().send(turn("TurnResumed", "я вот думаю"))
+        wait_until(lambda: len(opened) == 2)
+
+
+def test_two_lines_to_a_voice_that_makes_two_pieces_at_once(env, monkeypatch):
+    asked: list[int] = []
+
+    async def warm(lines=1):
+        asked.append(lines)
+
+    monkeypatch.setattr(tts, "warm", warm)
+    monkeypatch.setattr(tts, "slow_start", lambda: True)
+    with talk(env):
+        wait_until(lambda: asked == [live._AHEAD_WHOLE])

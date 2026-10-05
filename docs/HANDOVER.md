@@ -108,7 +108,7 @@ Measured end to end with `backend/live_check/client.py` — three spoken turns, 
 What changed:
 - **Gemma's hosts are pinned** — ModelRun, DeepInfra turbo, CoreWeave (`config.CHAT_PROVIDERS_FOR`). Asked to «sort by latency», OpenRouter had sent her to SiliconFlow. One host for a whole conversation keeps the prompt cached; it stays cached 2–4 minutes.
 - **The brain reads ahead** while they talk (`brain.prewarm`).
-- **The draft's first piece is voiced** while the turn may still go on (`live.Draft.voice_head`).
+- **A draft is begun only on Flux's «похоже, договорил», at most three a turn, and nothing of it is voiced until «договорил»** (2026-10-05). A draft at every 0.2 s pause had begun 69 replies for five turns on the real ears; this begins 10, at the same speed (docs/WHY-LIVE-IS-FAST.md, «5.10»).
 - **The first piece ends at the first pause** (`tts.first_pause`).
 - **His thirty most common first words are made ahead** in his voice and kept on disk (`first_sound.REACTIONS`).
 - **The voice is Gemini, from a catalog** — every companion has his own voice and a «whom he plays» line, kept in his persona (`voices.py`).

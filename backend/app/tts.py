@@ -583,8 +583,11 @@ def _line() -> httpx.AsyncClient:
     return _client
 
 
-async def warm() -> None:
-    """Open the line to the voice before it is needed (see brain.warm). Never
+async def warm(lines: int = 1) -> None:
+    """Open the line to the voice before it is needed (see brain.warm) — or
+    `lines` of them, for pieces made side by side (live._AHEAD_WHOLE): one
+    connection carries one piece at a time, and a second piece asked for while
+    the first is still coming would otherwise begin with a handshake. Never
     raises, costs nothing."""
     provider = config.voice_provider()
     url = ("https://generativelanguage.googleapis.com/" if provider == "gemini" and config.GEMINI_API_KEY
@@ -593,10 +596,8 @@ async def warm() -> None:
            else None)
     if url is None:
         return
-    try:
-        await _line().head(url)
-    except Exception:  # noqa: BLE001 — a warm-up that fails costs nothing
-        pass
+    # Side by side, so each takes a line of its own.
+    await asyncio.gather(*(_line().head(url) for _ in range(max(1, lines))), return_exceptions=True)
 
 
 def _fish_request(text: str, voice: str | None, fmt: str) -> tuple[str, dict, dict]:

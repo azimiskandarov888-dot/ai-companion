@@ -7,14 +7,30 @@ all of it — and only then did anything play. About 6.5 s, every turn
 (docs/LATENCY.md). Here every runner starts early:
 
     the phone streams the microphone          → Flux hears it as it is said
-    somebody starts talking                   → the brain reads ahead (prewarm)
-    a pause of theirs (0.2 s)                 → a DRAFT reply is already being
-                                                written, its first pieces voiced —
-                                                he thinks while they talk
-    Flux: «похоже, договорил» (~0.34 s)       → that draft, if they said no more
-    Flux: «договорил» (~0.63 s)               → the draft becomes the answer
-    its first pause («Ого,»)                  → that voice is played
+    somebody starts talking                   → the brain reads ahead (prewarm),
+                                                if it has been quiet a while
+    Flux: «похоже, договорил» (~0.37 s)       → a DRAFT reply is already being
+                                                written — by the brain alone
+    Flux: «договорил» (~0.64 s)               → the draft becomes the answer, and
+                                                only now is any of it voiced
+    its first pause («Ого,»)                  → that piece to the voice (or ready-made)
     first bytes of his voice                  → straight to the phone, played
+
+── THINKING WHILE THEY TALK, AND WHAT IT COSTS ──────────────────────────────
+
+The owner, 2026-10-05, of drafting at every pause: «будет тратить больше
+денег и лишней энергии». Measured on the real ears (Flux, five phrases, two
+with pauses inside): a draft at every 0.2 s pause began 69 replies for five
+turns, against 10 begun at «похоже, договорил». Flux sends the words about
+every quarter second, the last of them ending ~0.16 s behind the voice, so
+«0.2 s since the last word» was true between nearly any two of its messages.
+Every draft is the whole prompt, paid for. So a draft is begun only where the ears judge,
+by meaning and intonation, that the person may have finished — and at most
+_GUESSES times a turn — as Deepgram, LiveKit and Pipecat all do.
+
+And none of it is voiced until the turn is certain: on all five, «договорил»
+came before the draft had written its first piece — waiting for it cost
+nothing, and a guess thrown away costs no voice (LiveKit's own default).
 
 ── THE WIRE ────────────────────────────────────────────────────────────────
 
@@ -105,20 +121,11 @@ _FILL = 0.25
 #: plays, the rest of the sentence is being made.
 _AHEAD = 1
 _AHEAD_WHOLE = 2
-#: How many pieces of a draft are voiced before the turn is certain — his first
-#: words, and what follows them, so neither waits once it is.
-_PREVOICE = 2
-#: He starts thinking at a pause of theirs this long — while they may still be
-#: talking: the owner, «Companion must be thinking while person is speaking».
-#: Flux's own «похоже, договорил» comes ~0.37 s after the last word; a draft
-#: begun here is a fifth of a second ahead of it, and is thrown away, with its
-#: voice, the moment they say another word.
-_THINK_AT_PAUSE = 0.2
-#: …once they have said this much: «Я» is not yet something to answer.
-_THINK_FROM_WORDS = 2
-#: A sound of his that went out this long before a draft was born, or any time
-#: after, is one its first words must not say again (first_sound.without_repeat).
-_ECHOED_WITHIN = 0.5
+#: Drafts begun on a guess («похоже, договорил») in one turn, at most — then
+#: only «договорил» begins one. LiveKit's default too (max_retries 3): a turn
+#: that keeps stopping and going on would otherwise be paid for again at
+#: every stop.
+_GUESSES = 3
 #: A microphone frame bigger than this is not a microphone.
 _MAX_FRAME = 64 * 1024
 #: How long the phone has to say who it is before the line is closed.
@@ -232,18 +239,12 @@ class Draft:
 
     Built from main._assemble(pending=True) when there is a transcript (their
     line, not yet theirs for keeps), or from the hello cue when there is none.
-    Nothing it does is written anywhere until the session commits it.
-
-    And its first piece is voiced while they may still be talking
-    (`voice_head`): cut at his first pause, checked like every piece, and its
-    voice made — not played. When their turn is certain, his first word is
-    ready or nearly. The owner, 2026-10-03, of Gemini Live: in the wait to be
-    sure you have finished, «they already have everything ready to go». A draft
-    thrown away throws its voice away with it: nothing was played, nothing kept.
+    Nothing it does is written anywhere until the session commits it — and
+    nothing of it is voiced until then either (see the module docstring): the
+    answer cuts and voices it once their turn is certain (Session._answer).
     """
 
-    def __init__(self, session: Session, transcript: str | None, *, web: bool = False,
-                 voice_head: bool = False) -> None:
+    def __init__(self, session: Session, transcript: str | None, *, web: bool = False) -> None:
         self.session = session
         self.transcript = transcript
         self.web = web
@@ -256,33 +257,26 @@ class Draft:
         #: When the brain was actually asked — after the prompt was built.
         self.asked: float | None = None
         self.first_words: float | None = None
-        #: The reply so far, for as many readers as want it (texts()).
+        #: When his first piece (up to his first pause) was written — set or
+        #: not by the time their turn is certain, it says whether waiting for
+        #: that certainty kept his voice waiting (timing «head_waited»).
+        self.opened: float | None = None
+        #: The reply so far, for whoever reads it (texts()).
         self._latest = ""
         self._version = 0
         self._finished = False
         self._error: Exception | None = None
         self._waiters: set[asyncio.Event] = set()
-        #: How he says it aloud — one per reply, the voiced head included.
+        #: How he says it aloud — one per reply.
         self.speaker = aloud.Speaker(young=aloud.young(session.who))
-        #: The pieces voiced ahead — (what he means, how he says it, its voice) —
-        #: how much of the reply they took, and when the first was cut.
-        self.voiced: list[tuple[str, str, _Voicing]] = []
-        self.head_end = 0
-        self.head_at: float | None = None
-        #: Pieces that broke a vow, kept to be noted once the turn is real.
-        self.slips: list[tuple[str, str]] = []
-        self.head_done = asyncio.Event()
         self._task = asyncio.create_task(self._write())
-        self._head: asyncio.Task | None = None
-        if voice_head:
-            self._head = asyncio.create_task(self._voice_ahead())
-        else:
-            self.head_done.set()
 
     @property
-    def head(self) -> tuple[str, str, _Voicing] | None:
-        """His first piece, voiced ahead — or None."""
-        return self.voiced[0] if self.voiced else None
+    def opening(self) -> str:
+        """His first piece, as far as it is written — up to his first pause —
+        or "" while it is not."""
+        at = tts.first_pause(self._latest)
+        return self._latest[:at].strip() if at else ""
 
     async def _write(self) -> None:
         from . import main as app_main  # the one place what he knows is decided
@@ -319,6 +313,8 @@ class Draft:
     def _publish(self, text: str) -> None:
         self._latest = text
         self._version += 1
+        if self.opened is None and tts.first_pause(text):
+            self.opened = time.monotonic()
         self._wake()
 
     def _finish(self, error: Exception | None = None) -> None:
@@ -332,27 +328,11 @@ class Draft:
 
     def drop(self) -> None:
         self._task.cancel()
-        if self._head is not None:
-            self._head.cancel()
-        for *_, voicing in self.voiced:
-            voicing.cancel()
-
-    async def take_over(self) -> None:
-        """The answer takes what was voiced ahead: once the first piece is
-        decided, nothing more is cut here (the answer cuts the rest)."""
-        await self.head_done.wait()
-        if self._head is not None and not self._head.done():
-            self._head.cancel()
-            try:
-                await self._head
-            except asyncio.CancelledError:
-                pass
 
     async def texts(self) -> AsyncIterator[str]:
         """The reply as it grows: all of what is written so far at once, then
         each newer version; the last one is the finished reply. A failure of
-        the brain is raised here, to the one who is waiting on it. Any number
-        of readers may follow it — the voiced head, then the answer."""
+        the brain is raised here, to the one who is waiting on it."""
         seen = 0
         while True:
             if self._version > seen:
@@ -369,58 +349,6 @@ class Draft:
                 await woken.wait()
             finally:
                 self._waiters.discard(woken)
-
-    async def _voice_ahead(self) -> None:
-        """Its first pieces, while their turn may still go on: the first cut at
-        the reply's first pause, the next at its next sentence, and the voice of
-        each started — not played."""
-        try:
-            final, taken = "", 0
-            async for text in self.texts():
-                final = text
-                while taken < _PREVOICE:
-                    tail = text[self.head_end:]
-                    at = tts.first_pause(tail) if taken == 0 else tts.ready_split(tail, first=False)
-                    if not at:
-                        break
-                    self._take(tail[:at], self.head_end + at, first=taken == 0)
-                    taken += 1
-                    self.head_done.set()
-                if taken >= _PREVOICE:
-                    return
-            rest = final[self.head_end:]
-            for piece in tts.speakable_chunks(rest)[:_PREVOICE - taken]:   # it ended first
-                end = self.head_end + rest.find(piece) + len(piece)
-                self._take(piece, end, first=taken == 0)
-                rest, taken = final[end:], taken + 1
-                self.head_end = end
-        except asyncio.CancelledError:
-            raise
-        except Exception:  # noqa: BLE001 — the brain's failure reaches _answer through texts()
-            pass
-        finally:
-            self.head_done.set()
-
-    def _take(self, piece: str, end: int, *, first: bool) -> None:
-        """The checks every piece gets (live.Session._answer), done ahead."""
-        self.head_end = end
-        session = self.session
-        if first:
-            self.head_at = time.monotonic()
-            if session._sound_at >= self.born - _ECHOED_WITHIN:
-                piece = first_sound.without_repeat(piece.strip(), session._sound_text)
-        piece = piece.strip()
-        if not piece:
-            return
-        if slip := vow.broken(piece):
-            self.slips.append((slip, piece))
-            return
-        if not tts.audible(piece):
-            return
-        heard = self.speaker.say(piece)
-        voice = self.voice or session.voice
-        self.voiced.append((piece, heard, _Voicing.first(heard, voice) if not self.voiced
-                            else _Voicing(heard, voice)))
 
 
 class _Voicing:
@@ -526,10 +454,8 @@ class Session:
         self._rng = random.Random()
         #: His words are going out: no sound of his may cut into them.
         self._answering_aloud = False
-        #: What they have said so far in this turn, and where (seconds of the
-        #: audio Flux was sent) its last word ended — to think at a pause.
-        self._partial = ""
-        self._partial_end: float | None = None
+        #: Drafts begun on a guess in the turn they are in (_GUESSES).
+        self._guesses = 0
 
     # ── talking to the phone ────────────────────────────────────────────────
 
@@ -692,7 +618,6 @@ class Session:
         await self.ears.hear(pcm)
         self._clock += len(pcm) / (2 * hearing.RATE)
         self._arrivals.append((self._clock, now))
-        self._think_at_pause()
 
     async def _on_control(self, raw: str) -> None:
         try:
@@ -717,7 +642,6 @@ class Session:
                 await self.ears.hear(silence)
                 self._clock += _FILL
                 self._arrivals.append((self._clock, now))
-                self._think_at_pause()
             idle = now - self._last_life > config.LIVE_IDLE_SECONDS
             busy = self._reply is not None and not self._reply.done()
             if idle and not busy and self._mic_open():
@@ -748,6 +672,7 @@ class Session:
                         # That turn was his voice, and it is over. Not on the
                         # «похоже» before it: the same turn's EndOfTurn follows.
                         self._over_him = False
+                        self._guesses = 0
                     continue
                 await self._on_start_of_turn()
                 text = their_part(text, self._said)
@@ -756,8 +681,9 @@ class Session:
                 if event in ("StartOfTurn", "Update") and text != self._heard_so_far:
                     self._heard_so_far = text
                     await self._send({"kind": "hearing", "text": text})
-            if event in ("StartOfTurn", "Update"):
-                self._heard_more(text, message)
+            if (event in ("StartOfTurn", "Update") and self._draft is not None
+                    and not _same(self._draft.transcript, text)):
+                self._drop_draft()   # they said more: a draft for a turn that did not happen
             if event == "StartOfTurn":
                 await self._on_start_of_turn()
             elif event == "EagerEndOfTurn":
@@ -767,8 +693,8 @@ class Session:
             elif event == "EndOfTurn":
                 self._heard_so_far = ""
                 self._over_him = False
-                self._partial, self._partial_end = "", None
                 await self._on_end_of_turn(text, message)
+                self._guesses = 0
 
     # ── turns ───────────────────────────────────────────────────────────────
 
@@ -778,7 +704,8 @@ class Session:
         self._warmed = time.monotonic()
 
         async def both() -> None:
-            await asyncio.gather(brain.warm(), tts.warm(), return_exceptions=True)
+            lines = _AHEAD_WHOLE if tts.slow_start() else _AHEAD   # as many as _answer keeps going
+            await asyncio.gather(brain.warm(), tts.warm(lines), return_exceptions=True)
 
         _track(asyncio.create_task(both()))
 
@@ -807,47 +734,26 @@ class Session:
         if self._voicing and not self.duplex:
             return   # cannot be them: the microphone is closed while he speaks
         reply.cancel()
+        self._warm()   # what he was saying took its lines with it (_drop_draft)
         self._playing_until = time.monotonic()
         await self._send({"kind": "interrupted"})
 
-    def _heard_more(self, text: str, message: dict) -> None:
-        """They are talking: what they have said so far, and where it ended. A
-        draft written for less than this is for a turn that did not happen."""
-        try:
-            self._partial_end = float((message.get("words") or [])[-1]["end"])
-        except (IndexError, KeyError, TypeError, ValueError):
-            self._partial_end = None
-        self._partial = text
-        if self._draft is not None and not _same(self._draft.transcript, text):
-            self._drop_draft()
-
-    def _think_at_pause(self) -> None:
-        """He thinks while they talk: at a pause of _THINK_AT_PAUSE, a draft for
-        what they have said so far — begun before Flux has even guessed they
-        have finished, and thrown away if they go on (_heard_more)."""
-        if (self._partial_end is None or self._over_him
-                or self._clock - self._partial_end < _THINK_AT_PAUSE):
-            return
-        text = self._partial
-        if len(_words(text)) < _THINK_FROM_WORDS:
-            return
-        if self._draft is not None and _same(self._draft.transcript, text):
-            return
-        self._think(text)
-
     def _think(self, text: str) -> None:
-        """A draft for what they have said — in case it is all they will say."""
+        """A draft for what they have said — in case it is all they will say.
+        The brain only (Draft), and at most _GUESSES a turn."""
         if not text or brain.wants_fresh_info(text):
             return   # a search is seconds and money; not on a guess
+        if self._guesses >= _GUESSES:
+            return   # «договорил» will begin one
         self._drop_draft()
         if allowance.check(self.user_id).allowed:
-            self._draft = Draft(self, text, voice_head=True)
+            self._guesses += 1
+            self._draft = Draft(self, text)
             self._read_at = time.monotonic()
 
     def _on_eager(self, text: str) -> None:
-        """«Похоже, договорил» — writing, in case they have (if it has not begun
-        at their pause already); and, as a listener does in a pause, perhaps
-        say «м-м»."""
+        """«Похоже, договорил» — writing, in case they have; and, as a listener
+        does in a pause, perhaps say «м-м»."""
         self._sound_in_pause(text)
         if self._draft is not None and _same(self._draft.transcript, text):
             return
@@ -869,16 +775,15 @@ class Session:
         if made:
             _track(asyncio.create_task(self._send_sound(*made)))
 
-    async def _sound_at_end(self, transcript: str, before: str = "") -> None:
+    async def _sound_at_end(self, transcript: str) -> None:
         """Their turn is over: his first sound, at once — unless the «м-м» that
-        went into their last pause a moment ago already was it. Never the word
-        his answer, already voiced, opens with (`before`)."""
+        went into their last pause a moment ago already was it."""
         kind = first_sound.at_end(transcript)
         if kind is None or time.monotonic() - self._sound_at < first_sound.SPACING_AT_END:
             return
         if self._rng.random() >= first_sound.CHANCE_AT_END:
             return
-        made = first_sound.pick(self.voice, kind, self._rng, avoid=self._sound_text, before=before)
+        made = first_sound.pick(self.voice, kind, self._rng, avoid=self._sound_text)
         if made:
             await self._send_sound(*made)
 
@@ -895,9 +800,15 @@ class Session:
             await self._send_sound(*made)
 
     def _drop_draft(self) -> None:
+        """A draft that will not be said, thrown away — and the line to the
+        brain opened again at once, while they talk. A reply cut off half-way
+        takes its connection with it (HTTP/1.1 keeps one only for a reply read
+        to its end), and the next draft would begin with a handshake: +0.2 s
+        from Tashkent (measured 2026-10-05). The opening is free (brain.warm)."""
         if self._draft is not None:
             self._draft.drop()
             self._draft = None
+            _track(asyncio.create_task(brain.warm()))
 
     async def _on_end_of_turn(self, text: str, message: dict) -> None:
         ended = time.monotonic()
@@ -931,7 +842,10 @@ class Session:
         await self._send({
             "kind": "heard",
             "transcript": text,
-            "timing": {"end_of_turn": _after(ended, speech_end), "draft_reused": reused},
+            # «guesses»: drafts begun before this turn was certain — what the
+            # thinking ahead cost, the one that became the answer included.
+            "timing": {"end_of_turn": _after(ended, speech_end), "draft_reused": reused,
+                       "guesses": self._guesses},
         })
         self._reply = asyncio.create_task(
             self._answer(draft, ended, speech_end=speech_end, reused=reused)
@@ -985,8 +899,7 @@ class Session:
 
         async def cut() -> None:
             nonlocal final
-            # What the voiced head took is already said, or was rightly not.
-            committed, first = draft.head_end, not draft.voiced
+            committed, first = 0, True
             try:
                 async for text in draft.texts():
                     final = text
@@ -1047,12 +960,14 @@ class Session:
 
         voice = self.voice
         try:
-            head = draft.head
-            if head is not None and head[2].sounding.is_set():
-                timing["head_ready"] = True   # his first word is there: no «м-м» before it
+            opening = draft.opening   # his first piece, if the brain has got that far
+            if opening and first_sound.reaction(voice, opening) is not None:
+                timing["head_ready"] = True   # written, and ready-made: no «м-м» before it
             elif not hello and not draft.web:
                 # Before anything is waited on: the sound IS the not waiting.
-                await self._sound_at_end(draft.transcript, before=head[0] if head else "")
+                # A sound the answer opens with is taken off the answer (cut):
+                # nothing of it is voiced yet, so it still can be.
+                await self._sound_at_end(draft.transcript)
                 late = asyncio.create_task(self._sound_if_late(ended, draft.transcript))
             if self._sound_at >= start:
                 echoed = self._sound_text
@@ -1062,13 +977,6 @@ class Session:
             if not hello:
                 # From here it is their turn for keeps.
                 watcher = app_main._commit(user_id, draft.transcript, draft.marks)
-            await draft.take_over()          # what was voiced ahead is the answer's now
-            for slip, piece in draft.slips:   # held back by the voicing ahead
-                vow.note(user_id, slip, piece)
-                dropped = True
-            ahead.extend(draft.voiced)
-            if draft.voiced:
-                timing["first_piece"] = _after(draft.head_at, start)
             if draft.web:
                 filler = random.choice(lang.pick(_FILLERS, _FILLERS_EN))
                 if await self._speak_line(filler, voice):
@@ -1131,6 +1039,10 @@ class Session:
                 reply = app_main._body(user_id, reply)
             self._remember(draft, reply, leaving, sounded)
             spent()
+            if draft.opened is not None and draft.opened < ended:
+                # His first piece was written before their turn was certain,
+                # and waited this long for it: what not voicing a guess cost.
+                timing["head_waited"] = _after(ended, draft.opened)
             timing["done"] = _after(time.monotonic(), start)
             await self._send({
                 "kind": "done",
