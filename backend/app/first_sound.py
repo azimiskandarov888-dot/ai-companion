@@ -91,10 +91,16 @@ THINKING_EN = ("Hmm…", "So…", "Mm…")
 REACTIONS = ("Ого,", "Ого…", "Ого.", "Ого!", "Ой,", "Ой…", "Ой!", "Понимаю.", "Понимаю…",
              "Ничего себе.", "Ничего себе!", "Да ты что!", "Ну да,", "Ну?", "Ну…", "Что?",
              "Ага,", "Ага.", "А дальше?", "А там что?", "И что?", "Бывает.", "Круто.",
-             "Это точно.", "Слушай,", "Да ладно,", "Хм,", "Правда?", "Ладно,", "Нет,")
+             "Это точно.", "Слушай,", "Да ладно,", "Хм,", "Правда?", "Ладно,", "Нет,",
+             # …and how Gemma opens (2026-10-07): «Ох... понимаю.», «О... А в какие
+             # игры?», «Да, очень.» — of 577 rehearsed replies, nine models,
+             # only 2–15% opened with one of the words above.
+             "Ох…", "Ох,", "О…", "О,", "Да,", "Да.", "Ха,", "Ну,", "Ах,", "Эх…",
+             "Понятно.", "Ясно.", "Точно,", "Привет.")
 REACTIONS_EN = ("Oh wow,", "Oh wow!", "Wow,", "Oh,", "Oh!", "Oh no,", "Yeah,", "Yeah?",
                 "Really?", "What?", "And then?", "I see.", "Right,", "Hmm,", "Huh,", "Nice!",
-                "No way!", "Okay,", "Well,", "Mm,")
+                "No way!", "Okay,", "Well,", "Mm,",
+                "Wait,", "Hey.", "Hi.", "Ah,", "Exactly.", "I get that.")
 #: How many versions of each sound are made.
 TAKES = 2
 #: How often a finished turn gets one. Not always: people do not.
@@ -188,6 +194,23 @@ def reaction(voice: str | None, piece: str) -> tuple[int, bytes] | None:
         if _normal(text) == said and (takes := _made.get((voice, text))):
             return random.choice(takes)
     return None
+
+
+def opener(voice: str | None, text: str) -> int:
+    """Where his reply's first piece ends when it opens with one of his
+    ready-made first words — however short: «Ох…», «Да,» — so that it plays
+    the moment it is written instead of waiting for more words to make a
+    piece the voice is asked for (tts.first_pause wants three letters). 0 when
+    it does not open with one made in this voice, or not yet: only once
+    something follows it, as «Ох» may still become «Охотно»."""
+    best = 0
+    for said in (REACTIONS_EN if lang.english() else REACTIONS):
+        if not _made.get((voice, said)):
+            continue
+        shape = re.escape(said).replace("…", r"(?:…|\.\.\.)")
+        if m := re.match(rf"\s*{shape}(?=\s)", text):
+            best = max(best, m.end())
+    return best
 
 
 def _normal(text: str) -> str:

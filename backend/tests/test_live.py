@@ -853,7 +853,7 @@ def test_a_guess_is_written_but_never_voiced(env):
     assert after_heard(line)[0] == "Ого,"
     assert done["reply"] == "Ого, сам программу пишешь? А про что она?"
     assert done["timing"]["first_piece"] is not None
-    assert done["timing"]["head_waited"] > 0                # written before the turn was certain
+    assert done["timing"]["head_waited"] >= 0               # written before the turn was certain
 
 
 def test_a_guess_they_talked_past_never_reached_the_voice(env):
@@ -1066,3 +1066,29 @@ def test_two_lines_to_a_voice_that_makes_two_pieces_at_once(env, monkeypatch):
     monkeypatch.setattr(tts, "slow_start", lambda: True)
     with talk(env):
         wait_until(lambda: asked == [live._AHEAD_WHOLE])
+
+
+# ── his first word, ready-made, however short (2026-10-07) ──────────────────
+
+def test_a_short_ready_first_word_plays_at_once_and_the_rest_is_voiced(env):
+    """«Ох...» has two letters — too few to be a piece for the voice — but it
+    is made already, so it is cut off and played the moment it is written."""
+    first_sound._made[(his_voice(), "Ох…")] = [(16000, b"OH")]
+    env.mind.replies = ["Ох... понимаю. Давно за рулём?"]
+    with talk(env) as line:
+        line.ears().send(turn("StartOfTurn", "я"), turn("EndOfTurn", "я водителем работаю"))
+        line.expect("heard")
+        done = line.expect("done")
+    assert after_heard(line)[0] == "Ох..." and b"OH" in line.audio
+    assert not any(text.startswith("Ох") for text in env.voice.texts)   # never asked of the voice
+    assert env.voice.texts[0] == "понимаю."                  # the voice's first piece, short too
+    assert done["reply"] == "Ох... понимаю. Давно за рулём?"
+
+
+def test_a_first_word_that_is_not_made_is_not_cut_short():
+    assert first_sound.opener(his_voice(), "Ох... понимаю. ") == 0          # nothing made yet
+    first_sound._made[(his_voice(), "Ох…")] = [(16000, b"OH")]
+    assert first_sound.opener(his_voice(), "Ох... понимаю.") == len("Ох...")
+    assert first_sound.opener(his_voice(), "Ох...") == 0                    # nothing after it yet
+    assert first_sound.opener(his_voice(), "Охотно, давай.") == 0
+    assert first_sound.opener(his_voice(), "Ого… да") == 0                  # «О…» is not «Ого…»

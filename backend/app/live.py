@@ -161,6 +161,13 @@ _STOP = frozenset({"стоп", "стой", "подожди", "подождите
 _WORD = re.compile(r"[a-zA-Zа-яА-ЯёЁ]+")
 
 
+def _first_cut(voice: str | None, text: str) -> int:
+    """Where his answer's first piece ends: at one of his ready-made first
+    words, however short (first_sound.opener) — it plays at once — or at his
+    first pause (tts.first_pause). 0 for «not yet»."""
+    return first_sound.opener(voice, text) or tts.first_pause(text)
+
+
 def _same(a: str | None, b: str | None) -> bool:
     """The same words, whatever the punctuation and capitals Flux gave them."""
     return a is not None and b is not None and [
@@ -275,7 +282,7 @@ class Draft:
     def opening(self) -> str:
         """His first piece, as far as it is written — up to his first pause —
         or "" while it is not."""
-        at = tts.first_pause(self._latest)
+        at = _first_cut(self.voice or self.session.voice, self._latest)
         return self._latest[:at].strip() if at else ""
 
     async def _write(self) -> None:
@@ -313,7 +320,7 @@ class Draft:
     def _publish(self, text: str) -> None:
         self._latest = text
         self._version += 1
-        if self.opened is None and tts.first_pause(text):
+        if self.opened is None and _first_cut(self.voice or self.session.voice, text):
             self.opened = time.monotonic()
         self._wake()
 
@@ -900,12 +907,18 @@ class Session:
         async def cut() -> None:
             nonlocal final
             committed, first = 0, True
+            #: The piece after a ready-made first word is the voice's first:
+            #: cut as short, so that «Ох…» is not followed by a silence while
+            #: a whole sentence is written and made.
+            short = False
             try:
                 async for text in draft.texts():
                     final = text
                     while True:
                         tail = text[committed:]
-                        at = tts.first_pause(tail) if first else tts.ready_split(tail, first=False)
+                        at = (_first_cut(voice, tail) if first
+                              else tts.first_pause(tail) if short
+                              else tts.ready_split(tail, first=False))
                         if not at:
                             break
                         committed += at
@@ -916,6 +929,7 @@ class Session:
                             if first:
                                 timing["first_piece"] = _after(time.monotonic(), start)
                             await pieces.put(piece)
+                            short = first and first_sound.opener(voice, tail) == at
                             first = False
                 for piece in tts.speakable_chunks(final[committed:]):
                     if first and echoed:
