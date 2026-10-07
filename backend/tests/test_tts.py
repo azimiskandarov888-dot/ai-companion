@@ -5,6 +5,7 @@ removed by one that can't."""
 from __future__ import annotations
 
 import asyncio
+import time
 import json
 
 import httpx
@@ -346,17 +347,23 @@ def test_the_gemini_voice_streams_or_is_not_there(monkeypatch):
     assert tts.configured() and tts.streams()
 
 
-def _google_and_router(monkeypatch, google_status: int = 200):
-    """Google's stream and OpenRouter, both answered here."""
+def _google_and_router(monkeypatch, google_status: int | list[int] = 200):
+    """Google's stream and OpenRouter, both answered here. `google_status`: one
+    answer for every request, or one for each in turn."""
     import base64
 
     asked: list[str] = []
+    statuses = list(google_status) if isinstance(google_status, list) else None
 
     def answer(request: httpx.Request) -> httpx.Response:
         asked.append(request.url.host)
         if request.url.host == "generativelanguage.googleapis.com":
-            if google_status != 200:
-                return httpx.Response(google_status, content=b'{"error": "nope"}')
+            status = statuses.pop(0) if statuses else google_status if statuses is None else 200
+            if status == 429:
+                return httpx.Response(429, content=json.dumps({"error": {"code": 429, "details": [
+                    {"@type": "type.googleapis.com/google.rpc.RetryInfo", "retryDelay": "0.05s"}]}}).encode())
+            if status != 200:
+                return httpx.Response(status, content=b'{"error": "nope"}')
             def audio(raw: bytes) -> dict:
                 return {"candidates": [{"content": {"parts": [{"inlineData": {
                     "mimeType": "audio/L16;codec=pcm;rate=24000", "data": base64.b64encode(raw).decode()}}]}}]}
@@ -399,11 +406,79 @@ def test_when_google_refuses_it_is_said_and_nothing_whole_stands_in(monkeypatch)
     slower voice made whole somewhere else."""
     import pytest
 
-    asked = _google_and_router(monkeypatch, google_status=429)
+    asked = _google_and_router(monkeypatch, google_status=403)
 
     async def hear():
         return [piece async for piece in tts.stream("Ого.")]
 
-    with pytest.raises(RuntimeError, match="429"):
+    with pytest.raises(RuntimeError, match="403"):
         asyncio.run(hear())
     assert asked == ["generativelanguage.googleapis.com"]
+
+
+def test_refused_for_the_minute_it_waits_as_told_and_asks_once_more(monkeypatch):
+    """Ten requests a minute on a paid key's first tier (2026-10-07): a
+    refusal for the minute is a pause in his words, not the end of them."""
+    import pytest
+
+    asked = _google_and_router(monkeypatch, google_status=[429, 200])
+
+    async def hear():
+        return [piece async for piece in tts.stream("Ого.")]
+
+    assert asyncio.run(hear()) == [(24000, b"\x01\x00" * 4), (24000, b"\x02\x00" * 4)]
+    assert asked == ["generativelanguage.googleapis.com"] * 2
+    asked = _google_and_router(monkeypatch, google_status=429)    # and again: then it is said
+    with pytest.raises(RuntimeError, match="429"):
+        asyncio.run(hear())
+
+
+def test_the_minute_s_requests_are_kept_to_and_his_words_come_first():
+    """No eleventh request in a minute; and work nobody waits on (his sounds
+    made ahead) leaves BACKGROUND_SPARE of them for his words."""
+    budget = tts._Budget(3, window=0.3)
+
+    async def run():
+        for _ in range(3):
+            await budget.take()
+        assert budget.left() == 0
+        began = asyncio.get_running_loop().time()
+        await budget.take()                                   # waits for the window
+        assert asyncio.get_running_loop().time() - began >= 0.25
+        fresh = tts._Budget(3, window=0.3)
+        await fresh.take()                                    # 2 left
+        waited = asyncio.get_running_loop().time()
+        await fresh.take(spare=2)                             # only while more than 2 are left
+        assert asyncio.get_running_loop().time() - waited >= 0.25
+
+    asyncio.run(run())
+
+
+def test_a_voice_rationed_by_the_minute_is_said_so(monkeypatch):
+    monkeypatch.setattr(config, "TTS_PROVIDER", "gemini")
+    monkeypatch.setattr(config, "GEMINI_API_KEY", "google-key")
+    monkeypatch.setattr(config, "GEMINI_TTS_RPM", 10)
+    assert tts.limited() and tts.room() == 10
+    monkeypatch.setattr(config, "GEMINI_TTS_RPM", 0)
+    assert not tts.limited() and tts.room() > 100
+
+
+def test_refused_for_the_day_it_says_so_at_once_and_waits_no_hours(monkeypatch):
+    """100 requests a day on the first tier: Google says to come back in hours.
+    A turn is not left hanging — it is the turn's trouble, at once, and so is
+    every request after it until then."""
+    import pytest
+
+    asked = _google_and_router(monkeypatch, google_status=429)
+    monkeypatch.setattr(tts, "_retry_after", lambda detail: 26958.0)
+
+    async def hear():
+        return [piece async for piece in tts.stream("Ого.")]
+
+    began = time.monotonic()
+    with pytest.raises(RuntimeError, match="429"):
+        asyncio.run(hear())
+    with pytest.raises(RuntimeError, match="for the day"):
+        asyncio.run(hear())
+    assert time.monotonic() - began < 2
+    assert asked == ["generativelanguage.googleapis.com"]          # the second never went

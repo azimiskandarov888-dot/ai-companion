@@ -62,9 +62,12 @@ from __future__ import annotations
 
 import asyncio
 import io
+import json
 import re
 import sys
+import time
 import wave
+from collections import deque
 from collections.abc import AsyncIterator
 
 import httpx
@@ -708,39 +711,136 @@ def _audio_in(event: dict) -> tuple[int, bytes]:
     return rate, audio
 
 
-async def _gemini_direct_stream(text: str, voice: str | None, *,
-                                rate: float = 1.0) -> AsyncIterator[tuple[int, bytes]]:
-    """(rate, raw audio) from Google as it is made. Raises before the first
-    sound on any refusal, so the caller can go the other way (OpenRouter)."""
-    import json as _json
+class _Budget:
+    """Requests a minute to the voice, counted on this side, so that Google
+    never has to refuse one (config.GEMINI_TTS_RPM: ten, on a paid key's first
+    tier). His words take a request whenever one is left; work nobody is
+    waiting on — his sounds made ahead (first_sound.prepare) — only while
+    `spare` more are left for his words. A request that cannot go yet waits
+    for the minute to free one: a pause, never a refusal mid-sentence."""
 
+    #: A minute — and a second, for two clocks that do not quite agree.
+    WINDOW = 61.0
+
+    def __init__(self, per_minute: int, window: float = WINDOW) -> None:
+        self.per_minute = per_minute
+        self.window = window
+        self._sent: deque[float] = deque()
+        self._closed_until = 0.0
+
+    def left(self) -> int:
+        now = time.monotonic()
+        while self._sent and now - self._sent[0] >= self.window:
+            self._sent.popleft()
+        if now < self._closed_until:
+            return 0
+        return self.per_minute - len(self._sent)
+
+    async def take(self, *, spare: int = 0) -> None:
+        if self.per_minute <= 0:
+            return
+        if (shut := self._closed_until - time.monotonic()) > WAIT_AT_MOST:
+            raise RuntimeError(f"Gemini API voice refused (429) for another {shut / 3600:.1f} h — "
+                               "the key's requests for the day are spent")
+        while self.left() <= spare:
+            now = time.monotonic()
+            if now < self._closed_until:
+                opens = self._closed_until                  # Google said when
+            else:
+                opens = self._sent[0] + self.window          # the oldest leaves the minute
+            await asyncio.sleep(max(0.05, opens - now))
+        self._sent.append(time.monotonic())
+
+    def refused(self, seconds: float) -> None:
+        """Google refused all the same — the key is used from somewhere else
+        too: nothing goes until it said to come back."""
+        self._closed_until = max(self._closed_until, time.monotonic() + seconds)
+
+
+_budget: _Budget | None = None
+#: Longer than this, a refusal is not waited out: on a paid key's first tier
+#: Google also takes only 100 requests a DAY for the voice (measured
+#: 2026-10-07, GenerateRequestsPerDayPerProjectPerModel) and then says to come
+#: back in hours. A turn says so at once rather than hanging.
+WAIT_AT_MOST = 12.0
+#: Requests his sounds made ahead leave for his words (first_sound.prepare).
+BACKGROUND_SPARE = 4
+
+
+def _voice_budget() -> _Budget:
+    global _budget
+    if _budget is None or _budget.per_minute != config.GEMINI_TTS_RPM:
+        _budget = _Budget(config.GEMINI_TTS_RPM)
+    return _budget
+
+
+def limited() -> bool:
+    """Is the voice rationed by the minute? Then an answer is voiced in as few
+    pieces as it can be without a silence in it (live.Session._answer)."""
+    return config.voice_provider() == "gemini" and config.GEMINI_TTS_RPM > 0
+
+
+def room() -> int:
+    """Requests to the voice left this minute — as many as one likes when it
+    is not rationed."""
+    return _voice_budget().left() if limited() else 1_000
+
+
+def _retry_after(detail: bytes) -> float:
+    """How long Google said to wait, from its refusal (google.rpc.RetryInfo
+    «13s»); ten seconds when it did not say."""
+    try:
+        for item in json.loads(detail).get("error", {}).get("details", []):
+            if str(item.get("@type", "")).endswith("RetryInfo"):
+                return float(str(item.get("retryDelay", "10s")).rstrip("s"))
+    except (ValueError, TypeError, AttributeError):
+        pass
+    return 10.0
+
+
+async def _gemini_direct_stream(text: str, voice: str | None, *, rate: float = 1.0,
+                                background: bool = False) -> AsyncIterator[tuple[int, bytes]]:
+    """(rate, raw audio) from Google as it is made, within the minute's
+    requests (_Budget). Refused for the minute all the same, it waits as long
+    as Google says and asks once more; any other refusal is raised before the
+    first sound."""
     url, headers, payload = _gemini_direct_request(text, voice, rate=rate)
-    async with _line().stream("POST", url, headers=headers, json=payload) as resp:
-        if resp.status_code != 200:
-            detail = (await resp.aread()).decode("utf-8", "replace")
-            raise RuntimeError(f"Gemini API voice failed ({resp.status_code}): {detail[:300]}")
-        async for line in resp.aiter_lines():
-            line = line.strip()
-            if not line.startswith("data:"):
-                continue
-            try:
-                event = _json.loads(line[len("data:"):].strip())
-            except ValueError:
-                continue
-            if not isinstance(event, dict):
-                continue
-            if event.get("error"):
-                raise RuntimeError(f"Gemini API voice: {event['error']}")
-            out_rate, audio = _audio_in(event)
-            if audio:
-                yield out_rate, audio
+    budget = _voice_budget()
+    for attempt in (1, 2):
+        await budget.take(spare=BACKGROUND_SPARE if background else 0)
+        async with _line().stream("POST", url, headers=headers, json=payload) as resp:
+            if resp.status_code != 200:
+                detail = await resp.aread()
+                if resp.status_code == 429:
+                    budget.refused(wait := _retry_after(detail))
+                    if attempt == 1 and wait <= WAIT_AT_MOST:
+                        continue
+                raise RuntimeError(f"Gemini API voice failed ({resp.status_code}): "
+                                   f"{detail.decode('utf-8', 'replace')[:300]}")
+            async for line in resp.aiter_lines():
+                line = line.strip()
+                if not line.startswith("data:"):
+                    continue
+                try:
+                    event = json.loads(line[len("data:"):].strip())
+                except ValueError:
+                    continue
+                if not isinstance(event, dict):
+                    continue
+                if event.get("error"):
+                    raise RuntimeError(f"Gemini API voice: {event['error']}")
+                out_rate, audio = _audio_in(event)
+                if audio:
+                    yield out_rate, audio
+            return
 
 
-async def _gemini_pcm(text: str, voice: str | None, *, rate: float = 1.0) -> AsyncIterator[tuple[int, bytes]]:
+async def _gemini_pcm(text: str, voice: str | None, *, rate: float = 1.0,
+                      background: bool = False) -> AsyncIterator[tuple[int, bytes]]:
     """A Gemini voice as (rate, raw audio) pieces, streamed on Google's key."""
     if not config.GEMINI_API_KEY:
         raise RuntimeError("GEMINI_API_KEY is not set — the voice (Gemini) is not configured.")
-    async for out_rate, audio in _gemini_direct_stream(text, voice, rate=rate):
+    async for out_rate, audio in _gemini_direct_stream(text, voice, rate=rate, background=background):
         yield out_rate, audio
 
 
@@ -775,7 +875,8 @@ async def _synthesize_openrouter(text: str, voice: str | None = None) -> bytes:
     return resp.content
 
 
-async def stream(text: str, voice: str | None = None) -> AsyncIterator[tuple[int, bytes]]:
+async def stream(text: str, voice: str | None = None, *,
+                 background: bool = False) -> AsyncIterator[tuple[int, bytes]]:
     """His voice for this text AS IT IS MADE: (rate, raw audio) pieces, the
     first of them long before the sentence is finished being synthesised.
 
@@ -783,9 +884,12 @@ async def stream(text: str, voice: str | None = None) -> AsyncIterator[tuple[int
     bytes of a long sentence in 0.48 s, the whole of it in 1.9 s — the second
     number was what everybody used to wait for.
 
-    Only Fish streams here, directly or through OpenRouter; anything else is
-    said plainly rather than faked. Pieces are always whole samples: a byte
-    split across two pieces is a click.
+    Gemini streams here on Google's key, Fish directly or through OpenRouter;
+    anything else is said plainly rather than faked. Pieces are always whole
+    samples: a byte split across two pieces is a click.
+
+    `background`: nobody is waiting on it (first_sound.prepare) — on a voice
+    rationed by the minute it goes only while requests are left for his words.
     """
     text = spoken(text, sounds=makes_sounds())
     if not text:
@@ -794,7 +898,7 @@ async def stream(text: str, voice: str | None = None) -> AsyncIterator[tuple[int
     default_rate = PCM_RATE
     if provider == "gemini" and config.GEMINI_API_KEY:
         carry = b""
-        async for rate, chunk in _gemini_pcm(text, voice):
+        async for rate, chunk in _gemini_pcm(text, voice, background=background):
             data = carry + chunk
             whole = len(data) - len(data) % 2
             carry = data[whole:]

@@ -1,7 +1,7 @@
 """Pytest fixtures shared by the whole test suite.
 
 Placing this at the backend/ root puts `backend/` on sys.path (pytest prepend
-mode), so `from app import ...` works, and gives every test an isolated,
+mode), so `from app import ...` works, and gives every test an isolated,, tts
 throwaway database + data directory.
 """
 
@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import pytest
 
-from app import allowance, aloud, config, db, first_sound
+from app import allowance, aloud, config, db, first_sound, tts
 
 
 @pytest.fixture(autouse=True)
@@ -40,5 +40,8 @@ def temp_data(tmp_path, monkeypatch):
     # module — which is to say, between tests too. Each test starts with none.
     first_sound._made.clear()
     first_sound._making.clear()
+    # The voice's requests a minute (tts._Budget) are counted in the module
+    # too: each test starts with a full minute.
+    monkeypatch.setattr(tts, "_budget", None)
     db.init_db()
     yield

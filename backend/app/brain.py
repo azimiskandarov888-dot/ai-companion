@@ -594,10 +594,86 @@ async def generate_reply(
     return whole_sentences(text) if message.stop_reason == "max_tokens" else text
 
 
+async def _hedged(start, after: float):
+    """The same reply asked for a second time when the first is slow to begin
+    — and the one whose words come first is the one he says.
+
+    From Tashkent his first words usually come 0.7–0.95 s after the brain is
+    asked; now and then a request sits 2.8 s somewhere on its way (2026-10-07).
+    One asked again after `after` seconds is very unlikely to sit as long —
+    «The Tail at Scale» (Dean & Barroso, 2013) — and it costs a second prompt
+    only on the turns that were slow anyway. A first that fails before a word
+    is asked again at once. `start()` makes a fresh stream of the reply."""
+    lanes: list[asyncio.Queue] = []
+    pumps: list[asyncio.Task] = []
+    getters: dict[asyncio.Future, asyncio.Queue] = {}
+
+    def launch() -> None:
+        lane: asyncio.Queue = asyncio.Queue()
+
+        async def pump() -> None:
+            try:
+                async for text in start():
+                    lane.put_nowait(("text", text))
+                lane.put_nowait(("end", None))
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:  # noqa: BLE001 — handed to whoever reads it
+                lane.put_nowait(("error", e))
+
+        lanes.append(lane)
+        pumps.append(asyncio.create_task(pump()))
+        getters[asyncio.ensure_future(lane.get())] = lane
+
+    try:
+        launch()
+        winner, opening = None, ""
+        while winner is None:
+            done, _ = await asyncio.wait(list(getters), timeout=None if len(lanes) > 1 else after,
+                                         return_when=asyncio.FIRST_COMPLETED)
+            if not done:                       # slow to begin: ask again
+                launch()
+                continue
+            for got in done:
+                lane = getters.pop(got)
+                kind, value = got.result()
+                if kind == "text":
+                    winner, opening = lane, value
+                    break
+                if kind == "error" and len(lanes) == 1:
+                    launch()                    # failed at once: once more
+                elif not getters:               # nobody left to wait on
+                    if kind == "error":
+                        raise value
+                    return
+        if len(lanes) > 1:
+            print(f"[мозг] без слов {after:.1f} с — спросил ещё раз; первым ответил "
+                  f"{'второй' if winner is lanes[1] else 'первый'}", flush=True)
+        for task, lane in zip(pumps, lanes):
+            if lane is not winner:
+                task.cancel()
+        yield opening
+        while True:
+            kind, value = await winner.get()
+            if kind == "text":
+                yield value
+            elif kind == "error":
+                raise value
+            else:
+                return
+    finally:
+        for got in getters:
+            got.cancel()
+        for task in pumps:
+            task.cancel()
+
+
 async def stream_reply(
     history: list[dict[str, str]],
     system_stable: str,
     system_variable: str = "",
+    *,
+    hedge_after: float | None = None,
 ):
     """The same reply as `generate_reply`, but handed over as it is written.
 
@@ -606,6 +682,9 @@ async def stream_reply(
     is deliberate: a delta can be half a word or a lone comma, and every caller
     would otherwise have to reassemble it before it could look for a sentence.
 
+    `hedge_after`: asked again if no word has come in this many seconds
+    (_hedged) — the live channel's, where a second of silence is heard.
+
     Web search is NOT available here. That path runs several rounds with
     server-side pauses between them, and there is no honest way to speak the
     first sentence of an answer that might still change once the search comes
@@ -613,7 +692,10 @@ async def stream_reply(
     the whole-reply path instead.
     """
     if via_openrouter(config.CHAT_MODEL):
-        async for text in _router_stream(history, system_stable, system_variable):
+        def start():
+            return _router_stream(history, system_stable, system_variable)
+
+        async for text in (_hedged(start, hedge_after) if hedge_after else start()):
             yield text
         return
 

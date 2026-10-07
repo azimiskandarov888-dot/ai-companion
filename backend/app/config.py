@@ -86,6 +86,11 @@ CHAT_PROVIDERS: list[str] = [
 #: thinking it had). «none»: no reasoning, first words in 0.79–0.86 s on the
 #: same prompt (2026-09-29). Empty leaves it to the model.
 CHAT_REASONING: str = os.getenv("CHAT_REASONING", "none").strip()
+#: When his first words have not come this many seconds after the brain was
+#: asked, it is asked again, and whichever answers first is the one he says
+#: (brain.stream_reply). Usually they come in 0.7–0.95 s from Tashkent; now and
+#: then 2.8 s (2026-10-07). 0 turns it off.
+BRAIN_HEDGE_AFTER: float = float(os.getenv("BRAIN_HEDGE_AFTER", "1.1"))
 
 # READING him — once, before he even exists. The deepest work the app does:
 # understanding a person from HOW they wrote, not just what they wrote (see
@@ -265,6 +270,11 @@ GEMINI_TTS_MODEL: str = os.getenv("GEMINI_TTS_MODEL", "google/gemini-3.8-flash-l
 #: Google's free tier allows 10 requests a day per model: a conversation needs
 #: billing on the Google project.
 GEMINI_API_KEY: str | None = os.getenv("GEMINI_API_KEY")
+#: …and how many requests a minute Google takes on it for the voice model: 10
+#: on a paid key's first tier (measured 2026-10-07 — the 11th within a minute
+#: is refused, GenerateRequestsPerMinutePerProjectPerModel). Kept to by
+#: tts._budget, so his words are never refused for it. 0: no limit.
+GEMINI_TTS_RPM: int = int(os.getenv("GEMINI_TTS_RPM", "10"))
 
 # Fish Audio (https://fish.audio) — the default voice.
 FISH_API_KEY: str | None = os.getenv("FISH_API_KEY")

@@ -83,7 +83,7 @@ def test_he_does_not_make_the_same_sound_twice_running_when_there_is_another():
 def test_they_are_made_once_in_his_voice_and_kept(monkeypatch):
     asked: list[tuple[str, str | None]] = []
 
-    async def voice(text, voice=None):
+    async def voice(text, voice=None, **_):
         asked.append((text, voice))
         yield 1000, _pcm([0] * 50 + [9000] * 100 + [0] * 50)
 
@@ -99,6 +99,9 @@ def test_they_are_made_once_in_his_voice_and_kept(monkeypatch):
     assert {t for t, _ in asked} == set(texts)
     assert [t for t, _ in asked][:len(first_sound.LISTENING) * first_sound.TAKES] == [
         t for t in first_sound.LISTENING for _ in range(first_sound.TAKES)]   # sounds first
+    sounds = len(dict.fromkeys(first_sound.LISTENING + first_sound.THINKING)) * first_sound.TAKES
+    reactions = [t for t in first_sound.REACTIONS if t not in first_sound.THINKING + first_sound.LISTENING]
+    assert [t for t, _ in asked][sounds:sounds + len(reactions)] == reactions   # one of each first
     assert all(v == "her-voice" for _, v in asked)
     assert len(asked) == len(texts) * first_sound.TAKES
     assert first_sound.ready("her-voice") and not first_sound.ready(None)
@@ -109,7 +112,7 @@ def test_what_is_made_is_kept_and_never_made_again(monkeypatch):
     the next conversation, nor after a restart (DATA_DIR/sounds)."""
     asked: list[str] = []
 
-    async def voice(text, voice=None):
+    async def voice(text, voice=None, **_):
         asked.append(text)
         yield 1000, _pcm([0] * 50 + [9000] * 100 + [0] * 50)
 
@@ -134,7 +137,7 @@ def test_his_usual_first_word_is_ready_made_and_nothing_else_is():
 
 
 def test_a_voice_that_cannot_make_them_leaves_him_without_and_says_nothing_else(monkeypatch):
-    async def broken(text, voice=None):
+    async def broken(text, voice=None, **_):
         raise RuntimeError("no voice")
         yield  # pragma: no cover
 

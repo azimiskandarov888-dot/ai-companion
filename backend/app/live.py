@@ -121,6 +121,18 @@ _FILL = 0.25
 #: plays, the rest of the sentence is being made.
 _AHEAD = 1
 _AHEAD_WHOLE = 2
+#: On a voice rationed by the minute (tts.limited — ten requests a minute on
+#: Google's first paid tier, measured 2026-10-07) an answer is voiced in as
+#: few requests as it can be: its first piece, then the rest of it at once
+#: when it is written, not every sentence on its own — two requests for most
+#: answers, where it used to be three or four. A rest still being written
+#: past this many letters is voiced as far as it goes: a long answer must
+#: not become a long silence.
+_REST_AT_ONCE = 300
+#: …and the short piece after a ready-made first word («Ох…» — «понимаю.»)
+#: only while this many requests are left in the minute; with fewer, the rest
+#: follows «Ох…» whole, after a longer pause.
+_ROOM_FOR_SHORT = 5
 #: Drafts begun on a guess («похоже, договорил») in one turn, at most — then
 #: only «договорил» begins one. LiveKit's default too (max_retries 3): a turn
 #: that keeps stopping and going on would otherwise be paid for again at
@@ -306,7 +318,8 @@ class Draft:
                 self.first_words = time.monotonic()
                 self._publish(text)
             else:
-                async for text in brain.stream_reply(history, stable, variable):
+                async for text in brain.stream_reply(
+                        history, stable, variable, hedge_after=config.BRAIN_HEDGE_AFTER or None):
                     if self.first_words is None:
                         self.first_words = time.monotonic()
                     self._publish(text)
@@ -896,6 +909,8 @@ class Session:
         ahead: deque[tuple[str, str, _Voicing]] = deque()
         #: One for a voice that streams, two for one that makes pieces whole.
         keep_ahead = _AHEAD_WHOLE if tts.slow_start() else _AHEAD
+        #: Requests to the voice are counted by the minute (_REST_AT_ONCE).
+        rationed = tts.limited()
         speaker = draft.speaker
         pieces: asyncio.Queue = asyncio.Queue()
         cutter: asyncio.Task | None = None
@@ -918,6 +933,7 @@ class Session:
                         tail = text[committed:]
                         at = (_first_cut(voice, tail) if first
                               else tts.first_pause(tail) if short
+                              else 0 if rationed and len(tail) < _REST_AT_ONCE
                               else tts.ready_split(tail, first=False))
                         if not at:
                             break
@@ -929,7 +945,8 @@ class Session:
                             if first:
                                 timing["first_piece"] = _after(time.monotonic(), start)
                             await pieces.put(piece)
-                            short = first and first_sound.opener(voice, tail) == at
+                            short = (first and first_sound.opener(voice, tail) == at
+                                     and (not rationed or tts.room() >= _ROOM_FOR_SHORT))
                             first = False
                 for piece in tts.speakable_chunks(final[committed:]):
                     if first and echoed:
@@ -940,10 +957,23 @@ class Session:
             finally:
                 await pieces.put(None)
 
+        def accept(piece: str) -> tuple[str, str] | None:
+            """(what he means, how he says it aloud) — or None for a piece he
+            must not say, or that has nothing in it to say."""
+            nonlocal dropped
+            # THE TWO THINGS HE NEVER SAYS, checked before they are said.
+            if slip := vow.broken(piece):
+                vow.note(user_id, slip, piece)
+                dropped = True
+                return None
+            # Nothing but a stage direction: nothing to say.
+            if not tts.audible(piece):
+                return None
+            return piece, speaker.say(piece)
+
         async def ready_ahead(wait: bool) -> bool:
             """Start the voice on the next piece if it is written — or, with
             `wait`, wait for it. False once there is nothing left to say."""
-            nonlocal dropped
             while len(ahead) < keep_ahead or (wait and not ahead):
                 if wait and not ahead:
                     piece = await pieces.get()
@@ -955,17 +985,23 @@ class Session:
                 if piece is None:
                     pieces.put_nowait(None)   # stays the end for anyone asking again
                     return bool(ahead)
-                # THE TWO THINGS HE NEVER SAYS, checked before they are said.
-                if slip := vow.broken(piece):
-                    vow.note(user_id, slip, piece)
-                    dropped = True
+                if (taken := accept(piece)) is None:
                     continue
-                # Nothing but a stage direction: nothing to say.
-                if not tts.audible(piece):
-                    continue
-                heard = speaker.say(piece)
+                meant, heard = taken
                 opening = not spoken and not ahead and not sounded
-                ahead.append((piece, heard, _Voicing.first(heard, voice) if opening else _Voicing(heard, voice)))
+                # Rationed: whatever else is written already goes with it, in
+                # one request — never into his first piece, which may be ready-made.
+                while rationed and not opening:
+                    try:
+                        more = pieces.get_nowait()
+                    except asyncio.QueueEmpty:
+                        break
+                    if more is None:
+                        pieces.put_nowait(None)
+                        break
+                    if (extra := accept(more)) is not None:
+                        meant, heard = f"{meant} {extra[0]}", f"{heard} {extra[1]}"
+                ahead.append((meant, heard, _Voicing.first(heard, voice) if opening else _Voicing(heard, voice)))
             return True
 
         def spent() -> None:

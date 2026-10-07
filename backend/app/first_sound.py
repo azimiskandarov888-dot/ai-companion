@@ -229,29 +229,37 @@ def prepare(voice: str | None) -> asyncio.Task:
 
 
 async def _make_all(voice: str | None) -> None:
-    # His sounds first — they are wanted at once; his ready first words after.
-    reactions = REACTIONS_EN if lang.english() else REACTIONS
-    texts = dict.fromkeys(_texts("listening") + _texts("thinking") + reactions)
-    for text in texts:
-        takes = []
-        for take in range(TAKES):
-            try:
-                kept = _load(voice, text, take)
-                if kept is None:
-                    rate, pcm = None, b""
-                    async for rate, chunk in tts.stream(text, voice):
-                        pcm += chunk
-                    if not (rate and (pcm := trimmed(pcm, rate))):
-                        continue
-                    kept = (rate, pcm)
-                    _keep(voice, text, take, kept)
-                takes.append(kept)
-            except Exception as e:  # noqa: BLE001 — a sound is a nicety, never a failure
-                print(f"[first_sound] could not make {text!r}: {type(e).__name__}: {e}",
-                      file=sys.stderr, flush=True)
-                break
-        if takes:
-            _made[(voice, text)] = takes
+    # His sounds first, every take — they are wanted at once and often; then
+    # one of each of his ready first words, then their second takes. On a
+    # voice rationed by the minute (tts.limited) all of it is made in the
+    # requests his words leave over, so it can take a while — the most useful
+    # first.
+    sounds = list(dict.fromkeys(_texts("listening") + _texts("thinking")))
+    reactions = [t for t in (REACTIONS_EN if lang.english() else REACTIONS) if t not in sounds]
+    order = [(t, k) for t in sounds for k in range(TAKES)] + [
+        (t, k) for k in range(TAKES) for t in reactions]
+    takes: dict[str, list[tuple[int, bytes]]] = {}
+    failed: set[str] = set()
+    for text, take in order:
+        if text in failed:
+            continue
+        try:
+            kept = _load(voice, text, take)
+            if kept is None:
+                rate, pcm = None, b""
+                async for rate, chunk in tts.stream(text, voice, background=True):
+                    pcm += chunk
+                if not (rate and (pcm := trimmed(pcm, rate))):
+                    continue
+                kept = (rate, pcm)
+                _keep(voice, text, take, kept)
+        except Exception as e:  # noqa: BLE001 — a sound is a nicety, never a failure
+            print(f"[first_sound] could not make {text!r}: {type(e).__name__}: {e}",
+                  file=sys.stderr, flush=True)
+            failed.add(text)
+            continue
+        takes.setdefault(text, []).append(kept)
+        _made[(voice, text)] = list(takes[text])
 
 
 def _path(voice: str | None, text: str, take: int):

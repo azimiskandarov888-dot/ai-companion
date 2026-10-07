@@ -412,3 +412,67 @@ def test_whole_sentences():
     assert brain.whole_sentences("Всё… Ладно, давай") == "Всё…"
     assert brain.whole_sentences("Ты куда? Я тут") == "Ты куда?"
     assert brain.whole_sentences("без единой точки") == "без единой точки"
+
+
+# ── asked again when slow to begin (2026-10-07) ─────────────────────────────
+
+def _lanes(*plans):
+    """Fresh streams, one per ask: (seconds before the first word, words) — or
+    an exception to fail with at once."""
+    asked = []
+
+    def start():
+        plan = plans[len(asked)]
+        asked.append(plan)
+
+        async def stream():
+            if isinstance(plan, Exception):
+                raise plan
+            delay, words = plan
+            await asyncio.sleep(delay)
+            text = ""
+            for word in words:
+                text = f"{text} {word}".strip()
+                yield text
+
+        return stream()
+
+    return start, asked
+
+
+def _read(source):
+    async def run():
+        return [text async for text in source]
+    return asyncio.run(run())
+
+
+def test_a_brain_that_answers_in_time_is_asked_once():
+    start, asked = _lanes((0.0, ["Да", "конечно."]), (0.0, ["Нет."]))
+    assert _read(brain._hedged(start, 0.2)) == ["Да", "Да конечно."]
+    assert len(asked) == 1
+
+
+def test_a_brain_slow_to_begin_is_asked_again_and_the_first_to_answer_is_said():
+    start, asked = _lanes((0.5, ["Медленно."]), (0.0, ["Быстро", "второй."]))
+    assert _read(brain._hedged(start, 0.1)) == ["Быстро", "Быстро второй."]
+    assert len(asked) == 2
+
+
+def test_the_first_ask_still_wins_when_it_answers_before_the_second():
+    start, asked = _lanes((0.15, ["Первый."]), (0.5, ["Второй."]))
+    assert _read(brain._hedged(start, 0.1)) == ["Первый."]
+    assert len(asked) == 2
+
+
+def test_a_brain_that_fails_at_once_is_asked_again_at_once():
+    start, asked = _lanes(RuntimeError("502"), (0.0, ["Вот."]))
+    assert _read(brain._hedged(start, 5.0)) == ["Вот."]
+    assert len(asked) == 2
+
+
+def test_two_failures_are_the_turn_s_trouble():
+    import pytest
+
+    start, _asked = _lanes(RuntimeError("502"), RuntimeError("503"))
+    with pytest.raises(RuntimeError, match="503"):
+        _read(brain._hedged(start, 5.0))

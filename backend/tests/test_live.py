@@ -88,7 +88,7 @@ class FakeBrain:
         self.cancelled = 0
         self.delay = 0.0
 
-    async def stream(self, history, system_stable, system_variable=""):
+    async def stream(self, history, system_stable, system_variable="", **_):
         self.calls.append(history)
         text = self.replies.pop(0) if len(self.replies) > 1 else self.replies[0]
         try:
@@ -1081,7 +1081,7 @@ def test_a_short_ready_first_word_plays_at_once_and_the_rest_is_voiced(env):
         done = line.expect("done")
     assert after_heard(line)[0] == "Ох..." and b"OH" in line.audio
     assert not any(text.startswith("Ох") for text in env.voice.texts)   # never asked of the voice
-    assert env.voice.texts[0] == "понимаю."                  # the voice's first piece, short too
+    assert env.voice.texts[0].startswith("понимаю.")        # the voice's first piece, short too
     assert done["reply"] == "Ох... понимаю. Давно за рулём?"
 
 
@@ -1092,3 +1092,55 @@ def test_a_first_word_that_is_not_made_is_not_cut_short():
     assert first_sound.opener(his_voice(), "Ох...") == 0                    # nothing after it yet
     assert first_sound.opener(his_voice(), "Охотно, давай.") == 0
     assert first_sound.opener(his_voice(), "Ого… да") == 0                  # «О…» is not «Ого…»
+
+
+# ── ten requests a minute (2026-10-07) ──────────────────────────────────────
+#
+# Google takes ten requests a minute for the voice on a paid key's first tier,
+# and Bob used three or four an answer: in a real conversation he would have
+# gone quiet. The owner: «Оптимизирую сейчас все для одного человека».
+
+def test_a_rationed_voice_says_an_answer_in_two_requests(env, monkeypatch):
+    monkeypatch.setattr(tts, "limited", lambda: True)
+    env.mind.replies = ["После работы всегда так... Тяжёлый был день? Расскажи, что было."]
+    env.mind.delay = 0.01
+    with talk(env) as line:
+        line.ears().send(turn("EndOfTurn", "я с работы пришёл, устал"))
+        done = line.expect("done")
+    assert env.voice.texts == ["После работы всегда так...", "Тяжёлый был день? Расскажи, что было."]
+    assert done["reply"] == "После работы всегда так... Тяжёлый был день? Расскажи, что было."
+
+
+def test_a_voice_that_is_not_rationed_still_goes_sentence_by_sentence(env, monkeypatch):
+    monkeypatch.setattr(tts, "limited", lambda: False)
+    env.mind.replies = ["После работы всегда так... Тяжёлый был день? Расскажи, что было."]
+    env.mind.delay = 0.01
+    with talk(env) as line:
+        line.ears().send(turn("EndOfTurn", "я с работы пришёл, устал"))
+        line.expect("done")
+    assert len(env.voice.texts) >= 3
+
+
+def test_after_a_ready_first_word_the_next_piece_waits_for_nothing_when_requests_are_left(env, monkeypatch):
+    first_sound._made[(his_voice(), "Ох…")] = [(16000, b"OH")]
+    monkeypatch.setattr(tts, "limited", lambda: True)
+    monkeypatch.setattr(tts, "room", lambda: 10)
+    env.mind.replies = ["Ох... понимаю. Давно за рулём? Наверное, устаёшь сильно."]
+    env.mind.delay = 0.02
+    with talk(env) as line:
+        line.ears().send(turn("EndOfTurn", "я водителем работаю"))
+        line.expect("done")
+    assert env.voice.texts[0] == "понимаю."                  # alone, before the rest is written
+    assert len(env.voice.texts) == 2
+
+
+def test_with_few_requests_left_the_rest_follows_a_ready_first_word_whole(env, monkeypatch):
+    first_sound._made[(his_voice(), "Ох…")] = [(16000, b"OH")]
+    monkeypatch.setattr(tts, "limited", lambda: True)
+    monkeypatch.setattr(tts, "room", lambda: 2)
+    env.mind.replies = ["Ох... понимаю. Давно за рулём? Наверное, устаёшь сильно."]
+    env.mind.delay = 0.02
+    with talk(env) as line:
+        line.ears().send(turn("EndOfTurn", "я водителем работаю"))
+        line.expect("done")
+    assert env.voice.texts == ["понимаю. Давно за рулём? Наверное, устаёшь сильно."]
