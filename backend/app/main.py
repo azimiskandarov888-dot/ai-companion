@@ -93,6 +93,7 @@ from . import (
     persona,
     reading,
     safety,
+    shaping,
     situations,
     stt,
     tts,
@@ -231,6 +232,9 @@ async def _assemble(
     """
     if pending and user_text is None:
         raise ValueError("Only somebody's line can be pending — he never drafts a hello.")
+    # A shadow written after the last talk becomes that man here, between talks
+    # (shaping.settle) — first thing, before his file is read for this turn.
+    shaping.settle(user_id)
     # BEFORE the log, not after: this asks how long it has been since anybody
     # last said anything, and logging first makes that answer zero — forever.
     broke_off = memory.broke_off_last_time(user_id)
@@ -528,6 +532,11 @@ def _remember(
     # never move — but who is around him, what is wrong with him and what he
     # is up to this week are things you only learn by knowing somebody.
     background_tasks.add_task(persona.deepen, user_id)
+    # A goodbye ends a talk — and while he is still a shadow, the end of every
+    # talk is when the reader reads them all and decides whether it is time
+    # to write him (shaping.py). After the scribe, which goes first above.
+    if farewell:
+        background_tasks.add_task(shaping.after_talk, user_id)
 
 
 async def _think_and_speak(

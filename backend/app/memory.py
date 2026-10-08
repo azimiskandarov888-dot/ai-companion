@@ -225,6 +225,36 @@ _CONVERSATION_SCAN = 40
 _VISIT_SCAN = 500
 
 
+def in_a_talk(user_id: str) -> bool:
+    """Is a conversation going on right now — a word in the last ten minutes?
+    (The same boundary as everything here.) A shadow becomes the friend
+    written for the person only between talks, never in the middle of one
+    (shaping.settle)."""
+    with db.connect() as conn:
+        last = conn.execute(
+            "SELECT ts FROM turns WHERE user_id=? ORDER BY id DESC LIMIT 1", (user_id,)
+        ).fetchone()
+    return last is not None and time.time() - last["ts"] < NEW_CONVERSATION_GAP
+
+
+def talks(user_id: str, limit: int = 600) -> list[list[dict]]:
+    """Their conversations, each as its turns, oldest first — the newest
+    `limit` turns, cut where a visit begins (NEW_CONVERSATION_GAP)."""
+    with db.connect() as conn:
+        rows = conn.execute(
+            "SELECT role, content, ts FROM turns WHERE user_id=? ORDER BY id DESC LIMIT ?",
+            (user_id, limit),
+        ).fetchall()
+    out: list[list[dict]] = []
+    last_ts = None
+    for r in reversed(rows):
+        if last_ts is None or r["ts"] - last_ts > NEW_CONVERSATION_GAP:
+            out.append([])
+        out[-1].append({"role": r["role"], "content": r["content"]})
+        last_ts = r["ts"]
+    return out
+
+
 def broke_off_last_time(user_id: str) -> bool:
     """Did their last real conversation just stop, with nobody saying goodbye?
 

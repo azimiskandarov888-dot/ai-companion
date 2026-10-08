@@ -87,7 +87,10 @@ THEIRS = ("places", "usage", "alerts", "ages")
 #: exists. Left in place they are worse than wrong: `keep_reading` compares
 #: them against a visit count that has just gone back to zero, gets a negative
 #: number, and quietly never re-reads the person again.
-_FRIENDSHIP_COUNTERS = ("_read_at_visit", "_read_at_turn", "_confirmed_at_read")
+_FRIENDSHIP_COUNTERS = ("_read_at_visit", "_read_at_turn", "_confirmed_at_read",
+                        # the shadow's readings (shaping.STATE): a new friend is
+                        # a new shadow, and is not written from the old one's count
+                        "_shadow")
 
 
 def _tables_about_people(conn) -> list[str]:

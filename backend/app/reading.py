@@ -145,6 +145,28 @@ strong_at — в каком деле или знании он сам счита�
 hurt_by — ОСТАВЬ ПУСТЫМ. Это поле заполняется только потом, из настоящих разговоров, и только когда одно и то же повторилось дважды. Здесь доказательств взяться неоткуда: угадать, что человека заденет, нельзя, а ложная запись навсегда отнимет у друга что-то живое. Что покажется ему фальшивым — это would_ring_false, а это другое поле"""
 
 
+# ── reading him from his talks with the shadow ──────────────────────────────
+#
+# The owner, 2026-10-08: no interviewer. The person talks to the companion from
+# the first second — at first a shadow with no character (persona.is_shadow) —
+# and the reader reads those talks instead of an interview's answers. The
+# method is the same and so is the shape of the answer; what differs is the
+# material, and the reader is told how: spoken and heard by a machine, with a
+# stranger who said little on purpose, and with nobody asking down a list —
+# so what he did NOT say weighs less than in an interview, and what he brought
+# up himself weighs more.
+
+_TALKS_HEAD = """Ты читаешь человека по тому, КАК он говорил в первых разговорах, а не только по тому, ЧТО он сказал.
+
+Это самая важная работа во всём приложении. От неё зависит, каким станет тот, с кем он говорит.
+
+ЭТО ЖИВОЙ РАЗГОВОР, А НЕ АНКЕТА. Перед тобой расшифровка его первых разговоров вслух с незнакомцем — с тем, кого для него потом допишут. Собеседник был нарочно никаким: спокойный, без своих историй, больше слушал; его реплики — не о человеке, читай не их. Речь услышана на слух: странное слово бери по смыслу, точки и запятые поставила машина. И никто ни о чём не расспрашивал по списку: чего он не сказал, о том его, скорее всего, просто не спросили — молчание весит здесь меньше, чем в анкете, а то, о чём он заговорил сам, — больше.
+
+"""
+
+_TALKS_SYSTEM = _TALKS_HEAD + _READING_SYSTEM[_READING_SYSTEM.index("ЧТО ТЫ ДЕЛАЕШЬ"):]
+
+
 #: Fields whose absence means the reading didn't actually happen. Deliberately
 #: short: a reading that got the person's register and what would reach them is
 #: usable even if a subtler field came back thin.
@@ -206,6 +228,47 @@ async def read_person(about: str, wishes: str = "") -> dict:
         max_tokens=8000,
     )
     return _extract_json(raw, require=_REQUIRED)
+
+
+async def read_talks(said: str) -> dict:
+    """Read the person from their talks with the shadow — every one so far,
+    afresh, never a revision of the last reading (shaping.py compares them, so
+    each must be made without the other in view). Raises ReadingFailed."""
+    text = said.strip()
+    if not text:
+        raise ReadingFailed("Разговоров ещё нет — читать нечего.")
+    raw = await brain.think(
+        _TALKS_SYSTEM,
+        "ИХ РАЗГОВОРЫ (ЧЕЛОВЕК — тот, кого ты читаешь):\n\n" + text,
+        model=config.READING_MODEL,
+        effort=config.READING_EFFORT,
+        max_tokens=8000,
+    )
+    return _extract_json(raw, require=_REQUIRED)
+
+
+_SAME_SYSTEM = """Перед тобой два чтения одного и того же человека, сделанные после разных разговоров с ним, — только их главное: чего в его жизни нет. Скажи, об одной ли нехватке они говорят, пусть и разными словами.
+
+Если второе только уточняет или дополняет первое — это одно. Если они называют разное — например, одно «не с кем всерьёз о том, что внутри», другое «вокруг вообще никого» — это разное.
+
+Ответь ТОЛЬКО JSON: {"same": true или false, "why": "одной фразой"}"""
+
+
+async def same_need(before: str, now: str) -> bool:
+    """Do two readings name the same need? That is when the reader is sure —
+    twice in a row, as every inference about a person here needs two
+    (mood.CONFIRMED_AT). Anything unreadable counts as «not yet»."""
+    if not (str(before or "").strip() and str(now or "").strip()):
+        return False
+    raw = await brain.generate_text(
+        _SAME_SYSTEM, f"ПЕРВОЕ:\n{before}\n\nВТОРОЕ:\n{now}",
+        max_tokens=300, model=config.READING_MODEL,
+    )
+    try:
+        verdict = _extract_json(raw).get("same")
+    except ReadingFailed:
+        return False
+    return verdict is True or str(verdict).strip().lower() in ("true", "да", "yes")
 
 
 def save(user_id: str, data: dict) -> dict:
@@ -433,10 +496,15 @@ async def keep_reading(user_id: str) -> None:
     failure here costs nothing: the previous reading stays, and the next
     conversation triggers another attempt.
     """
-    from . import memory   # local: memory imports nothing from here, keep it that way
+    from . import memory, persona   # local: neither imports anything from here
 
     existing = load(user_id)
     if not existing:
+        return
+    # A shadow is read after every talk, afresh, by shaping.py — that reading
+    # decides when he is written, and a revision slipped in between would be
+    # comparing the reader with itself.
+    if persona.is_shadow(persona.load_persona(user_id)):
         return
 
     with db.connect() as conn:
@@ -470,6 +538,42 @@ async def keep_reading(user_id: str) -> None:
         print(f"  ✎ re-read {user_id[:8]} at visit {visits}", flush=True)
     except Exception as e:  # noqa: BLE001 — a background refinement, never a failure
         print(f"  · re-reading skipped ({e})", flush=True)
+        return
+    # AND HE IS SHAPED FURTHER, the moment the reader understands something new
+    # about what this person needs. The owner, 2026-10-08: «its not one build.
+    # its a build that we are always shaping and making better». Not on every
+    # re-reading — only when it moved what decides who he should be for them.
+    if changed(existing, fresh):
+        await persona.deepen(user_id, now=True)
+
+
+#: The parts of a reading that decide who he should be FOR this person — what
+#: is missing, what reaches them, what they love and what they are proud of,
+#: where to push back, what lifts them. A re-reading that moves one of these
+#: is news for the writer; one that only adds a line to «learned» is not.
+SHAPES_HIM = ("verdict", "would_reach_them", "common_ground_seeds", "strong_at",
+              "needs_pushback_on", "what_lifts_him")
+
+
+def changed(before: dict | None, after: dict | None) -> bool:
+    """Did a re-reading move anything the writer shapes him by?"""
+    return any(_said((after or {}).get(k)) != _said((before or {}).get(k)) for k in SHAPES_HIM)
+
+
+def with_what_stays(before: dict | None, fresh: dict) -> dict:
+    """A fresh reading, carrying what no reading may drop: what wounds him and
+    what never to touch only ever grow (NEVER_SHRINKS), and what the
+    conversations taught stays learned. Somebody who starts over with a new
+    friend has not become a different person (erase.the_companion)."""
+    out = dict(fresh)
+    for key in NEVER_SHRINKS:
+        held = _as_lines((before or {}).get(key))
+        added = [line for line in _as_lines(fresh.get(key)) if line not in held]
+        if held or added:
+            out[key] = held + added
+    if (before or {}).get("learned"):
+        out["learned"] = _accumulate(before.get("learned"), fresh.get("learned"))
+    return out
 
 
 async def reread(user_id: str, existing: dict, turns: list[dict]) -> dict:

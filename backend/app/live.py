@@ -103,7 +103,7 @@ from collections.abc import AsyncIterator, Iterable
 from fastapi import BackgroundTasks, WebSocket
 
 from . import (allowance, aloud, brain, config, first_sound, hearing, identity, lang, memory,
-               persona, tts, voices, vow, young)
+               persona, shaping, tts, voices, vow, young)
 
 #: Said the moment a question about the world is heard: the search takes
 #: seconds, and a friend who is looking something up says so.
@@ -565,6 +565,9 @@ class Session:
         self.ws = ws
         self.user_id = user_id
         self.duplex = duplex
+        # A shadow written after the last talk becomes that man as this one
+        # begins — never in the middle of a talk (shaping.settle).
+        shaping.settle(user_id)
         self.who = voices.ensure(user_id)   # his own voice, given once and kept
         self.voice = tts.voice_for(self.who)
         #: An older friend — or a friend to somebody past sixty, by their own
@@ -731,6 +734,9 @@ class Session:
                 await self.ws.close()
             except Exception:  # noqa: BLE001 — already closed from the other side
                 pass
+            # The talk is over, goodbye or not: a shadow is read now, and
+            # perhaps written (shaping.py). Kept alive like the turns' learning.
+            _track(asyncio.create_task(shaping.after_talk(self.user_id)))
 
     async def stop(self, message: dict | None = None) -> None:
         """End this conversation — saying why, if there is anything to say."""

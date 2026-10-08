@@ -143,6 +143,46 @@ def persona_name(persona: dict) -> str:
     return (persona or {}).get("name") or "Боб"
 
 
+# --------------------------------------------------------------------------- #
+# A shadow: somebody before he is anybody in particular
+# --------------------------------------------------------------------------- #
+#
+# The owner, 2026-10-08: no interviewer — from the very first second the person
+# talks to him, and at first he is «like a shadow with no exact personality,
+# like real people do in real world». A stranger has a name, an age, a place
+# and something he does; what he is like you learn later. Here it is not even
+# learned: it is WRITTEN later, for this person, once the reader knows what
+# they need (shaping.py). Until then he is the sketch the dice chose
+# (matchmaker.create_shadow) and nothing more — and everything he says about
+# himself in the meantime is law for whoever writes him.
+
+#: What a shadow is told about being one, instead of «you live like a real
+#: person: friends, habits, your own stories» — which, said to somebody with
+#: none written yet, is an invitation to invent them on the spot, and
+#: everything he invents becomes law. So: ordinary, brief, nothing loud —
+#: ordinary because whatever he says is kept, and the writer must build on it.
+_SHADOW = ("Ты живой обычный человек, и вы пока почти не знакомы. Ниже — всё, что о "
+           "тебе есть: имя, возраст, где живёшь, чем занят. Себя ты не показываешь — ни "
+           "словечек, ни ярких черт, ни громких историй: говоришь просто и спокойно, как "
+           "незнакомый, который не рисуется. Спросят о том, чего здесь нет, — ответь коротко "
+           "и по-обычному, как ответил бы любой такой человек, без громких подробностей: ни "
+           "бед, ни подвигов, ни необычных талантов. Всё, что ты о себе скажешь, станет "
+           "правдой о тебе навсегда — поэтому о себе говори мало и обыкновенно.")
+_SHADOW_EN = ("You're an ordinary living person, and the two of you barely know each other "
+              "yet. Below is all there is about you: your name, age, where you live, what you "
+              "do. You don't put yourself on show — no pet words, no bright traits, no big "
+              "stories: you talk simply and calmly, like a stranger who isn't trying to "
+              "impress. If they ask about something that isn't here, answer briefly and "
+              "ordinarily, the way any person like you would — no big details: no tragedies, "
+              "no feats, no unusual talents. Whatever you say about yourself becomes true "
+              "about you for good — so say little about yourself, and keep it ordinary.")
+
+
+def is_shadow(persona: dict | None) -> bool:
+    """Is he still a shadow — the sketch, not yet written for this person?"""
+    return bool((persona or {}).get("shadow"))
+
+
 def _persona_block_en(p: dict) -> str:
     """build_persona_block() for a conversation in English (lang.py) — the same
     fields in the same order, each label carrying the same behaviour."""
@@ -150,6 +190,7 @@ def _persona_block_en(p: dict) -> str:
     lines: list[str] = [
         (f"YOU ARE {name}, {_joined(p.get('one_liner')).strip()}" if _joined(p.get("one_liner")).strip()
          else f"YOU ARE {name}").rstrip(".") + ".",
+        _SHADOW_EN if is_shadow(p) else
         "You simply live like a real person: you have a home, friends, habits, your own "
         "stories and your own moods. Talk about your life warmly and naturally, as the most "
         "ordinary thing.",
@@ -345,9 +386,11 @@ _DEEPEN_SYSTEM = """Ты дописываешь человека, которог
 - И что у него происходит СЕЙЧАС — на этой неделе, конкретно.
 - И ЧТО ОН ЗАТЕЯЛ. У него есть одно дело, которое он делает и никак не доделает, — оно указано ниже. Посмотри по разговорам: он его доделал? бросил? застрял? Тогда напиши в "intention" НОВОЕ дело — обычное, своё, на недели, такое, о котором друга можно спросить: перебрать лодку до заморозков, дописать письмо брату, выходить котёнка, разобрать чердак. Не доделал и не бросил — верни его же, можно теми же словами. Не подвиг и не мечта: просто дело, которое всё не кончается.
 
+И ЕЩЁ ОДНО — ЕГО ДОПИСЫВАЮТ ДЛЯ ЭТОГО ЧЕЛОВЕКА. Если дано чтение человека, в нём сказано, чего человеку не хватает и что до него доходит. Когда у друга для этого пока ничего нет, можно дать ему один-два новых штриха — привычку, вкус, мнение, вещь, человека рядом, дело — через которые он сможет это дать. Только то, что в нём могло быть всегда и просто ещё не всплывало. Не зеркало: увлечения человека другу не раздавай — общее у них уже есть, его тема; давай то, чего человеку не хватает, а не ещё одно «я тоже».
+
 ЖЕЛЕЗНЫЕ ПРАВИЛА:
 - Только ДОБАВЛЯЙ. Ничего не отменяй и ничему не противоречь. Если он сказал, что вырос в Ростове, он вырос в Ростове.
-- Ничего не выдумывай на пустом месте. Добавляй только то, что и правда прозвучало в разговорах или прямо из них следует. Пусто — верни пустые списки, это нормальный ответ.
+- Ничего не выдумывай на пустом месте: добавляй то, что прозвучало в разговорах или прямо из них следует, — и, кроме этого, не больше одного-двух штрихов ради того, чего человеку не хватает. Пусто — верни пустые списки, это нормальный ответ.
 - Не повторяй то, что у него уже есть.
 - Никаких новых ран и никакой новой нужды в нём. Он не становится жалобнее со временем.
 
@@ -355,16 +398,24 @@ _DEEPEN_SYSTEM = """Ты дописываешь человека, которог
 cast (список {"name","who","between"} — новые живые люди рядом с ним и что между вами), things (список — его вещи и углы, если в разговорах всплыли новые), flaws (список — что за ним заметилось), likes, dislikes, opinions, habits (списки строк), current_life (что у него происходит сейчас — строка, заменяет прежнее)."""
 
 
-async def deepen(user_id: str) -> None:
-    """Let the friendship reveal more of him. Never raises.
+async def deepen(user_id: str, *, now: bool = False) -> None:
+    """Let the friendship reveal more of him — and shape him further for this
+    person. Never raises.
 
     Runs in the background after a reply, like the re-reading, and decides for
-    itself whether enough has been said to be worth a call.
+    itself whether enough has been said to be worth a call. `now`: the reader
+    has just understood something new about what the person needs
+    (reading.keep_reading) — that is a reason by itself, whatever the count.
+    The owner, 2026-10-08: «its not one build. its a build that we are always
+    shaping and making better».
+
+    Never for a shadow: he is not written yet, and the first writing of him is
+    shaping.py's (what he says about himself meanwhile is kept by the scribe).
     """
-    from . import brain, db, memory   # local: these import persona, not the reverse
+    from . import brain, db, memory, reading   # local: these import persona, not the reverse
 
     who = load_persona(user_id)
-    if not who or not who.get("name"):
+    if not who or not who.get("name") or is_shadow(who):
         return
 
     with db.connect() as conn:
@@ -373,7 +424,7 @@ async def deepen(user_id: str) -> None:
         ).fetchone()["n"]
 
     since = int(who.get("_deepened_at_turn") or 0)
-    if total - since < DEEPEN_EVERY or total < DEEPEN_MIN_TURNS:
+    if not now and (total - since < DEEPEN_EVERY or total < DEEPEN_MIN_TURNS):
         return
 
     try:
@@ -384,11 +435,13 @@ async def deepen(user_id: str) -> None:
         if not said:
             return
 
+        brief = reading.as_brief(reading.load(user_id))
         prompt = (
             "КТО ОН УЖЕ ЕСТЬ (это правда, не трогай):\n"
             + build_persona_block(who)
             + "\n\nЧТО ОН САМ РАССКАЗЫВАЛ О СЕБЕ:\n"
             + (memory.bob_self_context(user_id) or "— пока ничего")
+            + (f"\n\n{brief}" if brief else "")
             + "\n\nИХ РАЗГОВОРЫ:\n\n" + said
         )
         raw = await brain.think(
@@ -425,6 +478,7 @@ def build_persona_block(persona: dict) -> str:
 
     lines: list[str] = [
         f"ТЫ — {name}. {_joined(p.get('one_liner'))}".strip().rstrip(".") + ".",
+        _SHADOW if is_shadow(p) else
         "Ты просто живёшь как настоящий человек: у тебя есть дом, друзья, "
         "привычки, свои истории и своё настроение. Рассказывай о своей жизни "
         "тепло и естественно, как о самой обычной вещи.",

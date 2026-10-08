@@ -219,6 +219,9 @@ async def maybe_begin(user_id: str) -> None:
     try:
         if not brain.can_call(config.BRAIN_MODEL):
             return
+        from . import persona
+        if persona.is_shadow(persona.load_persona(user_id)):
+            return      # a shadow has no week yet: nothing is written of him to happen to
         _sweep(user_id)
         if current(user_id):
             return                                   # something already is
