@@ -155,7 +155,10 @@ MARK_LAUGH = "//СМЕХ//"
 #: His breath before he answers — not something his body does to him, so the
 #: brain is never offered it; first_sound makes it (the owner, 2026-10-08).
 MARK_BREATH = "//ВДОХ//"
-MARKERS = (MARK_COUGH, MARK_CLEAR, MARK_YAWN, MARK_SNEEZE, MARK_SIGH, MARK_LAUGH, MARK_BREATH)
+#: …and the deeper, longer one of somebody older (the owner, 2026-10-08).
+MARK_DEEP_BREATH = "//ГЛУБОКО//"
+MARKERS = (MARK_COUGH, MARK_CLEAR, MARK_YAWN, MARK_SNEEZE, MARK_SIGH, MARK_LAUGH, MARK_BREATH,
+           MARK_DEEP_BREATH)
 
 
 def _decayed(value: float, hours: float, half_life: float) -> float:

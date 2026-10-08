@@ -248,5 +248,5 @@ def test_a_child_who_types_the_age_as_a_word_is_still_a_child():
     assert young.band("мне двенадцать") == young.CHILD
     assert young.band("пятнадцать") == young.TEEN
     assert young.band("двадцать пять") == ""        # «пять» inside a grown-up's age
-    assert young.band("семьдесят") == ""
+    assert young.band("семьдесят") == young.ELDER     # past sixty: only how he breathes
 

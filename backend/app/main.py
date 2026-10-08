@@ -1202,7 +1202,8 @@ async def companion_create(
 
     # HOW OLD THEY ARE, from the question the warm-up already asks warmly and
     # in the middle of a conversation. Stored as a BAND and never as an age,
-    # and only when it is not an adult's — see young.py. Before the matchmaker
+    # and only when it is not an adult's — or past sixty, for how he breathes
+    # (young.ELDER) — see young.py. Before the matchmaker
     # for the same reason as the country: a failure to write him must not lose
     # the one fact that changes how he will speak.
     if req.age.strip():

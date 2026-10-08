@@ -90,6 +90,7 @@ cannot be mended by carrying on.
 
 from __future__ import annotations
 
+import array
 import asyncio
 import json
 import random
@@ -102,7 +103,7 @@ from collections.abc import AsyncIterator, Iterable
 from fastapi import BackgroundTasks, WebSocket
 
 from . import (allowance, aloud, brain, config, first_sound, hearing, identity, lang, memory,
-               persona, tts, voices, vow)
+               persona, tts, voices, vow, young)
 
 #: Said the moment a question about the world is heard: the search takes
 #: seconds, and a friend who is looking something up says so.
@@ -133,6 +134,28 @@ _REST_AT_ONCE = 300
 #: only while this many requests are left in the minute; with fewer, the rest
 #: follows «Ох…» whole, after a longer pause.
 _ROOM_FOR_SHORT = 5
+#: His sound at the end of their turn — his breath, «ну…» — is timed to END
+#: as his words begin, a breath taken to speak (Session._answer): not a noise,
+#: then a silence, then the words (the owner, 2026-10-08: «оно идёт неплавно…
+#: резко обрывается… тишина, и затем начинает говорить»). How long his words
+#: take to start once the voice is asked (0.44–0.66 s on Google Cloud), and
+#: once his first piece is written (the voice is asked at once).
+_VOICE_TAKES = 0.5
+#: …and once the brain's first words are in: his first piece is cut a moment
+#: later (it ends at his first pause), and the voice asked for it then.
+_CUT_AND_VOICE = 0.6
+#: …and before even those, from the brain being asked: 0.62–1.16 s from
+#: Tashkent (2026-10-08) — the early end of it, so a deep breath starts in time. Only a breath longer than _CUT_AND_VOICE goes by this guess — a
+#: shorter one waits for the brain to show, so a slow brain leaves no silence
+#: after it.
+_BRAIN_TAKES = 0.65
+#: A breath ends this long before his first word — a person breathes in, and
+#: then speaks…
+_BREATH_TO_WORD = 0.05
+#: …and his words wait for it this long at most — longer for an older friend,
+#: whose breath is deeper and whose pace is slower (the owner: «и дольше»).
+_MAY_WAIT = 0.2
+_MAY_WAIT_OLDER = 0.35
 #: Drafts begun on a guess («похоже, договорил») in one turn, at most — then
 #: only «договорил» begins one. LiveKit's default too (max_retries 3): a turn
 #: that keeps stopping and going on would otherwise be paid for again at
@@ -371,13 +394,44 @@ class Draft:
                 self._waiters.discard(woken)
 
 
+#: Before the first word of an answer, this much of the voice's own silence
+#: is kept (the rest — 0.11–0.27 s, measured 2026-10-08 — is left out, so his
+#: breath runs straight into the word); and below this level it is silence.
+_LEAD_KEPT = 0.03
+_SILENT = 300
+
+
+def _from_first_sound(pcm: bytes, rate: int) -> bytes | None:
+    """The voice's audio from just before its first audible sound, faded in —
+    or None while it is all still silence (more may come). After a second of
+    nothing but silence, everything as it came."""
+    samples = array.array("h")
+    samples.frombytes(pcm[: len(pcm) - len(pcm) % 2])
+    loud = next((i for i, x in enumerate(samples) if abs(x) > _SILENT), None)
+    if loud is None:
+        return pcm if len(samples) > rate else None
+    start = max(0, loud - int(rate * _LEAD_KEPT))
+    cut = samples[start:]
+    fade = min(loud - start, len(cut))
+    for i in range(fade):
+        cut[i] = int(cut[i] * i / fade)
+    return cut.tobytes()
+
+
 class _Voicing:
     """One piece of his answer being made into sound — started early, played in
     order. The next piece's voice is asked for while this one is still
     playing, so there is no silence between sentences."""
 
-    def __init__(self, text: str, voice: str | None, *, made: tuple[int, bytes] | None = None) -> None:
+    def __init__(self, text: str, voice: str | None, *, made: tuple[int, bytes] | None = None,
+                 from_sound: bool = False) -> None:
         self._chunks: asyncio.Queue = asyncio.Queue()
+        #: Ready-made (first_sound.REACTIONS): it plays the moment it is asked.
+        self.ready_made = made is not None
+        #: The silence the voice puts before its first word is left out — the
+        #: answer's opening, which follows his breath or comes after their
+        #: turn, starts on the word (_LEAD_KEPT).
+        self._from_sound = from_sound
         #: Its first sound is in — or it has failed, which is as ready to play.
         self.sounding = asyncio.Event()
         #: When the voice was asked, and when its first sound came — the two
@@ -397,16 +451,26 @@ class _Voicing:
     @classmethod
     def first(cls, text: str, voice: str | None) -> _Voicing:
         """The voice of an answer's FIRST piece: ready-made when it is one of
-        his usual first words, made now when it is not."""
-        return cls(text, voice, made=first_sound.reaction(voice, text))
+        his usual first words, made now — starting on the word — when it is not."""
+        return cls(text, voice, made=first_sound.reaction(voice, text), from_sound=True)
 
     async def _make(self, text: str, voice: str | None) -> None:
         try:
+            held, rate = b"", tts.GEMINI_RATE
             async for rate, pcm in tts.stream(text, voice):
+                if self._from_sound:
+                    held += pcm
+                    pcm = _from_first_sound(held, rate)
+                    if pcm is None:
+                        continue                  # still the silence before his word
+                    self._from_sound = False
                 if self.first_at is None:
                     self.first_at = time.monotonic()
                 self._chunks.put_nowait((rate, pcm))
                 self.sounding.set()
+            if self._from_sound and held:          # it never got loud: as it came
+                self.first_at = self.first_at or time.monotonic()
+                self._chunks.put_nowait((rate, held))
             self._chunks.put_nowait(_END)
         except asyncio.CancelledError:
             raise
@@ -437,8 +501,11 @@ class Session:
         self.duplex = duplex
         self.who = voices.ensure(user_id)   # his own voice, given once and kept
         self.voice = tts.voice_for(self.who)
-        #: An older friend breathes more before he answers (first_sound.SHARES).
-        self._older = (voices.years(self.who) or 0) >= first_sound.OLDER_FROM
+        #: An older friend — or a friend to somebody past sixty, by their own
+        #: answer at the warm-up (young.ELDER) — breathes more before he
+        #: answers, deeper and longer (first_sound.SHARES_OLDER).
+        self._older = (young.is_elder(user_id)
+                       or (voices.years(self.who) or 0) >= first_sound.OLDER_FROM)
         self.ears: hearing.Ears | None = None
         self._send_lock = asyncio.Lock()
         self._stopping = asyncio.Event()
@@ -798,16 +865,15 @@ class Session:
         if made:
             _track(asyncio.create_task(self._send_sound(*made)))
 
-    async def _sound_at_end(self, transcript: str) -> None:
-        """Their turn is over: his first sound, at once — unless the «м-м» that
+    def _sound_for_end(self, transcript: str) -> tuple[str, int, bytes] | None:
+        """Their turn is over: which sound of his goes before his answer — a
+        breath, a word or none (first_sound.choose) — unless the «м-м» that
         went into their last pause a moment ago already was it."""
         kind = first_sound.at_end(transcript)
         if kind is None or time.monotonic() - self._sound_at < first_sound.SPACING_AT_END:
-            return
-        made = first_sound.choose(self.voice, kind, self._rng, older=self._older,
+            return None
+        return first_sound.choose(self.voice, kind, self._rng, older=self._older,
                                   avoid=self._sound_text)
-        if made:
-            await self._send_sound(*made)
 
     async def _sound_if_late(self, ended: float, transcript: str) -> None:
         """His words still not there LATE seconds after their turn: one more sound."""
@@ -917,6 +983,9 @@ class Session:
         pieces: asyncio.Queue = asyncio.Queue()
         cutter: asyncio.Task | None = None
         late: asyncio.Task | None = None
+        soon: asyncio.Task | None = None
+        #: When his sound before his words stops playing, if one was sent.
+        sound_ends: float | None = None
         #: A sound of his since their last word (first_sound.py) that the first
         #: words of the answer must not say again.
         echoed = ""
@@ -1006,6 +1075,63 @@ class Session:
                 ahead.append((meant, heard, _Voicing.first(heard, voice) if opening else _Voicing(heard, voice)))
             return True
 
+        def words_expected(length: float) -> float | None:
+            """When his words will start to sound, as far as is known by now:
+            from the voice making his first piece, from that piece being
+            written — the voice is asked for it at once — or from the brain's
+            first words. None while not even those are in: a guess at the
+            brain would leave a silence after his breath whenever it is slow."""
+            if ahead and not ahead[0][2].ready_made:
+                voicing = ahead[0][2]
+                return voicing.first_at or voicing.asked_at + _VOICE_TAKES
+            if draft.opened is not None:
+                return draft.opened + _VOICE_TAKES
+            if draft.first_words is not None:
+                return draft.first_words + _CUT_AND_VOICE
+            if draft.asked is not None and length > _CUT_AND_VOICE:
+                return draft.asked + _BRAIN_TAKES + _CUT_AND_VOICE
+            return None
+
+        async def sound_before_words(made: tuple[str, int, bytes]) -> None:
+            """His sound at the end of their turn, sent so that it ENDS as his
+            words begin — and not at all before a first word that is
+            ready-made: that one plays at once, and is itself the start.
+
+            A breath is whichever of his breaths fits the time there is: the
+            deep one when there is time for it (and he is older), the ordinary
+            one when there is less, none when his words are nearly there — so
+            his words never wait more than _MAY_WAIT for his breath (measured
+            2026-10-08: a deep breath sent regardless kept them waiting
+            0.4–0.7 s). A word — «ну…» — is said only if it fits as well."""
+            nonlocal sound_ends
+            text = made[0]
+            if text == first_sound.shown(first_sound.BREATH):
+                choices = first_sound.breaths(voice, older=self._older) or [made]
+            else:
+                choices = [made]
+            lengths = [len(pcm) / (2 * rate) for _text, rate, pcm in choices]
+            while not self._answering_aloud:
+                if ahead and ahead[0][2].ready_made:
+                    return
+                opening = draft.opening
+                if (opening and first_sound.reaction(voice, opening) is not None
+                        and first_sound.without_repeat(opening, text) == opening):
+                    return
+                expected = words_expected(max(lengths))
+                if expected is not None:
+                    left = expected - _BREATH_TO_WORD - time.monotonic()
+                    may_wait = _MAY_WAIT_OLDER if self._older else _MAY_WAIT
+                    fitting = [i for i, length in enumerate(lengths) if length <= left + may_wait]
+                    if not fitting:
+                        return   # his words are nearly here: nothing before them
+                    best = max(fitting, key=lambda i: lengths[i])
+                    if lengths[best] >= left:   # its moment has come
+                        if await self._send_sound(*choices[best]):
+                            timing["first_sound"] = _after(self._sound_at, start)
+                            sound_ends = self._sound_at + lengths[best]
+                        return
+                await asyncio.sleep(0.02)
+
         def spent() -> None:
             if not hello:
                 allowance.spend(user_id, time.monotonic() - ended)
@@ -1014,15 +1140,18 @@ class Session:
         try:
             opening = draft.opening   # his first piece, if the brain has got that far
             if opening and first_sound.reaction(voice, opening) is not None:
-                timing["head_ready"] = True   # written, and ready-made: no «м-м» before it
+                timing["head_ready"] = True   # written, and ready-made: no sound before it
             elif not hello and not draft.web:
-                # Before anything is waited on: the sound IS the not waiting.
-                # A sound the answer opens with is taken off the answer (cut):
-                # nothing of it is voiced yet, so it still can be.
-                await self._sound_at_end(draft.transcript)
-                late = asyncio.create_task(self._sound_if_late(ended, draft.transcript))
-            if self._sound_at >= start:
-                echoed = self._sound_text
+                # Chosen now, said just before his words. A word the answer
+                # opens with that the sound already says is taken off the
+                # answer (cut): nothing of it is voiced yet, so it still can be.
+                if planned := self._sound_for_end(draft.transcript):
+                    echoed = planned[0]
+                    soon = asyncio.create_task(sound_before_words(planned))
+                else:
+                    late = asyncio.create_task(self._sound_if_late(ended, draft.transcript))
+            if self._sound_at >= start:   # the «м-м» that went into their last pause
+                echoed = echoed or self._sound_text
                 timing["first_sound"] = _after(self._sound_at, start)
             await draft.ready.wait()
             voice = draft.voice or self.voice
@@ -1053,6 +1182,10 @@ class Session:
                             timing["first_words"] = _after(draft.first_words, start)
                             timing["voice_asked"] = _after(voicing.asked_at, start)
                             timing["voice_ready"] = _after(voicing.first_at, start)
+                            if sound_ends is not None:
+                                # >0: a silence between his sound and his
+                                # words; <0: his words waited for it to end.
+                                timing["after_sound"] = round(time.monotonic() - sound_ends, 3)
                     await self._send_audio(pcm, rate)
                     sounded = True
                     await ready_ahead(wait=False)
@@ -1123,8 +1256,9 @@ class Session:
             spent()
             await self._send({"kind": "trouble", "detail": str(e)})
         finally:
-            if late is not None:
-                late.cancel()
+            for task in (late, soon):
+                if task is not None:
+                    task.cancel()
             self._answering_aloud = False
             self._voicing = False
 

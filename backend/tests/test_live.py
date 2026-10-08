@@ -10,6 +10,7 @@ himself, an alarm that comes after the words instead of before them.
 
 from __future__ import annotations
 
+import array
 import asyncio
 import json
 import queue
@@ -110,9 +111,13 @@ class FakeVoice:
     def __init__(self) -> None:
         self.texts: list[str] = []
         self.delay = 0.0
+        #: …and before its first sound only: a voice takes a moment to begin.
+        self.first_delay = 0.0
 
     async def stream(self, text, voice=None):
         self.texts.append(text)
+        if self.first_delay:
+            await asyncio.sleep(self.first_delay)
         for part in (b"AB", b"CD"):
             if self.delay:
                 await asyncio.sleep(self.delay)
@@ -716,17 +721,24 @@ def his_voice() -> str | None:
     return tts.voice_for(persona.load_persona(UID))
 
 
+#: His sounds in the tests: 0.4 s each at 16 kHz, each its own bytes.
+MM, HM, BR, DA, NU = (tag * 6400 for tag in (b"MM", b"HM", b"BR", b"DA", b"NU"))
+
+
 @pytest.fixture
-def sounds(monkeypatch):
+def sounds(monkeypatch, env):
     """His sounds, made — the stand-in voice would make them as bytes too, but
     then which bytes are which would be guesswork."""
-    for text, pcm in (("М-м…", b"MM"), ("Хм…", b"HM"), (first_sound.BREATH, b"BR"),
-                      ("Да…", b"DA"), ("Ну…", b"NU")):
+    # As long as the real ones, so that there is a moment to say them in
+    # before his words (live._VOICE_TAKES) — and his words take a moment too.
+    for text, pcm in (("М-м…", MM), ("Хм…", HM), (first_sound.BREATH, BR),
+                      ("Да…", DA), ("Ну…", NU)):
         first_sound._made[(his_voice(), text)] = [(16000, pcm)]
     # His breath at the end of every turn, unless a test says otherwise.
     always = {kind: (1.0, 0.0) for kind in first_sound.SHARES}
     monkeypatch.setattr(first_sound, "SHARES", always)
     monkeypatch.setattr(first_sound, "SHARES_OLDER", always)
+    env.voice.first_delay = 0.8    # his words take a moment to come, as they do
     monkeypatch.setattr(first_sound, "CHANCE_IN_PAUSE", 1.0)
     monkeypatch.setattr(first_sound, "LATE", None)
 
@@ -766,7 +778,7 @@ def test_he_gives_voice_at_once_and_it_is_not_what_he_said(env, sounds):
         done = line.expect("done")
     says = after_heard(line)
     assert says[0] == "(вдох)"                             # first, before any word
-    assert line.audio[0] == b"BR"
+    assert line.audio[0] == BR
     assert " ".join(says[1:]) == "Привет. Рад тебя слышать, как прошёл день?"
     assert done["reply"] == "Привет. Рад тебя слышать, как прошёл день?"
     assert memory.recent_turns(UID)[-1]["content"] == done["reply"]   # never remembered
@@ -792,7 +804,7 @@ def test_a_pause_gets_a_listeners_sound_where_he_can_be_talked_over(env, sounds)
     and the end of the turn does not get a second one straight after."""
     with talk(env, duplex=True) as line:
         line.ears().send(turn("StartOfTurn", "я сегодня"), turn("EagerEndOfTurn", "я сегодня в школу пришёл"))
-        pull_until(line, lambda: b"MM" in line.audio)
+        pull_until(line, lambda: MM in line.audio)
         line.ears().send(turn("TurnResumed", "я сегодня в школу пришёл"),
                          turn("EndOfTurn", "я сегодня в школу пришёл а там никого"))
         line.expect("heard")
@@ -1167,7 +1179,7 @@ def test_an_older_friend_breathes_more_and_says_less(env, sounds, monkeypatch):
     monkeypatch.setattr(first_sound, "SHARES", {k: (0.0, 1.0) for k in first_sound.SHARES})
     monkeypatch.setattr(first_sound, "SHARES_OLDER", {k: (1.0, 0.0) for k in first_sound.SHARES})
     persona.save_persona(UID, {**persona.load_persona(UID), "age": "71"})
-    for text, pcm in ((first_sound.BREATH, b"BR"), ("Да…", b"DA"), ("Ну…", b"NU")):
+    for text, pcm in ((first_sound.BREATH, BR), ("Да…", DA), ("Ну…", NU)):
         first_sound._made[(his_voice(), text)] = [(16000, pcm)]   # in the voice he has now
     with talk(env) as line:
         line.ears().send(turn("EndOfTurn", "я сегодня в саду работал"))
@@ -1181,3 +1193,73 @@ def test_his_breath_is_never_taken_for_his_words_coming_back(env, sounds):
         line.ears().send(turn("EndOfTurn", "я сегодня в школе был"))
         line.expect("done")
         assert "(вдох)" not in live._open[UID]._said
+
+
+# ── his breath runs into his words (2026-10-08) ─────────────────────────────
+#
+# The owner: «в начале он говорит «э» или «м», затем оно резко обрывается,
+# тишина, и затем начинает говорить, что неестественно. Звучит как
+# некачественный SFX».
+
+def test_his_breath_waits_for_his_words_and_comes_just_before_them(env, sounds):
+    env.mind.replies = ["После работы всегда так... Тяжёлый был день?"]
+    env.mind.delay = 0.25                                     # the brain takes a moment
+    with talk(env) as line:
+        line.ears().send(turn("EndOfTurn", "я с работы пришёл, устал"))
+        line.expect("heard")
+        began = time.monotonic()
+        first = line.expect("say")
+        waited = time.monotonic() - began
+        line.expect("done")
+    assert first["text"] == "(вдох)"
+    assert waited > 0.15                                      # not at once, into a silence
+    says = after_heard(line)
+    assert says[:2] == ["(вдох)", "После работы всегда так..."]
+
+
+def test_no_breath_before_a_first_word_that_is_ready_made(env, sounds):
+    first_sound._made[(his_voice(), "Ох…")] = [(16000, b"OH" * 4000)]
+    env.mind.replies = ["Ох... понимаю. Давно за рулём?"]
+    with talk(env) as line:
+        line.ears().send(turn("EndOfTurn", "я водителем работаю"))
+        line.expect("done")
+    assert after_heard(line)[0] == "Ох..."
+    assert "(вдох)" not in after_heard(line)
+
+
+def test_somebody_past_sixty_gets_the_deep_breath(env, sounds, monkeypatch):
+    from app import young
+
+    young.remember(UID, "72")
+    first_sound._made[(his_voice(), first_sound.DEEP_BREATH)] = [(16000, b"DB" * 9600)]   # 0.6 s
+    monkeypatch.setattr(first_sound, "SHARES_OLDER", {k: (1.0, 0.0) for k in first_sound.SHARES})
+    monkeypatch.setattr(first_sound, "SHARES", {k: (0.0, 0.0) for k in first_sound.SHARES})
+    with talk(env) as line:
+        line.ears().send(turn("EndOfTurn", "я сегодня в саду работал"))
+        line.expect("done")
+    assert after_heard(line)[0] == "(вдох)" and b"DB" * 9600 in line.audio
+
+
+def test_his_words_start_on_the_word_not_on_the_voice_s_silence():
+    rate = 1000
+    silence, word = [0] * 250, [0, 5000, -5000] * 100
+    pcm = live._from_first_sound(array.array("h", silence + word).tobytes(), rate)
+    cut = array.array("h")
+    cut.frombytes(pcm)
+    assert len(cut) == len(word) - 1 + int(rate * live._LEAD_KEPT)   # 30 ms kept before the word
+    assert cut[0] == 0                                                # faded in, no click
+    assert live._from_first_sound(array.array("h", [0] * 500).tobytes(), rate) is None   # wait for more
+
+
+def test_a_breath_too_long_for_the_moment_gives_way_to_a_shorter_one_or_none(env, sounds, monkeypatch):
+    """His words never wait long for his breath: the deep one when there is
+    time for it, the ordinary one when there is less, and none when they are
+    nearly there (2026-10-08: a deep breath sent regardless kept them waiting
+    0.4–0.7 s)."""
+    first_sound._made[(his_voice(), first_sound.DEEP_BREATH)] = [(16000, b"DB" * 16000)]   # a second
+    monkeypatch.setattr(live.Session, "_older", True, raising=False)
+    env.voice.first_delay = 0.75                              # time for 0.4 s, not for a second
+    with talk(env) as line:
+        line.ears().send(turn("EndOfTurn", "я сегодня в саду работал"))
+        line.expect("done")
+    assert BR in line.audio and b"DB" * 16000 not in line.audio

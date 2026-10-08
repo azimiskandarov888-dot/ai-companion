@@ -45,7 +45,10 @@ U = identity.user_id_from_token(TOKEN)
         ("17 лет", young.TEEN),
         ("18", ""),
         ("45", ""),
-        ("87", ""),
+        ("59", ""),
+        ("60", young.ELDER),
+        ("87", young.ELDER),
+        ("мне семьдесят два", young.ELDER),
     ],
 )
 def test_the_band_comes_from_the_answer_the_warm_up_already_gets(said, band):
@@ -73,6 +76,16 @@ def test_an_adult_is_never_written_down():
     assert young.remember(U, "45") == ""
     assert young.of(U) == ""
     assert young.is_young(U) is False
+
+
+def test_an_elder_is_written_down_and_it_changes_only_how_he_breathes():
+    """«Чем старше, тем больше вдоха… и дольше, и сильнее» (the owner,
+    2026-10-08): the one band kept about a grown-up, and nothing else follows
+    from it — not how he is spoken to, not what is kept."""
+    assert young.remember(U, "72") == young.ELDER
+    assert young.is_elder(U) is True
+    assert young.is_young(U) is False
+    assert young.keeps_nothing(U) is False and young.allowed(U) is True
 
 
 def test_a_child_is_written_down_once_and_stays():

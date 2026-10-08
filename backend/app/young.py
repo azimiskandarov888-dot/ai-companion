@@ -67,9 +67,19 @@ CHILD = "child"
 #: case that ended in the Character.AI settlements.
 TEEN = "teen"
 
-#: Below this, CHILD. From here to ADULT, TEEN.
+#: Sixty and over — the one band kept about a grown-up, and only for how he
+#: breathes before he answers: deeper, longer and more often (first_sound;
+#: the owner, 2026-10-08: «чем старше, тем больше вдоха… и дольше, и
+#: сильнее»). It changes nothing about what is kept or how he is spoken to.
+ELDER = "elder"
+
+#: Below this, CHILD. From here to ADULT, TEEN. From ELDER_FROM, ELDER.
 _TEEN_FROM = 13
 _ADULT_FROM = 18
+_ELDER_FROM = 60
+#: …and the tens that make an answer in words an elder's: «семьдесят два».
+_ELDER_TENS = {"шестьдесят", "семьдесят", "восемьдесят", "девяносто",
+               "sixty", "seventy", "eighty", "ninety"}
 
 #: Ages a person could plausibly give. A four-digit year of birth, a house
 #: number or the «8 лет как на пенсии» in an answer about something else all
@@ -104,7 +114,8 @@ _TENS = {
 
 
 def band(said) -> str:
-    """The age band in a free-text answer, or "" for adult / no answer.
+    """The age band in a free-text answer — CHILD, TEEN, ELDER — or "" for a
+    grown-up under sixty / no answer.
 
     Digits first, and a word only for the ages that matter here: a child who
     types «двенадцать» used to be read as a grown-up, and their inner life
@@ -117,11 +128,17 @@ def band(said) -> str:
         years = int(found.group())
     else:
         said_words = re.findall(r"\w+", text.lower())
+        if any(w in _ELDER_TENS for w in said_words):
+            return ELDER
         words = [_WORDS[w] for w in said_words if w in _WORDS]
         if not words or any(w in _TENS for w in said_words):
             return ""
         years = words[0]
-    if years not in _PLAUSIBLE or years >= _ADULT_FROM:
+    if years not in _PLAUSIBLE:
+        return ""
+    if years >= _ELDER_FROM:
+        return ELDER
+    if years >= _ADULT_FROM:
         return ""
     return TEEN if years >= _TEEN_FROM else CHILD
 
@@ -129,8 +146,9 @@ def band(said) -> str:
 def remember(user_id: str, said) -> str:
     """Note the band, if the answer had one. Returns what was stored, or "".
 
-    Never stores «adult»: a row here means «this person is not an adult», so
-    its absence and its presence say two different things, and a row that means
+    Never stores «adult»: a row here means «this person is not an adult» — or,
+    ELDER, past sixty, which changes nothing but how he breathes — so its
+    absence and its presence say two different things, and a row that means
     nothing would make the table impossible to read.
     """
     found = band(said)
@@ -151,6 +169,11 @@ def of(user_id: str) -> str:
             "SELECT band FROM ages WHERE user_id=?", (user_id,)
         ).fetchone()
     return (row["band"] if row else "") or ""
+
+
+def is_elder(user_id: str) -> bool:
+    """Sixty or over, by their own answer. Decides how he BREATHES, nothing else."""
+    return of(user_id) == ELDER
 
 
 def is_young(user_id: str) -> bool:

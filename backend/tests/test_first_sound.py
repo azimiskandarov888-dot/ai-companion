@@ -62,31 +62,38 @@ def test_the_silence_around_a_sound_is_cut_and_the_ends_fade():
     sound = _pcm([0] * 500 + [10000] * 300 + [0] * 500)
     cut = array.array("h")
     cut.frombytes(first_sound.trimmed(sound, rate))
-    edge = int(rate * first_sound._EDGE)
-    assert len(cut) == 300 + 2 * edge          # the sound, and a breath of margin
-    assert cut[0] == 0 and cut[-1] == 0          # no click
+    edge, tail = int(rate * first_sound._EDGE), int(rate * first_sound._TAIL)
+    assert len(cut) == 300 + edge + tail       # the sound, a little before it, a slow end after
+    assert cut[0] == 0 and cut[-1] == 0          # no click, and no dead stop
+    assert cut[-tail // 2] < 10000 // 2          # half-way through its end it has mostly died away
     assert max(cut) == 10000
     assert first_sound.trimmed(_pcm([0] * 100), rate) == b""
 
 
-def test_a_breath_is_kept_only_short_and_quiet_and_made_again_when_not(monkeypatch):
-    """Measured 2026-10-08: most takes of <breath> a quiet half-second, but one
-    23 s long and at full volume. Such a take is made again."""
-    takes = iter([[0] * 10 + [32000] * 600 + [0] * 10,      # loud: not a breath
-                  [0] * 10 + [3000] * 5000 + [0] * 10,      # five seconds: not a breath
-                  [0] * 10 + [3000] * 500 + [0] * 10])      # a quiet half-second
+def test_his_breaths_are_sorted_from_what_came_out_and_the_wrong_ones_dropped(monkeypatch):
+    """Measured 2026-10-08: a breath tag gives a quiet half-second, a strong
+    second — or 23 s at full volume. The short quiet ones are his breath, the
+    long strong ones his deep breath, the rest not breaths at all."""
+    takes = iter([[0] * 10 + [32000] * 600 + [0] * 100,     # full volume: not a breath
+                  [0] * 10 + [3000] * 5000 + [0] * 100,     # five seconds: not a breath
+                  [0] * 10 + [3000] * 300 + [0] * 100,      # a quiet 0.4 s: his breath
+                  [0] * 10 + [12000] * 700 + [0] * 100])    # a strong 0.8 s: his deep breath
     asked: list[str] = []
 
     async def voice(text, voice=None, **_):
         asked.append(text)
-        yield 1000, _pcm(next(takes) if text == first_sound.BREATH else [0] * 10 + [9000] * 300 + [0] * 10)
+        pcm = next(takes) if text in (first_sound.BREATH, first_sound.DEEP_BREATH) else SHORT
+        yield 1000, _pcm(pcm)
 
     monkeypatch.setattr(tts, "stream", voice)
     monkeypatch.setattr(first_sound, "TAKES", 1)
     asyncio.run(first_sound._make_all("v"))
-    assert asked.count(first_sound.BREATH) == 3
-    (rate, pcm), = first_sound._made[("v", first_sound.BREATH)]
-    assert 0.4 < len(pcm) / 2 / rate < 0.6
+    assert sum(t in (first_sound.BREATH, first_sound.DEEP_BREATH) for t in asked) == 4
+    (rate, ordinary), = first_sound._made[("v", first_sound.BREATH)]
+    (_rate, deep), = first_sound._made[("v", first_sound.DEEP_BREATH)]
+    assert 0.3 < len(ordinary) / 2 / rate <= 0.45 and 0.7 < len(deep) / 2 / rate <= 0.9
+    peak = lambda pcm: max(map(abs, array.array("h", pcm)))
+    assert peak(deep) == first_sound.DEEP_PEAK > peak(ordinary) == first_sound.BREATH_PEAK   # and stronger
 
 
 def test_the_end_of_a_turn_gets_a_breath_a_word_or_nothing(monkeypatch):
@@ -126,12 +133,22 @@ def test_he_does_not_make_the_same_sound_twice_running_when_there_is_another():
     assert first_sound.pick(None, "listening", rng, avoid="М-м…")[0] == "М-м…"
 
 
+#: What a stand-in voice makes: a short quiet sound for anything — an
+#: ordinary breath, a word — and for <heavy breath> a long, strong one.
+SHORT = [0] * 50 + [9000] * 320 + [0] * 100
+DEEP = [0] * 50 + [12000] * 700 + [0] * 100
+
+
+def _sound_of(text: str) -> bytes:
+    return _pcm(DEEP if text == first_sound.DEEP_BREATH else SHORT)
+
+
 def test_they_are_made_once_in_his_voice_and_kept(monkeypatch):
     asked: list[tuple[str, str | None]] = []
 
     async def voice(text, voice=None, **_):
         asked.append((text, voice))
-        yield 1000, _pcm([0] * 50 + [9000] * 300 + [0] * 50)
+        yield 1000, _sound_of(text)
 
     monkeypatch.setattr(tts, "stream", voice)
 
@@ -141,18 +158,23 @@ def test_they_are_made_once_in_his_voice_and_kept(monkeypatch):
         await first
 
     asyncio.run(run())
-    sounds = list(dict.fromkeys((first_sound.BREATH,) + first_sound.STATEMENT + first_sound.QUESTION
-                                + first_sound.THINKING + first_sound.LISTENING))
+    breaths = [first_sound.BREATH, first_sound.DEEP_BREATH] * first_sound.TAKES
+    sounds = list(dict.fromkeys(first_sound.STATEMENT + first_sound.QUESTION + first_sound.THINKING
+                                + first_sound.LISTENING))
     reactions = [t for t in first_sound.REACTIONS if t not in sounds]
-    texts = sounds + reactions
-    assert {t for t, _ in asked} == set(texts)
-    assert [t for t, _ in asked][:len(sounds) * first_sound.TAKES] == [
-        t for t in sounds for _ in range(first_sound.TAKES)]                 # his sounds first, his breath first of all
+    said = [t for t, _ in asked]
+    assert said[:len(breaths)] == breaths                                    # his breaths first of all
+    rest = said[len(breaths):]
+    assert rest[:len(sounds) * first_sound.TAKES] == [
+        t for t in sounds for _ in range(first_sound.TAKES)]                 # then his sounds
     start = len(sounds) * first_sound.TAKES
-    assert [t for t, _ in asked][start:start + len(reactions)] == reactions  # then one of each first word
+    assert rest[start:start + len(reactions)] == reactions                   # then one of each first word
     assert all(v == "her-voice" for _, v in asked)
-    assert len(asked) == len(texts) * first_sound.TAKES
+    assert len(rest) == (len(sounds) + len(reactions)) * first_sound.TAKES
     assert first_sound.ready("her-voice") and not first_sound.ready(None)
+    ordinary = first_sound._made[("her-voice", first_sound.BREATH)][0]
+    deep = first_sound._made[("her-voice", first_sound.DEEP_BREATH)][0]
+    assert len(deep[1]) > len(ordinary[1])                                   # the deep one is longer
 
 
 def test_what_is_made_is_kept_and_never_made_again(monkeypatch):
@@ -162,7 +184,7 @@ def test_what_is_made_is_kept_and_never_made_again(monkeypatch):
 
     async def voice(text, voice=None, **_):
         asked.append(text)
-        yield 1000, _pcm([0] * 50 + [9000] * 300 + [0] * 50)
+        yield 1000, _sound_of(text)
 
     monkeypatch.setattr(tts, "stream", voice)
     asyncio.run(first_sound._make_all("his-voice"))
