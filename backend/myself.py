@@ -10,6 +10,7 @@
     python3 myself.py scribe           # 6. что каждый писарь вынес из разговора
     python3 myself.py status           # что пройдено, что выбрано, сколько ушло
     python3 myself.py pick read Б      # выбрать позже, если сразу не решил
+    python3 myself.py live             # твой друг — в живом разговоре, совсем заново
 
 ЗАЧЕМ НА СЕБЕ
 
@@ -67,7 +68,8 @@ from pathlib import Path
 
 import httpx
 
-from app import brain, config, intake, learn, matchmaker, persona, reading, young
+from app import (brain, config, emergency, erase, identity, intake, learn, matchmaker, memory,
+                 persona, reading, voices, young)
 import tryout
 
 HOME = config.DATA_DIR / "myself"
@@ -636,6 +638,46 @@ def pick(args) -> None:
         _roll(record)
 
 
+# ── в живой разговор ─────────────────────────────────────────────────────────
+
+#: Кто ты в живом разговоре, когда страница открыта как localhost:8000/live#me —
+#: один и тот же здесь и там (static/live.html, MY_FRIEND). Не секрет: это
+#: страница разработки на твоём Mac, и к другим людям он не подходит.
+LIVE_TOKEN = "myself-live-friend-0001"
+#: Кто пишет твоего друга — тот же, кто пишет его в приложении (config.WRITER_MODEL
+#: и config.READING_MODEL — Claude Opus), только через OpenRouter: ключа
+#: Anthropic в .env нет.
+LIVE_WRITER = ("Claude Opus 5", "anthropic/claude-opus-5")
+
+
+async def live(args) -> None:
+    """Совсем заново: прежний друг уходит со всем, что было, а из твоего
+    знакомства (myself.py interview) приходит новый — так же, как в
+    приложении (matchmaker.create_companion), — и ждёт тебя в живом разговоре."""
+    me = _interview()
+    name, model = (args.model, args.model) if getattr(args, "model", None) else LIVE_WRITER
+    uid = identity.user_id_from_token(f"Bearer {LIVE_TOKEN}")
+    erase.everything(uid)
+    young.remember(uid, me.get("age") or "")
+    if me.get("country"):
+        emergency.remember(uid, me["country"])
+    if who := intake.their_name(me["story"]):
+        memory.add_memory(uid, "fact", f"имя: {who}", owner="elder", title="имя", importance=3)
+    _model.set(model)
+    _bill.set(bill := {"cost": 0.0, "calls": 0})
+    print(f"Пишет {name}: сначала читает тебя, потом придумывает и пишет его — пара минут…",
+          flush=True)
+    p = await matchmaker.create_companion(uid, me["story"], wishes=(me.get("wishes") or "").strip(),
+                                          band=young.of(uid), gender="", origin="")
+    if not young.keeps_nothing(uid):
+        await learn.from_intake(uid, me["story"])
+    voices.ensure(uid)
+    print(f"\nГотово: {p.get('name')}, {p.get('age')} — {p.get('one_liner')}")
+    print(f"Стоило ${bill['cost']:.3f}")
+    print("\nДальше: запусти сервер (./run.sh) и открой http://localhost:8000/live#me")
+    print("→ «Начать разговор». Он поздоровается первым.")
+
+
 async def _staged(stage) -> None:
     global _client
     _patch()
@@ -656,6 +698,8 @@ def main() -> None:
         s.add_argument("--models", help="свои кандидаты: id,id,… (имена OpenRouter)")
         if name == "interview":
             s.add_argument("--model", help="другой интервьюер (имя OpenRouter)")
+    lv = sub.add_parser("live")
+    lv.add_argument("--model", help="другой писатель (имя OpenRouter)")
     sub.add_parser("status")
     p = sub.add_parser("pick")
     p.add_argument("stage", choices=STAGES[1:])
@@ -669,6 +713,8 @@ def main() -> None:
         return pick(args)
     if args.stage == "meet":
         return asyncio.run(meet(args))
+    if args.stage == "live":
+        return asyncio.run(_staged(live(args)))
     asyncio.run(_staged(globals()[args.stage](args)))
 
 

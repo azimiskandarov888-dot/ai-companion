@@ -94,8 +94,15 @@
       const statusEl = $("status"), hearingEl = $("hearing"), convo = $("convo");
       const startBtn = $("start"), doneBtn = $("done"), freshBtn = $("fresh"), duplexBox = $("duplex");
 
+      // Opened as /live#me: YOUR friend, the one `python3 myself.py live` wrote
+      // from your own getting-to-know — the same token there and here. The
+      // «#» part never reaches the server, so it is never in any log.
+      const MY_FRIEND = "myself-live-friend-0001";
+      const mine = location.hash === "#me";
+
       // A stable test identity of its own — never the anonymous user the old page uses.
       function token() {
+        if (mine) return MY_FRIEND;
         let t = null;
         try { t = localStorage.getItem("live_token"); } catch (e) {}
         if (!t) {
@@ -338,6 +345,11 @@
         convo.innerHTML = "";
         add("note", "", "Новая встреча: нажми «Начать разговор» — он поздоровается первым.");
       };
+      if (mine) {
+        // Your own friend: starting over with him is `python3 myself.py live`.
+        freshBtn.style.display = "none";
+        add("note", "", "Твой друг. Совсем заново — python3 myself.py live в терминале.");
+      }
       // Opened where no microphone will ever be given (an iPhone, an address
       // that is not https or localhost): say so now, not after a press.
       if (window.isSecureContext === false || !navigator.mediaDevices) {
