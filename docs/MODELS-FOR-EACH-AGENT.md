@@ -335,3 +335,49 @@ Sources: [EQ-Bench 4](https://eqbench.com/) · [Creative Writing v3](https://eqb
 [Claude Opus 5.5](https://www.anthropic.com/claude-opus-5-5) · [GPT-6.1 Sol](https://openai.com/index/introducing-gpt-6-1-sol/) ·
 [Gemini 4 Argon](https://blog.google/innovation-and-ai/models-and-research/gemini-models/gemini-4-argon/) ·
 [October releases tracker](https://benchlm.ai/model-updates/releases/october-2026)
+
+---
+
+## 2026-10-08, evening: no interviewer — what changed for choosing the models
+
+The owner decided there is no interviewer: the person talks to the companion
+from the first second — at first a shadow with no character — and he is
+written once the reader is sure what this person needs, then shaped from
+there on (HANDOVER §0, `app/shaping.py`). The best model for each job is the
+same as this morning; what changed is the jobs, and so what each candidate
+must be tested on.
+
+| Agent | Before | Now |
+|---|---|---|
+| Interviewer | Opus 5, once per person | **gone** |
+| Sketches | ten people from the interview and the reading | ten strangers from the door only — age, country, whom they want to meet (`matchmaker.sketch_shadows`); they must never live where the person does, and stay plain: a character is written later |
+| Scribe | facts about the person | the same, **plus what the shadow says about himself** — the writer's law, so a scribe that misses or invents one breaks the portrait |
+| Reader | read written answers to an interviewer, once | reads **spoken talks with a stranger**, heard by a machine — all of them, afresh, after every talk until he is written (`reading.read_talks`); plus a one-line «same need?» comparison on the same model (`reading.same_need`) |
+| Writer | wrote a whole person from a sketch and the reading | the same, **without contradicting anything the shadow already said** (the new law in `_WRITE_SYSTEM`); afterwards, the shaping passes (`persona.deepen`) follow the writer's model |
+| Watcher | Haiku 4.5, Anthropic only — dead without the key | the same model through OpenRouter; still not chosen by feel |
+
+**What the change asks of the models more than before.** The reader gets
+less direct material — nobody asks «о чём бы поговорить, да не с кем?» — and
+more of it, in speech, with mishearings: long-context reading of casual talk
+is the skill now (EQ-Bench 4 is still the closest benchmark). The writer gets
+a harder constraint: unfold a sketch for a person AND keep every word of a
+self it did not write — instruction-following under creativity, which the
+blind test checks by the owner's own «does he contradict what he told me?».
+
+**The shortlists hold.** OpenRouter's model list re-read the same evening:
+nothing new since the morning's refresh (the newest — Claude Haiku 5.5, 7 Oct;
+Mistral Large 4, 6 Oct — are already weighed above). The readers' list takes
+GPT-6.1 Sol in place of GPT-6 Sol.
+
+**The test, in the order a person now meets them** (`backend/myself.py`):
+
+```
+python3 myself.py shadow    # sets of ten strangers → the dice → his shadow, held
+# …2–3 live talks with the shadow on http://localhost:8000/live#me
+python3 myself.py scribe    # what each scribe kept — about him, and about the shadow
+python3 myself.py read      # readings of his real talks → which is true?
+python3 myself.py write     # the shadow, written by each writer → whom daily? who contradicts himself?
+```
+
+Every stage runs the app's own function through the app's own road — only the
+model changes — blind, with real costs revealed after the pick.

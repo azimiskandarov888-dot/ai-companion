@@ -3,12 +3,13 @@
 Everything a new session needs to work on this project without re-deriving it
 or re-litigating decisions that are already made. Written 2026-09-17 on branch
 `claude/gallant-bardeen-0l6ff0`; revised through 2026-09-23 on
-`claude/awesome-planck-wdj4hu`, and since then on
-`claude/ai-companion-next-steps-c593db`, which is where all current work lives
-(it is ahead of the other two; the owner's main checkout may still be on
-`awesome-planck` — run the server from this branch).
-**1294 tests pass** (2026-10-08). Every number below was measured by running
-the code, not estimated; where something is an estimate it says so.
+`claude/awesome-planck-wdj4hu`, then on `claude/ai-companion-next-steps-c593db`,
+and since the evening of 2026-10-08 on **`claude/ai-model-selection-voice-f93485`**
+(worktree `~/ai-companion/.claude/worktrees/ai-model-selection-voice-f93485`),
+which is where all current work lives — ahead of the others; run the server
+from this one. **1321 tests pass** (2026-10-08). Every number below was
+measured by running the code, not estimated; where something is an estimate
+it says so.
 
 **Start with §0** — where things stand and what comes next, as of the end of
 the last session (2026-10-08). The rest is the record of how it got here.
@@ -26,7 +27,7 @@ the others were written earlier and some of them have drifted.
 | `LATENCY.md` | **how fast he answers, measured, and the plan in four stages** — stage 1, the live channel, built 2026-09-30: 1.6–2.2 s from the end of the person's words to his first sound, against ~6.5 s before; where every tenth of a second goes, what was found on the way, stages 2–4 and what each needs from the owner |
 | `VOICE-MODELS-REHEARSAL.md` | **history**: which voice, from 24 rehearsed first meetings (2026-09-27) — Luna chosen 2026-09-28; **replaced by Gemma 4 on 2026-10-02** (`ALIVE-BRAIN.md`) |
 | `SOUNDS.md` | his coughs, «кхм», sighs, laughs and yawns made by the voice itself (our markers → Fish S2.1 tags) — **layer 1 built 2026-09-28**, and what listening showed; layer 2, the world around him as a quiet loop played by the phone, waits for the iOS screen |
-| `FIRST-MEETING.md` | **the plan that replaces the intake interview** — owner's decisions of 2026-09-26; step 1 (the conversation) built and rehearsed 2026-09-27, steps 2–3 ahead |
+| `FIRST-MEETING.md` | **the plan that replaces the intake interview** — owner's decisions of 2026-09-26; step 1 (the conversation) built and rehearsed 2026-09-27; **step 2 — the shadow, written when the reader is sure, then always shaped — built 2026-10-08**; step 3 (sign-up screens, iOS) ahead |
 | `BOUNDARIES.md`, `AUDIT-2026-09.md` | current, evidence-backed |
 | `VISION.md`, `README.md` | corrected today; the rest is older but sound |
 | `BUILD-PLAN.md`, `ALWAYS-ON.md` | **stale** — phase plans and an always-on listening design that was not built |
@@ -35,81 +36,107 @@ the others were written earlier and some of them have drifted.
 
 ---
 
-## 0. Where things stand, and what is next (2026-10-08)
+## 0. Where things stand, and what is next (2026-10-08, evening)
 
-### The next session starts here: the owner tests every model that is not the conversation brain
+### The decision: no interviewer — a shadow first, then somebody, then always shaped
 
-The owner, 2026-10-08: «прежде чем идти сразу на новый разговор, мы хотели с
-тобой проверить все модели. Не только разговорные, но и пишущие… Тот, кто
-пишет историю, тот, кто читает человека». The conversation brain is decided
-(Gemma 4, `ALIVE-BRAIN.md`). Everything else — the reader, the sketches, the
-writer, the scribe — is chosen now, **on him**, blind, one stage at a time,
-with `backend/myself.py`. The research behind every shortlist, re-read on
-2026-10-08: `docs/MODELS-FOR-EACH-AGENT.md`, last section.
+The owner, 2026-10-08: «we won't have an interviewer and from the very
+beginning we will be talking to our regular voice AI which from the beginning
+would be like a shadow with no exact personality like real people do in real
+world and after a while after several conversations we are going to know
+exactly what kind of person our user need and we would shape the companion to
+it». Asked three questions, he chose: test the reader and the writer **on his
+own talks with the shadow**, not on the old interview; the shadow becomes
+somebody **when the reader is sure**; and after that — «its not one build. its
+a build that we are always shaping and making better».
 
-**Before anything — top up OpenRouter.** $0.35 is left of $15
-(2026-10-08), and both the test and Bob's brain run on it; the writer was
-already refused for it today. ~$10 at [openrouter.ai/credits](https://openrouter.ai/credits),
-paid by an adult (the owner is 15). The whole test costs ~$2–3.
+Built the same evening (`app/shaping.py`; `docs/FIRST-MEETING.md`, «Шаг 2»):
 
-**The stages, in order** (run from `backend/` with `.venv/bin/python`):
+- **The shadow** (`matchmaker.create_shadow`): ten strangers from what was
+  given at the door — a peer for a teenager, never living where the person
+  does, whom they want to meet as law — and the dice choose one. A name,
+  gender, age, home, what he does, what is going on; no character, manner or
+  story. He is told (`persona._SHADOW`) to be ordinary and say little about
+  himself: what he says is kept by the scribe and is law for the writer.
+- **When he is written**: after every talk (a goodbye, or the live line
+  closing) the reader reads ALL their talks afresh (`reading.read_talks` — the
+  reading, told it is spoken talk with a stranger, heard by a machine). Two
+  readings in a row that name the same need (`reading.same_need`) — or the
+  fifth reading at the latest, never before the second — and the writer
+  writes him (`matchmaker.portrait_context` + `write_him`; `_WRITE_SYSTEM` now
+  says that everything he said about himself in their talks is law). Name,
+  gender, age and voice stay as heard (`shaping.becoming`).
+- **Between talks, never during one**: the portrait waits in his file
+  (`_portrait`) and becomes him as the next talk begins (`shaping.settle`).
+- **Always shaped**: after that, whenever a re-reading moves what decides who
+  he should be (`reading.SHAPES_HIM`), the writer adds to him at once
+  (`persona.deepen(now=True)` — now given the reading and allowed one or two
+  new strokes for what the person lacks; never a mirror, never against what
+  he is or said).
+- **The background agents go through OpenRouter.** The watcher, scribe, his
+  week, reader, writer and diary had Anthropic's road only, and the owner has
+  no Anthropic key — they quietly did nothing. An id with a «/» now goes to
+  OpenRouter (`brain._router_once`); the models are the old ones until the
+  test picks. Checked on the real service: the watcher's model answered for
+  $0.00006.
+- A shadow phase costs ~$0.5–1 a person, once (estimate).
+
+### The next session starts here: the owner's blind test, in the new order
+
+**Before anything — top up OpenRouter.** $0.35 left (2026-10-08), and now the
+watcher and the scribe run on it too. ~$10 at
+[openrouter.ai/credits](https://openrouter.ai/credits), paid by an adult (the
+owner is 15). The whole test is ~$3–4.
+
+**Run from this worktree's `backend/`** with `.venv/bin/python`. Its `.env`
+was copied from the old worktree and its `.venv` made on 2026-10-08; its
+database is new — the old talks stay in the old worktree.
 
 | # | Command | Read | The question he answers | ~$ |
 |---|---|---|---|---|
-| 1 | *(done 2026-09-24)* `myself.py interview` | — | — | 0.05 |
-| 2 | `myself.py pick read <буква> "почему"` — the five readings exist already | `data/myself/read.md` | «Какое из чтений правдивее про тебя?» | 0 |
-| 3 | `myself.py sketch` | `data/myself/sketch.md` | «В каком наборе люди правда РАЗНЫЕ?» — then a die picks one sketch, as in the app | 0.06 |
-| 4 | `myself.py write` | `data/myself/write.md` | «С кем из них тебе хотелось бы разговаривать каждый день?» — six writers | 1.7 |
-| 5 | `myself.py talk` *(optional)* | the tryout paper | «Кто был со мной живым и остался собой?» — only to see Gemma hold with HIS friend | 0.2 |
-| 6 | `myself.py scribe` | `data/myself/scribe.md` | «Кто запомнил верно и ничего не выдумал?» — six scribes; price counts here (~150 runs a month a person) | 0.05 |
-| — | `myself.py status` | — | what is picked, what it cost | 0 |
+| 1 | `myself.py shadow` | `data/myself/shadow.md` | «В каком наборе люди правда РАЗНЫЕ?» — the dice then pick his shadow, **held**: the app will not write him itself | 0.05 |
+| — | `./run.sh`, then http://localhost:8000/live#me | — | 2–3 talks with the shadow, more than 10 minutes apart | ~0.1 a talk |
+| 2 | `myself.py scribe` | `scribe.md` | «Кто запомнил верно — про тебя и про него — и ничего не выдумал?» | 0.1 |
+| 3 | `myself.py read` | `read.md` | «Какое из чтений правдивее про тебя?» | 0.5 |
+| 4 | `myself.py write` | `write.md` | «С кем хотелось бы говорить каждый день — и кто не спорит с тем, что уже сказал о себе?» — the pick becomes him | 2 |
+| — | `myself.py status` | — | what is picked, his talks so far, what it cost | 0 |
 
-How it works, so the next session does not re-derive it: each stage runs **the
-app's own function** for every candidate — only the model behind
-`brain.think` / `brain.generate_text` changes (`myself._patch`, through
-OpenRouter) — shows the results **blind** (letters), reveals names and real
-costs only after the pick, and the pick becomes the next stage's input. A
-stage that is re-run overwrites its record: pick before re-running.
+Each stage runs the app's own function for every candidate through the app's
+own road — only the model changes (`myself._model`), blind, names and real
+costs after the pick; the pick is the next stage's input. The interview,
+`meet`, `talk` and `live` stages are gone with the interview.
 
-His interview says **15**, so the app treats him as a teenager (`young.TEEN`):
-the sketches and the friend are his own age. That is the product, not a test
-artefact.
+**After the picks — my work:** set the winners as the defaults
+(`config.READING_MODEL`, `WRITER_MODEL`, `BRAIN_MODEL` for the scribe — one line
+each); the sketches run on `WRITER_MODEL` at low effort, so a different
+sketcher winner needs a `SKETCH_MODEL` of its own.
 
-**After the picks — my work, in this order:**
-1. **Route the deep agents through OpenRouter** with the winners: `brain.think`
-   and `brain.generate_text` go to OpenRouter when the model id has a «/», as
-   `CHAT_MODEL` already does; `config.READING_MODEL`, `WRITER_MODEL`,
-   `INTAKE_MODEL`, `BRAIN_MODEL` (scribe, his week, diary) set to the winners;
-   the watchman (`SAFETY_MODEL`) to Claude Haiku through OpenRouter until a
-   Russian crisis set picks one. This also fixes «broken right now» below.
-2. **His own friend, live:** `myself.py live` writes a friend from his
-   interview through the app's `matchmaker.create_companion` (erasing the
-   previous one: «совсем заново») under the identity the page uses at
-   **http://localhost:8000/live#me** («#me» never reaches the server or a log).
+### Still open, from this evening
 
-### Broken right now on the owner's machine — fixed by step 1 above
-
-`backend/.env` has no Anthropic and no OpenAI key, so these quietly do nothing:
-
-| Part | Needs | Without it |
-|---|---|---|
-| The danger watcher (`safety.look`) | Anthropic | answers «no danger» for everybody |
-| The scribe — what he remembers (`learn.py`) | Anthropic | nothing is remembered |
-| His week (`life.py`) | Anthropic | nothing happens in his life |
-| The reader, writer, interviewer, diary (`brain.think` / `generate_text`) | Anthropic | a new companion cannot be written by the app (`myself.py live` works: it patches them) |
-| Whisper — the iPhone app's current path `/api/talk` | OpenAI | the app cannot hear |
-| Embeddings — recall by meaning | OpenAI | the newest stories instead of the right ones |
+- **A child (under 13), or a teenager who switched memory off, stays a
+  shadow**: nothing is kept to grow sure from. The owner's call.
+- **The iPhone app still uses the interview** (`/api/companion/create`). The
+  new start needs the ordinary sign-up screens and an endpoint that makes the
+  shadow (`docs/FIRST-MEETING.md` step 3).
+- **No automatic check that the portrait does not contradict the shadow**
+  (FIRST-MEETING §9) — the owner's eye in the test for now.
+- `tests/test_live.py::test_somebody_past_sixty_gets_the_deep_breath` fails
+  now and then — on the code before this evening too (2 of 3 runs); the reason
+  not yet found.
+- Whisper and the embeddings still need an OpenAI key (the iPhone's
+  `/api/talk` ears; recall by meaning).
 
 ### Keys and money (2026-10-08) — all in `backend/.env` of this worktree, never in a message
 
 | Key | State | What it pays for |
 |---|---|---|
-| `OPENROUTER_API_KEY` | works; **$0.35 left** | Bob's brain (Gemma 4 on ModelRun, $0.75 / $1.00 per million, the fastest host and 8× the cheapest), and every test |
+| `OPENROUTER_API_KEY` | works; **$0.35 left** | Bob's brain (Gemma 4 on ModelRun, $0.75 / $1.00 per million, the fastest host and 8× the cheapest), every background agent since 2026-10-08, and every test |
 | `DEEPGRAM_API_KEY` | works | the live ears (Flux, EU) |
 | `GOOGLE_CLOUD_API_KEY` + `GOOGLE_CLOUD_PROJECT` | works (8 Oct) | **Bob's voice** — Gemini 3.8 Flash-Lite TTS on Google Cloud (Agent Platform), an API key bound to the service account `bob-voice`; billed to the card monthly, **budget alert at $5** |
 | `GEMINI_API_KEY` (AI Studio) | works, first paid tier, **$30 prepaid** | nothing of Bob's any more: for TTS it allows only **10 requests a minute and 100 a day** (measured 7 Oct). The $30 is Gemini-API-only, lasts 12 months, refunded only if the account is ever switched to Postpay. The owner: «я эти 30 долларов потрачу на Gemini» |
 | `FISH_API_KEY` | works | nothing now (the old voice) |
-| `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` | **missing** | see «broken right now» |
+| `ANTHROPIC_API_KEY` | missing — **not needed** since 2026-10-08 | the background agents go through OpenRouter |
+| `OPENAI_API_KEY` | **missing** | Whisper (the iPhone's `/api/talk`) and the embeddings (recall by meaning) |
 
 ### Done 2026-10-03 → 10-08
 
@@ -138,8 +165,8 @@ artefact.
 
 ### The plan after the test, in order
 
-1. **Agents through OpenRouter with the winners** (me — above).
-2. **His own friend, live** (`myself.py live`, `/live#me`) — the owner's first real conversation with someone written for him.
+1. **The winners into config** (me — above). The road itself is done.
+2. **His own friend, live** — the test itself ends with it: the writer he picks becomes the shadow he has been talking to, on `/live#me`.
 3. **The iPhone app on the live channel** (`LATENCY.md` stage 3). Owner: an iPhone connected to the Mac, Xcode signed in.
 4. **A server near the services** (stage 4). The brain's host answers in ~0.1 s at OpenRouter; from Tashkent it takes 0.6–0.9 s — the road and the queue. Measure first from a server rented for an hour (~$1); owner: the hosting account.
 5. **The Russian brains round** — owner: Yandex and Sber accounts.
@@ -147,7 +174,7 @@ artefact.
 
 ### How the owner works — keep to it
 
-- Russian. **Short, plain answers: the result first, then his steps** — each command in its own `bash` block. He stops reading long answers.
+- Russian — and sometimes English, dictated (2026-10-08): answer in the language he wrote in. **Short, plain answers: the result first, then his steps** — each command in its own `bash` block. He stops reading long answers.
 - **His ear and his judgement decide**, blind; numbers only sieve. He said so of the brain and of the voices, and it holds for the agents.
 - **Money:** say the cost before spending; he asked «Получается те деньги которые я только что положил сгорают??» — be exact about what is refundable. Accounts and payments are done by an adult (he is 15; Google's Gemini API terms say 18+).
 - Keys live only in `backend/.env`; never ask him to paste one. Commit locally with the attribution line; never push or open a PR unless he asks.
@@ -283,6 +310,7 @@ Do not reopen these without being asked.
 | **On the person's own ground the friend is a PUPIL** — knows little or nothing, badly wants to become a master, and the person teaches him. Built as a mechanism, not a sentence: the scribe writes down what he was taught (`taught_bob` → memory `kind='lesson'`, HIS row, so it leaves with him), and `memory.lessons_block` hands it back every turn with the count — so he actually grows. Labour becomes love only when it ends in success (IKEA effect); a forever-beginner would be labour that went nowhere. Same mechanism carries life advice he acts on and reports back. And he now notices the person's change for the better, not only for the worse (Michelangelo phenomenon) | owner's call 2026-09-24 (`tests/test_pupil.py`) |
 | **The intake interview — a conversation first, a list second.** Every question is the interviewer's (Opus 5 — #1 on EQ-Bench 4, chosen by comparison). It talks like a person meeting someone: after the name, «Очень приятно» and how's your day (small talk builds trust — Bickmore & Cassell 2001); then, most often, a question about what was just said — «пишу программу» → «а про что она?» — because follow-up questions, not topic switches, are what make an asker liked (Huang 2017). **Shy first, closer by the end**: the server tells every call the stage — strangers for questions 1–8 (polite, «вы», quiet reactions or none, no exclamations, praise or «-то/же/ну»; warmth only as attention), a little acquainted for 9–11 (warmer, livelier; the under-thirties move to «ты»), almost friends from 12 (open, close, never an old friend) — and the model keeps pace with the person, never ahead. Why: acquaintance goes from light to personal (Altman & Taylor 1973; Kellermann 1991), the same intimacy is liked less early (Wortman 1976), and in Russian a stranger's warmth reads as put on (Стернин); the owner: «you don't talk to someone you just met like you've known him for years». The server keeps a memo of twelve topics (name; how the day is and what fills it — the friend's topic must NOT land there; what they love; what's coming up this week; country; age; what they love but haven't done in a while; what they're best at; who they last talked to «по душам»; who last asked them for something; what helped the last time it was hard; and, last and required, «А о чём бы поговорить, да не с кем?» with one gentle rescue if the answer is vague). Topics are taken up when they come up, in any order — except that his people and his hard times (`intake.DEEPER`) are offered only after the lighter topics, so never before question 9; up to three questions per thread; at most 18 in all — follow-ups only while every remaining topic still fits, so country and age cannot be lost, and a model that wanders off or stops early is overruled — as is a question filed under age or country that doesn't ask it (a simulated run filed «А кодить давно начали?» as the age). History: the owner rejected a fixed app warm-up («ничем» went unanswered) and then a strict list («it wants to end the interview as fast as possible») — both times rightly | owner + councils, 2026-09-24/25 (`tests/test_interview.py`, `tests/test_intake.py`) |
 | **The beginning becomes a first meeting — no interview at all.** The person meets the companion himself, in voice, as two strangers: the day and the moment, where from, a topic both care about, names (his first), and closer only as they talk more — measured by the amount of talk, never by days; no list of deep questions anywhere. He is a little shy, calm, more interested in the person than in himself — and NEUTRAL: no manner of speech, no bright traits at the meeting; the real him is not revealed but CREATED over time, in the portrait and after (owner, 2026-09-27; a sketch with «смеётся одним „ха“» opened seven replies of one rehearsal with it). Before: an ordinary sign-up (name, age, gender, country) and the person's choice of his gender and age. He exists as a SKETCH before the meeting and gets his PORTRAIT after it — everything he said about himself is law. He never lives where the person does: abroad or on the road. That he is an AI is written in small print, as on AI sites; he still never says it. The intake row above stands until step 3 replaces it. **Step 1 — the conversation itself — is built** (`meeting.py`; `/api/hello`; closeness by the person's words, 300 / 2,000 / 8,000, kept as a count in `acquaintance` because a child's log is deleted; the server tells him to say his name if he has not by the person's fifth line — and, once he has, that it is said, so he does not introduce himself twice (he did, in the very next reply, when the person answered with their work instead of their name; fixed 2026-09-30) — and to end a reply without a question after two in a row). **Since 2026-09-30, after the owner's first live conversation: the meeting is about the PERSON** — his first words ask how they are and say nothing of himself; he talks about himself only when asked or plainly wanted, in a phrase, never the same thing twice; replies of one or two sentences; he does not say goodbye first («it's weird that you are talking about yourself without knowing that the person you're talking to is even interested in it» — it reverses the meeting's earlier «his own day and weather unasked» and second stories. Scripted A/B on the real voice: talk about himself unasked 11 → 0 in 24 replies, coffee 10 → 2–4, opening with himself 4/4 → 0/8) and rehearsed in three rounds (`rehearse.py`): GPT-5.6 Luna was the best voice for it, Gemini 3.5 Flash-Lite next; Haiku 4.5, MiniMax (asterisk stage directions) and Qwen 3.5 (empty replies) were not | step 1 built 2026-09-27; owner's plan 2026-09-26 (`docs/FIRST-MEETING.md`, `tests/test_meeting.py`) |
+| **From a shadow to somebody, and always shaped** — the owner, 2026-10-08: no interviewer; from the first second the person talks to him, at first «a shadow with no exact personality, like real people do in real world», and «after several conversations» he is shaped to what this person needs. The portrait no longer follows the first meeting: the reader reads all their talks after each one, and he is written **when two readings in a row name the same need** (never before the 2nd reading, never after the 5th — the owner's pick of three), between talks, never during one; everything the shadow said about himself is law. Then «its not one build. its a build that we are always shaping and making better»: each re-reading that moves what he is for sends the writer to add to him. Amends the row above («портрет — после встречи») | built 2026-10-08 (`shaping.py`, `tests/test_shaping.py`); the iPhone sign-up is step 3 |
 | **The reader decides WHAT somebody needs; the writer decides WHO gives it.** The request is honoured literally and never overruled — it decides what he is like; the need decides what he is for. Stated ideals do not predict whom people actually warm to (Eastwick & Finkel 2008), but a visibly overridden request provokes reactance, so neither is traded for the other. The first reading is a hypothesis; the conversations correct it (re-reads, confirmed observations). **How the reader gets it right**, by Funder's Realistic Accuracy Model — the cue must exist, reach the reader, be noticed and be used right: the interview now asks the one closing question whose answer says what is missing («о чём тебе не с кем поговорить»); the reader is walked through perspective-taking, direct words over form, competing hypotheses and a Barnum check, in its thinking. Tested on the owner: without that answer every model correctly declined to guess «feelings»; with it, Opus 5.5 wrote «нет никого, с кем можно всерьёз, особенно о чувствах» | owner's question, 2026-09-23 |
 | **The rules stay a file you can read, plus mechanisms in code. No fine-tuning.** Four reasons, in order of weight: a fine-tune trained on our own prompt's output can at best COPY it and never exceed it; Anthropic has no fine-tuning API, so it means leaving Claude for a small model that writes worse Russian; catastrophic forgetting is documented and shows up where you did not test; and weights cannot be read, diffed, or fixed by one line with a test | settled 2026-09-22 |
 | **The constitution gets CUT, from 26,348 chars to ~8,000.** This is the whole answer to the 94/6 problem. Fine-tuning would have removed the last ~3,000 tokens for a month of work and no way back | **done 2026-09-23: 10,385 chars**, ~6,000 tokens off every request (estimate). Awaiting the owner's ear (§13.1) |
@@ -840,8 +868,9 @@ the reason the tests that now hold them exist.
 
 ## 12. How to work here
 
-- **Branch:** `claude/ai-companion-next-steps-c593db` (earlier work:
-  `claude/awesome-planck-wdj4hu`, an ancestor of it). Push with
+- **Branch:** `claude/ai-model-selection-voice-f93485` since 2026-10-08
+  (before it `claude/ai-companion-next-steps-c593db`, and
+  `claude/awesome-planck-wdj4hu` before that — each an ancestor of the next). Push with
   `git push -u origin <branch>`, retry network failures with backoff
   (2s/4s/8s/16s). **Never open a PR unless explicitly asked.**
 - **Keys live only in `backend/.env`** (gitignored). Never paste one into a
@@ -850,7 +879,8 @@ the reason the tests that now hold them exist.
   or any repo artifact. Chat replies only.
 - **Commit attribution:** end every commit with the attribution line(s) the
   session's own instructions give — nothing else names a model.
-- **Tests:** `cd backend && python -m pytest -q`. **1255 pass.** The suite is the
+- **Tests:** `cd backend && .venv/bin/python -m pytest -q`. **1321 pass** (one,
+  `test_somebody_past_sixty_gets_the_deep_breath`, fails now and then — §0). The suite is the
   design record — test docstrings carry the *reasoning*, including what went
   wrong before. Read the docstring before changing an assertion; several tests
   exist because a previous fix was subtly wrong.
