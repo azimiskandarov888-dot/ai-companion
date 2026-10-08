@@ -99,16 +99,25 @@ SKETCHERS = [
     ("GLM-5.3", "z-ai/glm-5.3"),
 ]
 
+#: 2026-10-08, Creative Writing v3: GPT-6 Astra 2173 · Fable 5.1 2162 ·
+#: Opus 5 2133 · GPT-6 Sol 2125 · Kimi K3 2082 · Opus 5.5 2050. GPT-6.1 Sol —
+#: «near-Astra at a fifth of the price», not rated yet — in for GPT-6 Sol.
 WRITERS = [
     ("Claude Opus 5", "anthropic/claude-opus-5"),
     ("Claude Opus 5.5", "anthropic/claude-opus-5.5"),
     ("Claude Fable 5.1", "anthropic/claude-fable-5.1"),
     ("GPT-6 Astra", "openai/gpt-6-astra"),
+    ("GPT-6.1 Sol", "openai/gpt-6.1-sol"),
     ("Kimi K3", "moonshotai/kimi-k3"),
 ]
 
+#: The scribe runs ~150 times a month a person, so price counts here. Added
+#: 2026-10-08: Claude Haiku 5.5 (7 Oct, $0.10/$0.50) and Sonnet 5.5 (28 Sep,
+#: Sonnet 5's price, faster).
 SCRIBES = [
     ("Claude Sonnet 5", "anthropic/claude-sonnet-5"),
+    ("Claude Sonnet 5.5", "anthropic/claude-sonnet-5.5"),
+    ("Claude Haiku 5.5", "anthropic/claude-haiku-5.5"),
     ("GPT-5.4 Mini", "openai/gpt-5.4-mini"),
     ("Gemini 3.8 Flash", "google/gemini-3.8-flash"),
     ("GLM-5.3", "z-ai/glm-5.3"),

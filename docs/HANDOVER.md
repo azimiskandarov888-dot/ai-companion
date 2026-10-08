@@ -7,11 +7,11 @@ or re-litigating decisions that are already made. Written 2026-09-17 on branch
 `claude/ai-companion-next-steps-c593db`, which is where all current work lives
 (it is ahead of the other two; the owner's main checkout may still be on
 `awesome-planck` — run the server from this branch).
-**1255 tests pass** (2026-10-03). Every number below was measured by running
+**1294 tests pass** (2026-10-08). Every number below was measured by running
 the code, not estimated; where something is an estimate it says so.
 
 **Start with §0** — where things stand and what comes next, as of the end of
-the last session (2026-10-02). The rest is the record of how it got here.
+the last session (2026-10-08). The rest is the record of how it got here.
 
 Where this document and any other document disagree, **this one is right** —
 the others were written earlier and some of them have drifted.
@@ -35,125 +35,122 @@ the others were written earlier and some of them have drifted.
 
 ---
 
-## 0. Where things stand, and what is next (2026-10-02)
+## 0. Where things stand, and what is next (2026-10-08)
 
-### Done: the companion's brain and how he talks
+### The next session starts here: the owner tests every model that is not the conversation brain
 
-The owner, 2026-10-02: «we are done with the model of the companion».
+The owner, 2026-10-08: «прежде чем идти сразу на новый разговор, мы хотели с
+тобой проверить все модели. Не только разговорные, но и пишущие… Тот, кто
+пишет историю, тот, кто читает человека». The conversation brain is decided
+(Gemma 4, `ALIVE-BRAIN.md`). Everything else — the reader, the sketches, the
+writer, the scribe — is chosen now, **on him**, blind, one stage at a time,
+with `backend/myself.py`. The research behind every shortlist, re-read on
+2026-10-08: `docs/MODELS-FOR-EACH-AGENT.md`, last section.
 
-- **The voice is Gemma 4** (`google/gemma-4-31b-it` through OpenRouter, `config.CHAT_MODEL`). The owner chose it by ear from four blind English conversations, with the same model on both sides (conversation D).
-- **The prompt stays as it is.** A version with a short, person-like prompt (E) did better on my numbers: shorter turns, fewer questions, its own stumbles. The owner: «the conversation D is much, better». His ear decides, not my numbers (`ALIVE-BRAIN.md`).
-- **He talks the way people talk out loud,** not the way they message: one move a turn, a «что?» while they tell, one question and then silence (`SOUNDS-HUMAN.md` part 3).
-- **He makes a sound at once:** «м-м» 0.35–0.41 s after they stop (`first_sound.py`). He can be interrupted (§6).
-- **He stumbles as often as people do** (`aloud.py`, `SOUNDS-HUMAN.md` part 4).
-- **The whole conversation works in English too** (`COMPANION_LANGUAGE=en`, `ENGLISH.md`).
-- The owner's verdict: «but still not perfect. but for now i dont now whats missing. and thats okay».
+**Before anything — top up OpenRouter.** $0.35 is left of $15
+(2026-10-08), and both the test and Bob's brain run on it; the writer was
+already refused for it today. ~$10 at [openrouter.ai/credits](https://openrouter.ai/credits),
+paid by an adult (the owner is 15). The whole test costs ~$2–3.
 
-**Weak spots of the choice.** Not blockers, but know them:
-- **Russian.** Gemma 4 slips in it: «такой пекло» in round 1, and «Чем обычнось занимаешься» in the first call through the app (2026-10-02). It was chosen by ear in English. If the app launches in Russian, listen to it in Russian first. GPT-6 Luna made no Russian mistakes.
-- **Cost.** Gemma's hosts keep no cache, so the voice costs ~$2 a person a month at 25 exchanges a day. Luna cost ~$0.4.
-- **Repetition.** At the host's default temperature it gave the same reply word for word twice. Not yet looked into.
+**The stages, in order** (run from `backend/` with `.venv/bin/python`):
 
-### Broken right now on the owner's machine — fix first
+| # | Command | Read | The question he answers | ~$ |
+|---|---|---|---|---|
+| 1 | *(done 2026-09-24)* `myself.py interview` | — | — | 0.05 |
+| 2 | `myself.py pick read <буква> "почему"` — the five readings exist already | `data/myself/read.md` | «Какое из чтений правдивее про тебя?» | 0 |
+| 3 | `myself.py sketch` | `data/myself/sketch.md` | «В каком наборе люди правда РАЗНЫЕ?» — then a die picks one sketch, as in the app | 0.06 |
+| 4 | `myself.py write` | `data/myself/write.md` | «С кем из них тебе хотелось бы разговаривать каждый день?» — six writers | 1.7 |
+| 5 | `myself.py talk` *(optional)* | the tryout paper | «Кто был со мной живым и остался собой?» — only to see Gemma hold with HIS friend | 0.2 |
+| 6 | `myself.py scribe` | `data/myself/scribe.md` | «Кто запомнил верно и ничего не выдумал?» — six scribes; price counts here (~150 runs a month a person) | 0.05 |
+| — | `myself.py status` | — | what is picked, what it cost | 0 |
 
-`backend/.env` holds only the OpenRouter, Deepgram and Fish keys. Without an Anthropic or OpenAI key, these parts quietly do nothing:
+How it works, so the next session does not re-derive it: each stage runs **the
+app's own function** for every candidate — only the model behind
+`brain.think` / `brain.generate_text` changes (`myself._patch`, through
+OpenRouter) — shows the results **blind** (letters), reveals names and real
+costs only after the pick, and the pick becomes the next stage's input. A
+stage that is re-run overwrites its record: pick before re-running.
+
+His interview says **15**, so the app treats him as a teenager (`young.TEEN`):
+the sketches and the friend are his own age. That is the product, not a test
+artefact.
+
+**After the picks — my work, in this order:**
+1. **Route the deep agents through OpenRouter** with the winners: `brain.think`
+   and `brain.generate_text` go to OpenRouter when the model id has a «/», as
+   `CHAT_MODEL` already does; `config.READING_MODEL`, `WRITER_MODEL`,
+   `INTAKE_MODEL`, `BRAIN_MODEL` (scribe, his week, diary) set to the winners;
+   the watchman (`SAFETY_MODEL`) to Claude Haiku through OpenRouter until a
+   Russian crisis set picks one. This also fixes «broken right now» below.
+2. **His own friend, live:** `myself.py live` writes a friend from his
+   interview through the app's `matchmaker.create_companion` (erasing the
+   previous one: «совсем заново») under the identity the page uses at
+   **http://localhost:8000/live#me** («#me» never reaches the server or a log).
+
+### Broken right now on the owner's machine — fixed by step 1 above
+
+`backend/.env` has no Anthropic and no OpenAI key, so these quietly do nothing:
 
 | Part | Needs | Without it |
 |---|---|---|
 | The danger watcher (`safety.look`) | Anthropic | answers «no danger» for everybody |
 | The scribe — what he remembers (`learn.py`) | Anthropic | nothing is remembered |
 | His week (`life.py`) | Anthropic | nothing happens in his life |
-| The reader, the writer, the interviewer, the diary (`brain.think` / `generate_text`) | Anthropic | a new companion cannot be written (`/api/companion` fails) |
+| The reader, writer, interviewer, diary (`brain.think` / `generate_text`) | Anthropic | a new companion cannot be written by the app (`myself.py live` works: it patches them) |
 | Whisper — the iPhone app's current path `/api/talk` | OpenAI | the app cannot hear |
 | Embeddings — recall by meaning | OpenAI | the newest stories instead of the right ones |
 
-The live page (`/live`) works without them: the voice, the ears and the mouth have their keys. There are two ways to fix this:
-- add the two keys (the owner's step);
-- move these parts to OpenRouter like the voice — one key and one bill (§13 Q8). This is code work. The watcher can stay on Claude Haiku through OpenRouter.
+### Keys and money (2026-10-08) — all in `backend/.env` of this worktree, never in a message
 
-My recommendation is OpenRouter.
-
-### Changed the same evening — Russian voices first
-
-The owner, 2026-10-02:
-- «the most importantly, we must find a really, really good quality collection of Russian AI voices. Because those that we were using, they are horrible»;
-- for Russian, Russian brains are allowed: «we can really use Russian models for that»;
-- the brain comparison comes after the voices.
-
-Round 1 of the voices — 21 voices reachable through the OpenRouter key, blind, the same words, loudness-matched — is in `docs/VOICES-RU.md`.
-
-**Chosen by ear the same evening: Gemini TTS.** All six voices the owner marked better were Gemini; every other voice, the current Fish ones included, was worse. Male: **Zubenelgenubi** («m08 is the best of all»). Female: **Callirrhoe** («w09 is the best»).
-
-Still open:
-- **Which version.** 3.8 Flash works now through OpenRouter and costs less than Fish, but it gives sound only whole — words come 1.5–2 s later. 3.1 streams through Google Cloud, but costs ~4× and is a preview. The owner heard both as «equally good», the newer one with the least emotion.
-- **The app still speaks with Fish.** Gemini is not in `tts.py` yet.
-
-**The owner's decision, 2026-10-03:** «we will be using Google Cloud if that would let us stream the voice. The same exact voices. And the version 3.1 is one of the best». It is conditional on real streaming — a developer on Google's forum reports 3.1 Flash TTS «streaming» as a long silence then all the audio at once. So: measure first, with his key; if it does not stream, Chirp 3 HD has the same 30 voices and does. Why Gemini Live answers in 0.8 s, and what we can borrow: `docs/WHY-LIVE-IS-FAST.md`.
-
-**Not one voice — a catalog** (the owner, 2026-10-03: «we need hundred of them voices, and atleast 10 out of them must be russian»):
-- Every companion gets a voice of his own, picked for his gender, age and temper when he is written, and kept in his `persona` for good.
-- The pool is Gemini's 30 voices, which all speak Russian, each with a «whom he plays» style line from his portrait. Round 3 — all 30, blind — waits for the owner's ear (`docs/VOICES-RU.md`).
-
-### Done 2026-10-03 — faster, and a voice for every companion
-
-The owner asked why Gemini Live answers in 0.8 s (`docs/WHY-LIVE-IS-FAST.md`), then: «everything must be fixed right now».
-
-Measured end to end with `backend/live_check/client.py` — three spoken turns, real services (`docs/LATENCY.md`, «3.10»):
-
-| | Before | After |
+| Key | State | What it pays for |
 |---|---|---|
-| Brain's first words | 3.2–3.6 s | 0.7–1.2 s |
-| His first word | 3.7–4.3 s | 2.4–3.5 s; 1.05 s when he opens with a ready first word |
+| `OPENROUTER_API_KEY` | works; **$0.35 left** | Bob's brain (Gemma 4 on ModelRun, $0.75 / $1.00 per million, the fastest host and 8× the cheapest), and every test |
+| `DEEPGRAM_API_KEY` | works | the live ears (Flux, EU) |
+| `GOOGLE_CLOUD_API_KEY` + `GOOGLE_CLOUD_PROJECT` | works (8 Oct) | **Bob's voice** — Gemini 3.8 Flash-Lite TTS on Google Cloud (Agent Platform), an API key bound to the service account `bob-voice`; billed to the card monthly, **budget alert at $5** |
+| `GEMINI_API_KEY` (AI Studio) | works, first paid tier, **$30 prepaid** | nothing of Bob's any more: for TTS it allows only **10 requests a minute and 100 a day** (measured 7 Oct). The $30 is Gemini-API-only, lasts 12 months, refunded only if the account is ever switched to Postpay. The owner: «я эти 30 долларов потрачу на Gemini» |
+| `FISH_API_KEY` | works | nothing now (the old voice) |
+| `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` | **missing** | see «broken right now» |
 
-What changed:
-- **Gemma's hosts are pinned** — ModelRun, DeepInfra turbo, CoreWeave (`config.CHAT_PROVIDERS_FOR`). Asked to «sort by latency», OpenRouter had sent her to SiliconFlow. One host for a whole conversation keeps the prompt cached; it stays cached 2–4 minutes.
-- **The brain reads ahead** while they talk (`brain.prewarm`).
-- **A draft is begun only on Flux's «похоже, договорил», at most three a turn, and nothing of it is voiced until «договорил»** (2026-10-05). A draft at every 0.2 s pause had begun 69 replies for five turns on the real ears; this begins 10, at the same speed (docs/WHY-LIVE-IS-FAST.md, «5.10»).
-- **The first piece ends at the first pause** (`tts.first_pause`).
-- **His thirty most common first words are made ahead** in his voice and kept on disk (`first_sound.REACTIONS`).
-- **The voice is Gemini, from a catalog** — every companion has his own voice and a «whom he plays» line, kept in his persona (`voices.py`).
+### Done 2026-10-03 → 10-08
 
-Still open:
-- **The rest of the wait is the Gemini voice through OpenRouter, which comes only whole** (1.9 s).
-  - The owner's Gemini API key is in. Google's own stream (`streamGenerateContent`) measured 0.63–0.93 s to first sound on 3.8 Flash-Lite (`tts._gemini_direct_stream`, OpenRouter as the way back).
-  - **But the key is on the free tier: 10 requests a day per model.** Billing on the Google project is needed before the stream can carry a conversation.
-- **The voice is 3.8 Flash-Lite** (the owner: «3.8 for more voices and less price tag»; Lite of the two for speed and price).
-- **Gemini Live measured by us** (`live_check/gemini_live.py`, the same phrases, Bob's prompt): 3.8 Live median 1.63 s, 2.5 Native Audio 1.44–2.30 s. With Google's stream Bob's sum is ~1.8 s, and ~1.1 s when he opens with a ready word (`docs/WHY-LIVE-IS-FAST.md`).
-- **3.1 or 3.8?** Only 3.8 makes voices from a description (Voice Design) — the way to «hundred of them voices» (`docs/VOICES-RU.md`).
-- **Gemma's fast hosts all run her at 4 bits.** Whether that costs her Russian is for the brains' Russian round.
+**Speed** (`docs/WHY-LIVE-IS-FAST.md`, sections «5.10», «7.10», «8.10»):
+- **His first word now comes 1.20 s after the person stops** (median of 9, through the real services; 3.7–4.3 s on the morning of 3 Oct, 1.73–1.80 s on 7 Oct). Gemini Live, measured the same way with Bob's prompt from Tashkent: 1.44–1.72 s.
+- **Thinking while they talk, without waste:** a draft only on Flux's «похоже, договорил», at most 3 a turn, nothing voiced before «договорил». A draft at every 0.2 s pause had begun **69** brain requests for five turns on the real ears; this begins **10**, at the same speed.
+- **A dropped draft re-opens the line to the brain** at once (HTTP/1.1 closes it: +0.2 s measured); **two lines to the voice** (+0.17 s on the second piece otherwise). HTTP/2 was rejected: httpcore 1.0.9 sends no RST_STREAM, so an abandoned stream would keep running upstream, billed.
+- **The brain is asked again if silent 1.1 s** (`brain._hedged`, `BRAIN_HEDGE_AFTER`).
+- **The voice on Google Cloud**, no ration (15 requests in 10 s all passed); first sound 0.49–0.66 s. On the AI Studio key Bob went silent mid-conversation (429). `tts._Budget` still keeps any AI Studio voice within 10 a minute, and a voice rationed so is spoken in two requests an answer.
+- **His first word ready-made more often:** the openings Gemma actually uses («Ох…», «Да,», «О…») added; a ready one is cut off however short, and the piece after it is short too.
 
-### What's next — the plan, in order
+**His sounds** (the owner: «м-м» before every answer «even when it's not logically belong there»; «i need it to be like breathing… different sounds all the time… it cuts in the middle of the sound»):
+- **A breath, most of the time** — otherwise «ну…»/«да…» (or «хм…», «так…» before something to weigh), sometimes nothing (`first_sound.SHARES`).
+- **13 breaths per voice** — 6 in, 3 out, 4 deep — made by the voice told «just air, no voice at all»: half of Gemini's plain `<breath>` takes were voiced, an «э». Every take is checked for a pitch (`first_sound._voiced`) and made again if it has one; never shortened; never one of the last three.
+- **Timed to his words and never cut:** streamed to the phone a little ahead of playback, it fades out over 80 ms under his first word when the words come (`live._Breath`); joined from its middle when there is less time than it lasts (`first_sound.joined`). Measured: breath-to-word 0.06–0.20 s, no silence. The voice's own silence before his first word is cut off.
+- **Older → deeper and stronger** (the owner: «чем старше, тем больше вдоха… и дольше, и сильнее»): a companion of 55+ or a person who said 60+ at the warm-up — `young.ELDER`, the one band now kept about an adult, which changes nothing but his breathing.
+- **«м-м» in their pauses is off:** half those pauses were the end of the turn, and it became the start of his answer followed by a silence.
+- His mid-sentence «э-э…» / «м-м…» stumbles stay (the owner: keep both).
 
-1. **Keys, or one key** (above).
-   - Me: move the watcher, scribe, week, reader, writer and diary to OpenRouter, with tests; check whether embeddings can go too.
-   - Owner: nothing — or add the Anthropic and OpenAI keys instead.
-2. **The iPhone app on the live channel** (`LATENCY.md`, stage 3). The app (31 Swift files, type-checks clean) has never run on a phone. It still uses the old file-at-a-time path.
-   - Me: move it to `/api/live` — sound both ways, the phone's echo cancellation, interruption, the first sound.
-   - Owner: an iPhone connected to the Mac, and Xcode signed in with his Apple ID.
-3. **The first meeting, steps 2–3** (`FIRST-MEETING.md`).
-   - A sketch of him before the meeting and his portrait after it — what he said about himself becomes law.
-   - Sign-up screens: «о тебе» and «с кем познакомиться». The intake interview is removed.
-   - The phone sends the local time.
-4. **His voices, by ear** (§10.18; `LATENCY.md` stage 2). Two voices per language, from Fish's library, nobody's clone. Owner: listen and choose.
-5. **A server for real people** (`LATENCY.md` stage 4): hosting in Europe, ~€5 a month. Owner: the hosting account, which needs a card. Before strangers use it, the must-fix list (§10) also needs:
-   - the crisis-line numbers;
-   - who else is told about danger;
-   - how long data is kept;
-   - prompt injection, which the owner deferred.
-6. **Real people — TestFlight.** Then the owner's plan (2026-10-02): with their permission, record conversations and study where real human speech and his differ, «to know more about how to make the companion as best as it possibly can be». What that needs:
-   - consent asked plainly, opt-in;
-   - adults first — at 13–17 most countries want a parent's consent, and under 13 nothing is kept at all, by design (§4);
-   - transcripts before audio;
-   - deletion on request.
-   Today Deepgram is told not to keep the audio (`mip_opt_out`).
+**Tests: 1294 pass.** Commits are local on `claude/ai-companion-next-steps-c593db`, not pushed.
 
-**Decisions only the owner can make** (also §13):
-- the launch language — Russian or English; it decides the voice model's weak spot and the voices;
-- the crisis lines;
-- who else is told about danger;
-- two more keys, or everything on OpenRouter.
+### Still true from 2026-10-02/03
 
----
+- **Gemma 4's weak spots:** Russian slips («такой пекло»), chosen by ear in English; repetition at the host's default temperature not looked into; the Russian brains round (Yandex, Sber) needs the owner's accounts.
+- **The voice is 3.8 Flash-Lite** («3.8 for more voices and less price tag»), Zubenelgenubi / Callirrhoe the owner's best; every companion gets his own voice from Gemini's 30 (Pulcherrima out: heard as a man), kept in his persona (`voices.py`). The owner on the voice through Google Cloud: «absolutely perfect… insanely good».
+
+### The plan after the test, in order
+
+1. **Agents through OpenRouter with the winners** (me — above).
+2. **His own friend, live** (`myself.py live`, `/live#me`) — the owner's first real conversation with someone written for him.
+3. **The iPhone app on the live channel** (`LATENCY.md` stage 3). Owner: an iPhone connected to the Mac, Xcode signed in.
+4. **A server near the services** (stage 4). The brain's host answers in ~0.1 s at OpenRouter; from Tashkent it takes 0.6–0.9 s — the road and the queue. Measure first from a server rented for an hour (~$1); owner: the hosting account.
+5. **The Russian brains round** — owner: Yandex and Sber accounts.
+6. **Real people — TestFlight**, after the must-fix list (§10): crisis-line numbers, who else is told about danger, how long data is kept, prompt injection.
+
+### How the owner works — keep to it
+
+- Russian. **Short, plain answers: the result first, then his steps** — each command in its own `bash` block. He stops reading long answers.
+- **His ear and his judgement decide**, blind; numbers only sieve. He said so of the brain and of the voices, and it holds for the agents.
+- **Money:** say the cost before spending; he asked «Получается те деньги которые я только что положил сгорают??» — be exact about what is refundable. Accounts and payments are done by an adult (he is 15; Google's Gemini API terms say 18+).
+- Keys live only in `backend/.env`; never ask him to paste one. Commit locally with the attribution line; never push or open a PR unless he asks.
 
 ## 1. What this is
 

@@ -1,4 +1,8 @@
-# Which model for which agent — research, 2026-09-23
+# Which model for which agent — research, 2026-09-23 (refreshed 2026-10-08)
+
+**Start with «2026-10-08: what changed, and where the test stands» at the
+end** — the leaderboards re-read, the new models, the updated shortlists, and
+exactly which stages of the owner's test are done.
 
 The voice already has its shortlist (HANDOVER §7b). This is the same exercise
 for everything else: the reader, the writer, the sketches, the interviewer,
@@ -239,3 +243,95 @@ behind `brain.think` / `brain.generate_text` changes — shows the results blind
 in `backend/data/myself/<stage>.md`, and reveals names and real costs only
 after the pick. The pick becomes the next stage's input.
 
+
+---
+
+## 2026-10-08: what changed, and where the test stands
+
+The owner, 2026-10-08: «прежде чем идти сразу на новый разговор, мы хотели с
+тобой проверить все модели. Не только разговорные, но и пишущие… Тот, кто
+пишет историю, тот, кто читает человека». The research above was done on
+2026-09-23; this section re-reads the leaderboards two weeks on.
+
+### Where the owner's own test stands (`python3 myself.py status`)
+
+| Stage | State | Cost so far |
+|---|---|---|
+| 1 · interview | **done** 2026-09-24 (`data/myself/interview.json`: his story, name «azim», Tashkent, **age 15**) | $0.048 |
+| 2 · read | **5 readings made, none picked** (`data/myself/read.md`, blind А–Д: GPT-5.5, Gemini 3.1 Pro, Claude Opus 5.5, GPT-6 Sol, Claude Opus 5) | $0.219 |
+| 3 · sketch | not run | — |
+| 4 · write | not run | — |
+| 5 · talk | not run | — |
+| 6 · scribe | not run | — |
+
+His age is 15, so every stage runs as the app would for a teenager
+(`young.TEEN`): the sketches and the friend are his own age (14–18). That is
+the product working as designed, not a test artefact.
+
+### The leaderboards, re-read 2026-10-08
+
+**EQ-Bench 4** — unchanged at the top: Claude Opus 5 **1385** · Claude Fable 5
+1340 · Kimi K3 1339 · GPT-5.5 1315 · Claude Opus 4.7 1311 · … · GPT-5.6 Sol
+1250 · Claude Sonnet 5 1236 · … · Gemma 4 31B 1120 (our conversation brain).
+Still not rated: Opus 5.5, Fable 5.1, Sonnet 5.5, GPT-6 Astra / Sol / 6.1 Sol.
+
+**Creative Writing v3** — the September newcomers are rated now:
+GPT-6 Astra **2173** · Claude Fable 5.1 2162 · Claude Opus 5 2133 (still the
+lowest slop of the top ten, 0.9) · **GPT-6 Sol 2125** · Kimi K3 2082 · GLM-5.3
+2075 · **Claude Opus 5.5 2050** · Grok 4.7 2007 · … · Claude Sonnet 5 1794 ·
+Gemini 3.8 Flash 1748.
+- **GPT-6 Sol is the find:** #4 in writing at $2 / $10 — a fifth of Astra.
+- **Opus 5.5 writes worse than Opus 5** here (#7 against #3). It stays on the
+  writer's list only because it is Anthropic's newest flagship; the test decides.
+
+**Judgemark v4** — unchanged (Opus 4.6 90.7 · GPT-5.5 87.8 · Gemini 3.7 Flash
+83.4 at $3 · … · Opus 5 78.8 · … · Gemma 4 31B 72.3 at $0.82).
+
+**The Russian arena** (llmarena.ru) could not be read today; the September
+reading stands — Gemini 3.1 Pro first in Russian, the Claude order holding.
+
+### New models since 2026-09-23 (all on OpenRouter, $ per million in / out)
+
+| Model | Out | $ | Where it fits |
+|---|---|---|---|
+| Claude Sonnet 5.5 | 28 Sep | 2 / 10 | scribe, interviewer — Sonnet 5's price, 30% faster |
+| GPT-6.1 Sol | 29 Sep | 2 / 10 | writer, reader — «near-Astra at a fifth of the price»; not rated yet |
+| Claude Haiku 5.5 | 7 Oct | 0.10 / 0.50 | scribe, and the watchman's first candidate once a crisis set exists |
+| Mistral Large 4 | 6 Oct | 0.68 / 2.09 | not shortlisted — no writing or EQ rating |
+| Gemini 4 Argon | 30 Sep | — | not available: cyber-defenders' programme only |
+| DeepSeek V4.1 Flash | 10 Sep | 0.04 / 1.00 | not shortlisted — EQ 1166 for V4 Pro, no Russian data |
+
+### The shortlists, as `myself.py` now runs them
+
+- **Reader** — the five already run. Pick among them first: it costs nothing.
+  If none rings true, re-run with the newest added — but `myself.py read`
+  overwrites `read.json`, so re-run all of them together:
+  `python3 myself.py read --models anthropic/claude-opus-5,anthropic/claude-opus-5.5,openai/gpt-5.5,google/gemini-3.1-pro-preview,openai/gpt-6.1-sol` (~$0.3).
+- **Sketches** — unchanged: Opus 5, GLM-5.3, and five from each.
+- **Writer — six:** Opus 5 *(incumbent)* · Opus 5.5 · Fable 5.1 · GPT-6 Astra
+  · **GPT-6.1 Sol** *(new)* · Kimi K3. ~$1.7 for all six.
+- **Talk** — the conversation brain is decided (Gemma 4, `ALIVE-BRAIN.md`).
+  This stage is optional: it only shows whether Gemma holds with HIS friend.
+- **Scribe — six:** Sonnet 5 *(incumbent)* · **Sonnet 5.5** · **Haiku 5.5**
+  *(new, a fifth of the price of Sonnet)* · GPT-5.4 Mini · Gemini 3.8 Flash ·
+  GLM-5.3. Run without reasoning (finding 3 above).
+- **Interviewer** — done once. Re-testing means answering the interview again
+  per candidate; worth it only if his first impression of it was poor.
+- **Watchman** — still not by feel: a labelled Russian crisis set first.
+
+### After the test: the winners must reach the app
+
+Today the app calls the reader, writer, interviewer, scribe, his week, the
+diary and the watchman on **Anthropic's own API** (`brain.think`,
+`brain.generate_text`, `config.READING_MODEL` etc.) — and `backend/.env` has no
+Anthropic key, so on the owner's machine they quietly do nothing (HANDOVER §0).
+`myself.py` reaches them only because it swaps those two functions for
+OpenRouter. So the step after the picks is code: let those calls go through
+OpenRouter when the model id has a «/» — as `CHAT_MODEL` already does — and set
+each agent's model to the winner.
+
+Sources: [EQ-Bench 4](https://eqbench.com/) · [Creative Writing v3](https://eqbench.com/creative_writing.html) ·
+[Judgemark v4](https://eqbench.com/judgemark-v4.html) · OpenRouter's model list (`/api/v1/models`, 2026-10-08) ·
+[Claude Opus 5.5](https://www.anthropic.com/claude-opus-5-5) · [GPT-6.1 Sol](https://openai.com/index/introducing-gpt-6-1-sol/) ·
+[Gemini 4 Argon](https://blog.google/innovation-and-ai/models-and-research/gemini-models/gemini-4-argon/) ·
+[October releases tracker](https://benchlm.ai/model-updates/releases/october-2026)
