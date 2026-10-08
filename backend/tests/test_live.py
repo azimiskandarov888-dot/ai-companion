@@ -763,6 +763,13 @@ def pull_until(line, condition, timeout: float = 3.0) -> None:
             pass
 
 
+def breath_heard(line) -> bytes:
+    """His breath as the phone was sent it — in pieces (live._Breath), before
+    his first word (the stand-in voice's «AB»)."""
+    first_word = line.audio.index(b"AB") if b"AB" in line.audio else len(line.audio)
+    return b"".join(line.audio[:first_word])
+
+
 def after_heard(line) -> list[str]:
     heard = line.kinds().index("heard")
     return [m["text"] for m in line.messages[heard:] if m["kind"] == "say"]
@@ -778,7 +785,7 @@ def test_he_gives_voice_at_once_and_it_is_not_what_he_said(env, sounds):
         done = line.expect("done")
     says = after_heard(line)
     assert says[0] == "(вдох)"                             # first, before any word
-    assert line.audio[0] == BR
+    assert BR[:400] in breath_heard(line)
     assert " ".join(says[1:]) == "Привет. Рад тебя слышать, как прошёл день?"
     assert done["reply"] == "Привет. Рад тебя слышать, как прошёл день?"
     assert memory.recent_turns(UID)[-1]["content"] == done["reply"]   # never remembered
@@ -1237,7 +1244,8 @@ def test_somebody_past_sixty_gets_the_deep_breath(env, sounds, monkeypatch):
     with talk(env) as line:
         line.ears().send(turn("EndOfTurn", "я сегодня в саду работал"))
         line.expect("done")
-    assert after_heard(line)[0] == "(вдох)" and b"DB" * 9600 in line.audio
+    assert after_heard(line)[0] == "(вдох)"
+    assert any(audio.endswith(b"DB" * 200) for audio in line.audio)          # the deep one
 
 
 def test_his_words_start_on_the_word_not_on_the_voice_s_silence():
@@ -1251,15 +1259,33 @@ def test_his_words_start_on_the_word_not_on_the_voice_s_silence():
     assert live._from_first_sound(array.array("h", [0] * 500).tobytes(), rate) is None   # wait for more
 
 
-def test_a_breath_too_long_for_the_moment_gives_way_to_a_shorter_one_or_none(env, sounds, monkeypatch):
-    """His words never wait long for his breath: the deep one when there is
-    time for it, the ordinary one when there is less, and none when they are
-    nearly there (2026-10-08: a deep breath sent regardless kept them waiting
-    0.4–0.7 s)."""
-    first_sound._made[(his_voice(), first_sound.DEEP_BREATH)] = [(16000, b"DB" * 16000)]   # a second
-    monkeypatch.setattr(live.Session, "_older", True, raising=False)
-    env.voice.first_delay = 0.75                              # time for 0.4 s, not for a second
+def test_a_breath_longer_than_the_moment_is_joined_in_the_middle_and_never_cut(env, sounds, monkeypatch):
+    """The owner, 2026-10-08: «it cuts in the middle of the sound». A breath
+    longer than the time before his words is heard from the middle of it,
+    faded in, to its own end — and his words do not wait for it."""
+    first_sound._made[(his_voice(), first_sound.BREATH)] = [(16000, b"LB" * 32000)]   # two seconds
+    env.voice.first_delay = 0.75
     with talk(env) as line:
         line.ears().send(turn("EndOfTurn", "я сегодня в саду работал"))
-        line.expect("done")
-    assert BR in line.audio and b"DB" * 16000 not in line.audio
+        done = line.expect("done")
+    breath = breath_heard(line)
+    assert b"LB" * 200 in breath and len(breath) < len(b"LB" * 32000)   # from the middle of it
+    assert breath[:2] == b"\x00\x00"                         # faded in
+    assert done["timing"]["after_sound"] > -0.2              # and his words did not wait for it
+
+
+def test_his_breath_gives_way_to_his_words_when_they_come_and_fades_under_them(env, sounds):
+    """Started to outlast the moment his words are expected, a breath that is
+    still going when they come ends there — its rest faded out over a few
+    hundredths of a second, as an in-breath ends when one speaks — and they
+    follow at once."""
+    first_sound._made[(his_voice(), first_sound.BREATH)] = [(16000, b"\x10\x27" * 32000)]   # two loud seconds
+    env.voice.first_delay = 0.6
+    with talk(env) as line:
+        line.ears().send(turn("EndOfTurn", "я сегодня в саду работал"))
+        done = line.expect("done")
+    breath = array.array("h")
+    breath.frombytes(breath_heard(line))
+    assert 0 < len(breath) < 32000                           # it gave way before its end
+    assert abs(breath[-1]) < 300                             # …fading, not cut
+    assert abs(done["timing"]["after_sound"]) < 0.25          # and his words came straight after

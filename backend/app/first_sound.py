@@ -79,6 +79,8 @@ from __future__ import annotations
 import array
 import asyncio
 import hashlib
+import math
+import operator
 import random
 import re
 import sys
@@ -91,6 +93,7 @@ LISTENING = ("М-м…",)
 #: His breath before he answers — the sound he makes most; and the deeper,
 #: longer one of an older friend, or of a friend to somebody past sixty.
 BREATH = body.MARK_BREATH
+EXHALE = body.MARK_EXHALE
 DEEP_BREATH = body.MARK_DEEP_BREATH
 #: Words an answer opens with: after something told, after a plain question,
 #: and before an answer to something they asked him to weigh.
@@ -105,6 +108,9 @@ QUESTION_EN = ("Well…",)
 THINKING_EN = ("Hmm…", "So…", "Well…")
 #: How his breath is shown on the phone, where his words are.
 BREATH_SHOWN, BREATH_SHOWN_EN = "(вдох)", "(breath)"
+EXHALE_SHOWN, EXHALE_SHOWN_EN = "(выдох)", "(breath out)"
+#: …all of which are breaths, wherever they are shown.
+BREATHS_SHOWN = frozenset({BREATH_SHOWN, BREATH_SHOWN_EN, EXHALE_SHOWN, EXHALE_SHOWN_EN})
 #: First words most of his answers open with (see the module docstring) —
 #: each with its own ending, since «Ого!» and «Ого…» are said differently.
 REACTIONS = ("Ого,", "Ого…", "Ого.", "Ого!", "Ой,", "Ой…", "Ой!", "Понимаю.", "Понимаю…",
@@ -207,6 +213,8 @@ def shown(text: str) -> str:
     """A sound of his as the phone shows it: his breath as «(вдох)»."""
     if text in (BREATH, DEEP_BREATH):
         return BREATH_SHOWN_EN if lang.english() else BREATH_SHOWN
+    if text == EXHALE:
+        return EXHALE_SHOWN_EN if lang.english() else EXHALE_SHOWN
     return text
 
 
@@ -224,10 +232,10 @@ def pick(voice: str | None, kind: str, rng: random.Random,
 
 
 def breaths(voice: str | None, *, older: bool = False) -> list[tuple[str, int, bytes]]:
-    """His breaths that are made, as (shown, rate, PCM): the ordinary ones,
-    and for an older friend the deep ones too — for live.py to take whichever
-    fits the moment before his words."""
-    kinds = (BREATH, DEEP_BREATH) if older else (BREATH,)
+    """His breaths that are made, as (shown, rate, PCM) — in and out, and for
+    an older friend the deep ones too — for live.py to take whichever fits
+    the moment before his words."""
+    kinds = (BREATH, EXHALE, DEEP_BREATH) if older else (BREATH, EXHALE)
     return [(shown(kind), rate, pcm) for kind in kinds for rate, pcm in _made.get((voice, kind), [])]
 
 
@@ -239,7 +247,7 @@ def choose(voice: str | None, kind: str, rng: random.Random, *, older: bool = Fa
     stands in for it."""
     breath, word = (SHARES_OLDER if older else SHARES).get(kind, SHARES["statement"])
     roll = rng.random()
-    if roll < breath and (made := (older and pick(voice, "deep breath", rng)) or pick(voice, "breath", rng)):
+    if roll < breath and (made := pick(voice, "breath", rng)):
         return made
     if roll < breath + word:
         return pick(voice, kind, rng, avoid=avoid)
@@ -330,44 +338,147 @@ async def _make_all(voice: str | None) -> None:
         _made[(voice, text)] = list(takes[text])
 
 
+# ── his breaths ──────────────────────────────────────────────────────────────
+#
+# The owner, 2026-10-08, of the breaths the voice made from its own <breath>:
+# «everytime he says "ehh" thats not real and kinda dumb. i need it to be like
+# breathing. inhale or exhale. and different sounds all the time. breathing
+# cant sound identical 6 times in a row… and yet again it cuts in the middle
+# of the sound». Measured: of the takes kept then, half were VOICED — 0.45–0.95
+# of their loud moments had a pitch (_voiced): an «э», not air — and they had
+# been cut short to fit before his words. Told whom it plays as «just air, no
+# voice at all», the same voice breathed: eight takes of eight unvoiced.
+#
+# So: a dozen of them, in and out, none voiced, none cut — and before his
+# words he takes whichever fits the moment (live.Session._answer), never one
+# he has just taken.
+
+#: (kind, how it is breathed, how many takes are kept, how long one may be)
+BREATHS = (
+    (BREATH, "a quiet in-breath through the nose before speaking", 6, (0.3, 1.1)),
+    (EXHALE, "a soft breath out, settling before speaking", 3, (0.4, 1.4)),
+    (DEEP_BREATH, "a slow, deep in-breath through the mouth before speaking", 4, (0.6, 1.6)),
+)
+_AIR = " — just air, no voice at all"
+#: How loud each is made: quieter than his words, as breath is; the deep one
+#: the strongest (the owner: «и дольше, и сильнее»).
+PEAKS = {BREATH: 7000, EXHALE: 7000, DEEP_BREATH: 11000}
+#: Not silence, not the full-volume noise a take now and then turns out as.
+BREATH_FAINTEST, BREATH_LOUDEST = 600, 26000
+#: Of its loud moments, at most this share may have a pitch: more, and it is
+#: a voice, not a breath.
+VOICED_AT_MOST = 0.15
+#: Tries for each take kept, before it is given up on.
+BREATH_TRIES_EACH = 5
+
+
+def _breathing(voice: str | None, how: str) -> str | None:
+    """His voice told to breathe: the same voice, playing the same person,
+    told that this is air and nothing else. None for a voice that cannot be
+    told whom it plays (no Gemini voice) — such a voice has no breaths."""
+    from . import voices
+
+    parsed = voices.parse(voice)
+    if parsed is None:
+        return None
+    name, style = parsed
+    who = re.split(r" \(|,", style or "", maxsplit=1)[0].strip() or "a person"
+    return voices.key({"name": name, "style": f"{who}: {how}{_AIR}"})
+
+
 async def _make_breaths(voice: str | None) -> None:
-    """His breaths, ordinary and deep, from tries of both of Gemini's tags
-    (<breath>, <heavy breath>): whatever came out a breath at all (_breath) is
-    his ordinary breath, made BREATH_LONGEST at most, or — when it was long
-    enough — the deep breath of somebody older, DEEP_LONGEST at most and
-    louder (DEEP_PEAK), so the deep one is always the longer and the stronger
-    (the owner, 2026-10-08: «и дольше, и сильнее»). Kept as any sound is."""
-    kinds = (BREATH, DEEP_BREATH)
-    takes = {kind: [_load(voice, kind, k) for k in range(TAKES)] for kind in kinds}
-    for attempt in range(BREATH_TRIES if not all(all(t) for t in takes.values()) else 0):
-        tag = kinds[attempt % 2]
-        try:
-            rate, pcm = None, b""
-            async for rate, chunk in tts.stream(tag, voice, background=True):
-                pcm += chunk
-        except Exception as e:  # noqa: BLE001 — a sound is a nicety, never a failure
-            print(f"[first_sound] could not make a breath: {type(e).__name__}: {e}",
-                  file=sys.stderr, flush=True)
-            break
-        if not (rate and (pcm := trimmed(pcm, rate)) and _breath(rate, pcm)):
-            continue
-        long_enough = len(pcm) / (2 * rate) >= DEEP_SHORTEST
-        deep_wanted = None in takes[DEEP_BREATH] and long_enough
-        if deep_wanted and (tag == DEEP_BREATH or None not in takes[BREATH]):
-            kind, longest, peak = DEEP_BREATH, DEEP_LONGEST, DEEP_PEAK
-        elif None in takes[BREATH]:
-            kind, longest, peak = BREATH, BREATH_LONGEST, BREATH_PEAK
-        else:
-            continue
-        take = takes[kind].index(None)
-        made = (rate, _louder(_shortened(pcm, rate, longest), peak))
-        takes[kind][take] = made
-        _keep(voice, kind, take, made)
-        if all(all(t) for t in takes.values()):
-            break
-    for kind in kinds:
-        if made := [t for t in takes[kind] if t]:
+    """His breaths (BREATHS), made once in his voice and kept, as any sound of
+    his: each take a breath (_air) or made again, BREATH_TRIES_EACH times."""
+    for kind, how, count, (shortest, longest) in BREATHS:
+        takes = [_load(voice, kind, k) for k in range(count)]
+        breathing = _breathing(voice, how) if None in takes else None
+        for take in range(count):
+            for _try in range(BREATH_TRIES_EACH if breathing and takes[take] is None else 0):
+                try:
+                    rate, pcm = None, b""
+                    async for rate, chunk in tts.stream(kind, breathing, background=True):
+                        pcm += chunk
+                except Exception as e:  # noqa: BLE001 — a sound is a nicety, never a failure
+                    print(f"[first_sound] could not make a breath: {type(e).__name__}: {e}",
+                          file=sys.stderr, flush=True)
+                    breathing = None
+                    break
+                # Off the conversation's loop: listening for a pitch is a
+                # moment of arithmetic, and his words must not wait on it.
+                if rate and (pcm := trimmed(pcm, rate)) and await asyncio.to_thread(
+                        _air, rate, pcm, shortest, longest):
+                    takes[take] = (rate, _louder(pcm, PEAKS[kind]))
+                    _keep(voice, kind, take, takes[take])
+                    break
+        if made := [t for t in takes if t]:
             _made[(voice, kind)] = made
+
+
+def _air(rate: int, pcm: bytes, shortest: float, longest: float) -> bool:
+    """Is this a breath — as long as one of its kind may be, neither silence
+    nor full-volume noise, and not voiced?"""
+    samples = array.array("h")
+    samples.frombytes(pcm[: len(pcm) - len(pcm) % 2])
+    seconds, peak = len(samples) / rate, max(map(abs, samples), default=0)
+    return (shortest <= seconds <= longest and BREATH_FAINTEST <= peak <= BREATH_LOUDEST
+            and _voiced(samples, rate) <= VOICED_AT_MOST)
+
+
+def _voiced(samples: array.array, rate: int) -> float:
+    """The share of its loud moments that have a pitch — a voice's buzz, as
+    an «э» has and air has not: autocorrelation at a lag of one 80–400 Hz
+    period, over 40 ms frames, at 8 kHz."""
+    step = max(1, rate // 8000)
+    x = samples[::step]
+    sr = rate / step
+    n, hop = int(sr * 0.04), int(sr * 0.02)
+    lo, hi = int(sr / 400), int(sr / 80)
+    frames = []
+    for i in range(0, len(x) - n - hi, hop):
+        frame = x[i:i + n + hi]
+        mean = sum(frame) / len(frame)
+        frames.append([v - mean for v in frame])
+    energies = [sum(v * v for v in f[:n]) for f in frames]
+    top = max(energies, default=0)
+    if not top:
+        return 0.0
+    voiced = loud = 0
+    for f, e0 in zip(frames, energies):
+        if e0 < 0.01 * top:                    # (10% of the loudest, as amplitude)
+            continue
+        loud += 1
+        head = f[:n]
+        best = 0.0
+        for lag in range(lo, hi):
+            tail = f[lag:lag + n]
+            c = sum(map(operator.mul, head, tail))
+            e1 = sum(v * v for v in tail)
+            if c > 0 and e1:
+                best = max(best, c / math.sqrt(e0 * e1))
+        voiced += best > 0.6
+    return voiced / loud if loud else 0.0
+
+
+#: A breath is joined in no later than this from its end — less would be a
+#: puff, not a breath — and faded in over this.
+JOINED_SHORTEST, JOINED_FADE = 0.3, 0.08
+
+
+def joined(pcm: bytes, rate: int, seconds: float) -> bytes:
+    """A breath as heard from the middle when there are only `seconds` for
+    it: its last `seconds`, faded in, to its own natural end — a breath that
+    began a moment earlier, not one cut off (the owner, 2026-10-08: «it cuts
+    in the middle of the sound»)."""
+    samples = array.array("h")
+    samples.frombytes(pcm[: len(pcm) - len(pcm) % 2])
+    keep = int(rate * seconds)
+    if keep >= len(samples):
+        return pcm
+    part = samples[len(samples) - keep:]
+    fade = min(int(rate * JOINED_FADE), keep)
+    for i in range(fade):
+        part[i] = int(part[i] * (i / fade) ** 0.5)
+    return part.tobytes()
 
 
 def _louder(pcm: bytes, peak: int) -> bytes:
@@ -381,63 +492,14 @@ def _louder(pcm: bytes, peak: int) -> bytes:
     return array.array("h", (max(-32767, min(32767, int(x * k))) for x in samples)).tobytes()
 
 
-def _breath(rate: int, pcm: bytes) -> bool:
-    """Did a breath come out — not seconds of noise, not full volume, not
-    next to nothing?"""
-    samples = array.array("h")
-    samples.frombytes(pcm[: len(pcm) - len(pcm) % 2])
-    seconds, peak = len(samples) / rate, max(map(abs, samples), default=0)
-    return BREATH_SHORTEST <= seconds <= BREATH_MOST and BREATH_FAINTEST <= peak <= BREATH_LOUDEST
-
-
-def _shortened(pcm: bytes, rate: int, seconds: float) -> bytes:
-    """A breath made no longer than this: cut there, its last part faded out
-    slowly, so it ends as a shorter breath, not a cut one."""
-    samples = array.array("h")
-    samples.frombytes(pcm[: len(pcm) - len(pcm) % 2])
-    keep = int(rate * seconds)
-    if len(samples) <= keep:
-        return pcm
-    cut = samples[:keep]
-    fade = min(int(rate * _SHORTENED_FADE), keep)
-    for i in range(fade):
-        cut[-1 - i] = int(cut[-1 - i] * (i / fade) ** 2)
-    return cut.tobytes()
-
-
-#: Times a take is made before it is given up on, when it came out wrong.
+#: Times a take of any other sound is made before it is given up on.
 ATTEMPTS = 4
-#: Tries of both breath tags, all told, to find his breaths among.
-BREATH_TRIES = 16
-#: A breath of his: this long at most, and this quiet — a take that runs for
-#: seconds or comes out loud is not a breath (measured 2026-10-08: 4 of 6
-#: takes 0.5–0.95 s and quiet; one 2 s, one 23 s, both at full volume).
-#: With its end left to die away (trimmed), a breath in his voice is 0.66–1.3 s
-#: and peaks at 11,000–22,000; the ones at full volume (32,767), or seconds
-#: long, are not breaths (measured 2026-10-08). His ordinary breath is the
-#: shorter of them — live.Session._answer starts it early enough to end as his
-#: words begin — and a deep one, longer and stronger.
-#: An in-breath before speaking is some 0.3–0.5 s; the ordinary one fits in the
-#: half-second his voice takes to begin once his first piece is written, the
-#: deep one when there is more time (live.Session._answer). Measured 2026-10-08:
-#: a one-second deep breath kept his words waiting 0.3–0.5 s after it,
-#: every time. A take that came out longer is shortened
-#: to this (_shortened); one from DEEP_SHORTEST up may be the deep one.
-BREATH_LONGEST, DEEP_SHORTEST, DEEP_LONGEST = 0.45, 0.6, 0.9
-#: …and what came out a breath at all: this long, and this loud.
-BREATH_SHORTEST, BREATH_MOST, BREATH_FAINTEST, BREATH_LOUDEST = 0.25, 3.0, 2000, 26000
-#: The fade over a shortened breath's end, in seconds.
-_SHORTENED_FADE = 0.18
-#: …and how loud each is made: the deep one always the stronger.
-BREATH_PEAK, DEEP_PEAK = 9000, 16000
-#: …and any other sound of his: this long at most.
+#: …and how long one may be.
 SOUND_LONGEST = 3.0
 
 
 def _kept(text: str, rate: int, pcm: bytes) -> bool:
     """Is this take what it should be?"""
-    if text in (BREATH, DEEP_BREATH):
-        return _breath(rate, pcm)
     return len(pcm) / (2 * rate) <= SOUND_LONGEST
 
 
@@ -469,15 +531,15 @@ def _keep(voice: str | None, text: str, take: int, made: tuple[int, bytes]) -> N
 #: Below this share of the loudest moment, a stretch counts as silence — low,
 #: so that the end of a breath or of «ну…» dies away as it does in a room
 #: instead of being cut off (the owner, 2026-10-08: «резко обрывается… звучит
-#: как некачественный SFX»).
-_QUIET = 0.015
+#: как некачественный SFX»; and again: «cuts in the middle of the sound»).
+_QUIET = 0.006
 #: Silence kept before a sound, and its fade in, in seconds — no click…
 _EDGE = 0.02
-#: …and after it: a longer, slower fade, the way a sound ends.
-_TAIL = 0.09
+#: …and after it: a long, slow fade, the way a sound ends.
+_TAIL = 0.15
 #: How sounds are cut now — part of where they are kept (_path), so that those
 #: cut the old, abrupt way are made again.
-CUT = "soft-ends-2026-10-08"
+CUT = "soft-ends-2026-10-08b"
 
 
 def trimmed(pcm: bytes, rate: int) -> bytes:

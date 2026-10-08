@@ -152,10 +152,13 @@ _BRAIN_TAKES = 0.65
 #: A breath ends this long before his first word — a person breathes in, and
 #: then speaks…
 _BREATH_TO_WORD = 0.05
-#: …and his words wait for it this long at most — longer for an older friend,
-#: whose breath is deeper and whose pace is slower (the owner: «и дольше»).
+#: …and his words wait for a word of his — «ну…» — this long at most…
 _MAY_WAIT = 0.2
-_MAY_WAIT_OLDER = 0.35
+#: …while a breath is started so as to be still going this long after his
+#: words are expected, and gives way to them when they come (_Breath): his
+#: estimate of when they come is good to a few tenths of a second, and a
+#: breath that ended before them would leave the silence the owner heard.
+_BREATH_OUTLASTS = 0.3
 #: Drafts begun on a guess («похоже, договорил») in one turn, at most — then
 #: only «договорил» begins one. LiveKit's default too (max_retries 3): a turn
 #: that keeps stopping and going on would otherwise be paid for again at
@@ -418,6 +421,69 @@ def _from_first_sound(pcm: bytes, rate: int) -> bytes | None:
     return cut.tobytes()
 
 
+class _Breath:
+    """His breath before his words, going out as it is heard — a little ahead
+    of the phone, not all at once — so that it gives way the moment his words
+    come: what is left of it faded out under their start (BREATH_GIVES_WAY),
+    as an in-breath ends when one speaks. If his words are later than it, it
+    ends on its own, whole. The owner, 2026-10-08: «yet again it cuts in the
+    middle of the sound… like bad sfx»."""
+
+    #: Sent in pieces this long, this far ahead of what the phone is playing.
+    PIECE, AHEAD = 0.05, 0.12
+    #: …and when his words come, the rest of it fades over this.
+    GIVES_WAY = 0.08
+
+    def __init__(self, session: Session, shown: str, rate: int, pcm: bytes) -> None:
+        self.session, self.shown, self.rate, self.pcm = session, shown, rate, pcm
+        self._yield = asyncio.Event()
+        self.sent = 0.0          # seconds of it the phone has been given
+        self.began: float | None = None
+        self.task = asyncio.create_task(self._go())
+
+    async def _go(self) -> None:
+        session, rate = self.session, self.rate
+        if session._answering_aloud:
+            return
+        await session._send({"kind": "say", "text": self.shown, "rate": rate})
+        self.began = now = time.monotonic()
+        session._sound_at, session._sound_text = now, self.shown
+        step = int(rate * self.PIECE) * 2
+        pos = 0
+        while pos < len(self.pcm):
+            if self._yield.is_set():
+                fade = int(rate * self.GIVES_WAY) * 2
+                await session._send_audio(_faded_out(self.pcm[pos:pos + fade]), rate)
+                self.sent += min(fade, len(self.pcm) - pos) / (2 * rate)
+                return
+            piece = self.pcm[pos:pos + step]
+            await session._send_audio(piece, rate)
+            pos += len(piece)
+            self.sent += len(piece) / (2 * rate)
+            await asyncio.sleep(max(0.0, self.began + self.sent - self.AHEAD - time.monotonic()))
+
+    async def give_way(self) -> None:
+        """His words are here: the breath ends now, softly."""
+        self._yield.set()
+        try:
+            await self.task
+        except asyncio.CancelledError:
+            pass
+
+    def ends(self) -> float | None:
+        """When the phone will have played the last of it."""
+        return None if self.began is None else self.began + self.sent
+
+
+def _faded_out(pcm: bytes) -> bytes:
+    samples = array.array("h")
+    samples.frombytes(pcm[: len(pcm) - len(pcm) % 2])
+    n = len(samples)
+    for i in range(n):
+        samples[i] = int(samples[i] * ((n - i) / n) ** 2)
+    return samples.tobytes()
+
+
 class _Voicing:
     """One piece of his answer being made into sound — started early, played in
     order. The next piece's voice is asked for while this one is still
@@ -545,6 +611,8 @@ class Session:
         self._answering_aloud = False
         #: Drafts begun on a guess in the turn they are in (_GUESSES).
         self._guesses = 0
+        #: His last few breaths, not to be taken again straight away.
+        self._breathed: deque[int] = deque(maxlen=3)
 
     # ── talking to the phone ────────────────────────────────────────────────
 
@@ -582,7 +650,7 @@ class Session:
                 return False
             self._playing_until = max(self._playing_until, now) + len(pcm) / (2 * rate)
             self._last_life = now
-            if _WORD.search(text) and text not in (first_sound.BREATH_SHOWN, first_sound.BREATH_SHOWN_EN):
+            if _WORD.search(text) and text not in first_sound.BREATHS_SHOWN:
                 self._said.append(text)   # a word of his, to know again from the speaker
             self._sound_at, self._sound_text = now, text
         return True
@@ -984,8 +1052,10 @@ class Session:
         cutter: asyncio.Task | None = None
         late: asyncio.Task | None = None
         soon: asyncio.Task | None = None
-        #: When his sound before his words stops playing, if one was sent.
+        #: When his sound before his words stops playing, if one was sent —
+        #: or his breath, going out as it plays (_Breath).
         sound_ends: float | None = None
+        breathing: _Breath | None = None
         #: A sound of his since their last word (first_sound.py) that the first
         #: words of the answer must not say again.
         echoed = ""
@@ -1093,23 +1163,26 @@ class Session:
             return None
 
         async def sound_before_words(made: tuple[str, int, bytes]) -> None:
-            """His sound at the end of their turn, sent so that it ENDS as his
-            words begin — and not at all before a first word that is
-            ready-made: that one plays at once, and is itself the start.
+            """His sound at the end of their turn, timed to his words — and not
+            at all before a first word that is ready-made: that one plays at
+            once, and is itself the start.
 
-            A breath is whichever of his breaths fits the time there is: the
-            deep one when there is time for it (and he is older), the ordinary
-            one when there is less, none when his words are nearly there — so
-            his words never wait more than _MAY_WAIT for his breath (measured
-            2026-10-08: a deep breath sent regardless kept them waiting
-            0.4–0.7 s). A word — «ну…» — is said only if it fits as well."""
-            nonlocal sound_ends
+            A breath is any of his breaths — in or out, deep ones too when he
+            is older — never one of the last he took. It is started so as to
+            be still going, by _BREATH_OUTLASTS, when his words are expected —
+            from the middle of it, faded in, when there is less time than it
+            lasts (first_sound.joined) — and gives way to them when they come
+            (_Breath). A word — «ну…» — is said whole, and only if it fits."""
+            nonlocal sound_ends, breathing
             text = made[0]
-            if text == first_sound.shown(first_sound.BREATH):
-                choices = first_sound.breaths(voice, older=self._older) or [made]
-            else:
-                choices = [made]
-            lengths = [len(pcm) / (2 * rate) for _text, rate, pcm in choices]
+            if breath := text in first_sound.BREATHS_SHOWN:
+                # Never the breath he has just taken: «breathing cant sound
+                # identical 6 times in a row» (the owner, 2026-10-08).
+                every = first_sound.breaths(voice, older=self._older) or [made]
+                fresh = [c for c in every if id(c[2]) not in self._breathed] or every
+                made = self._rng.choice(fresh)
+            shown, rate, pcm = made
+            length = len(pcm) / (2 * rate)
             while not self._answering_aloud:
                 if ahead and ahead[0][2].ready_made:
                     return
@@ -1117,19 +1190,27 @@ class Session:
                 if (opening and first_sound.reaction(voice, opening) is not None
                         and first_sound.without_repeat(opening, text) == opening):
                     return
-                expected = words_expected(max(lengths))
+                expected = words_expected(length)
                 if expected is not None:
-                    left = expected - _BREATH_TO_WORD - time.monotonic()
-                    may_wait = _MAY_WAIT_OLDER if self._older else _MAY_WAIT
-                    fitting = [i for i, length in enumerate(lengths) if length <= left + may_wait]
-                    if not fitting:
-                        return   # his words are nearly here: nothing before them
-                    best = max(fitting, key=lambda i: lengths[i])
-                    if lengths[best] >= left:   # its moment has come
-                        if await self._send_sound(*choices[best]):
-                            timing["first_sound"] = _after(self._sound_at, start)
-                            sound_ends = self._sound_at + lengths[best]
-                        return
+                    now = time.monotonic()
+                    if breath:
+                        part = expected + _BREATH_OUTLASTS - now
+                        if part < first_sound.JOINED_SHORTEST:
+                            return   # his words are nearly here: nothing before them
+                        if part <= length:   # its moment has come
+                            self._breathed.append(id(pcm))
+                            breathing = _Breath(self, shown, rate, first_sound.joined(pcm, rate, part))
+                            timing["first_sound"] = _after(now, start)
+                            return
+                    else:
+                        left = expected - _BREATH_TO_WORD - now
+                        if left < length - _MAY_WAIT:
+                            return
+                        if left <= length:
+                            if await self._send_sound(shown, rate, pcm):
+                                timing["first_sound"] = _after(self._sound_at, start)
+                                sound_ends = self._sound_at + length
+                            return
                 await asyncio.sleep(0.02)
 
         def spent() -> None:
@@ -1171,6 +1252,9 @@ class Session:
                 async for rate, pcm in voicing.chunks():
                     if not announced:
                         announced = True
+                        if breathing is not None:
+                            await breathing.give_way()   # his breath ends as he speaks
+                            sound_ends = breathing.ends()
                         self._answering_aloud = True   # no «м-м» into his words from here
                         if late is not None:
                             late.cancel()
@@ -1256,7 +1340,7 @@ class Session:
             spent()
             await self._send({"kind": "trouble", "detail": str(e)})
         finally:
-            for task in (late, soon):
+            for task in (late, soon, breathing.task if breathing else None):
                 if task is not None:
                     task.cancel()
             self._answering_aloud = False

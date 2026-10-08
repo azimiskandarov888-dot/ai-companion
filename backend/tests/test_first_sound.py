@@ -70,30 +70,62 @@ def test_the_silence_around_a_sound_is_cut_and_the_ends_fade():
     assert first_sound.trimmed(_pcm([0] * 100), rate) == b""
 
 
-def test_his_breaths_are_sorted_from_what_came_out_and_the_wrong_ones_dropped(monkeypatch):
-    """Measured 2026-10-08: a breath tag gives a quiet half-second, a strong
-    second — or 23 s at full volume. The short quiet ones are his breath, the
-    long strong ones his deep breath, the rest not breaths at all."""
-    takes = iter([[0] * 10 + [32000] * 600 + [0] * 100,     # full volume: not a breath
-                  [0] * 10 + [3000] * 5000 + [0] * 100,     # five seconds: not a breath
-                  [0] * 10 + [3000] * 300 + [0] * 100,      # a quiet 0.4 s: his breath
-                  [0] * 10 + [12000] * 700 + [0] * 100])    # a strong 0.8 s: his deep breath
+def _noise(seconds: float, level: int, rate: int = 8000, seed: int = 1) -> list[int]:
+    rng = random.Random(seed)
+    return [0] * 80 + [int(rng.uniform(-level, level)) for _ in range(int(rate * seconds))] + [0] * 1200
+
+
+def _tone(seconds: float, level: int, hz: float = 150, rate: int = 8000) -> list[int]:
+    import math
+    return [0] * 80 + [int(level * math.sin(2 * math.pi * hz * i / rate))
+                       for i in range(int(rate * seconds))] + [0] * 1200
+
+
+#: A companion's voice as tts.voice_for gives it: a Gemini voice, whom it plays.
+GEMINI = "gemini:Charon|a man of 68 (calm), warm, relaxed and natural"
+
+
+def test_a_breath_with_a_voice_in_it_is_made_again_and_air_is_kept(monkeypatch):
+    """The owner, 2026-10-08: «everytime he says "ehh" thats not real». Half
+    the breaths kept then had a pitch — an «э». A take with one is made again,
+    and so is one at full volume; air is kept, as loud as a breath is."""
+    takes = iter([_tone(0.5, 9000),            # a voice: «э»
+                  _noise(0.5, 32000),          # full volume: not a breath
+                  _noise(0.5, 4000)])          # air
+    asked: list[tuple[str, str]] = []
+
+    async def voice(text, voice=None, **_):
+        asked.append((text, voice))
+        yield 8000, _pcm(next(takes) if text == first_sound.BREATH else _noise(0.9, 4000, seed=2))
+
+    monkeypatch.setattr(tts, "stream", voice)
+    monkeypatch.setattr(first_sound, "BREATHS", (
+        (first_sound.BREATH, "a quiet in-breath", 1, (0.3, 1.1)),
+        (first_sound.DEEP_BREATH, "a deep in-breath", 1, (0.6, 1.6))))
+    asyncio.run(first_sound._make_breaths(GEMINI))
+    assert [t for t, _ in asked] == [first_sound.BREATH] * 3 + [first_sound.DEEP_BREATH]
+    assert all("just air, no voice at all" in v and v.startswith("gemini:Charon|a man of 68") for _, v in asked)
+    (_rate, ordinary), = first_sound._made[(GEMINI, first_sound.BREATH)]
+    (_rate, deep), = first_sound._made[(GEMINI, first_sound.DEEP_BREATH)]
+    peak = lambda pcm: max(map(abs, array.array("h", pcm)))
+    assert peak(deep) == first_sound.PEAKS[first_sound.DEEP_BREATH] > peak(ordinary)   # and stronger
+
+
+def test_a_voice_that_cannot_be_told_whom_it_plays_has_no_breaths(monkeypatch):
     asked: list[str] = []
 
     async def voice(text, voice=None, **_):
         asked.append(text)
-        pcm = next(takes) if text in (first_sound.BREATH, first_sound.DEEP_BREATH) else SHORT
-        yield 1000, _pcm(pcm)
+        yield 8000, _pcm(_noise(0.5, 4000))
 
     monkeypatch.setattr(tts, "stream", voice)
-    monkeypatch.setattr(first_sound, "TAKES", 1)
-    asyncio.run(first_sound._make_all("v"))
-    assert sum(t in (first_sound.BREATH, first_sound.DEEP_BREATH) for t in asked) == 4
-    (rate, ordinary), = first_sound._made[("v", first_sound.BREATH)]
-    (_rate, deep), = first_sound._made[("v", first_sound.DEEP_BREATH)]
-    assert 0.3 < len(ordinary) / 2 / rate <= 0.45 and 0.7 < len(deep) / 2 / rate <= 0.9
-    peak = lambda pcm: max(map(abs, array.array("h", pcm)))
-    assert peak(deep) == first_sound.DEEP_PEAK > peak(ordinary) == first_sound.BREATH_PEAK   # and stronger
+    asyncio.run(first_sound._make_breaths("c962ed46edfd419abc530d1e33a7435f"))   # a Fish voice id
+    assert asked == [] and not first_sound.breaths("c962ed46edfd419abc530d1e33a7435f")
+
+
+def test_a_pitch_is_heard_in_a_voice_and_not_in_air():
+    assert first_sound._voiced(array.array("h", _tone(0.6, 9000)), 8000) > 0.8
+    assert first_sound._voiced(array.array("h", _noise(0.6, 9000)), 8000) < 0.1
 
 
 def test_the_end_of_a_turn_gets_a_breath_a_word_or_nothing(monkeypatch):
@@ -140,7 +172,13 @@ DEEP = [0] * 50 + [12000] * 700 + [0] * 100
 
 
 def _sound_of(text: str) -> bytes:
-    return _pcm(DEEP if text == first_sound.DEEP_BREATH else SHORT)
+    """At 1000 Hz: a word is SHORT; a breath is air — noise — as long as its
+    kind (the deep one longest)."""
+    if text == first_sound.DEEP_BREATH:
+        return _pcm(_noise(0.9, 9000, rate=1000))
+    if text in (first_sound.BREATH, first_sound.EXHALE):
+        return _pcm(_noise(0.5, 9000, rate=1000))
+    return _pcm(SHORT)
 
 
 def test_they_are_made_once_in_his_voice_and_kept(monkeypatch):
@@ -153,12 +191,12 @@ def test_they_are_made_once_in_his_voice_and_kept(monkeypatch):
     monkeypatch.setattr(tts, "stream", voice)
 
     async def run():
-        first = first_sound.prepare("her-voice")
-        assert first_sound.prepare("her-voice") is first     # one making per voice
+        first = first_sound.prepare(GEMINI)
+        assert first_sound.prepare(GEMINI) is first          # one making per voice
         await first
 
     asyncio.run(run())
-    breaths = [first_sound.BREATH, first_sound.DEEP_BREATH] * first_sound.TAKES
+    breaths = [kind for kind, _how, count, _lengths in first_sound.BREATHS for _ in range(count)]
     sounds = list(dict.fromkeys(first_sound.STATEMENT + first_sound.QUESTION + first_sound.THINKING
                                 + first_sound.LISTENING))
     reactions = [t for t in first_sound.REACTIONS if t not in sounds]
@@ -169,12 +207,14 @@ def test_they_are_made_once_in_his_voice_and_kept(monkeypatch):
         t for t in sounds for _ in range(first_sound.TAKES)]                 # then his sounds
     start = len(sounds) * first_sound.TAKES
     assert rest[start:start + len(reactions)] == reactions                   # then one of each first word
-    assert all(v == "her-voice" for _, v in asked)
+    assert all(v == GEMINI for t, v in asked if t not in breaths)         # his words in his voice
     assert len(rest) == (len(sounds) + len(reactions)) * first_sound.TAKES
-    assert first_sound.ready("her-voice") and not first_sound.ready(None)
-    ordinary = first_sound._made[("her-voice", first_sound.BREATH)][0]
-    deep = first_sound._made[("her-voice", first_sound.DEEP_BREATH)][0]
+    assert first_sound.ready(GEMINI) and not first_sound.ready(None)
+    ordinary = first_sound._made[(GEMINI, first_sound.BREATH)][0]
+    deep = first_sound._made[(GEMINI, first_sound.DEEP_BREATH)][0]
     assert len(deep[1]) > len(ordinary[1])                                   # the deep one is longer
+    assert len(first_sound.breaths(GEMINI)) == 6 + 3                         # in and out, many
+    assert len(first_sound.breaths(GEMINI, older=True)) == 6 + 3 + 4
 
 
 def test_what_is_made_is_kept_and_never_made_again(monkeypatch):
