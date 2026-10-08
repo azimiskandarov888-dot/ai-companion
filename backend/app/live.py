@@ -437,6 +437,8 @@ class Session:
         self.duplex = duplex
         self.who = voices.ensure(user_id)   # his own voice, given once and kept
         self.voice = tts.voice_for(self.who)
+        #: An older friend breathes more before he answers (first_sound.SHARES).
+        self._older = (voices.years(self.who) or 0) >= first_sound.OLDER_FROM
         self.ears: hearing.Ears | None = None
         self._send_lock = asyncio.Lock()
         self._stopping = asyncio.Event()
@@ -513,7 +515,8 @@ class Session:
                 return False
             self._playing_until = max(self._playing_until, now) + len(pcm) / (2 * rate)
             self._last_life = now
-            self._said.append(text)
+            if _WORD.search(text) and text not in (first_sound.BREATH_SHOWN, first_sound.BREATH_SHOWN_EN):
+                self._said.append(text)   # a word of his, to know again from the speaker
             self._sound_at, self._sound_text = now, text
         return True
 
@@ -801,9 +804,8 @@ class Session:
         kind = first_sound.at_end(transcript)
         if kind is None or time.monotonic() - self._sound_at < first_sound.SPACING_AT_END:
             return
-        if self._rng.random() >= first_sound.CHANCE_AT_END:
-            return
-        made = first_sound.pick(self.voice, kind, self._rng, avoid=self._sound_text)
+        made = first_sound.choose(self.voice, kind, self._rng, older=self._older,
+                                  avoid=self._sound_text)
         if made:
             await self._send_sound(*made)
 
@@ -814,7 +816,7 @@ class Session:
         await asyncio.sleep(max(0.0, ended + first_sound.LATE - time.monotonic()))
         if self._answering_aloud or time.monotonic() < self._playing_until:
             return
-        made = first_sound.pick(self.voice, first_sound.at_end(transcript) or "listening",
+        made = first_sound.pick(self.voice, first_sound.at_end(transcript) or "statement",
                                 self._rng, avoid=self._sound_text)
         if made:
             await self._send_sound(*made)

@@ -720,11 +720,23 @@ def his_voice() -> str | None:
 def sounds(monkeypatch):
     """His sounds, made — the stand-in voice would make them as bytes too, but
     then which bytes are which would be guesswork."""
-    for text, pcm in (("М-м…", b"MM"), ("Хм…", b"HM")):
+    for text, pcm in (("М-м…", b"MM"), ("Хм…", b"HM"), (first_sound.BREATH, b"BR"),
+                      ("Да…", b"DA"), ("Ну…", b"NU")):
         first_sound._made[(his_voice(), text)] = [(16000, pcm)]
-    monkeypatch.setattr(first_sound, "CHANCE_AT_END", 1.0)
+    # His breath at the end of every turn, unless a test says otherwise.
+    always = {kind: (1.0, 0.0) for kind in first_sound.SHARES}
+    monkeypatch.setattr(first_sound, "SHARES", always)
+    monkeypatch.setattr(first_sound, "SHARES_OLDER", always)
     monkeypatch.setattr(first_sound, "CHANCE_IN_PAUSE", 1.0)
     monkeypatch.setattr(first_sound, "LATE", None)
+
+
+def _shares(monkeypatch, breath: float, word: float) -> None:
+    """The end of every turn gets his breath, a word or nothing as told —
+    whatever his age (first_sound.SHARES_OLDER)."""
+    shares = {kind: (breath, word) for kind in first_sound.SHARES}
+    monkeypatch.setattr(first_sound, "SHARES", shares)
+    monkeypatch.setattr(first_sound, "SHARES_OLDER", shares)
 
 
 def pull_until(line, condition, timeout: float = 3.0) -> None:
@@ -745,23 +757,25 @@ def after_heard(line) -> list[str]:
 
 
 def test_he_gives_voice_at_once_and_it_is_not_what_he_said(env, sounds):
-    """The owner, 2026-10-02: «сделай чтобы он сразу подавал голос». A person
-    answers about 0.2 s after the other stops; his words take 1.6–2.3 s."""
+    """The owner, 2026-10-02: «сделай чтобы он сразу подавал голос» — and,
+    2026-10-08, most of the time with a breath. A person answers about 0.2 s
+    after the other stops; his words take longer."""
     with talk(env) as line:
         line.ears().send(turn("StartOfTurn", "я сегодня"), turn("EndOfTurn", "я сегодня в школе был"))
         line.expect("heard")
         done = line.expect("done")
     says = after_heard(line)
-    assert says[0] == "М-м…"                               # first, before any word
-    assert line.audio[0] == b"MM"
+    assert says[0] == "(вдох)"                             # first, before any word
+    assert line.audio[0] == b"BR"
     assert " ".join(says[1:]) == "Привет. Рад тебя слышать, как прошёл день?"
     assert done["reply"] == "Привет. Рад тебя слышать, как прошёл день?"
     assert memory.recent_turns(UID)[-1]["content"] == done["reply"]   # never remembered
     assert done["timing"]["first_sound"] is not None
 
 
-def test_his_answer_does_not_say_the_sound_again(env, sounds):
-    first_sound._made.pop((his_voice(), "М-м…"))   # so the thinking sound is «Хм…»
+def test_his_answer_does_not_say_the_sound_again(env, sounds, monkeypatch):
+    _shares(monkeypatch, 0.0, 1.0)
+    first_sound._made.pop((his_voice(), "Ну…"))    # so the thinking sound is «Хм…»
     env.mind.replies = ["Хм, ну я не знаю. Наверное, стоит."]
     with talk(env) as line:
         line.ears().send(turn("StartOfTurn", "а ты"), turn("EndOfTurn", "а ты как думаешь, стоит идти?"))
@@ -817,7 +831,7 @@ def test_he_makes_no_sound_before_his_own_hello(env, sounds):
 
 
 def test_a_slow_answer_gets_one_more_sound_and_never_inside_his_words(env, sounds, monkeypatch):
-    monkeypatch.setattr(first_sound, "CHANCE_AT_END", 0.0)
+    _shares(monkeypatch, 0.0, 0.0)
     monkeypatch.setattr(first_sound, "LATE", 0.05)
     env.mind.delay = 0.03
     with talk(env) as line:
@@ -825,8 +839,8 @@ def test_a_slow_answer_gets_one_more_sound_and_never_inside_his_words(env, sound
         line.expect("heard")
         line.expect("done")
     says = after_heard(line)
-    assert says[0] == "М-м…"
-    assert says.count("М-м…") == 1
+    assert says[0] in ("Да…", "Ну…")                       # a word, not a second breath
+    assert sum(said in ("Да…", "Ну…", "(вдох)") for said in says) == 1
 
 
 # ── a guess is written, never voiced (2026-10-05) ───────────────────────────
@@ -884,10 +898,11 @@ def test_a_first_word_that_is_ready_needs_no_sound_before_it(env, sounds):
     assert done["timing"]["head_ready"] is True
 
 
-def test_a_written_answer_drops_the_word_his_sound_has_just_said(env, sounds):
+def test_a_written_answer_drops_the_word_his_sound_has_just_said(env, sounds, monkeypatch):
     """Nothing of a guess is voiced, so its first word can still go: «Хм…» at
     once, then «Ну я не знаю» — not «Хм…» and then «Хм, ну»."""
-    first_sound._made.pop((his_voice(), "М-м…"))             # only «Хм…» left to make
+    _shares(monkeypatch, 0.0, 1.0)
+    first_sound._made.pop((his_voice(), "Ну…"))              # only «Хм…» left to make
     env.mind.replies = ["Хм, ну я не знаю. Наверное, стоит."]
     with talk(env) as line:
         line.ears().send(turn("StartOfTurn", "а ты"),
@@ -1144,3 +1159,25 @@ def test_with_few_requests_left_the_rest_follows_a_ready_first_word_whole(env, m
         line.ears().send(turn("EndOfTurn", "я водителем работаю"))
         line.expect("done")
     assert env.voice.texts == ["понимаю. Давно за рулём? Наверное, устаёшь сильно."]
+
+
+# ── a breath, a word, or nothing (2026-10-08) ───────────────────────────────
+
+def test_an_older_friend_breathes_more_and_says_less(env, sounds, monkeypatch):
+    monkeypatch.setattr(first_sound, "SHARES", {k: (0.0, 1.0) for k in first_sound.SHARES})
+    monkeypatch.setattr(first_sound, "SHARES_OLDER", {k: (1.0, 0.0) for k in first_sound.SHARES})
+    persona.save_persona(UID, {**persona.load_persona(UID), "age": "71"})
+    for text, pcm in ((first_sound.BREATH, b"BR"), ("Да…", b"DA"), ("Ну…", b"NU")):
+        first_sound._made[(his_voice(), text)] = [(16000, pcm)]   # in the voice he has now
+    with talk(env) as line:
+        line.ears().send(turn("EndOfTurn", "я сегодня в саду работал"))
+        line.expect("heard")
+        line.expect("done")
+    assert after_heard(line)[0] == "(вдох)"
+
+
+def test_his_breath_is_never_taken_for_his_words_coming_back(env, sounds):
+    with talk(env) as line:
+        line.ears().send(turn("EndOfTurn", "я сегодня в школе был"))
+        line.expect("done")
+        assert "(вдох)" not in live._open[UID]._said

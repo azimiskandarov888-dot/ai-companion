@@ -338,6 +338,7 @@ GEMINI_SOUNDS: dict[str, str] = {
     body.MARK_COUGH: "<cough>",
     body.MARK_SIGH: "<sigh>",
     body.MARK_LAUGH: "<laugh>",
+    body.MARK_BREATH: "<breath>",
 }
 
 

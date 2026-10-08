@@ -15,16 +15,24 @@ the phone it is the only sign of listening there is. The owner, 2026-10-02:
 
 ── WHAT, AND WHEN ──────────────────────────────────────────────────────────
 
-  a pause in their turn          «м-м» — a listener's sound. If they carry on,
-  (Flux: «похоже, договорил»)    that is exactly what it was. Only when he may
-                                 be talked over (duplex): otherwise the
-                                 microphone is closed while he makes a sound,
-                                 and their next words would be lost.
-  the end of their turn          «хм…», «так…» or «м-м…» before an answer to
-                                 something they asked him to weigh; «м-м…»
-                                 before anything else
-  his words still not there      one more, once
+  a pause in their turn          «м-м» — a listener's sound, now and then. If
+  (Flux: «похоже, договорил»)    they carry on, that is exactly what it was.
+                                 Only when he may be talked over (duplex):
+                                 otherwise the microphone is closed while he
+                                 makes a sound, and their next words would be lost.
+  the end of their turn          most often his BREATH, the way somebody about
+                                 to speak takes one; sometimes a word an answer
+                                 opens with — «да…», «ну…» after something told,
+                                 «ну…» after a question, «хм…», «так…» before
+                                 something he must weigh; sometimes nothing
+                                 (SHARES). An older friend breathes more.
+  his words still not there      one more — a word, once
   LATE seconds after
+
+The owner, 2026-10-08, of the «м-м» before every answer: «even when it's not
+logically belong there… Maybe we can have some other voice lines like "nuuu",
+"da..." Sometimes maybe we don't use it at all. But most of the time, I want
+to use the breathing effect. Especially when we talk to someone old».
 
 Never before a goodbye, never twice within SPACING, never when he speaks
 first, never in a search turn — that one says «сейчас гляну» (live._FILLERS).
@@ -37,11 +45,11 @@ conversation opens, and kept: playing one costs nothing and waits for
 nothing. The silence a voice puts before and after a word is cut off: it would
 only be more gap.
 
-A breath before speaking would be the most neutral sound of all, and Fish has
-a tag for it. Measured (2026-10-02), «[inhale]» came out VOICED — no noise,
-the periodicity of a vowel — so whatever it is, it is not obviously a breath.
-It is not here until the owner has heard it; adding it means a marker in
-tts.SOUNDS too, since the voice is never sent a bracket it does not know.
+His breath is Gemini's own `<breath>` (body.MARK_BREATH, tts.GEMINI_SOUNDS).
+Most takes come out a quiet half-second to a second; now and then one runs for
+seconds, loud — so a take of it is kept only when it is short and quiet
+(_kept), and made again when it is not. (Fish's «[inhale]» came out voiced,
+2026-10-02: a voice with no breath of its own gets words instead.)
 
 ── HIS FIRST WORD, READY TOO ───────────────────────────────────────────────
 
@@ -76,16 +84,25 @@ import re
 import sys
 import wave
 
-from . import config, lang, tts
+from . import body, config, lang, tts
 
-#: A listener's sound — in a pause of theirs, and before most of his answers.
+#: A listener's sound — in a pause of theirs.
 LISTENING = ("М-м…",)
-#: Before an answer to something they asked him to weigh.
-THINKING = ("Хм…", "Так…", "М-м…")
-#: The same sounds in an English conversation (lang.py) — said by an English
-#: voice, which would read «Так…» as a word.
+#: His breath before he answers — the sound he makes most.
+BREATH = body.MARK_BREATH
+#: Words an answer opens with: after something told, after a plain question,
+#: and before an answer to something they asked him to weigh.
+STATEMENT = ("Да…", "Ну…")
+QUESTION = ("Ну…",)
+THINKING = ("Хм…", "Так…", "Ну…")
+#: The same in an English conversation (lang.py) — said by an English voice,
+#: which would read «Так…» as a word.
 LISTENING_EN = ("Mm…",)
-THINKING_EN = ("Hmm…", "So…", "Mm…")
+STATEMENT_EN = ("Yeah…", "Well…")
+QUESTION_EN = ("Well…",)
+THINKING_EN = ("Hmm…", "So…", "Well…")
+#: How his breath is shown on the phone, where his words are.
+BREATH_SHOWN, BREATH_SHOWN_EN = "(вдох)", "(breath)"
 #: First words most of his answers open with (see the module docstring) —
 #: each with its own ending, since «Ого!» and «Ого…» are said differently.
 REACTIONS = ("Ого,", "Ого…", "Ого.", "Ого!", "Ой,", "Ой…", "Ой!", "Понимаю.", "Понимаю…",
@@ -103,10 +120,15 @@ REACTIONS_EN = ("Oh wow,", "Oh wow!", "Wow,", "Oh,", "Oh!", "Oh no,", "Yeah,", "
                 "Wait,", "Hey.", "Hi.", "Ah,", "Exactly.", "I get that.")
 #: How many versions of each sound are made.
 TAKES = 2
-#: How often a finished turn gets one. Not always: people do not.
-CHANCE_AT_END = 0.85
-#: How often a pause in their turn gets one.
-CHANCE_IN_PAUSE = 0.6
+#: Of the ends of their turns, by what was said: the share that gets his
+#: breath, and the share that gets a word — the rest get nothing, as people's
+#: do not always. An older friend (OLDER_FROM) breathes more and says less.
+SHARES = {"statement": (0.6, 0.2), "question": (0.6, 0.2), "thinking": (0.45, 0.4)}
+SHARES_OLDER = {"statement": (0.75, 0.1), "question": (0.75, 0.1), "thinking": (0.6, 0.25)}
+OLDER_FROM = 55
+#: How often a pause in their turn gets a listener's «м-м» — now and then,
+#: not at every breath of theirs.
+CHANCE_IN_PAUSE = 0.3
 #: Seconds between two sounds of his in a pause — a listener who says «м-м» at
 #: every breath is not listening, he is ticking.
 SPACING = 4.0
@@ -148,14 +170,16 @@ def goodbye(transcript: str) -> bool:
 
 
 def at_end(transcript: str) -> str | None:
-    """Which sound a finished turn gets — "thinking", "listening" — or None."""
+    """What kind of turn this was, for his sound after it — "thinking" (a
+    question he must weigh), "question", "statement" — or None for none at
+    all (a goodbye, or nothing said)."""
     said = (transcript or "").strip()
     if not _words(said) or goodbye(said):
         return None
     low = said.lower().replace("ё", "е")
-    if said.endswith("?") and (_WEIGH.search(low) or _WEIGH_EN.search(low)):
-        return "thinking"
-    return "listening"
+    if said.endswith("?"):
+        return "thinking" if (_WEIGH.search(low) or _WEIGH_EN.search(low)) else "question"
+    return "statement"
 
 
 def in_pause(transcript: str) -> bool:
@@ -164,9 +188,20 @@ def in_pause(transcript: str) -> bool:
 
 
 def _texts(kind: str) -> tuple[str, ...]:
-    if lang.english():
-        return THINKING_EN if kind == "thinking" else LISTENING_EN
-    return THINKING if kind == "thinking" else LISTENING
+    if kind == "breath":
+        return (BREATH,)
+    english = lang.english()
+    return {"thinking": THINKING_EN if english else THINKING,
+            "question": QUESTION_EN if english else QUESTION,
+            "statement": STATEMENT_EN if english else STATEMENT,
+            }.get(kind, LISTENING_EN if english else LISTENING)
+
+
+def shown(text: str) -> str:
+    """A sound of his as the phone shows it: his breath as «(вдох)»."""
+    if text == BREATH:
+        return BREATH_SHOWN_EN if lang.english() else BREATH_SHOWN
+    return text
 
 
 def pick(voice: str | None, kind: str, rng: random.Random,
@@ -176,14 +211,28 @@ def pick(voice: str | None, kind: str, rng: random.Random,
     ready = [t for t in _texts(kind) if _made.get((voice, t))]
     if not ready:
         return None
-    fresh = [t for t in ready if t != avoid] or ready
+    fresh = [t for t in ready if shown(t) != avoid] or ready
     text = rng.choice(fresh)
     rate, pcm = rng.choice(_made[(voice, text)])
-    return text, rate, pcm
+    return shown(text), rate, pcm
+
+
+def choose(voice: str | None, kind: str, rng: random.Random, *, older: bool = False,
+           avoid: str = "") -> tuple[str, int, bytes] | None:
+    """His sound at the end of a turn of this kind (at_end): his breath most
+    often, a word sometimes, nothing the rest of the time (SHARES). While his
+    breath is not made yet, a word stands in for it."""
+    breath, word = (SHARES_OLDER if older else SHARES).get(kind, SHARES["statement"])
+    roll = rng.random()
+    if roll < breath and (made := pick(voice, "breath", rng)):
+        return made
+    if roll < breath + word:
+        return pick(voice, kind, rng, avoid=avoid)
+    return None
 
 
 def ready(voice: str | None) -> bool:
-    return any(_made.get((voice, t)) for t in _texts("listening"))
+    return any(_made.get((voice, t)) for t in _texts("listening") + _texts("breath"))
 
 
 def reaction(voice: str | None, piece: str) -> tuple[int, bytes] | None:
@@ -234,7 +283,8 @@ async def _make_all(voice: str | None) -> None:
     # voice rationed by the minute (tts.limited) all of it is made in the
     # requests his words leave over, so it can take a while — the most useful
     # first.
-    sounds = list(dict.fromkeys(_texts("listening") + _texts("thinking")))
+    sounds = list(dict.fromkeys(_texts("breath") + _texts("statement") + _texts("question")
+                                + _texts("thinking") + _texts("listening")))
     reactions = [t for t in (REACTIONS_EN if lang.english() else REACTIONS) if t not in sounds]
     order = [(t, k) for t in sounds for k in range(TAKES)] + [
         (t, k) for k in range(TAKES) for t in reactions]
@@ -245,14 +295,16 @@ async def _make_all(voice: str | None) -> None:
             continue
         try:
             kept = _load(voice, text, take)
-            if kept is None:
+            for _attempt in range(ATTEMPTS if kept is None else 0):
                 rate, pcm = None, b""
                 async for rate, chunk in tts.stream(text, voice, background=True):
                     pcm += chunk
-                if not (rate and (pcm := trimmed(pcm, rate))):
-                    continue
-                kept = (rate, pcm)
-                _keep(voice, text, take, kept)
+                if rate and (pcm := trimmed(pcm, rate)) and _kept(text, rate, pcm):
+                    kept = (rate, pcm)
+                    _keep(voice, text, take, kept)
+                    break
+            if kept is None:
+                continue
         except Exception as e:  # noqa: BLE001 — a sound is a nicety, never a failure
             print(f"[first_sound] could not make {text!r}: {type(e).__name__}: {e}",
                   file=sys.stderr, flush=True)
@@ -260,6 +312,26 @@ async def _make_all(voice: str | None) -> None:
             continue
         takes.setdefault(text, []).append(kept)
         _made[(voice, text)] = list(takes[text])
+
+
+#: Times a take is made before it is given up on, when it came out wrong.
+ATTEMPTS = 4
+#: A breath of his: this long at most, and this quiet — a take that runs for
+#: seconds or comes out loud is not a breath (measured 2026-10-08: 4 of 6
+#: takes 0.5–0.95 s and quiet; one 2 s, one 23 s, both at full volume).
+BREATH_LONGEST, BREATH_LOUDEST = 1.0, 16000
+#: …and any other sound of his: this long at most.
+SOUND_LONGEST = 3.0
+
+
+def _kept(text: str, rate: int, pcm: bytes) -> bool:
+    """Is this take what it should be?"""
+    seconds = len(pcm) / (2 * rate)
+    if text != BREATH:
+        return seconds <= SOUND_LONGEST
+    samples = array.array("h")
+    samples.frombytes(pcm[: len(pcm) - len(pcm) % 2])
+    return 0.15 <= seconds <= BREATH_LONGEST and max(map(abs, samples), default=0) <= BREATH_LOUDEST
 
 
 def _path(voice: str | None, text: str, take: int):

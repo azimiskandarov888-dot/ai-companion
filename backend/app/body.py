@@ -152,7 +152,10 @@ MARK_YAWN = "//ЗЕВОК//"
 MARK_SNEEZE = "//ЧИХ//"
 MARK_SIGH = "//ВЗДОХ//"
 MARK_LAUGH = "//СМЕХ//"
-MARKERS = (MARK_COUGH, MARK_CLEAR, MARK_YAWN, MARK_SNEEZE, MARK_SIGH, MARK_LAUGH)
+#: His breath before he answers — not something his body does to him, so the
+#: brain is never offered it; first_sound makes it (the owner, 2026-10-08).
+MARK_BREATH = "//ВДОХ//"
+MARKERS = (MARK_COUGH, MARK_CLEAR, MARK_YAWN, MARK_SNEEZE, MARK_SIGH, MARK_LAUGH, MARK_BREATH)
 
 
 def _decayed(value: float, hours: float, half_life: float) -> float:

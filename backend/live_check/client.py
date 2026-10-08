@@ -20,7 +20,7 @@ ARGS = [a for a in sys.argv[1:] if not a.startswith("--")]
 URL = ARGS[0] if ARGS else "ws://127.0.0.1:8765/api/live"
 ROUNDS = int(next((a.split("=", 1)[1] for a in sys.argv[1:] if a.startswith("--rounds=")), "1"))
 #: His first sounds (first_sound.py) — not words.
-SOUNDS = {"М-м…", "Хм…", "Так…", "Mm…", "Hmm…", "So…"}
+SOUNDS = {"М-м…", "Хм…", "Так…", "Да…", "Ну…", "(вдох)", "Mm…", "Hmm…", "So…", "Yeah…", "Well…", "(breath)"}
 #: The server's own marks, in the order they happen (live.Session._answer).
 STEPS = [("draft_started", "«похоже, договорил» — черновик начат"),
          ("brain_asked", "промпт собран, мозг спрошен"),
