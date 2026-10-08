@@ -37,6 +37,7 @@ WRITTEN = {
     "name": "Лука",                       # the writer slipped — the person has heard «Лукас»
     "gender": "женский",                  # and slipped again
     "age": "19 лет",
+    "address": "вы",
     "home": "Лиссабон, Алфама, квартира над булочной матери",
     "one_liner": "спокойный, с сухим юмором",
     "backstory": "Вырос в Лиссабоне. Отец уехал рано.",
@@ -191,7 +192,8 @@ def test_two_readings_that_agree_write_him(models):
     written = persona.load_persona(U)["_portrait"]
     assert persona.is_shadow(persona.load_persona(U)), "he must not change until the next talk"
     # What the person has heard stays exactly as heard.
-    assert (written["name"], written["gender"], written["age"]) == ("Лукас", "мужской", "16 лет")
+    assert (written["name"], written["gender"], written["age"], written["address"]) == (
+        "Лукас", "мужской", "16 лет", "ты")
     assert written["voice"]["name"] == persona.load_persona(U)["voice"]["name"]
     assert "сухим юмором" in written["voice"]["style"]
     assert not written.get("shadow")

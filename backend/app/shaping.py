@@ -169,10 +169,12 @@ async def portrait(user_id: str, said: str | None = None) -> dict:
 
 def becoming(shadow: dict, written: dict) -> dict:
     """The written man, keeping what the shadow already was out loud: his
-    name, his gender and his age, and the voice the person has been hearing —
-    how he sounds in it may now carry who he turned out to be."""
+    name, his gender, his age, «ты» or «вы» — a stranger who switches to «ты»
+    between two talks without a word about it sounds like somebody else — and
+    the voice the person has been hearing; how he sounds in it may now carry
+    who he turned out to be."""
     out = {**written}
-    for key in ("name", "gender", "age"):
+    for key in ("name", "gender", "age", "address"):
         if shadow.get(key):
             out[key] = shadow[key]
     voice = shadow.get("voice") if isinstance(shadow.get("voice"), dict) else {}
