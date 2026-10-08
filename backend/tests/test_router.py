@@ -364,6 +364,11 @@ def test_thinking_through_openrouter_keeps_its_effort_and_room_for_the_answer(ba
     # A writer that thought well and was cut off before the closing brace would
     # lose a person for nothing of its own.
     assert sent["max_tokens"] >= 32_000
+    # …but ten one-line strangers at «low» are not asked to have room for a
+    # novel: a ceiling the balance cannot cover is refused outright (402).
+    asyncio.run(brain.generate_text("A", "B", model="anthropic/claude-opus-5", effort="low",
+                                    max_tokens=2000))
+    assert 2000 < background.sent[1]["max_tokens"] <= 8_000
 
 
 def test_what_each_call_cost_is_counted_for_whoever_asked(background):

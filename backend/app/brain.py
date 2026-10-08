@@ -478,7 +478,11 @@ _ROUTER_EFFORT = {"xhigh": "high", "max": "high"}
 #: own. Only what is written is paid for; but OpenRouter refuses a request the
 #: balance could not cover at the ceiling (402), which is one more reason the
 #: balance must not run near zero.
-_ROUTER_FLOOR_THINKING = 32_000
+#: By how hard it may think: ten one-line strangers at «low» need nothing like
+#: the room a writer at «high» does — and a ceiling the balance cannot cover
+#: is refused outright, so it is no larger than the effort asks for.
+_ROUTER_FLOOR_THINKING = {"low": 8_000, "medium": 16_000}
+_ROUTER_FLOOR_DEEP = 32_000
 _ROUTER_FLOOR = 4_000
 
 #: What a caller's OpenRouter calls cost, if it wants to know: set a dict here
@@ -507,7 +511,8 @@ async def _router_once(system_prompt: str, user_text: str, *, model: str, max_to
     """
     body: dict = {
         "model": model,
-        "max_tokens": max(max_tokens, _ROUTER_FLOOR_THINKING if effort else _ROUTER_FLOOR),
+        "max_tokens": max(max_tokens, (_ROUTER_FLOOR_THINKING.get(effort, _ROUTER_FLOOR_DEEP)
+                                       if effort else _ROUTER_FLOOR)),
         "messages": [{"role": "system", "content": system_prompt},
                      {"role": "user", "content": user_text}],
         "stream": True,
