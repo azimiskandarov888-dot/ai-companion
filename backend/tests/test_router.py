@@ -73,7 +73,7 @@ def _streamed() -> list[str]:
 
 # ── who is speaking ─────────────────────────────────────────────────────────
 
-def test_the_voice_is_gemma_and_the_watcher_stays_on_claude():
+def test_the_voice_is_gemma_and_the_watcher_has_a_model_of_its_own():
     """Gemma 4 since 2026-10-02 — the owner's ear, four blind conversations
     (config.CHAT_MODEL). The router tests below talk to Luna on purpose: what
     they pin is how a reply is sent and read, whoever the model is."""
@@ -81,11 +81,13 @@ def test_the_voice_is_gemma_and_the_watcher_stays_on_claude():
         assert config.CHAT_MODEL == GEMMA
     assert brain.via_openrouter(GEMMA) and brain.via_openrouter(LUNA)
     assert not brain.via_openrouter("claude-haiku-4-5")
-    # The watcher has its own default. Following the voice, it would have gone
-    # to a Claude client that cannot call it — and safety.look never raises,
-    # so it would have answered «no danger» to everybody, quietly.
+    # The watcher has its own default, never the voice's: chosen by a labelled
+    # crisis set, not by whoever happens to talk. It once followed the voice
+    # onto a client that could not call it — and safety.look never raises, so
+    # it would have answered «no danger» to everybody, quietly. Now every road
+    # is callable (below), and the separation is about choice, not plumbing.
     if "SAFETY_MODEL" not in os.environ:
-        assert not brain.via_openrouter(config.SAFETY_MODEL)
+        assert config.SAFETY_MODEL != config.CHAT_MODEL
 
 
 def test_each_model_goes_to_its_own_fastest_place(monkeypatch):
@@ -295,3 +297,99 @@ def test_the_line_is_watched_for_stalls_and_the_key_is_named(monkeypatch):
         brain._get_router()
     monkeypatch.setattr(config, "OPENROUTER_API_KEY", "test-key")
     assert brain._get_router().timeout.read == brain._LIVE_REPLY_TIMEOUT
+
+
+# ── the background agents' road (2026-10-08) ────────────────────────────────
+#
+# The reader, the writer, the scribe, his week, the diary and the watcher go
+# through OpenRouter when their id has a «/». Before, they had Anthropic's road
+# only, and the owner's machine has no Anthropic key: every one of them quietly
+# did nothing — the watcher answered «no danger» to everybody.
+
+AGENTS = ("BRAIN_MODEL", "READING_MODEL", "WRITER_MODEL", "INTAKE_MODEL", "SAFETY_MODEL")
+
+
+@pytest.fixture
+def background(monkeypatch):
+    answer = _OpenRouter()
+    answer.body = _sse(_delta('{"facts": '), _delta("[]}"), _delta("", "stop"),
+                       {"choices": [], "usage": {"cost": 0.0123}})
+    monkeypatch.setattr(config, "OPENROUTER_API_KEY", "test-key")
+    monkeypatch.setattr(brain, "_router_loop", None)
+    monkeypatch.setattr(brain, "_router", httpx.AsyncClient(
+        base_url=brain.ROUTER_URL, transport=httpx.MockTransport(answer)))
+    return answer
+
+
+def test_every_agent_can_be_called_on_the_one_key_the_owner_has(monkeypatch):
+    """Only OPENROUTER_API_KEY in .env — the owner's machine — and nothing may
+    quietly do nothing."""
+    monkeypatch.setattr(config, "OPENROUTER_API_KEY", "test-key")
+    for name in AGENTS:
+        if name not in os.environ and not (name == "BRAIN_MODEL" and "ANTHROPIC_MODEL" in os.environ):
+            assert brain.can_call(getattr(config, name)), name
+
+
+def test_a_key_is_asked_of_the_road_the_model_takes(monkeypatch):
+    monkeypatch.setattr(config, "OPENROUTER_API_KEY", "test-key")
+    assert brain.can_call("anthropic/claude-opus-5")
+    assert not brain.can_call("claude-opus-5")          # Anthropic's road, no key for it
+    monkeypatch.setattr(config, "OPENROUTER_API_KEY", None)
+    monkeypatch.setattr(config, "ANTHROPIC_API_KEY", "test-key")
+    assert brain.can_call("claude-opus-5")
+    assert not brain.can_call("anthropic/claude-opus-5")
+
+
+def test_a_background_call_goes_to_openrouter_as_it_was_asked(background):
+    said = asyncio.run(brain.generate_text("КАК ВЕСТИ ПАМЯТЬ", "ЧТО СКАЗАНО",
+                                           max_tokens=120, model="anthropic/claude-sonnet-5"))
+    assert said == '{"facts": []}'
+    sent = background.sent[0]
+    assert sent["model"] == "anthropic/claude-sonnet-5"
+    assert sent["messages"] == [{"role": "system", "content": "КАК ВЕСТИ ПАМЯТЬ"},
+                                {"role": "user", "content": "ЧТО СКАЗАНО"}]
+    # Not asked to think — the scribe must not (it invents 2–3× more), and the
+    # watcher has no second to spare. Room enough for a model that thinks anyway.
+    assert "reasoning" not in sent
+    assert sent["max_tokens"] >= 4_000
+    assert sent["stream"] is True
+
+
+def test_thinking_through_openrouter_keeps_its_effort_and_room_for_the_answer(background):
+    asyncio.run(brain.think("ЧИТАЙ", "ЕГО СЛОВА", model="anthropic/claude-opus-5", effort="max",
+                            max_tokens=8000))
+    sent = background.sent[0]
+    # OpenRouter's efforts stop at «high»; ours go to «max».
+    assert sent["reasoning"] == {"effort": "high"}
+    # A writer that thought well and was cut off before the closing brace would
+    # lose a person for nothing of its own.
+    assert sent["max_tokens"] >= 32_000
+
+
+def test_what_each_call_cost_is_counted_for_whoever_asked(background):
+    """The owner's test prints the real price of every candidate — from here."""
+    async def two_calls():
+        brain.bill.set(spent := {})
+        await brain.generate_text("A", "B", model="z-ai/glm-5.3")
+        await brain.generate_text("A", "B", model="z-ai/glm-5.3")
+        return spent
+
+    spent = asyncio.run(two_calls())
+    assert spent == {"cost": pytest.approx(0.0246), "calls": 2}
+    assert brain.bill.get() is None          # nobody else's calls were billed to it
+
+
+def test_an_empty_account_stops_a_background_agent_in_the_same_words(background):
+    background.status = 402
+    background.body = b'{"error": {"message": "This request requires more credits"}}'
+    with pytest.raises(RuntimeError, match="пополни"):
+        asyncio.run(brain.generate_text("A", "B", model="anthropic/claude-opus-5"))
+
+
+def test_an_empty_answer_is_a_failure_not_a_silent_nothing(background):
+    """Every agent already survives a failed call — the reading is skipped, the
+    batch waits for the next turn. An empty string would instead be taken as
+    an answer: a friend written from nothing, a batch marked read."""
+    background.body = _sse(_delta("", "length"))
+    with pytest.raises(RuntimeError, match="пустой ответ"):
+        asyncio.run(brain.think("A", "B", model="anthropic/claude-opus-5"))

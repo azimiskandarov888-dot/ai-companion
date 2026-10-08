@@ -35,7 +35,7 @@ def _configured(monkeypatch):
     """
     from app import config
 
-    monkeypatch.setattr(config, "ANTHROPIC_API_KEY", "test-key")
+    monkeypatch.setattr(config, "OPENROUTER_API_KEY", "test-key")
     yield
 
 

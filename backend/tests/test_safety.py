@@ -22,7 +22,7 @@ from app import companion, config, db, embeddings, main, safety
 @pytest.fixture(autouse=True)
 def _fresh(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "DB_PATH", str(tmp_path / "t.db"))
-    monkeypatch.setattr(config, "ANTHROPIC_API_KEY", "test-key")
+    monkeypatch.setattr(config, "OPENROUTER_API_KEY", "test-key")
     db.init_db()
     yield
 
@@ -147,7 +147,7 @@ async def test_hanging_up_takes_the_watcher_with_it(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_no_api_key_means_no_watcher_and_no_crash(monkeypatch):
-    monkeypatch.setattr(config, "ANTHROPIC_API_KEY", None)
+    monkeypatch.setattr(config, "OPENROUTER_API_KEY", None)
     assert (await safety.look("u", "я упал"))["level"] == "none"
 
 
@@ -533,7 +533,7 @@ def test_who_is_speaking_reaches_the_watcher(tmp_path, monkeypatch):
     from app import config, memory
 
     monkeypatch.setattr(config, "DB_PATH", str(tmp_path / "t.db"))
-    monkeypatch.setattr(config, "ANTHROPIC_API_KEY", "test-key")
+    monkeypatch.setattr(config, "OPENROUTER_API_KEY", "test-key")
     db.init_db()
     memory.add_memory("u", "fact", "19 лет, переехал в другой город учиться")
 
@@ -560,7 +560,7 @@ def test_a_person_with_no_facts_yet_still_gets_watched(tmp_path, monkeypatch):
     from app import config
 
     monkeypatch.setattr(config, "DB_PATH", str(tmp_path / "t.db"))
-    monkeypatch.setattr(config, "ANTHROPIC_API_KEY", "test-key")
+    monkeypatch.setattr(config, "OPENROUTER_API_KEY", "test-key")
     db.init_db()
 
     seen = {}

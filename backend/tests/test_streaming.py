@@ -591,7 +591,7 @@ def test_danger_interrupts_him_mid_reply(client, monkeypatch, tmp_path):
     is on the floor. What he had already said has been heard and is not
     revised; everything after it is simply never reached."""
     monkeypatch.setattr(config, "DB_PATH", str(tmp_path / "t.db"))
-    monkeypatch.setattr(config, "ANTHROPIC_API_KEY", "test-key")
+    monkeypatch.setattr(config, "OPENROUTER_API_KEY", "test-key")
     db.init_db()
 
     async def found(system, user_text, **kw):
@@ -650,7 +650,7 @@ def test_the_button_carries_this_persons_own_country(client, monkeypatch, tmp_pa
     """Not the deployment's default. Telling a man in Chicago to dial 103 is
     the same failure as missing the alarm, and a button makes it a tap."""
     monkeypatch.setattr(config, "DB_PATH", str(tmp_path / "t.db"))
-    monkeypatch.setattr(config, "ANTHROPIC_API_KEY", "test-key")
+    monkeypatch.setattr(config, "OPENROUTER_API_KEY", "test-key")
     db.init_db()
     emergency.remember(UID, "Канада")
 
@@ -671,7 +671,7 @@ def test_an_ordinary_turn_says_nothing_to_the_phone(client, monkeypatch, tmp_pat
     """A button that has ever appeared when nothing was wrong is a button
     nobody believes the one time it matters."""
     monkeypatch.setattr(config, "DB_PATH", str(tmp_path / "t.db"))
-    monkeypatch.setattr(config, "ANTHROPIC_API_KEY", "test-key")
+    monkeypatch.setattr(config, "OPENROUTER_API_KEY", "test-key")
     db.init_db()
 
     async def quiet(system, user_text, **kw):
@@ -686,7 +686,7 @@ def test_an_ordinary_turn_is_not_interrupted(client, monkeypatch, tmp_path):
     turn where nothing is wrong — which is very nearly all of them — he is not
     touched, and says every word he meant to."""
     monkeypatch.setattr(config, "DB_PATH", str(tmp_path / "t.db"))
-    monkeypatch.setattr(config, "ANTHROPIC_API_KEY", "test-key")
+    monkeypatch.setattr(config, "OPENROUTER_API_KEY", "test-key")
     db.init_db()
 
     async def quiet(system, user_text, **kw):

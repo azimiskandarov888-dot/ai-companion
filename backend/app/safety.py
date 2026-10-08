@@ -168,7 +168,7 @@ async def look(user_id: str, said: str) -> dict:
     alternative is a turn that never answers somebody who was perfectly fine.
     """
     said = (said or "").strip()
-    if not said or not config.ANTHROPIC_API_KEY:
+    if not said or not brain.can_call(config.SAFETY_MODEL):
         return {"level": "none", "kind": "body", "what": ""}
 
     # Who is speaking goes in the USER message rather than the system prompt,

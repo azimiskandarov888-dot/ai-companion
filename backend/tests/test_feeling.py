@@ -345,7 +345,7 @@ def test_his_mood_is_per_friendship():
 @pytest.mark.asyncio
 async def test_a_real_turn_carries_his_weather_to_the_model(monkeypatch):
     monkeypatch.setattr(embeddings, "available", lambda: False)
-    monkeypatch.setattr(config, "ANTHROPIC_API_KEY", None)  # no watcher
+    monkeypatch.setattr(config, "OPENROUTER_API_KEY", None)  # no watcher
     feeling.record(U, {"valence": -2, "arousal": -2, "note": "не спалось"})
 
     _stable, variable, _turns, _voice, watcher = await main._assemble(U, "здравствуй")
@@ -362,7 +362,7 @@ async def test_a_real_emergency_turn_leaves_his_weather_out(monkeypatch):
     the whole prompt: on the turn a man is on the floor, how the companion
     slept is not one of the things competing for the model's attention."""
     monkeypatch.setattr(embeddings, "available", lambda: False)
-    monkeypatch.setattr(config, "ANTHROPIC_API_KEY", "test-key")
+    monkeypatch.setattr(config, "OPENROUTER_API_KEY", "test-key")
     feeling.record(U, {"valence": -2, "arousal": -2, "note": "не спалось"})
 
     async def found(system, user_text, **kw):

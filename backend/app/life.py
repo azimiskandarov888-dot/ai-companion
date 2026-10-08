@@ -217,7 +217,7 @@ async def maybe_begin(user_id: str) -> None:
     his week is uneventful, which is what most weeks are anyway.
     """
     try:
-        if not config.ANTHROPIC_API_KEY:
+        if not brain.can_call(config.BRAIN_MODEL):
             return
         _sweep(user_id)
         if current(user_id):

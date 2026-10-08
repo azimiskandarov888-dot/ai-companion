@@ -2,19 +2,20 @@
 
 Every turn of conversation is a race against silence: the listener said
 something and is waiting. So conversation runs on CHAT_MODEL, with the
-character it plays fully written in advance. The slow, deep work — creating
-the person, rewriting the diary, distilling memory — runs on Claude
-(BRAIN_MODEL and friends) where nobody is waiting mid-sentence.
+character it plays fully written in advance. The slow, deep work — reading
+the person, writing him, rewriting the diary, distilling memory — runs on
+the models config names for it (BRAIN_MODEL and friends), where nobody is
+waiting mid-sentence.
 
-WHERE A CALL GOES is read off the model id. «openai/gpt-5.6-luna» — an
-OpenRouter id, with a «/» — goes to OpenRouter; a bare «claude-…» id goes to
-Anthropic, as it always did. The voice is GPT-5.6 Luna through OpenRouter:
-the owner's choice (2026-09-28) from 24 rehearsed first meetings — the best
-Russian, the best listener, calm with somebody who answers in one word, and
-among the cheapest (docs/VOICE-MODELS-REHEARSAL.md). Same prompt, same
-history, same length limit as the meetings it was chosen on — sent to the
-fastest place that serves it, without thinking before it speaks
-(config.CHAT_PROVIDERS, config.CHAT_REASONING; docs/LATENCY.md).
+WHERE A CALL GOES is read off the model id — for every call, the voice's and
+the background agents' alike. «openai/gpt-5.6-luna» — an OpenRouter id, with
+a «/» — goes to OpenRouter; a bare «claude-…» id goes to Anthropic, as it
+always did. The voice is Gemma 4 through OpenRouter since 2026-10-02 — the
+owner's ear, four blind conversations (docs/ALIVE-BRAIN.md); before it GPT-5.6
+Luna, his choice of 2026-09-28 from 24 rehearsed first meetings
+(docs/VOICE-MODELS-REHEARSAL.md). Sent to the fastest place that serves it,
+without thinking before it speaks (config.CHAT_PROVIDERS,
+config.CHAT_REASONING; docs/LATENCY.md).
 
 Two further speed decisions live here:
 
@@ -40,6 +41,7 @@ Two further speed decisions live here:
 from __future__ import annotations
 
 import asyncio
+import contextvars
 import json
 import re
 import unicodedata
@@ -452,6 +454,94 @@ async def _router_stream(history, system_stable: str, system_variable: str, *,
             yield trimmed
 
 
+# ── the background agents, on the same road ─────────────────────────────────
+#
+# The reader, the writer, the scribe, his week, the diary and the watcher used
+# to have one road only — Anthropic's own API — and the owner's machine has no
+# Anthropic key. So all of them quietly did nothing (HANDOVER §0, 2026-10-08):
+# the watcher answered «no danger» to everybody, nothing was remembered, and a
+# companion could not be written by the app at all. An OpenRouter id («vendor/
+# model», with a «/») now goes to OpenRouter, exactly as the voice's does, and
+# the model behind each agent is a line in config — the winner of the owner's
+# own test (myself.py), whoever makes it.
+
+#: How hard a background model may think, in OpenRouter's words. Ours are
+#: Anthropic's (low … max); OpenRouter takes low / medium / high and maps them
+#: onto each vendor's own.
+_ROUTER_EFFORT = {"xhigh": "high", "max": "high"}
+
+#: The ceiling on what a background call may write, thinking included. Larger
+#: than the app's own numbers, which were sized for Claude's API: through
+#: OpenRouter a thinking model is given a share of the ceiling to think in, and
+#: what is left must still hold the answer — a writer that thought well and
+#: was cut off before the closing brace would lose a person for nothing of its
+#: own. Only what is written is paid for; but OpenRouter refuses a request the
+#: balance could not cover at the ceiling (402), which is one more reason the
+#: balance must not run near zero.
+_ROUTER_FLOOR_THINKING = 32_000
+_ROUTER_FLOOR = 4_000
+
+#: What a caller's OpenRouter calls cost, if it wants to know: set a dict here
+#: and every call adds to {"cost", "calls"} — the owner's test tool prints the
+#: real price of each candidate from it. A ContextVar, because a stage runs all
+#: its candidates at once and each must be billed for its own calls only.
+bill: contextvars.ContextVar[dict | None] = contextvars.ContextVar("bill", default=None)
+
+
+def can_call(model: str | None = None) -> bool:
+    """Is there a key for the road this model takes? An OpenRouter id needs
+    OpenRouter's; a bare Claude id needs Anthropic's. Every background agent
+    asks before it spends anything, and without a key it skips quietly, as it
+    always has."""
+    road = model or config.BRAIN_MODEL
+    return bool(config.OPENROUTER_API_KEY if via_openrouter(road) else config.ANTHROPIC_API_KEY)
+
+
+async def _router_once(system_prompt: str, user_text: str, *, model: str, max_tokens: int,
+                       effort: str | None, timeout: float | None) -> str:
+    """One background call through OpenRouter, read to the end.
+
+    Streamed, like the voice, and for the same reason: `timeout` stays what it
+    is on the Claude road — a stall detector, the longest the line may stay
+    silent — and not a cap on a long answer that is still arriving.
+    """
+    body: dict = {
+        "model": model,
+        "max_tokens": max(max_tokens, _ROUTER_FLOOR_THINKING if effort else _ROUTER_FLOOR),
+        "messages": [{"role": "system", "content": system_prompt},
+                     {"role": "user", "content": user_text}],
+        "stream": True,
+        "usage": {"include": True},
+    }
+    if effort:
+        body["reasoning"] = {"effort": _ROUTER_EFFORT.get(effort, effort)}
+    text, finish, cost = "", None, 0.0
+    quiet = httpx.Timeout(timeout or 300.0, connect=10.0)
+    async with _get_router().stream("POST", "/chat/completions", json=body, timeout=quiet) as r:
+        if r.status_code != 200:
+            raise _router_failed(r.status_code, (await r.aread()).decode("utf-8", "replace"))
+        async for line in r.aiter_lines():
+            if not line.startswith("data:"):
+                continue  # keep-alive comments while it thinks
+            data = line[len("data:"):].strip()
+            if data == "[DONE]":
+                break
+            chunk = json.loads(data)
+            if chunk.get("error"):
+                raise RuntimeError(f"OpenRouter: {chunk['error']}")
+            cost = float((chunk.get("usage") or {}).get("cost") or cost)
+            choice = (chunk.get("choices") or [{}])[0]
+            finish = choice.get("finish_reason") or finish
+            text += (choice.get("delta") or {}).get("content") or ""
+    spent = bill.get()
+    if spent is not None:
+        spent["cost"] = spent.get("cost", 0.0) + cost
+        spent["calls"] = spent.get("calls", 0) + 1
+    if not text.strip():
+        raise RuntimeError(f"OpenRouter: пустой ответ от {model} (закончил так: {finish})")
+    return text.strip()
+
+
 def _get_client() -> AsyncAnthropic:
     global _client
     if not config.ANTHROPIC_API_KEY:
@@ -742,9 +832,10 @@ async def think(
 ) -> str:
     """One deep call, with the model actually allowed to think first.
 
-    Used for the reading (reading.py) and nothing else so far. `generate_text`
-    below is the fast one-shot; this is the one where quality is worth minutes
-    and cents, because it runs once per person and everything is built on it.
+    Used for the reading (reading.py) and for writing him (matchmaker.py,
+    persona.deepen). `generate_text` below is the fast one-shot; this is the
+    one where quality is worth minutes and cents, because everything is built
+    on what it writes.
 
     Adaptive thinking lets the model decide how long to think per input — a
     three-line story doesn't need what a page-long one does. `effort` sets the
@@ -758,11 +849,18 @@ async def think(
     in generate_text, that omits the kwarg entirely rather than handing the
     SDK a literal `None`, which httpx reads as "never time out" — stricter
     than even its own default.
+
+    An OpenRouter id goes to OpenRouter (_router_once), thinking at the same
+    effort.
     """
+    model = model or config.BRAIN_MODEL
+    if via_openrouter(model):
+        return await _router_once(system_prompt, user_text, model=model,
+                                  max_tokens=max_tokens, effort=effort, timeout=timeout)
     client = _get_client()
     extra = {"timeout": timeout} if timeout is not None else {}
     async with client.messages.stream(
-        model=model or config.BRAIN_MODEL,
+        model=model,
         max_tokens=max_tokens,
         system=system_prompt,
         messages=[{"role": "user", "content": user_text}],
@@ -809,13 +907,19 @@ async def generate_text(
     exists to add. So the kwarg is omitted entirely unless a real number was
     given, leaving the SDK to see its own unset default and behave exactly as
     it always has for every caller that doesn't ask for a bound.
+
+    An OpenRouter id goes to OpenRouter (_router_once).
     """
+    model = model or config.BRAIN_MODEL
+    if via_openrouter(model):
+        return await _router_once(system_prompt, user_text, model=model,
+                                  max_tokens=max_tokens, effort=effort, timeout=timeout)
     client = _get_client()
     extra = {"timeout": timeout} if timeout is not None else {}
     if effort:
         extra["output_config"] = {"effort": effort}
     async with client.messages.stream(
-        model=model or config.BRAIN_MODEL,
+        model=model,
         max_tokens=max_tokens,
         system=system_prompt,
         messages=[{"role": "user", "content": user_text}],

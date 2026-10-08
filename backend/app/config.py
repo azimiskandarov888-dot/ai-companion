@@ -51,7 +51,17 @@ ANTHROPIC_API_KEY: str | None = os.getenv("ANTHROPIC_API_KEY")
 # when that snapshot is retired it stops answering at all — on the turn, in
 # front of the person, with no way for them to tell it from the friend having
 # gone. The alias moves; the friend keeps talking.
-BRAIN_MODEL: str = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-5")
+#
+# THE BACKGROUND AGENTS GO THROUGH OPENROUTER TOO (2026-10-08). Their ids carry
+# a «/» now, so brain.think / brain.generate_text send them where the voice's
+# goes, on the one key the owner has — with no Anthropic key, the old bare ids
+# made every one of them quietly do nothing. The models are still the ones
+# they were; each becomes whoever wins its stage of the owner's own blind test
+# (myself.py, docs/MODELS-FOR-EACH-AGENT.md). A bare «claude-…» id set in .env
+# still goes straight to Anthropic.
+#
+# The scribe, his week and the diary.
+BRAIN_MODEL: str = os.getenv("ANTHROPIC_MODEL", "anthropic/claude-sonnet-5")
 CHAT_MODEL: str = os.getenv("CHAT_MODEL", "google/gemma-4-31b-it")
 #: The key for every «vendor/model» id — the voice above, and the owner's tools.
 OPENROUTER_API_KEY: str | None = os.getenv("OPENROUTER_API_KEY")
@@ -97,7 +107,7 @@ BRAIN_HEDGE_AFTER: float = float(os.getenv("BRAIN_HEDGE_AFTER", "1.1"))
 # reading.py). This is the one call where the best model and real thinking
 # time are worth minutes and cents, because it happens once per person and
 # every other stage is built on its output.
-READING_MODEL: str = os.getenv("READING_MODEL", "claude-opus-5")
+READING_MODEL: str = os.getenv("READING_MODEL", "anthropic/claude-opus-5")
 
 # WRITING him — also once, immediately after the reading, and by the same
 # argument. This used to run on BRAIN_MODEL (Sonnet) purely because it sat in
@@ -111,7 +121,7 @@ READING_MODEL: str = os.getenv("READING_MODEL", "claude-opus-5")
 # generous enough that a rich character is never cut off (see
 # matchmaker._WRITE_MAX_TOKENS — the previous 2500 was truncating people
 # mid-backstory).
-WRITER_MODEL: str = os.getenv("WRITER_MODEL", "claude-opus-5")
+WRITER_MODEL: str = os.getenv("WRITER_MODEL", "anthropic/claude-opus-5")
 #: How long the writer may think before it starts writing him.
 #:
 #: This used to be "medium", on the argument that «the reading is inference and
@@ -141,7 +151,7 @@ WRITER_EFFORT: str = os.getenv("WRITER_EFFORT", "high")
 # (2026-09-24), all seven candidates kept the list and all followed «ничем»
 # with «а вчера, например?»; this one did it fastest of the Claude models,
 # about three seconds a question. Once per person: about thirty cents.
-INTAKE_MODEL: str = os.getenv("INTAKE_MODEL", "claude-opus-5")
+INTAKE_MODEL: str = os.getenv("INTAKE_MODEL", "anthropic/claude-opus-5")
 #: low | medium | high | xhigh | max — how long it may think before answering.
 READING_EFFORT: str = os.getenv("READING_EFFORT", "high")
 
@@ -155,7 +165,9 @@ READING_EFFORT: str = os.getenv("READING_EFFORT", "high")
 # voice moved to OpenRouter, the watcher would have followed it onto a Claude
 # client that cannot call it, failed on every turn, and, because safety.look
 # never raises, quietly answered «no danger» to everybody from then on.
-SAFETY_MODEL: str = os.getenv("SAFETY_MODEL", "claude-haiku-4-5")
+# Through OpenRouter since 2026-10-08, the same model: which one watches is
+# decided by a labelled Russian crisis set, never by feel (HANDOVER §11).
+SAFETY_MODEL: str = os.getenv("SAFETY_MODEL", "anthropic/claude-haiku-4.5")
 #: Hard ceiling. It runs concurrently with work the turn was doing anyway, so
 #: it normally costs no wall time at all — but a hung connection must never be
 #: what stands between somebody and their answer. Missing the alarm once is

@@ -173,7 +173,9 @@ def test_the_interviewer_is_chosen_for_its_ear():
     needs across a conversation — and was the fastest Claude model there."""
     from app import config
 
-    assert config.INTAKE_MODEL == "claude-opus-5"
+    # Through OpenRouter since 2026-10-08 (config: the background agents),
+    # the same model.
+    assert config.INTAKE_MODEL == "anthropic/claude-opus-5"
 
 
 # ── what the answers are used for ───────────────────────────────────────────

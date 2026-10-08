@@ -40,7 +40,7 @@ from app import config, db, embeddings, feeling, memory, mood
 @pytest.fixture(autouse=True)
 def _fresh(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "DB_PATH", str(tmp_path / "t.db"))
-    monkeypatch.setattr(config, "ANTHROPIC_API_KEY", "test-key")
+    monkeypatch.setattr(config, "OPENROUTER_API_KEY", "test-key")
     monkeypatch.setattr(embeddings, "available", lambda: False)
     db.init_db()
     yield
@@ -50,24 +50,20 @@ def _answers(monkeypatch, payload) -> dict:
     """Make the extractor's one model call return exactly this."""
     seen: dict = {}
 
-    class _Block:
-        type = "text"
-        def __init__(self, text): self.text = text
+    async def answer(system, user_text, **kw):
+        seen.update(kw, system=system, user_text=user_text)
+        return payload if isinstance(payload, str) else json.dumps(payload, ensure_ascii=False)
 
-    class _Message:
-        def __init__(self, text): self.content = [_Block(text)]
-
-    class _Messages:
-        async def create(self, **kw):
-            seen.update(kw)
-            return _Message(payload if isinstance(payload, str)
-                            else json.dumps(payload, ensure_ascii=False))
-
-    class _Client:
-        messages = _Messages()
-
-    monkeypatch.setattr(learn, "_get_client", lambda: _Client())
+    monkeypatch.setattr(learn.brain, "generate_text", answer)
     return seen
+
+
+def _breaks(monkeypatch, why: str = "провайдер прилёг") -> None:
+    """Make the extractor's model call fail, as a provider having a bad minute does."""
+    async def boom(*a, **kw):
+        raise RuntimeError(why)
+
+    monkeypatch.setattr(learn.brain, "generate_text", boom)
 
 
 def _learn(user, said="я вчера ходил к врачу", replied="и как, что сказал?"):
@@ -114,7 +110,7 @@ def test_what_the_extractor_is_shown(monkeypatch):
     seen = _answers(monkeypatch, {})
     _learn("u")
 
-    prompt = seen["messages"][0]["content"]
+    prompt = seen["user_text"]
     assert "дочь Валя" in prompt
     assert "«война»" in prompt
     assert "буква в букву" in prompt
@@ -122,13 +118,7 @@ def test_what_the_extractor_is_shown(monkeypatch):
 
 
 def test_a_broken_model_never_breaks_the_turn(monkeypatch):
-    class _Boom:
-        class messages:
-            @staticmethod
-            async def create(**kw):
-                raise RuntimeError("провайдер прилёг")
-
-    monkeypatch.setattr(learn, "_get_client", lambda: _Boom())
+    _breaks(monkeypatch)
     _learn("u")                                   # must not raise
     assert memory.facts_context("u") == ""
 
@@ -157,12 +147,12 @@ def test_prose_around_the_json_is_tolerated(monkeypatch):
 
 
 def test_nothing_is_learned_without_a_key(monkeypatch):
-    monkeypatch.setattr(config, "ANTHROPIC_API_KEY", "")
+    monkeypatch.setattr(config, "OPENROUTER_API_KEY", "")
 
-    def boom():
+    async def boom(*a, **kw):
         raise AssertionError("the extractor must not be called without a key")
 
-    monkeypatch.setattr(learn, "_get_client", boom)
+    monkeypatch.setattr(learn.brain, "generate_text", boom)
     _learn("u")
 
 
@@ -273,13 +263,7 @@ def test_a_failed_extraction_keeps_the_batch_for_the_next_turn(monkeypatch):
     user = "batch-f"
     _say(user, learn.BATCH_EXCHANGES)
 
-    class _Boom:
-        class messages:
-            @staticmethod
-            async def create(**kw):
-                raise RuntimeError("провайдер лёг")
-
-    monkeypatch.setattr(learn, "_get_client", lambda: _Boom())
+    _breaks(monkeypatch, "провайдер лёг")
     asyncio.run(learn.learn_from_conversation(user))
     assert len(learn.unread(user)) == learn.BATCH_EXCHANGES * 2, "пачка потеряна"
 
@@ -315,7 +299,7 @@ def test_the_extractor_is_shown_his_own_words_numbered(monkeypatch):
     memory.add_memory(user, "fact", "брат в Мурманске", owner="bob", importance=2)
     seen = _answers(monkeypatch, {})
     _learn(user)
-    prompt = seen["messages"][0]["content"]
+    prompt = seen["user_text"]
     assert "брат в Мурманске" in prompt
     assert "[" in prompt.split("брат в Мурманске")[0].rsplit("\n", 1)[-1]
 

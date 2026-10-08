@@ -120,6 +120,11 @@ def test_stable_head_is_cached_and_variable_tail_is_not():
 # --------------------------------------------------------------------------- #
 # Timeouts: the live conversation is bounded, deep writing is not
 # --------------------------------------------------------------------------- #
+#
+# These are the Claude road's, so they name a bare Claude id: the background
+# agents' defaults go through OpenRouter since 2026-10-08, and that road has
+# its own tests below («the background agents' road»).
+CLAUDE = "claude-sonnet-5"
 def test_generate_reply_is_bounded(monkeypatch):
     """A person is standing there waiting. A stalled connection to Claude
     must fail within seconds, not the SDK's own 600-second default."""
@@ -153,7 +158,7 @@ def test_generate_text_has_no_bound_by_default(monkeypatch):
     fake = _FakeClient(message=_Message("текст"))
     monkeypatch.setattr(brain, "_get_client", lambda: fake)
 
-    asyncio.run(brain.generate_text("system", "user"))
+    asyncio.run(brain.generate_text("system", "user", model=CLAUDE))
 
     assert "timeout" not in fake.messages.calls[0]
 
@@ -164,7 +169,7 @@ def test_generate_text_honours_an_explicit_bound(monkeypatch):
     fake = _FakeClient(message=_Message("текст"))
     monkeypatch.setattr(brain, "_get_client", lambda: fake)
 
-    asyncio.run(brain.generate_text("system", "user", timeout=18.0))
+    asyncio.run(brain.generate_text("system", "user", timeout=18.0, model=CLAUDE))
 
     assert fake.messages.calls[0]["timeout"] == 18.0
 
@@ -177,7 +182,7 @@ def test_an_explicit_none_never_reaches_the_sdk_as_a_literal_timeout(monkeypatch
     fake = _FakeClient(message=_Message("текст"))
     monkeypatch.setattr(brain, "_get_client", lambda: fake)
 
-    asyncio.run(brain.generate_text("system", "user", timeout=None))
+    asyncio.run(brain.generate_text("system", "user", timeout=None, model=CLAUDE))
 
     assert "timeout" not in fake.messages.calls[0]
 
@@ -193,7 +198,7 @@ def test_think_defaults_to_a_bound_reading_timeout(monkeypatch):
     fake = _FakeClient(message=_Message("текст"))
     monkeypatch.setattr(brain, "_get_client", lambda: fake)
 
-    asyncio.run(brain.think("system", "user"))
+    asyncio.run(brain.think("system", "user", model=CLAUDE))
 
     assert fake.messages.calls[0]["timeout"] == brain._READING_TIMEOUT
 
@@ -204,7 +209,7 @@ def test_think_none_never_reaches_the_sdk_as_a_literal_timeout(monkeypatch):
     fake = _FakeClient(message=_Message("текст"))
     monkeypatch.setattr(brain, "_get_client", lambda: fake)
 
-    asyncio.run(brain.think("system", "user", timeout=None))
+    asyncio.run(brain.think("system", "user", timeout=None, model=CLAUDE))
 
     assert "timeout" not in fake.messages.calls[0]
 

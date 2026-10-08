@@ -191,7 +191,7 @@ def client(monkeypatch):
     monkeypatch.setattr(stt, "transcribe", heard)
     monkeypatch.setattr(safety.brain, "generate_text", quiet)
     monkeypatch.setattr(learn, "learn_from_conversation", fake_learn)
-    monkeypatch.setattr(config, "ANTHROPIC_API_KEY", "test-key")
+    monkeypatch.setattr(config, "OPENROUTER_API_KEY", "test-key")
     with TestClient(main.app) as c:
         yield c
 

@@ -101,6 +101,35 @@ def shape_report() -> None:
 
 
 def check_claude() -> bool:
+    """The background agents — the scribe, the watcher, the reader, the writer.
+
+    Through OpenRouter since 2026-10-08, when their ids carry a «/» (the
+    default): then they need no key of their own, and one real word from the
+    watcher's model says the road is open. A bare «claude-…» id set in .env
+    still needs ANTHROPIC_API_KEY, and is checked as before.
+    """
+    from app import brain
+
+    agents = (config.BRAIN_MODEL, config.SAFETY_MODEL, config.READING_MODEL, config.WRITER_MODEL)
+    if all(brain.via_openrouter(m) for m in agents):
+        who = "🧠 Писарь, сторож, читатель, писатель"
+        if not config.OPENROUTER_API_KEY:
+            print(f"{who}: нет ключа в .env  → добавьте OPENROUTER_API_KEY")
+            return False
+        try:
+            asyncio.run(brain.generate_text("Отвечай одним словом.", "Скажи: привет.",
+                                            max_tokens=5, model=config.SAFETY_MODEL))
+            print(f"{who} (через OpenRouter): ✅ отвечают")
+            return True
+        except Exception as error:  # noqa: BLE001 — friendly report, not a crash
+            reason = _classify(error)
+            if reason == "no_credit":
+                print(f"{who}: ⚠️ на счету OpenRouter кончились деньги — openrouter.ai/credits")
+            elif reason == "not_found":
+                print(f"{who}: ⚠️ модели '{config.SAFETY_MODEL}' нет на OpenRouter")
+            else:
+                print(f"{who}: ⚠️ не отвечают ({error})")
+            return False
     if not config.ANTHROPIC_API_KEY:
         print("🧠 Claude (brain): нет ключа в .env  → добавьте ANTHROPIC_API_KEY")
         return False

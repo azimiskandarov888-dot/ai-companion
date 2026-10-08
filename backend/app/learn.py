@@ -28,18 +28,7 @@ import json
 import sys
 import time
 
-from anthropic import AsyncAnthropic
-
-from . import config, db, embeddings, emergency, feeling, lang, memory, mood
-
-_client: AsyncAnthropic | None = None
-
-
-def _get_client() -> AsyncAnthropic:
-    global _client
-    if _client is None:
-        _client = AsyncAnthropic(api_key=config.ANTHROPIC_API_KEY)
-    return _client
+from . import brain, config, db, embeddings, emergency, feeling, lang, memory, mood
 
 
 _EXTRACTION_SYSTEM = """Ты ведёшь память для тёплого друга-собеседника (его зовут Боб) и человека, с которым он говорит.
@@ -254,7 +243,7 @@ async def learn_from_conversation(user_id: str, *, farewell: bool = False) -> No
     explicitly for that reason: there is no ambient "current user" to fall
     back on, and inventing one would file this conversation under a stranger.
     """
-    if not config.ANTHROPIC_API_KEY:
+    if not brain.can_call(config.BRAIN_MODEL):
         return
     rows = unread(user_id, farewell=farewell)
     if not rows:
@@ -289,7 +278,6 @@ SCRIBE_TOKENS = 2_500
 
 
 async def _extract(user_id: str, said: str) -> dict:
-    client = _get_client()
     # Numbered, and only here. The companion never sees an id — he would have
     # no idea what it was and might say one out loud — but something has to be
     # able to POINT at a fact to retire it, and pointing by text is how the
@@ -317,20 +305,22 @@ async def _extract(user_id: str, said: str) -> dict:
     # that fixes wording; see mood.subjects_seen.
     topics = mood.subjects_seen(user_id)
     known_bob = memory.believes(user_id, "bob") or "(пока ничего)"
-    message = await client.messages.create(
-        model=config.BRAIN_MODEL,
+    # Through brain.generate_text, so the scribe takes whatever road its model
+    # takes — OpenRouter for an id with a «/». It had a client of its own, to
+    # Anthropic only, and with no Anthropic key on the owner's machine nothing
+    # at all was remembered (HANDOVER §0, 2026-10-08).
+    text = await brain.generate_text(
+        # What it keeps is read back to him later: in the conversation's language.
+        _EXTRACTION_SYSTEM + lang.write_in(),
+        extraction_prompt(known_elder, known_bob, topics, said),
         # Room for a talkative batch. At 800, five exchanges with somebody who
         # talks a lot needed ~960 tokens (measured, 2026-09-27): the JSON was
         # cut, _parse_json returned {}, the batch was marked read — and nothing
         # at all was kept, least of all his own words about himself, which come
         # last (bob_facts, taught_bob). Only what is written is paid for.
         max_tokens=SCRIBE_TOKENS,
-        # What it keeps is read back to him later: in the conversation's language.
-        system=_EXTRACTION_SYSTEM + lang.write_in(),
-        messages=[{"role": "user", "content": extraction_prompt(
-            known_elder, known_bob, topics, said)}],
+        model=config.BRAIN_MODEL,
     )
-    text = "".join(b.text for b in message.content if b.type == "text").strip()
     return _parse_json(text)
 
 
@@ -399,7 +389,7 @@ async def from_intake(user_id: str, story: str) -> None:
     is not a visit, and the observation register is for what is watched in
     conversation. Never raises; the friend arrives either way.
     """
-    if not config.ANTHROPIC_API_KEY or not str(story or "").strip():
+    if not brain.can_call(config.BRAIN_MODEL) or not str(story or "").strip():
         return
     said = ("ИНТЕРВЬЮ ПЕРЕД ЗНАКОМСТВОМ — спрашивало приложение, отвечал ЧЕЛОВЕК; "
             "БОБ ещё не сказал ни слова:\n" + str(story).strip())
