@@ -497,7 +497,7 @@ async def synthesize(
 
     provider = config.voice_provider()
     if provider == "gemini":
-        if not config.GEMINI_API_KEY:
+        if not (config.GEMINI_API_KEY or config.gemini_on_cloud()):
             raise RuntimeError("GEMINI_API_KEY is not set — the voice (Gemini) is not configured.")
         return await _synthesize_gemini(text, voice, rate=rate)
 
@@ -593,7 +593,8 @@ async def warm(lines: int = 1) -> None:
     the first is still coming would otherwise begin with a handshake. Never
     raises, costs nothing."""
     provider = config.voice_provider()
-    url = ("https://generativelanguage.googleapis.com/" if provider == "gemini" and config.GEMINI_API_KEY
+    url = ("https://aiplatform.googleapis.com/" if provider == "gemini" and config.gemini_on_cloud()
+           else "https://generativelanguage.googleapis.com/" if provider == "gemini" and config.GEMINI_API_KEY
            else "https://openrouter.ai/api/v1/models" if provider == "openrouter" and config.OPENROUTER_API_KEY
            else "https://api.fish.audio/" if provider == "fish" and config.FISH_API_KEY
            else None)
@@ -665,6 +666,9 @@ def wav(pcm: bytes, rate: int) -> bytes:
 
 
 _GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:streamGenerateContent?alt=sse"
+#: …and on Google Cloud (config.gemini_on_cloud): the same model and request.
+_CLOUD_URL = ("https://aiplatform.googleapis.com/v1/projects/{project}/locations/global/"
+              "publishers/google/models/{model}:streamGenerateContent?alt=sse")
 _PCM_RATE_IN = re.compile(r"rate=(\d+)", re.I)
 
 
@@ -686,6 +690,10 @@ def _gemini_direct_request(text: str, voice: str | None, *, rate: float = 1.0) -
         "generationConfig": {"responseModalities": ["AUDIO"],
                              "speech_config": {"voice_config": {"voice": name}}},
     }
+    if config.gemini_on_cloud():
+        return (_CLOUD_URL.format(project=config.GOOGLE_CLOUD_PROJECT, model=model),
+                {"x-goog-api-key": config.GOOGLE_CLOUD_API_KEY or "", "Content-Type": "application/json"},
+                payload)
     return (_GEMINI_URL.format(model=model),
             {"x-goog-api-key": config.GEMINI_API_KEY or "", "Content-Type": "application/json"}, payload)
 
@@ -777,7 +785,8 @@ def _voice_budget() -> _Budget:
 def limited() -> bool:
     """Is the voice rationed by the minute? Then an answer is voiced in as few
     pieces as it can be without a silence in it (live.Session._answer)."""
-    return config.voice_provider() == "gemini" and config.GEMINI_TTS_RPM > 0
+    return (config.voice_provider() == "gemini" and config.GEMINI_TTS_RPM > 0
+            and not config.gemini_on_cloud())
 
 
 def room() -> int:
@@ -807,7 +816,8 @@ async def _gemini_direct_stream(text: str, voice: str | None, *, rate: float = 1
     url, headers, payload = _gemini_direct_request(text, voice, rate=rate)
     budget = _voice_budget()
     for attempt in (1, 2):
-        await budget.take(spare=BACKGROUND_SPARE if background else 0)
+        if limited():
+            await budget.take(spare=BACKGROUND_SPARE if background else 0)
         async with _line().stream("POST", url, headers=headers, json=payload) as resp:
             if resp.status_code != 200:
                 detail = await resp.aread()
@@ -838,7 +848,7 @@ async def _gemini_direct_stream(text: str, voice: str | None, *, rate: float = 1
 async def _gemini_pcm(text: str, voice: str | None, *, rate: float = 1.0,
                       background: bool = False) -> AsyncIterator[tuple[int, bytes]]:
     """A Gemini voice as (rate, raw audio) pieces, streamed on Google's key."""
-    if not config.GEMINI_API_KEY:
+    if not (config.GEMINI_API_KEY or config.gemini_on_cloud()):
         raise RuntimeError("GEMINI_API_KEY is not set — the voice (Gemini) is not configured.")
     async for out_rate, audio in _gemini_direct_stream(text, voice, rate=rate, background=background):
         yield out_rate, audio
@@ -896,7 +906,7 @@ async def stream(text: str, voice: str | None = None, *,
         raise ValueError("Nothing to say — empty text passed to stream().")
     provider = config.voice_provider()
     default_rate = PCM_RATE
-    if provider == "gemini" and config.GEMINI_API_KEY:
+    if provider == "gemini" and (config.GEMINI_API_KEY or config.gemini_on_cloud()):
         carry = b""
         async for rate, chunk in _gemini_pcm(text, voice, background=background):
             data = carry + chunk

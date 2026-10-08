@@ -482,3 +482,18 @@ def test_refused_for_the_day_it_says_so_at_once_and_waits_no_hours(monkeypatch):
         asyncio.run(hear())
     assert time.monotonic() - began < 2
     assert asked == ["generativelanguage.googleapis.com"]          # the second never went
+
+
+def test_with_a_google_cloud_key_the_voice_goes_to_google_cloud_unrationed(monkeypatch):
+    """10 a minute and 100 a day on the AI Studio key; on Google Cloud the same
+    voice and the same request, without that ration (2026-10-08)."""
+    monkeypatch.setattr(config, "TTS_PROVIDER", "gemini")
+    monkeypatch.setattr(config, "GEMINI_API_KEY", "studio-key")
+    monkeypatch.setattr(config, "GOOGLE_CLOUD_API_KEY", "cloud-key")
+    monkeypatch.setattr(config, "GOOGLE_CLOUD_PROJECT", "gen-lang-client-1")
+    url, headers, payload = tts._gemini_direct_request("Ого.", None)
+    assert url.startswith("https://aiplatform.googleapis.com/v1/projects/gen-lang-client-1/locations/global/")
+    assert "gemini-3.8-flash-lite-tts:streamGenerateContent" in url
+    assert headers["x-goog-api-key"] == "cloud-key"
+    assert payload["generationConfig"]["speech_config"]["voice_config"]["voice"]
+    assert not tts.limited() and config.tts_configured()

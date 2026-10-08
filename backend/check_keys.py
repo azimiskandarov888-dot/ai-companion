@@ -290,7 +290,7 @@ def check_gemini_stream() -> bool:
 
     from app import tts
 
-    if not config.GEMINI_API_KEY:
+    if not (config.GEMINI_API_KEY or config.gemini_on_cloud()):
         print("🎙️ Голос Gemini потоком: нет ключа  → GEMINI_API_KEY из aistudio.google.com (необязательно)")
         return True
 

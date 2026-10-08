@@ -275,6 +275,18 @@ GEMINI_API_KEY: str | None = os.getenv("GEMINI_API_KEY")
 #: is refused, GenerateRequestsPerMinutePerProjectPerModel). Kept to by
 #: tts._budget, so his words are never refused for it. 0: no limit.
 GEMINI_TTS_RPM: int = int(os.getenv("GEMINI_TTS_RPM", "10"))
+#: The same voices on Google Cloud (Gemini Enterprise Agent Platform): an API
+#: key bound to a service account, and the project it is in. When both are
+#: set the voice goes there: on the AI Studio key Google takes 10 requests a
+#: minute and 100 a day for it — not one conversation's worth (2026-10-07);
+#: here, fifteen in ten seconds went through, first sound 0.49–0.66 s once
+#: the line was open (2026-10-08). Billed to the card at the month's end.
+GOOGLE_CLOUD_API_KEY: str | None = os.getenv("GOOGLE_CLOUD_API_KEY")
+GOOGLE_CLOUD_PROJECT: str | None = os.getenv("GOOGLE_CLOUD_PROJECT")
+
+
+def gemini_on_cloud() -> bool:
+    return bool(GOOGLE_CLOUD_API_KEY and GOOGLE_CLOUD_PROJECT)
 
 # Fish Audio (https://fish.audio) — the default voice.
 FISH_API_KEY: str | None = os.getenv("FISH_API_KEY")
@@ -380,7 +392,7 @@ def tts_configured() -> bool:
     """Is the selected voice provider set up? If not, the client speaks free."""
     provider = voice_provider()
     if provider == "gemini":
-        return bool(GEMINI_API_KEY)
+        return bool(GEMINI_API_KEY) or gemini_on_cloud()
     if provider == "fish":
         return bool(FISH_API_KEY)
     if provider == "openrouter":
