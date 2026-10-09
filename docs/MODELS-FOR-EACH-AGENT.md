@@ -1,5 +1,7 @@
 # Which model for which agent — research, 2026-09-23 (refreshed 2026-10-08)
 
+**Superseded on 2026-10-09 by `MODELS-RESEARCH-2026-10-09.md`** (in Russian) — read that first. It corrects three things below: Gemini 3.1 Pro is no longer first in Russian (10th on arena.ai's Russian board); Kimi K3 is as good in Russian as in English; Claude Opus 5's slop score is 6.59, not 0.9.
+
 **Start with «2026-10-08: what changed, and where the test stands» at the
 end** — the leaderboards re-read, the new models, the updated shortlists, and
 exactly which stages of the owner's test are done.
