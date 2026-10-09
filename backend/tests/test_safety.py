@@ -87,18 +87,52 @@ async def test_worry_is_recorded_but_never_breaks_character(monkeypatch):
 # ── never breaking the conversation ─────────────────────────────────────────
 
 @pytest.mark.asyncio
-async def test_a_broken_watcher_lets_the_turn_through(monkeypatch):
-    """Missing an alarm harms one person occasionally. Freezing the app harms
-    everyone always."""
+async def test_a_broken_watcher_lets_the_turn_through_but_never_as_calm(monkeypatch):
+    """Freezing the app harms everyone always — so a broken watcher still never
+    raises. But it used to answer «none», and «none» is the one thing a watcher
+    that did not read the line must never say: now it is «worry», and he is
+    only told to be a little more attentive (the owner, 2026-10-09)."""
     _raises(monkeypatch, RuntimeError("провайдер прилёг"))
     v = await safety.look("u", "мне что-то нехорошо")
-    assert v["level"] == "none"
+    assert v == {"level": "worry", "kind": "body", "what": safety.UNREAD}
+    assert safety.recent("u")[0]["level"] == "worry"      # and it is on record
 
 
 @pytest.mark.asyncio
-async def test_a_timeout_lets_the_turn_through(monkeypatch):
+async def test_a_timeout_is_not_calm_either(monkeypatch):
     _raises(monkeypatch, TimeoutError())
-    assert (await safety.look("u", "что-то с рукой"))["level"] == "none"
+    assert (await safety.look("u", "что-то с рукой"))["what"] == safety.UNREAD
+
+
+@pytest.mark.asyncio
+async def test_a_refused_line_is_read_by_a_model_without_moderation(monkeypatch):
+    """Moderation stops exactly the words the watcher is for. The verdict of
+    the unmoderated model stands — here, the danger the first one never saw."""
+    asked: list[str] = []
+
+    async def fake(system, user_text, *, model, **kw):
+        asked.append(model)
+        if model == config.SAFETY_MODEL:
+            raise safety.brain.Refused("403 flagged")
+        return '{"level":"danger","kind":"self","what":"не хочет жить"}'
+
+    monkeypatch.setattr(safety.brain, "generate_text", fake)
+    v = await safety.look("u", "я больше не хочу жить")
+    assert asked == [config.SAFETY_MODEL, config.UNMODERATED_MODEL]
+    assert (v["level"], v["kind"]) == ("danger", "self")
+
+
+@pytest.mark.asyncio
+async def test_refused_twice_is_worry(monkeypatch):
+    _raises(monkeypatch, safety.brain.Refused("403 flagged"))
+    assert (await safety.look("u", "всё, хватит"))["what"] == safety.UNREAD
+
+
+def test_an_unread_worry_invents_no_trouble():
+    """Nothing is known: he must not send them to a doctor about nothing —
+    only be a little more attentive, once."""
+    said = safety.block({"level": "worry", "kind": "body", "what": safety.UNREAD})
+    assert "спроси, как он" in said and safety.UNREAD not in said and "врач" not in said
 
 
 @pytest.mark.asyncio
@@ -122,7 +156,7 @@ async def test_a_hanging_provider_cannot_hold_the_turn(monkeypatch):
     verdict = await safety.look("u", "я упал и не встану")
     elapsed = time.perf_counter() - started
 
-    assert verdict["level"] == "none"
+    assert verdict["what"] == safety.UNREAD
     assert elapsed < 1.0, f"held the turn for {elapsed:.1f}s"
 
 
@@ -176,9 +210,11 @@ async def test_empty_speech_is_not_sent_anywhere(monkeypatch):
         '{"what":"упал"}',                         # no level at all
     ],
 )
-async def test_garbage_is_read_as_calm(monkeypatch, raw):
+async def test_an_answer_nobody_can_read_is_worry_not_calm(monkeypatch, raw):
+    """It used to be read as «none». An answer with no level among LEVELS is the
+    watcher failing to say — «упал» with no level included."""
     _answers(monkeypatch, raw)
-    assert (await safety.look("u", "что-то сказал"))["level"] == "none"
+    assert (await safety.look("u", "что-то сказал"))["what"] == safety.UNREAD
 
 
 @pytest.mark.asyncio

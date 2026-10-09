@@ -309,18 +309,38 @@ async def _extract(user_id: str, said: str) -> dict:
     # takes — OpenRouter for an id with a «/». It had a client of its own, to
     # Anthropic only, and with no Anthropic key on the owner's machine nothing
     # at all was remembered (HANDOVER §0, 2026-10-08).
-    text = await brain.generate_text(
-        # What it keeps is read back to him later: in the conversation's language.
-        _EXTRACTION_SYSTEM + lang.write_in(),
-        extraction_prompt(known_elder, known_bob, topics, said),
-        # Room for a talkative batch. At 800, five exchanges with somebody who
-        # talks a lot needed ~960 tokens (measured, 2026-09-27): the JSON was
-        # cut, _parse_json returned {}, the batch was marked read — and nothing
-        # at all was kept, least of all his own words about himself, which come
-        # last (bob_facts, taught_bob). Only what is written is paid for.
-        max_tokens=SCRIBE_TOKENS,
-        model=config.BRAIN_MODEL,
-    )
+    # What it keeps is read back to him later: in the conversation's language.
+    system = _EXTRACTION_SYSTEM + lang.write_in()
+    prompt = extraction_prompt(known_elder, known_bob, topics, said)
+
+    async def write_down(model: str) -> str:
+        return await brain.generate_text(
+            system, prompt,
+            # Room for a talkative batch. At 800, five exchanges with somebody
+            # who talks a lot needed ~960 tokens (measured, 2026-09-27): the
+            # JSON was cut, _parse_json returned {}, the batch was marked read
+            # — and nothing at all was kept, least of all his own words about
+            # himself, which come last (bob_facts, taught_bob). Only what is
+            # written is paid for.
+            max_tokens=SCRIBE_TOKENS,
+            model=model,
+            # NOT thinking — said, not left to the model: Sonnet 5 thinks at
+            # «high» before every answer unless told not to. The scribe writes
+            # down what was said; it composes nothing, and thinking makes the
+            # same model invent more (Vectara: 8.4% at low effort, 10.8% at
+            # high) and costs more. The story is the writer's, and HE thinks
+            # (docs/MODELS-RESEARCH-2026-10-09.md; the owner asked, 2026-10-09).
+            effort="none",
+        )
+
+    try:
+        text = await write_down(config.BRAIN_MODEL)
+    except brain.Refused:
+        # Moderation stopped the batch — and what it stops is the heaviest
+        # thing said, the last a friend may forget. Retried on the next turn it
+        # would only grow, until it lost its own beginning. So now, once, on a
+        # model without moderation.
+        text = await write_down(config.UNMODERATED_MODEL)
     return _parse_json(text)
 
 

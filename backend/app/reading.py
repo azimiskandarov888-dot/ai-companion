@@ -263,6 +263,7 @@ async def same_need(before: str, now: str) -> bool:
     raw = await brain.generate_text(
         _SAME_SYSTEM, f"ПЕРВОЕ:\n{before}\n\nВТОРОЕ:\n{now}",
         max_tokens=300, model=config.READING_MODEL,
+        effort="none",   # two lines compared; nothing to think through
     )
     try:
         verdict = _extract_json(raw).get("same")

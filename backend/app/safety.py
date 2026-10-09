@@ -160,12 +160,55 @@ def _who(user_id: str) -> str:
     return facts
 
 
+#: What the watcher's verdict says when it could not read the line at all —
+#: never a model's words, so never mistaken for one, and never put in front of
+#: him as it is (block() says what it means instead).
+UNREAD = "—unread—"
+
+#: Below this much of the watcher's time left, a second model is not asked:
+#: the turn is not held for it.
+_FALLBACK_NEEDS = 1.0
+
+
+def _unread(why: str) -> dict:
+    print(f"[safety] the line was not read ({why}) — worry, not «no danger»",
+          file=sys.stderr, flush=True)
+    return {"level": "worry", "kind": "body", "what": UNREAD}
+
+
+async def _ask(model: str, asked: str, *, timeout: float) -> str:
+    return await asyncio.wait_for(
+        brain.generate_text(
+            _SYSTEM + lang.write_in(),   # the «what» comes back in the conversation's language
+            asked,
+            max_tokens=120,
+            model=model,
+            timeout=timeout,
+            # No thinking: a second of it on every turn buys nothing on one
+            # narrow question, and the watcher has six seconds in all.
+            effort="none",
+        ),
+        timeout=timeout,
+    )
+
+
 async def look(user_id: str, said: str) -> dict:
     """Is this person in danger right now? Never raises, never blocks for long.
 
-    Returns {"level": ..., "what": ...}. On any failure — no key, bad JSON, a
-    timeout, a provider having a bad day — returns level "none", because the
-    alternative is a turn that never answers somebody who was perfectly fine.
+    Returns {"level": ..., "kind": ..., "what": ...}. With no key at all it
+    returns «none» — nothing is configured to watch. But a watcher that WAS
+    asked and could not read the line — a timeout, a provider having a bad
+    day, an answer nobody can read — returns «worry» (what = UNREAD): he is
+    told to be a little more attentive and ask how they are, once. It used to
+    return «none», on the argument that the alternative was a turn that never
+    answered; «worry» answers just the same, and «none» was the one verdict a
+    failure must never give (the owner, 2026-10-09; MODELS-RESEARCH §«Сторож»).
+
+    And moderation is not a failure to shrug at: every Anthropic and OpenAI
+    model on OpenRouter is moderated, and what it refuses (brain.Refused) is
+    the heaviest thing a person says. So a refused line is asked again of a
+    model without moderation (config.UNMODERATED_MODEL), in whatever time is
+    left — its verdict stands; only if that fails too is it «worry».
     """
     said = (said or "").strip()
     if not said or not brain.can_call(config.SAFETY_MODEL):
@@ -178,44 +221,43 @@ async def look(user_id: str, said: str) -> dict:
     # conversation, to say something that belongs with the words it qualifies.
     who = _who(user_id)
     asked = f"ЧТО ИЗВЕСТНО ПРО ЧЕЛОВЕКА:\n{who}\n\nЕГО РЕПЛИКА:\n{said}" if who else said
+    began = time.monotonic()
 
+    # asyncio.wait_for, and not only the timeout handed to the client, because
+    # those two bound different things: the client's is a stall detector, and
+    # this coroutine is awaited inside the gather() the whole turn waits on.
+    # wait_for is the ceiling that holds whatever happens underneath it.
+    # (CancelledError is deliberately NOT caught: it is a BaseException, and a
+    # caller hanging up should take this call down with it.)
     try:
-        # asyncio.wait_for, and not only the timeout handed to the SDK, because
-        # those two bound different things. The SDK's is a read timeout PER HTTP
-        # ATTEMPT, and the client is built with the SDK's default max_retries=2
-        # — so a hung provider costs three attempts plus backoff, roughly twenty
-        # seconds, not six. This coroutine is awaited inside the gather() that
-        # the whole turn waits on, so those twenty seconds would be twenty
-        # seconds of silence for somebody who is perfectly fine. wait_for is the
-        # ceiling that holds no matter what the SDK does underneath it; the
-        # inner timeout stays so a single dead connection still gives up early
-        # instead of burning the entire budget.
-        raw = await asyncio.wait_for(
-            brain.generate_text(
-                _SYSTEM + lang.write_in(),   # the «what» comes back in the conversation's language
-                asked,
-                max_tokens=120,
-                model=config.SAFETY_MODEL,
-                timeout=config.SAFETY_TIMEOUT,
-            ),
-            timeout=config.SAFETY_TIMEOUT,
-        )
-    except Exception as e:  # noqa: BLE001 — a timeout is one of these, and so is
-        # anything else; every one of them means the same thing here, which is
-        # that this turn goes on without a watcher rather than not going on.
-        # (CancelledError is deliberately NOT caught: it is a BaseException, and
-        # a caller hanging up should take this call down with it.)
-        print(f"[safety] watcher skipped: {e!r}", file=sys.stderr, flush=True)
-        return {"level": "none", "kind": "body", "what": ""}
+        raw = await _ask(config.SAFETY_MODEL, asked, timeout=config.SAFETY_TIMEOUT)
+    except brain.Refused:
+        left = config.SAFETY_TIMEOUT - (time.monotonic() - began)
+        if left < _FALLBACK_NEEDS:
+            verdict = _unread("moderation refused it, no time left to ask again")
+            _record(user_id, verdict, said)
+            return verdict
+        try:
+            raw = await _ask(config.UNMODERATED_MODEL, asked, timeout=left)
+        except Exception as e:  # noqa: BLE001
+            verdict = _unread(f"moderation refused it, and then: {e!r}")
+            _record(user_id, verdict, said)
+            return verdict
+    except Exception as e:  # noqa: BLE001 — a timeout is one of these
+        verdict = _unread(repr(e))
+        _record(user_id, verdict, said)
+        return verdict
 
-    verdict = _parse(raw)
+    verdict = _parse(raw) or _unread("an answer nobody can read")
     if verdict["level"] != "none":
         _record(user_id, verdict, said)
     return verdict
 
 
-def _parse(raw: str) -> dict:
-    """Read the verdict, and treat anything unrecognisable as 'none'."""
+def _parse(raw: str) -> dict | None:
+    """Read the verdict — or None when there is no verdict to read: no JSON,
+    or no level among LEVELS. Not «none»: an answer nobody can read is the
+    watcher failing, and look() treats it as one."""
     text = (raw or "").strip()
     if "```" in text:
         parts = text.split("```")
@@ -225,16 +267,16 @@ def _parse(raw: str) -> dict:
                 text = text.lstrip()[4:]
     start, end = text.find("{"), text.rfind("}")
     if start == -1 or end == -1 or end < start:
-        return {"level": "none", "kind": "body", "what": ""}
+        return None
     try:
         data = json.loads(text[start : end + 1])
     except json.JSONDecodeError:
-        return {"level": "none", "kind": "body", "what": ""}
+        return None
     if not isinstance(data, dict):
-        return {"level": "none", "kind": "body", "what": ""}
-    level = str(data.get("level") or "none").strip().lower()
+        return None
+    level = str(data.get("level") or "").strip().lower()
     if level not in LEVELS:
-        level = "none"
+        return None
     kind = str(data.get("kind") or "body").strip().lower()
     if kind not in KINDS:
         kind = "body"
@@ -388,6 +430,17 @@ def block(verdict: dict | None, user_id: str = "") -> str:
         return ""
     level = verdict.get("level")
     what = (verdict.get("what") or "").strip()
+    if level == "worry" and what == UNREAD:
+        # Nothing is known — so nothing about a trouble may be invented, and
+        # nobody is sent to a doctor about it. Only a little more attention.
+        return lang.pick(
+            "Его последние слова не удалось проверить, и что с ним — неизвестно. Ничего "
+            "не придумывай про его беду и не пугай его. Просто будь внимательнее: если "
+            "будет к слову, спроси, как он. Один раз.",
+            "Their last words couldn't be checked, and nobody knows how they are. Don't "
+            "invent any trouble and don't frighten them. Just be a little more attentive: "
+            "if it fits, ask how they are. Once.",
+        )
     n = emergency.numbers(user_id) if user_id else (
         f"{config.EMERGENCY_NUMBER} {lang.pick('или', 'or')} {emergency.UNIVERSAL}"
     )

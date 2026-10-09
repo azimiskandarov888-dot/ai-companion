@@ -359,8 +359,9 @@ def test_thinking_through_openrouter_keeps_its_effort_and_room_for_the_answer(ba
     asyncio.run(brain.think("ЧИТАЙ", "ЕГО СЛОВА", model="anthropic/claude-opus-5", effort="max",
                             max_tokens=8000))
     sent = background.sent[0]
-    # OpenRouter's efforts stop at «high»; ours go to «max».
-    assert sent["reasoning"] == {"effort": "high"}
+    # As asked: OpenRouter offers Opus up to «max» (catalogue, 2026-10-09). It
+    # used to be folded into «high», and xhigh could never be tested.
+    assert sent["reasoning"] == {"effort": "max"}
     # A writer that thought well and was cut off before the closing brace would
     # lose a person for nothing of its own.
     assert sent["max_tokens"] >= 32_000
@@ -398,3 +399,55 @@ def test_an_empty_answer_is_a_failure_not_a_silent_nothing(background):
     background.body = _sse(_delta("", "length"))
     with pytest.raises(RuntimeError, match="пустой ответ"):
         asyncio.run(brain.think("A", "B", model="anthropic/claude-opus-5"))
+
+
+def test_every_background_call_asks_that_nothing_be_kept(background):
+    """A person's own talk, and the reading of them — the most private thing
+    the app holds. Every model the app or the test uses has such a route."""
+    asyncio.run(brain.generate_text("A", "B", model="anthropic/claude-haiku-5.5"))
+    assert background.sent[0]["provider"] == {"zdr": True}
+
+
+def test_thinking_switched_off_is_said_in_each_vendors_words(background):
+    """Left alone, Sonnet 5 thinks at «high» and Haiku 5.5 at «medium» before
+    every answer — for the scribe, dearer and more invented."""
+    for model in ("anthropic/claude-haiku-5.5", "openai/gpt-5.4-nano", "deepseek/deepseek-v4.1-flash"):
+        asyncio.run(brain.generate_text("A", "B", model=model, effort="none"))
+    claude, gpt, deepseek = (sent["reasoning"] for sent in background.sent)
+    assert claude == {"enabled": False} and deepseek == {"enabled": False}
+    assert gpt == {"effort": "none"}
+    assert all(sent["max_tokens"] <= 4_000 for sent in background.sent)   # no room to think bought
+
+
+def test_a_model_that_must_think_is_asked_once_more_at_a_level_it_takes(background):
+    """GLM-5.3 and Gemini 3.8 Flash cannot switch thinking off; Kimi K3 has no
+    «xhigh». A 400 about it is not the end of the call."""
+    answers = iter([
+        (400, b'{"error":{"message":"Reasoning is mandatory for this model"}}'),
+        (200, _sse(_delta("ok"), _delta("", "stop"))),
+    ])
+
+    def answer(request):
+        background.sent.append(json.loads(request.content))
+        status, body = next(answers)
+        return httpx.Response(status, content=body, headers={"content-type": "text/event-stream"})
+
+    brain._router = httpx.AsyncClient(base_url=brain.ROUTER_URL, transport=httpx.MockTransport(answer))
+    assert asyncio.run(brain.generate_text("A", "B", model="z-ai/glm-5.3", effort="none")) == "ok"
+    assert background.sent[0]["reasoning"] == {"enabled": False}
+    assert background.sent[1]["reasoning"] == {"effort": "low"}
+
+
+@pytest.mark.parametrize("stream", [False, True])
+def test_moderation_is_told_apart_from_any_other_failure(background, stream):
+    """Every Anthropic and OpenAI model on OpenRouter is moderated, and what it
+    stops is the heaviest thing a person says: the watcher and the scribe must
+    be able to ask somebody else — so a refusal has a name of its own, whether
+    it comes as a 403 or inside a stream that began «200 OK»."""
+    if stream:
+        background.body = _sse({"error": {"code": 403, "message": "flagged"}}, done=False)
+    else:
+        background.status = 403
+        background.body = b'{"error":{"code":403,"message":"Input was flagged","metadata":{"reasons":["self-harm"]}}}'
+    with pytest.raises(brain.Refused):
+        asyncio.run(brain.generate_text("A", "B", model="anthropic/claude-haiku-4.5", effort="none"))

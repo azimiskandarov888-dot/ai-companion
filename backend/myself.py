@@ -72,48 +72,52 @@ HOME = config.DATA_DIR / "myself"
 # Откуда они и почему именно эти — docs/MODELS-FOR-EACH-AGENT.md. Любой этап
 # принимает --models id,id,… — чтобы добавить кандидата, не трогая файл.
 
-#: Двое — и третьим набором их смесь: у разных семейств разные «любимые»
-#: люди, поэтому пять от одного и пять от другого могут оказаться разнее,
-#: чем десять от любого из них.
+#: Двое — и третьим набором их смесь. Исследование 2026-10-09 оставило этих
+#: же: десять в одном вызове уже дают Opus 5 больше разнообразия, чем почти
+#: любой другой модели (NoveltyBench), а смесь семейств помогает меньше, чем
+#: кажется (ответы разных семейств похожи на 71–82%) — но это дешёвая проверка.
 SKETCHERS = [
     ("Claude Opus 5", "anthropic/claude-opus-5"),
     ("GLM-5.3", "z-ai/glm-5.3"),
 ]
 
-#: The scribe runs ~150 times a month a person, so price counts here. Added
-#: 2026-10-08: Claude Haiku 5.5 (7 Oct, $0.10/$0.50) and Sonnet 5.5 (28 Sep,
-#: Sonnet 5's price, faster). Now it also keeps what the SHADOW said about
-#: himself — the writer's law — so «invented nothing» is judged on him too.
+#: Писарь — без размышления (так и в приложении, learn._extract). Из прежнего
+#: списка ушли Sonnet 5.5, Gemini 3.8 Flash и GLM-5.3: размышление у них не
+#: выключается. Пришли GPT-5.4 Nano (меньше всех выдумывает по Vectara, 3.1%)
+#: и DeepSeek V4.1 Flash (без модерации, чистый русский своего семейства).
+#: И твой вопрос (2026-10-09) — «может, писарю лучше думать?» — решает сама
+#: проверка: нынешний Sonnet 5 здесь дважды, без размышления и думающий, как
+#: думал до сих пор («@high»). docs/MODELS-RESEARCH-2026-10-09.md
 SCRIBES = [
-    ("Claude Sonnet 5", "anthropic/claude-sonnet-5"),
-    ("Claude Sonnet 5.5", "anthropic/claude-sonnet-5.5"),
     ("Claude Haiku 5.5", "anthropic/claude-haiku-5.5"),
     ("GPT-5.4 Mini", "openai/gpt-5.4-mini"),
-    ("Gemini 3.8 Flash", "google/gemini-3.8-flash"),
-    ("GLM-5.3", "z-ai/glm-5.3"),
+    ("GPT-5.4 Nano", "openai/gpt-5.4-nano"),
+    ("DeepSeek V4.1 Flash", "deepseek/deepseek-v4.1-flash"),
+    ("Claude Sonnet 5 — без размышления", "anthropic/claude-sonnet-5"),
+    ("Claude Sonnet 5 — думает, как раньше", "anthropic/claude-sonnet-5@high"),
 ]
 
-#: Читателю язык важнее всего — поэтому здесь нет Kimi (у Kimi K2 #24 на
-#: русской арене), зато есть Gemini 3.1 Pro, которая на русской арене первая.
-#: GPT-6.1 Sol (29 Sep) — вместо GPT-6 Sol: «near-Astra at a fifth of the price».
+#: Gemini 3.1 Pro ушла (21-я из 28 в EQ-Bench 4, поддакивает больше всех,
+#: худший русский в сравнении переводов на Habr), Kimi K3 вернулся (3-й в
+#: EQ-Bench 4; по-русски не проседает — 16-й против 15-го по-английски).
+#: Gemini 3.8 Flash — дешёвая проверка: 5-я на русской арене, в 7 раз дешевле.
 READERS = [
     ("Claude Opus 5", "anthropic/claude-opus-5"),
     ("Claude Opus 5.5", "anthropic/claude-opus-5.5"),
+    ("Kimi K3", "moonshotai/kimi-k3"),
     ("GPT-5.5", "openai/gpt-5.5"),
-    ("Gemini 3.1 Pro", "google/gemini-3.1-pro-preview"),
-    ("GPT-6.1 Sol", "openai/gpt-6.1-sol"),
+    ("Gemini 3.8 Flash", "google/gemini-3.8-flash"),
 ]
 
-#: 2026-10-08, Creative Writing v3: GPT-6 Astra 2173 · Fable 5.1 2162 ·
-#: Opus 5 2133 · GPT-6 Sol 2125 · Kimi K3 2082 · Opus 5.5 2050. GPT-6.1 Sol —
-#: «near-Astra at a fifth of the price», not rated yet — in for GPT-6 Sol.
+#: Ушли Fable 5.1 (нет пути без хранения разговоров — ZDR), Kimi K3 (17-й в
+#: длинной прозе, к концу слабеет) и GPT-6.1 Sol (его ещё нет на досках, а у
+#: GPT-6 Sol самые слабые персонажи). Opus 5 на xhigh — второй раунд, если он
+#: выиграет: «--models anthropic/claude-opus-5,anthropic/claude-opus-5@xhigh».
 WRITERS = [
     ("Claude Opus 5", "anthropic/claude-opus-5"),
     ("Claude Opus 5.5", "anthropic/claude-opus-5.5"),
-    ("Claude Fable 5.1", "anthropic/claude-fable-5.1"),
     ("GPT-6 Astra", "openai/gpt-6-astra"),
-    ("GPT-6.1 Sol", "openai/gpt-6.1-sol"),
-    ("Kimi K3", "moonshotai/kimi-k3"),
+    ("GLM-5.3", "z-ai/glm-5.3"),
 ]
 
 _LABELS = "АБВГДЕЖЗИК"
@@ -123,6 +127,15 @@ _LABELS = "АБВГДЕЖЗИК"
 #: Какой модели уходит вызов. ContextVar, а не глобальная переменная: этап
 #: гоняет всех кандидатов разом, и у каждого своя задача со своей моделью.
 _model: contextvars.ContextVar[str] = contextvars.ContextVar("model")
+#: …и как ей думать, если у кандидата сказано своё: «модель@high». Иначе —
+#: как велит приложение (у писаря — не думать).
+_effort: contextvars.ContextVar[str | None] = contextvars.ContextVar("effort", default=None)
+
+
+def candidate(spec: str) -> tuple[str, str | None]:
+    """«anthropic/claude-sonnet-5@high» → модель и её размышление."""
+    model, _, effort = spec.partition("@")
+    return model, (effort or None)
 #: The app's own calls, kept before they are pointed at the candidate.
 _real = {"think": brain.think, "generate_text": brain.generate_text}
 
@@ -132,14 +145,16 @@ async def _think(system_prompt, user_text, *, model=None, effort="high",
     """The app's deep call, to the candidate — at the app's effort and on its
     road. No stall limit: a model that thinks longer than ours did is waited
     for, not judged on our impatience."""
-    return await _real["think"](system_prompt, user_text, model=_model.get(), effort=effort,
-                                max_tokens=max_tokens, timeout=None)
+    return await _real["think"](system_prompt, user_text, model=_model.get(),
+                                effort=_effort.get() or effort, max_tokens=max_tokens,
+                                timeout=None)
 
 
 async def _generate_text(system_prompt, user_text, max_tokens=1500, model=None,
                          timeout=None, effort=None):
     return await _real["generate_text"](system_prompt, user_text, max_tokens=max_tokens,
-                                        model=_model.get(), timeout=None, effort=effort)
+                                        model=_model.get(), timeout=None,
+                                        effort=_effort.get() or effort)
 
 
 def _patch() -> None:
@@ -152,7 +167,9 @@ def _patch() -> None:
 async def _one(name: str, model: str, job) -> dict:
     """Один кандидат на одном этапе. Никогда не поднимает исключение: упавший
     провайдер должен стоить одной строчки, а не всего этапа."""
-    _model.set(model)
+    base, effort = candidate(model)
+    _model.set(base)
+    _effort.set(effort)
     bill = {"cost": 0.0, "calls": 0}
     brain.bill.set(bill)
     began = time.monotonic()
@@ -427,7 +444,8 @@ async def scribe(args) -> None:
             prompt = learn.extraction_prompt(_as_known(found, "facts"),
                                              _as_known(found, "bob_facts"), "", text)
             found.append(learn._parse_json(await brain.generate_text(
-                learn._EXTRACTION_SYSTEM + lang.write_in(), prompt, max_tokens=learn.SCRIBE_TOKENS)))
+                learn._EXTRACTION_SYSTEM + lang.write_in(), prompt, max_tokens=learn.SCRIBE_TOKENS,
+                effort="none")))   # как в приложении; «@high» у кандидата — думать
         return found
 
     entries = await _race(_candidates(args, SCRIBES), lambda m: job)

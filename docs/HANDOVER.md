@@ -7,7 +7,7 @@ or re-litigating decisions that are already made. Written 2026-09-17 on branch
 and since the evening of 2026-10-08 on **`claude/ai-model-selection-voice-f93485`**
 (worktree `~/ai-companion/.claude/worktrees/ai-model-selection-voice-f93485`),
 which is where all current work lives — ahead of the others; run the server
-from this one. **1321 tests pass** (2026-10-08). Every number below was
+from this one. **1334 tests pass** (2026-10-09). Every number below was
 measured by running the code, not estimated; where something is an estimate
 it says so.
 
@@ -114,8 +114,24 @@ sketcher winner needs a `SKETCH_MODEL` of its own.
 
 ### Still open, from this evening
 
-- **Before the blind test — the call settings the model research found** (`docs/MODELS-RESEARCH-2026-10-09.md`, «Что из этого следует»): ZDR on every background call; thinking switched off explicitly for the scribe and the watcher; a watcher error or a moderation 403 means «worry», never «no danger»; xhigh/max passed through; embeddings through OpenRouter; `myself.py` shortlists updated to the research's.
-
+- **Done 2026-10-09 — the call settings the model research found**
+  (`docs/MODELS-RESEARCH-2026-10-09.md`): every background call asks for zero
+  data retention (`config.BACKGROUND_ZDR`); the scribe, the watcher and the
+  «same need?» comparison switch thinking off explicitly (`effort="none"`) —
+  the owner asked whether the scribe should think; the test decides it, with
+  Sonnet 5 in it twice, thinking and not (`myself.SCRIBES`, «@high»); efforts
+  pass through as asked (xhigh, max) and a model that will not take one is
+  asked once more at the nearest; **every Anthropic and OpenAI model on
+  OpenRouter is moderated** — a refusal (`brain.Refused`) is asked again of
+  `config.UNMODERATED_MODEL` (DeepSeek V4.1 Flash) by the watcher and the
+  scribe, and a watcher that could not read a line now says «worry» (what =
+  `safety.UNREAD`: ask how they are, once), never «no danger»; memory by
+  meaning is ON — `qwen/qwen3-embedding-8b` through OpenRouter, one host
+  (`config.EMBEDDING_PROVIDER`), checked live: «внучка опять не звонит» is
+  0.58 to «внучка Маша звонит по воскресеньям», 0.39 to a bicycle. The
+  `myself.py` shortlists are the research's. Not done: strict JSON schemas,
+  the reader and writer on a moderation refusal (they retry at the next talk),
+  sketch axes rolled by code.
 - **A child (under 13), or a teenager who switched memory off, stays a
   shadow**: nothing is kept to grow sure from. The owner's call.
 - **The iPhone app still uses the interview** (`/api/companion/create`). The
@@ -882,7 +898,7 @@ the reason the tests that now hold them exist.
   or any repo artifact. Chat replies only.
 - **Commit attribution:** end every commit with the attribution line(s) the
   session's own instructions give — nothing else names a model.
-- **Tests:** `cd backend && .venv/bin/python -m pytest -q`. **1321 pass** (one,
+- **Tests:** `cd backend && .venv/bin/python -m pytest -q`. **1334 pass** (one,
   `test_somebody_past_sixty_gets_the_deep_breath`, fails now and then — §0). The suite is the
   design record — test docstrings carry the *reasoning*, including what went
   wrong before. Read the docstring before changing an assertion; several tests

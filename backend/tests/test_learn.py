@@ -328,3 +328,29 @@ def test_a_talkative_batch_is_not_cut_off_and_lost():
     assert learn._parse_json('{"facts": [{"value": "обрез') == {}   # why it matters
     fmt = learn._EXTRACTION_SYSTEM
     assert fmt.index('"bob_facts"') > fmt.index('"facts"')
+
+
+def test_the_scribe_writes_down_without_thinking(monkeypatch):
+    """It composes nothing; thinking makes the same model invent more and
+    costs more (docs/MODELS-RESEARCH-2026-10-09.md). Said, not left to the
+    model — Sonnet 5 thinks at «high» unless told not to."""
+    seen = _answers(monkeypatch, {})
+    _learn("u")
+    assert seen["effort"] == "none" and seen["model"] == config.BRAIN_MODEL
+
+
+def test_a_batch_moderation_refuses_is_written_down_by_a_model_without_it(monkeypatch):
+    """Retried on the next turn it would only grow until it lost its own
+    beginning — and it is the heaviest thing that was said."""
+    asked: list[str] = []
+
+    async def answer(system, user_text, *, model, **kw):
+        asked.append(model)
+        if model == config.BRAIN_MODEL:
+            raise learn.brain.Refused("403 flagged")
+        return '{"facts":[{"category":"быт","value":"живёт один"}]}'
+
+    monkeypatch.setattr(learn.brain, "generate_text", answer)
+    _learn("u")
+    assert asked == [config.BRAIN_MODEL, config.UNMODERATED_MODEL]
+    assert "живёт один" in memory.facts_context("u")

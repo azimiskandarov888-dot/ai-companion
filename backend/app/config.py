@@ -168,6 +168,17 @@ READING_EFFORT: str = os.getenv("READING_EFFORT", "high")
 # Through OpenRouter since 2026-10-08, the same model: which one watches is
 # decided by a labelled Russian crisis set, never by feel (HANDOVER §11).
 SAFETY_MODEL: str = os.getenv("SAFETY_MODEL", "anthropic/claude-haiku-4.5")
+#: Who reads a line when OpenRouter's moderation will not pass it to the
+#: watcher or the scribe (brain.Refused). Every Anthropic and OpenAI model
+#: there is moderated (2026-10-09), and what moderation stops is the heaviest
+#: thing a person says — exactly what the watcher exists for. DeepSeek V4.1
+#: Flash: not moderated, thinking can be switched off, ~216 tokens a second,
+#: clean Russian for its family (RuQualBench), zero-retention routes
+#: (docs/MODELS-RESEARCH-2026-10-09.md).
+UNMODERATED_MODEL: str = os.getenv("UNMODERATED_MODEL", "deepseek/deepseek-v4.1-flash")
+#: Zero data retention on every background call (brain._router_once): the
+#: provider keeps nothing of what it is sent and cannot train on it.
+BACKGROUND_ZDR: bool = os.getenv("BACKGROUND_ZDR", "1").strip().lower() not in ("0", "false", "no")
 #: Hard ceiling. It runs concurrently with work the turn was doing anyway, so
 #: it normally costs no wall time at all — but a hung connection must never be
 #: what stands between somebody and their answer. Missing the alarm once is
@@ -228,7 +239,14 @@ FLUX_EOT_TIMEOUT_MS: int = int(os.getenv("FLUX_EOT_TIMEOUT_MS", "5000"))
 LIVE_IDLE_SECONDS: float = float(os.getenv("LIVE_IDLE_SECONDS", "120"))
 
 # --- Memory: embeddings for semantic story recall (reuses the OpenAI key) --
-EMBEDDING_MODEL: str = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
+#: Through OpenRouter since 2026-10-09 (app/embeddings.py): the best Russian
+#: similarity of any model an API serves, on the one key the owner has.
+#: A bare id («text-embedding-3-small») still goes to OpenAI.
+EMBEDDING_MODEL: str = os.getenv("EMBEDDING_MODEL", "qwen/qwen3-embedding-8b")
+#: The one host every vector comes from: two hosts of «the same» model can
+#: give slightly different vectors (one serves it at fp8), and vectors that
+#: are compared must come from the same place. Zero-retention.
+EMBEDDING_PROVIDER: str = os.getenv("EMBEDDING_PROVIDER", "deepinfra/us")
 # Smaller dimension = lighter storage + faster similarity, still strong for one user.
 EMBEDDING_DIM: int = int(os.getenv("EMBEDDING_DIM", "512"))
 

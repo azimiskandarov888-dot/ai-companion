@@ -50,7 +50,10 @@ def test_semantic_recall_orders_by_relevance(monkeypatch):
     memory.add_memory(U, "story", "Танцевал на свадьбе", owner="elder",
                       title="Свадьба", embedding=[0.0, 1.0, 0.0])
 
-    async def fake_embed(text):
+    asked: list[bool] = []
+
+    async def fake_embed(text, *, query=False):
+        asked.append(query)
         return [0.95, 0.05, 0.0]  # close to the fishing story
 
     monkeypatch.setattr(embeddings, "available", lambda: True)
@@ -58,6 +61,8 @@ def test_semantic_recall_orders_by_relevance(monkeypatch):
 
     picked = asyncio.run(memory.recall_relevant(U, "расскажи про рыбалку", k=2))
     assert picked and picked[0]["title"] == "Рыбалка"
+    # Their words are searched WITH — the model is told so; the notes are not.
+    assert asked == [True]
 
 
 def test_recall_falls_back_to_recency_without_embeddings(monkeypatch):

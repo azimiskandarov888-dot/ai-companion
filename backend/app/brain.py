@@ -465,10 +465,42 @@ async def _router_stream(history, system_stable: str, system_variable: str, *,
 # the model behind each agent is a line in config — the winner of the owner's
 # own test (myself.py), whoever makes it.
 
-#: How hard a background model may think, in OpenRouter's words. Ours are
-#: Anthropic's (low … max); OpenRouter takes low / medium / high and maps them
-#: onto each vendor's own.
-_ROUTER_EFFORT = {"xhigh": "high", "max": "high"}
+#: How hard a background model may think. Passed as asked: OpenRouter's
+#: catalogue (2026-10-09) offers Opus up to «max», GPT up to «xhigh», and some
+#: models only max / high / low — a level a model does not take, or «none» to
+#: one that must think, is answered with a 400 and asked once more at the
+#: nearest level every model takes (_router_once). It used to fold xhigh and
+#: max into high, so the writer could never be tested at xhigh — where Opus 5
+#: moves from 5th to 2nd on a story with ten required details
+#: (docs/MODELS-RESEARCH-2026-10-09.md).
+#:
+#: «none» is thinking switched off — explicitly, because left alone Sonnet 5
+#: thinks at «high» and Haiku 5.5 at «medium» before every answer: dearer, and
+#: for an agent that must invent nothing, worse (Vectara: the same model
+#: invents 8.4% at low effort, 10.8% at high). OpenAI's models take it as an
+#: effort; the rest as «enabled: false».
+
+
+class Refused(RuntimeError):
+    """OpenRouter's moderation stopped these words before the model saw them
+    (403). Every Anthropic and OpenAI model there is moderated (catalogue,
+    2026-10-09) — and what it stops is the heaviest thing a person says, the
+    very words the watcher exists for and the scribe must not lose. Raised
+    apart from other failures so that they can ask a model without moderation
+    instead (config.UNMODERATED_MODEL)."""
+
+
+class _Unthinkable(RuntimeError):
+    """The model would not think the way it was asked (a 400 about reasoning)."""
+
+
+def _reasoning(model: str, effort: str | None) -> dict | None:
+    """The request's «reasoning», or None to leave the model to its own."""
+    if effort is None:
+        return None
+    if effort == "none":
+        return {"effort": "none"} if model.startswith("openai/") else {"enabled": False}
+    return {"effort": effort}
 
 #: The ceiling on what a background call may write, thinking included. Larger
 #: than the app's own numbers, which were sized for Claude's API: through
@@ -508,23 +540,51 @@ async def _router_once(system_prompt: str, user_text: str, *, model: str, max_to
     Streamed, like the voice, and for the same reason: `timeout` stays what it
     is on the Claude road — a stall detector, the longest the line may stay
     silent — and not a cap on a long answer that is still arriving.
+
+    Every one of them asks for zero data retention (config.BACKGROUND_ZDR):
+    what passes here is a person's own talk, a teenager's or an old man's, and
+    the reading of them — the most private thing the app holds. Every model
+    the app or the owner's test uses has such a route (OpenRouter's ZDR list,
+    2026-10-09); a model that has none is refused outright, never sent the
+    talk somewhere it is kept.
     """
+    thinks = effort not in (None, "none")
     body: dict = {
         "model": model,
         "max_tokens": max(max_tokens, (_ROUTER_FLOOR_THINKING.get(effort, _ROUTER_FLOOR_DEEP)
-                                       if effort else _ROUTER_FLOOR)),
+                                       if thinks else _ROUTER_FLOOR)),
         "messages": [{"role": "system", "content": system_prompt},
                      {"role": "user", "content": user_text}],
         "stream": True,
         "usage": {"include": True},
     }
-    if effort:
-        body["reasoning"] = {"effort": _ROUTER_EFFORT.get(effort, effort)}
+    if config.BACKGROUND_ZDR:
+        body["provider"] = {"zdr": True}
+    if (asked := _reasoning(model, effort)) is not None:
+        body["reasoning"] = asked
+    try:
+        return await _read_once(body, timeout)
+    except _Unthinkable:
+        # Once more at the nearest level every model takes: thinking that
+        # cannot be switched off thinks a little; a level it does not offer
+        # becomes «high».
+        body["reasoning"] = {"effort": "low" if not thinks else "high"}
+        return await _read_once(body, timeout)
+
+
+async def _read_once(body: dict, timeout: float | None) -> str:
+    model = body["model"]
     text, finish, cost = "", None, 0.0
     quiet = httpx.Timeout(timeout or 300.0, connect=10.0)
     async with _get_router().stream("POST", "/chat/completions", json=body, timeout=quiet) as r:
         if r.status_code != 200:
-            raise _router_failed(r.status_code, (await r.aread()).decode("utf-8", "replace"))
+            said = (await r.aread()).decode("utf-8", "replace")
+            if r.status_code == 403:
+                raise Refused(f"OpenRouter: модерация не пропустила ({model}): {said[:200]}")
+            if r.status_code == 400 and "reasoning" in body and (
+                    "reason" in said.lower() or "effort" in said.lower()):
+                raise _Unthinkable(said[:200])
+            raise _router_failed(r.status_code, said)
         async for line in r.aiter_lines():
             if not line.startswith("data:"):
                 continue  # keep-alive comments while it thinks
@@ -532,8 +592,11 @@ async def _router_once(system_prompt: str, user_text: str, *, model: str, max_to
             if data == "[DONE]":
                 break
             chunk = json.loads(data)
-            if chunk.get("error"):
-                raise RuntimeError(f"OpenRouter: {chunk['error']}")
+            if error := chunk.get("error"):
+                # Moderation can also arrive after «200 OK», inside the stream.
+                if isinstance(error, dict) and str(error.get("code")) == "403":
+                    raise Refused(f"OpenRouter: модерация не пропустила ({model}): {error}")
+                raise RuntimeError(f"OpenRouter: {error}")
             cost = float((chunk.get("usage") or {}).get("cost") or cost)
             choice = (chunk.get("choices") or [{}])[0]
             finish = choice.get("finish_reason") or finish
@@ -921,7 +984,7 @@ async def generate_text(
                                   max_tokens=max_tokens, effort=effort, timeout=timeout)
     client = _get_client()
     extra = {"timeout": timeout} if timeout is not None else {}
-    if effort:
+    if effort and effort != "none":
         extra["output_config"] = {"effort": effort}
     async with client.messages.stream(
         model=model,

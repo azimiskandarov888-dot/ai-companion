@@ -773,7 +773,7 @@ async def recall_relevant(
     q = None
     if embeddings.available() and query_text.strip():
         try:
-            q = await embeddings.embed(query_text)
+            q = await embeddings.embed(query_text, query=True)
         except Exception:
             q = None
 
