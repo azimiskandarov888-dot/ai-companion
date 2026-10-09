@@ -234,6 +234,7 @@ def _persona_block_en(p: dict) -> str:
     add("Your character", p.get("personality"))
     add("How you talk (your own words — where they fit and now and then, not in every "
         "sentence)", p.get("speech_style"))
+    add("What makes you laugh and how you joke", p.get("humor"))
     add("What's on your mind (don't say it outright — just live with it)", p.get("inner_world"))
     add("Your subject — you know it inside out and could talk about it for ever. It isn't "
         "random: it's something THEY love or miss. When it comes up, don't just keep up — leave "
@@ -244,6 +245,7 @@ def _persona_block_en(p: dict) -> str:
     add("Your flaws (you really do have them — don't act them out, just be like that)",
         p.get("flaws"))
     add("Where you don't match yourself", p.get("contradiction"))
+    add("What you dream of (you rarely say it out loud)", p.get("dream"))
     add("What hasn't healed in you (you don't bring it up and don't ask for help — you just "
         "know what it's like)", p.get("wound"))
     add("What's precious to you", p.get("values"))
@@ -265,6 +267,7 @@ def _persona_block_en(p: dict) -> str:
         "truly fired up to get good at it; THEY teach you — ask, try, tell them how it went)",
         p.get("wants_to_learn"))
     add("Where you're hopeless and not ashamed of it", p.get("hopeless"))
+    add("More about you", p.get("more"))
     current = str(p.get("current_life") or "").strip()
     if current:
         lines.append(f"What's going on in your life right now: {current}.")
@@ -301,7 +304,10 @@ def _joined(value) -> str:
 
 #: Fields a friendship is allowed to reveal more of. Everything not listed
 #: here is identity and is untouchable.
-GROWABLE = ("cast", "flaws", "likes", "dislikes", "opinions", "habits", "things")
+GROWABLE = ("cast", "flaws", "likes", "dislikes", "opinions", "habits", "things",
+            # Everything that makes him him and fits no field (the owner, 2026-10-09:
+            # sections are «bare minimum, а не ограничение»).
+            "more")
 
 #: …but not without end. These lists only ever grew, and a friendship that
 #: lasts a year grew them from under two thousand characters to over twenty —
@@ -313,7 +319,7 @@ GROWABLE = ("cast", "flaws", "likes", "dislikes", "opinions", "habits", "things"
 #: A real person is a handful of things you could name about them. So: a
 #: ceiling per list.
 _MOST = {"flaws": 5, "opinions": 6, "habits": 6, "likes": 8, "dislikes": 8,
-         "cast": 6, "things": 7}
+         "cast": 6, "things": 7, "more": 8}
 
 #: And when one is full, the oldest goes — EXCEPT the first few, which are the
 #: character as written. Those are who he is; everything after them is what a
@@ -533,6 +539,7 @@ def build_persona_block(persona: dict) -> str:
     # opened seven replies of one rehearsal.
     add("Как ты говоришь (свои словечки — к месту и изредка, не в каждой фразе)",
         p.get("speech_style"))
+    add("Над чем ты смеёшься и как шутишь", p.get("humor"))
     # What's on his mind when nobody's listening. Never recited out loud — it
     # is there so that what he DOES say comes from somewhere.
     add("Что у тебя на душе (не рассказывай это прямо — просто живи с этим)",
@@ -571,6 +578,7 @@ def build_persona_block(persona: dict) -> str:
     # Real people do not match themselves. A character who does reads as
     # designed.
     add("В чём ты сам себе не соответствуешь", p.get("contradiction"))
+    add("О чём ты мечтаешь (вслух говоришь редко)", p.get("dream"))
     # Never recited, never a request. It is there so that he understands
     # somebody else's pain without needing it explained — and a lonely person
     # must never end up managing his feelings.
@@ -613,6 +621,7 @@ def build_persona_block(persona: dict) -> str:
         "загорелся дорасти до мастера; учит тебя ОН — спрашивай, пробуй, "
         "рассказывай, что вышло)", p.get("wants_to_learn"))
     add("В чём ты пустой и не стыдишься этого", p.get("hopeless"))
+    add("Ещё о тебе", p.get("more"))
 
     current = str(p.get("current_life") or "").strip()
     if current:

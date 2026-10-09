@@ -201,7 +201,10 @@ def grown(who: dict, layer: int, fields: dict) -> dict:
     hearing, sounding now like who he is turning out to be (voices.style_for)."""
     out = dict(who)
     for key, value in fields.items():
-        if not out.get(key):
+        if key == "more" and out.get("more"):
+            # The one open field: each layer adds to it, nothing in it is replaced.
+            out["more"] = persona.merge_growth(out, {"more": value})["more"]
+        elif not out.get(key):
             out[key] = value
     out["layers"] = max(persona.written(who), layer)
     voice = who.get("voice") if isinstance(who.get("voice"), dict) else {}

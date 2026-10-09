@@ -130,6 +130,8 @@ _READING_SYSTEM = """Ты читаешь человека по тому, КАК 
 - Мало текста — мало чтения. Не видно из текста — оставь поле пустой строкой: пустое честнее догадки, а недостающее доберут из разговоров.
 - register, would_ring_false, do_not_touch, closeness и what_lifts_him уходят тому, кто с ним говорит, на каждой реплике. Пиши их как короткое указание ему: что делать, а не почему.
 
+ПОЛЯ НИЖЕ — МИНИМУМ, А НЕ ПОТОЛОК. Каждое ты обязан РАССМОТРЕТЬ: поискать в его словах, а не пропустить. Но человек больше любого списка: всё важное о нём, что не легло в поля, — в more, сколько бы этого ни было. И честность важнее полноты: не видно — оставь поле пустым и запиши в unknown, чего не хватает; выдуманное поле хуже пустого.
+
 Ответь ТОЛЬКО валидным JSON без пояснений, с ключами:
 
 verdict — ГЛАВНОЕ, в двух-трёх предложениях: кто он, чего в его жизни с избытком и чего в ней нет — того, о чём он сам не попросил. Друг — для второго. Если бы от всего чтения осталось только это, друга всё равно можно было бы написать
@@ -142,7 +144,22 @@ closeness — КАК ЭТОТ ЧЕЛОВЕК ХОЧЕТ БЫТЬ НУЖНЫМ. �
 do_not_touch — что слишком больно, чтобы делать это предметом дружеского спора. Называй тему, а не его слова. Только то, где он показал, что ему больно, — не то, что он не смог сказать: «не могу сказать» чаще значит «не с кем», а не «не трогай»
 common_ground_seeds — список конкретных вещей из ЕГО жизни, которые друг мог бы честно разделить: что он любит, в том числе не по делу. Только то, что он назвал сам: выбор из двух кнопок («сова», «лето») — не любовь
 strong_at — в каком деле или знании он сам считает себя сильным и чем гордится: умение, а не черта характера. Там друг не должен быть лучше его
-hurt_by — ОСТАВЬ ПУСТЫМ. Это поле заполняется только потом, из настоящих разговоров, и только когда одно и то же повторилось дважды. Здесь доказательств взяться неоткуда: угадать, что человека заденет, нельзя, а ложная запись навсегда отнимет у друга что-то живое. Что покажется ему фальшивым — это would_ring_false, а это другое поле"""
+hurt_by — ОСТАВЬ ПУСТЫМ. Это поле заполняется только потом, из настоящих разговоров, и только когда одно и то же повторилось дважды. Здесь доказательств взяться неоткуда: угадать, что человека заденет, нельзя, а ложная запись навсегда отнимет у друга что-то живое. Что покажется ему фальшивым — это would_ring_false, а это другое поле
+temperament — его натура простыми словами, без ярлыков: откуда он берёт силы — от людей или от тишины; быстрый он или неспешный; ровный или тревожный; тянется ли к новому
+speech — как он сам говорит: коротко или длинно, рассказывает ли истории, спрашивает ли в ответ, где обрывает фразу; если даны замеры его речи (темп, паузы) — с ними
+humor — над чем он смеётся и как шутит сам: ирония, абсурд, над собой, совсем не шутит; и где шутка его заденет
+values — что для него по-настоящему важно, две-четыре вещи — по его словам и выборам, а не по тому, что принято считать правильным
+drives — к чему он сейчас стремится: цели, дела, планы — и верит ли, что выйдет
+dreams — о чём он мечтает, даже если сказал это вскользь или в шутку
+fears — чего он боится или о чём тревожится — только то, что прозвучало
+life_chapter — в какой главе жизни он сейчас: что недавно изменилось, что впереди, как выглядят его обычные дни и когда он остаётся один
+people — его круг не списком, а формой: с кем он близок, по кому скучает, кого не хватает; и какое у него одиночество — людей вокруг нет, или люди есть, но не с кем о главном
+self_story — как он рассказывает свою жизнь и себя: каким себя видит, чем гордится, о чём жалеет, где у него поворотные точки
+coping — как он сам справляется, когда трудно: делом, юмором, уходит в себя, ищет с кем поговорить (а что помогает ему от друга — это what_lifts_him)
+care — как он проявляет заботу и как принимает её: словами, делом, временем, шуткой
+becoming — каким он хочет стать: что в нём растёт и что хорошему другу стоит замечать и поддерживать
+more — список: ВСЁ остальное важное о нём, что не легло в поля выше, — короткими выводами, каждый на его словах. Поля выше — минимум, а не потолок
+unknown — список: что важно, но пока не видно, — чтобы следующее чтение это искало. Не вопросы ему: он не на допросе"""
 
 
 # ── reading him from his talks with the shadow ──────────────────────────────
@@ -166,6 +183,25 @@ _TALKS_HEAD = """Ты читаешь человека по тому, КАК он
 
 _TALKS_SYSTEM = _TALKS_HEAD + _READING_SYSTEM[_READING_SYSTEM.index("ЧТО ТЫ ДЕЛАЕШЬ"):]
 
+
+#: The sections a reading must at least LOOK at — a floor, never a ceiling
+#: (the owner, 2026-10-09: «разделы… должны быть как bare minimum, а не как
+#: ограничение»). Chosen by how people are described where it has been
+#: studied longest: the three levels of a person (McAdams & Pals 2006) —
+#: temperament and traits; what he strives for, values, fears and how he
+#: copes; the story he tells of himself — plus the two kinds of loneliness
+#: (Weiss 1973: nobody around, or nobody for what matters) and what a FRIEND
+#: needs to know (what lifts him, how he wants to be needed, what not to touch,
+#: what would ring false). Anything else that matters goes to «more», without
+#: limit; what cannot be seen yet goes to «unknown» rather than into a guess.
+#: Only register, would_ring_false, do_not_touch, closeness and what_lifts_him
+#: reach every turn (standing_block) — the rest is the writer's, so a richer
+#: reading costs a few cents once, not a little on every line.
+SECTIONS = ("verdict", "register", "would_ring_false", "would_reach_them", "needs_pushback_on",
+            "what_lifts_him", "closeness", "do_not_touch", "common_ground_seeds", "strong_at",
+            "temperament", "speech", "humor", "values", "drives", "dreams", "fears",
+            "life_chapter", "people", "self_story", "coping", "care", "becoming", "more",
+            "unknown")
 
 #: Fields whose absence means the reading didn't actually happen. Deliberately
 #: short: a reading that got the person's register and what would reach them is
@@ -554,7 +590,8 @@ async def keep_reading(user_id: str) -> None:
 #: where to push back, what lifts them. A re-reading that moves one of these
 #: is news for the writer; one that only adds a line to «learned» is not.
 SHAPES_HIM = ("verdict", "would_reach_them", "common_ground_seeds", "strong_at",
-              "needs_pushback_on", "what_lifts_him")
+              "needs_pushback_on", "what_lifts_him", "humor", "values", "drives", "dreams",
+              "people", "becoming")
 
 
 def changed(before: dict | None, after: dict | None) -> bool:
@@ -897,6 +934,19 @@ def as_brief(reading: dict | None) -> str:
 
     parts = [
         line("Главное", "verdict"),
+        line("Его натура", "temperament"),
+        line("Как он сам говорит", "speech"),
+        line("Над чем смеётся и как шутит", "humor"),
+        line("Что для него важно", "values"),
+        line("К чему стремится", "drives"),
+        line("О чём мечтает", "dreams"),
+        line("Чего боится", "fears"),
+        line("Какая у него сейчас глава жизни", "life_chapter"),
+        line("Его люди", "people"),
+        line("Как он рассказывает себя", "self_story"),
+        line("Как справляется, когда трудно", "coping"),
+        line("Как проявляет и принимает заботу", "care"),
+        line("Каким хочет стать", "becoming"),
         line("Как с ним говорить", "register"),
         line("Что показалось бы ему фальшивым", "would_ring_false"),
         line("Какое присутствие до него дойдёт", "would_reach_them"),
@@ -907,12 +957,14 @@ def as_brief(reading: dict | None) -> str:
         line("Чего не трогать", "do_not_touch"),
         line("Живая общая почва", "common_ground_seeds"),
         line("В чём он сам силён (там друг не лучше его — там он спрашивает)", "strong_at"),
+        line("Ещё о нём", "more"),
+        line("Чего о нём пока не знаем (не выдумывай)", "unknown"),
     ]
     body = "\n".join(p for p in parts if p)
     if not body:
         return ""
     return (
-        "ЧТЕНИЕ ЧЕЛОВЕКА (сделано по тому, КАК он писал; ему это никогда не показывают "
+        "ЧТЕНИЕ ЧЕЛОВЕКА (сделано по тому, КАК он писал или говорил; ему это никогда не показывают "
         "и вслух не произносят — это только чтобы выбрать и написать того, кто ему подойдёт):\n"
         + body
     )

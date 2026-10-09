@@ -1106,3 +1106,31 @@ def test_the_interview_asks_the_one_question_that_answers_it():
     # exactly what got «слишком много», and «кому позвонил бы в три ночи»
     # makes the most isolated say «никому» and asks about a crisis he can't be.
     assert "когда не спится" not in ask and "в три ночи" not in ask
+
+
+# ── sections: a floor, never a ceiling (the owner, 2026-10-09) ─────────────
+
+def test_every_section_is_asked_for_and_none_of_them_is_a_ceiling():
+    """«Разделы… должны быть как bare minimum, а не как ограничение»: each one
+    must be looked at; anything else that matters has «more», without limit;
+    what cannot be seen goes to «unknown», never into a guess."""
+    for prompt in (reading._READING_SYSTEM, reading._TALKS_SYSTEM):
+        assert "МИНИМУМ, А НЕ ПОТОЛОК" in prompt
+        for key in reading.SECTIONS:
+            assert f"\n{key} — " in prompt, key
+
+
+def test_the_writer_is_handed_all_of_it():
+    brief = reading.as_brief({"verdict": "не с кем всерьёз", "dreams": "своя мастерская",
+                              "humor": "сухая ирония", "people": "друзья есть, о главном не с кем",
+                              "more": ["помнит дни рождения всех"], "unknown": ["есть ли брат"]})
+    for said in ("своя мастерская", "сухая ирония", "о главном не с кем",
+                 "помнит дни рождения всех", "есть ли брат"):
+        assert said in brief
+
+
+def test_only_the_few_sections_meant_for_every_line_reach_every_line():
+    """A richer reading costs a few cents once, not a little on every turn."""
+    every = reading.standing_block({"register": "коротко", "dreams": "своя мастерская",
+                                    "humor": "сухая ирония", "verdict": "x"})
+    assert "своя мастерская" not in every and "сухая ирония" not in every

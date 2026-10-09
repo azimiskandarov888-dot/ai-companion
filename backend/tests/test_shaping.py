@@ -336,3 +336,30 @@ def test_a_reading_that_only_learned_a_line_does_not_reshape_him():
     before = {"verdict": "а", "learned": ["x"]}
     assert not reading.changed(before, {**before, "learned": ["x", "y"]})
     assert reading.changed(before, {**before, "verdict": "б"})
+
+
+# ── a floor, not a ceiling — for him too ────────────────────────────────────
+
+def test_his_humour_comes_with_what_he_is_like_and_his_dream_with_his_depths(models):
+    _born()
+    _talk()
+    _after_and_settle()
+    assert "humor" in matchmaker.LAYERS[0]["fields"] and "dream" in matchmaker.LAYERS[2]["fields"]
+    write = _asked(models["seen"], "Ты пишешь человека, который уже существует")[0]
+    assert "humor —" in write["system"] and "минимум, а не потолок" in write["system"]
+
+
+def test_more_only_grows_from_layer_to_layer():
+    """The one open field: each layer adds to it, nothing in it is replaced."""
+    him = shaping.grown({"name": "Лукас", "layers": 0}, 1, {"more": ["свистит, когда думает"]})
+    him = shaping.grown(him, 2, {"more": ["коллекционирует билеты"], "humor": "чужое"})
+    assert him["more"] == ["свистит, когда думает", "коллекционирует билеты"]
+    block = persona.build_persona_block(him)
+    assert "Ещё о тебе: свистит, когда думает; коллекционирует билеты" in block
+
+
+def test_we_complement_and_sometimes_the_best_complement_is_matching():
+    """The owner, 2026-10-09: «Мы не мэтчим, мы дополняем. Но иногда самое
+    лучшее дополнение это matching»."""
+    for prompt in (matchmaker._WRITE_SYSTEM, matchmaker._layer_system(2, {})):
+        assert "МЫ ДОПОЛНЯЕМ" in prompt and "иногда лучшее дополнение — совпадение" in prompt
