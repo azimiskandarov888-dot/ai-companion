@@ -232,8 +232,8 @@ async def _assemble(
     """
     if pending and user_text is None:
         raise ValueError("Only somebody's line can be pending — he never drafts a hello.")
-    # A shadow written after the last talk becomes that man here, between talks
-    # (shaping.settle) — first thing, before his file is read for this turn.
+    # A layer of him written after the last talk becomes part of him here,
+    # between talks (shaping.settle) — first thing, before his file is read.
     shaping.settle(user_id)
     # BEFORE the log, not after: this asks how long it has been since anybody
     # last said anything, and logging first makes that answer zero — forever.
@@ -532,9 +532,9 @@ def _remember(
     # never move — but who is around him, what is wrong with him and what he
     # is up to this week are things you only learn by knowing somebody.
     background_tasks.add_task(persona.deepen, user_id)
-    # A goodbye ends a talk — and while he is still a shadow, the end of every
-    # talk is when the reader reads them all and decides whether it is time
-    # to write him (shaping.py). After the scribe, which goes first above.
+    # A goodbye ends a talk — and while he is still being written, the end of
+    # every talk is when the reader reads them all and the next layer of him is
+    # written if it is time (shaping.py). After the scribe, which goes first.
     if farewell:
         background_tasks.add_task(shaping.after_talk, user_id)
 

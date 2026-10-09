@@ -565,8 +565,8 @@ class Session:
         self.ws = ws
         self.user_id = user_id
         self.duplex = duplex
-        # A shadow written after the last talk becomes that man as this one
-        # begins — never in the middle of a talk (shaping.settle).
+        # A layer of him written after the last talk becomes part of him as
+        # this one begins — never in the middle of a talk (shaping.settle).
         shaping.settle(user_id)
         self.who = voices.ensure(user_id)   # his own voice, given once and kept
         self.voice = tts.voice_for(self.who)
@@ -734,8 +734,9 @@ class Session:
                 await self.ws.close()
             except Exception:  # noqa: BLE001 — already closed from the other side
                 pass
-            # The talk is over, goodbye or not: a shadow is read now, and
-            # perhaps written (shaping.py). Kept alive like the turns' learning.
+            # The talk is over, goodbye or not: the person is read now, and the
+            # next layer of him perhaps written (shaping.py). Kept alive like
+            # the turns' learning.
             _track(asyncio.create_task(shaping.after_talk(self.user_id)))
 
     async def stop(self, message: dict | None = None) -> None:

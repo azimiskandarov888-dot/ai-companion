@@ -355,43 +355,63 @@ def _their_story(
     return text
 
 
-# ── the shadow: who somebody meets in the first second ──────────────────────
+# ── one companion, from a blank to somebody ─────────────────────────────────
 #
-# The owner, 2026-10-08: no interviewer. From the first second the person talks
-# to HIM — at first «a shadow with no exact personality, like real people do in
-# real world», and after several talks, once the reader knows what this person
-# needs, somebody written for them (shaping.py). So he begins as a sketch:
-# what a stranger shows on the first evening — a name, an age, a place, what
-# he does, what is going on — and nothing of a character, a manner, a story.
-# Ten very different strangers from what was given at the door, and the dice
-# choose one, exactly as below and for the same reason: asked to choose, a
-# model picks its safe favourite.
+# The owner, 2026-10-09: «Мы не должны создавать отдельного агента для этого…
+# тень будет тем же самым компаньоном. Только сначала он будет как пустая
+# бланка. Сперва с рандомным именем. И если у юзера будут какие-то
+# предпочтения… с самого начала он будет с ними, но все еще пустой».
+# In real life a person you have just met does not open up at once — shy, or
+# simply neutral — and shows his character, his interests, himself, the more
+# you talk. Ours is not revealed but WRITTEN over time, because to write him
+# we must know the person; to the person it looks the same.
 #
-# He never lives where the person does: abroad, or on the road
-# (docs/FIRST-MEETING.md §6) — somebody from elsewhere is more interesting,
-# and not being able to drop by is natural rather than an excuse.
+# So nobody is invented at the door. He is born from what was given there: a
+# random name — the dice, with no model and no wait — and the person's own
+# wishes, which hold from the first second. Everything else is blank, and is
+# written in LAYERS as the two of them get to know each other (shaping.py),
+# each layer once and never rewritten: what he is like; what he lives for and
+# what he is for THIS person; his depths. Before a layer exists he answers
+# plainly whatever he is asked, and what he says is law for the layers after.
 
-_SHADOW_TEN_SYSTEM = """Ты придумываешь людей — совершенно разных.
-
-Человек только что пришёл знакомиться и ещё ничего о себе не рассказал. Известно лишь то, что он указал при входе, — и кого он хотел бы встретить. Придумай ДЕСЯТЬ разных людей, с каждым из которых он мог бы разговориться как с незнакомцем, а потом, может быть, подружиться. Твоя работа — РАЗБРОС: покажи ширину человеческой жизни.
-
-Это только НАБРОСОК — каким человек кажется со стороны в первый вечер: имя, возраст, где живёт, чем занят и что у него сейчас происходит. Характер, манеру речи, историю, увлечения и людей вокруг не пиши: их напишут потом, когда станет ясно, кто этому человеку нужен. Набросок должен оставить для этого место.
-
-Требования к десятке:
-- Все десять НЕ ПОХОЖИ друг на друга: разные десятилетия жизни (от двадцати с лишним до восьмидесяти с лишним, если пожелания не говорят иного), разные края и города, разные занятия, разные обстоятельства.
-- НИКТО ИЗ НИХ НЕ ЖИВЁТ ТАМ, ГДЕ ЧЕЛОВЕК. Каждый либо давно живёт в другой стране — и на языке разговора говорит как на родном, — либо он в дороге: моряк, дальнобойщик, проводник, вахтовик, путешественник. Страны и дороги у десяти разные.
-- ПОЖЕЛАНИЯ ЧЕЛОВЕКА — закон для всех десяти. Внутри закона всё равно сделай их разными.
-- Обычная жизнь, без громкого: ни бед, ни славы, ни необычных талантов — ничего, что потом пришлось бы объяснять в каждом разговоре.
-- Никто не копия живого или умершего человека. Никакой мистики, никаких программ и ИИ — просто люди.
-- СЛУЧАЙНЫЕ ИСКРЫ в конце — толчки воображению: пусть какие-то отзовутся в ком-то местом, занятием или тем, что у него сейчас. Не вставляй слова буквально ради галочки.
-
-Ответь ТОЛЬКО JSON — массивом из десяти объектов, без пояснений:
-[{"name": "имя", "gender": "мужской" или "женский", "age": "например «34 года»", "home": "где живёт — город и страна, или где он сейчас в дороге", "doing": "чем занят — одной фразой", "now": "что у него сейчас происходит — одной фразой, обычное"}, …]"""
-
-#: What every stranger must have. Without a name he cannot introduce himself;
-#: without a gender his voice and his grammar are a guess; without an age and
-#: a place he is nobody yet even from the outside.
-_SHADOW_FIELDS = ("name", "gender", "age", "home")
+#: A random name — the only thing the dice decide about him. Common names of
+#: three generations, so that a friend of a 15-year-old is not an Аркадий and a
+#: friend of an 80-year-old is not a Милана (an age nobody chose → the middle).
+_NAMES = {
+    ("ru", "м"): {
+        "young": ("Артём", "Максим", "Матвей", "Тимур", "Даниил", "Кирилл", "Марк", "Лев",
+                  "Егор", "Арсений", "Глеб", "Ярослав", "Мирон", "Савва", "Тимофей", "Платон"),
+        "middle": ("Алексей", "Дмитрий", "Андрей", "Сергей", "Павел", "Антон", "Евгений", "Олег",
+                   "Денис", "Вадим", "Руслан", "Игорь", "Константин", "Виталий", "Роман", "Артур"),
+        "old": ("Виктор", "Анатолий", "Геннадий", "Валерий", "Борис", "Юрий", "Николай",
+                "Василий", "Владимир", "Леонид", "Аркадий", "Эдуард", "Вячеслав", "Григорий",
+                "Фёдор", "Семён"),
+    },
+    ("ru", "ж"): {
+        "young": ("Алиса", "Варвара", "Ева", "Милана", "Вероника", "Ульяна", "Полина", "Софья",
+                  "Злата", "Арина", "Таисия", "Кира", "Мирослава", "Василиса", "Есения", "Майя"),
+        "middle": ("Анна", "Ольга", "Екатерина", "Наталья", "Ирина", "Юлия", "Марина", "Светлана",
+                   "Елена", "Ксения", "Дарья", "Алёна", "Вера", "Лариса", "Инна", "Жанна"),
+        "old": ("Валентина", "Людмила", "Галина", "Тамара", "Нина", "Зинаида", "Лидия", "Раиса",
+                "Антонина", "Надежда", "Римма", "Нелли", "Эльвира", "Клавдия", "Алла", "Маргарита"),
+    },
+    ("en", "м"): {
+        "young": ("Liam", "Noah", "Ethan", "Mason", "Owen", "Leo", "Caleb", "Finn", "Jonah", "Theo",
+                  "Miles", "Eli", "Kai", "Ezra", "Jude", "Silas"),
+        "middle": ("Mark", "Daniel", "Chris", "Matt", "Ryan", "Adam", "Ben", "Paul", "Greg", "Neil",
+                   "Simon", "Craig", "Tom", "Scott", "Jason", "Brian"),
+        "old": ("Frank", "Walter", "Harold", "Albert", "Arthur", "George", "Stanley", "Leonard",
+                "Ernest", "Raymond", "Howard", "Gerald", "Ralph", "Clifford", "Norman", "Eugene"),
+    },
+    ("en", "ж"): {
+        "young": ("Ava", "Mia", "Isla", "Chloe", "Nora", "Zoe", "Lily", "Ruby", "Maya", "Ellie",
+                  "Hazel", "Ivy", "Stella", "Willow", "Cleo", "Freya"),
+        "middle": ("Sarah", "Emma", "Laura", "Kate", "Rachel", "Helen", "Amy", "Claire", "Lisa",
+                   "Anna", "Jenny", "Megan", "Ruth", "Holly", "Diane", "Julia"),
+        "old": ("Margaret", "Dorothy", "Betty", "Joan", "Shirley", "Barbara", "Patricia", "Doris",
+                "Irene", "Evelyn", "Gloria", "Phyllis", "Marjorie", "Lorraine", "Edith", "Vera"),
+    },
+}
 
 #: A teenager meets somebody their own age — the same law as for the writer's
 #: ten (_their_story), said where it is read.
@@ -403,66 +423,11 @@ _PEER = (
     "что у них дома."
 )
 
-
-def newcomer(*, country: str = "", wants: str = "", band: str = "") -> str:
-    """What is known before a word is said: what they gave at the door."""
-    text = "Человек ещё ничего о себе не рассказал."
-    if country.strip():
-        text += f"\nОткуда он: {country.strip()} — друг живёт НЕ там."
-    law = [part for part in (_PEER if band == "teen" else "", wants.strip()) if part]
-    if law:
-        return text + "\n\nКого он хотел бы встретить (закон):\n" + "\n".join(law)
-    return text + "\n\nПожеланий о друге он не оставил — тем свободнее."
-
-
-def _shadows(raw: str) -> list[dict]:
-    """The ten, read out of the reply; a stranger missing what every stranger
-    has is left out rather than patched."""
-    start, end = raw.find("["), raw.rfind("]")
-    if start == -1 or end <= start:
-        _log_extract_failure("наброски тени — в ответе нет списка", raw)
-        raise RuntimeError(_FAIL)
-    try:
-        items = json.loads(raw[start : end + 1])
-    except json.JSONDecodeError as e:
-        _log_extract_failure(f"наброски тени — JSON не разобрался: {e}", raw)
-        raise RuntimeError(_FAIL)
-    ten = [i for i in items if isinstance(i, dict)
-           and all(str(i.get(k) or "").strip() for k in _SHADOW_FIELDS)]
-    if len(ten) < 2:
-        _log_extract_failure("наброски тени — меньше двух целых", raw)
-        raise RuntimeError(_FAIL)
-    return ten
-
-
-async def sketch_shadows(context: str, rng: random.Random | None = None) -> list[dict]:
-    """Ten strangers from the door, one call — as sketch_ten, on the same model
-    at the same low effort, and for the same reason: breadth, not depth."""
-    prompt = context + "\n\nСЛУЧАЙНЫЕ ИСКРЫ (толчки воображению): " + ", ".join(_roll_sparks(rng))
-    failure: RuntimeError | None = None
-    for _attempt in range(2):     # one retry, as write_him: a broken JSON is a real, passing failure
-        raw = await brain.generate_text(
-            _SHADOW_TEN_SYSTEM + lang.write_in(), prompt, max_tokens=2000,
-            model=config.WRITER_MODEL, effort="low", timeout=_STAGE_TIMEOUT,
-        )
-        try:
-            return _shadows(raw)
-        except RuntimeError as e:
-            failure = e
-    assert failure is not None
-    raise failure
-
-
-def as_sketch(stranger: dict) -> str:
-    """One stranger as the writer will be handed him later («разверни его»)."""
-    def said(key: str) -> str:
-        return str(stranger.get(key) or "").strip().rstrip(".")
-
-    line = ", ".join(b for b in (said("name"), said("age")) if b) + "."
-    for label, key in (("Где живёт", "home"), ("Чем занят", "doing"), ("Сейчас", "now")):
-        if said(key):
-            line += f" {label}: {said(key)}."
-    return line
+_WOMAN = re.compile(r"\b(девушк\w*|женщин\w*|подруг\w*|девочк\w*|бабушк\w*|girl\w*|wom[ae]n|female|lady)\b", re.I)
+_MAN = re.compile(r"\b(парн\w*|парень|мужчин\w*|мужик\w*|мальчик\w*|дедушк\w*|guy\w*|m[ae]n|male|boy\w*)\b", re.I)
+_OLDER = re.compile(r"(постарше|старше|older)", re.I)
+_YOUNGER = re.compile(r"(помладше|младше|younger)", re.I)
+_SAME = re.compile(r"(ровесни\w*|my age|same age)", re.I)
 
 
 def _years(text: str) -> int | None:
@@ -483,61 +448,187 @@ def address(their_age: str, his_age: str, band: str = "") -> str:
     return "ты" if theirs < 35 and his < 35 and abs(theirs - his) <= 10 else "вы"
 
 
-def as_shadow(stranger: dict, *, their_age: str = "", band: str = "") -> dict:
-    """The stranger the dice chose, as a persona: what shows from the outside,
-    the sketch kept whole for the writer, and the mark that he is a shadow."""
-    return {
-        "name": str(stranger["name"]).strip(),
-        "gender": str(stranger["gender"]).strip(),
-        "age": str(stranger["age"]).strip(),
-        "home": str(stranger["home"]).strip(),
-        "one_liner": str(stranger.get("doing") or "").strip(),
-        "current_life": str(stranger.get("now") or "").strip(),
-        "address": address(their_age, str(stranger["age"]), band),
-        "sketch": as_sketch(stranger),
-        "shadow": True,
-    }
-
-
-async def create_shadow(
-    user_id: str,
-    *,
-    age: str = "",
-    country: str = "",
-    wants: str = "",
-    band: str = "",
-    rng: random.Random | None = None,
-) -> dict:
-    """Who this person meets in the first second: ten strangers → the dice →
-    a shadow, saved as their companion. `age` is THEIR age, for «ты»/«вы»
-    only; `wants` is whom they would like to meet, in words — law.
-
-    A new friend is a clean slate, as in create_companion: the old one is
-    erased only once there is definitely somebody to replace him with."""
+def wished(wants: str, *, their_age: str = "", band: str = "",
+           rng: random.Random | None = None) -> tuple[str, str]:
+    """His gender and age from the person's own words at the door — «с девушкой
+    постарше», «a guy my age», «35» — or by the dice where they said nothing.
+    The age stays BLANK when nothing decides it: he will say it when asked,
+    and that is law. A teenager's friend is always their own age."""
     r = rng or random
-    ten = await sketch_shadows(newcomer(country=country, wants=wants, band=band), rng)
-    shadow = as_shadow(r.choice(ten), their_age=age, band=band)
+    text = wants or ""
+    woman, man = bool(_WOMAN.search(text)), bool(_MAN.search(text))
+    gender = "женский" if woman and not man else "мужской" if man and not woman else \
+        r.choice(("мужской", "женский"))
+    theirs = _years(their_age)
+    if band == "teen":
+        middle = theirs if theirs is not None else 16
+        return gender, f"{min(18, max(14, middle + r.choice((-1, 0, 1))))}"
+    said = re.search(r"\b(1[89]|[2-9]\d)\b", text)
+    if said:
+        return gender, said.group(1)
+    if theirs is not None and _OLDER.search(text):
+        return gender, f"{theirs + r.randint(5, 15)}"
+    if theirs is not None and _YOUNGER.search(text):
+        return gender, f"{max(18, theirs - r.randint(5, 15))}"
+    if theirs is not None and _SAME.search(text):
+        return gender, f"{max(18, theirs + r.randint(-3, 3))}"
+    return gender, ""
+
+
+def random_name(gender: str, age: str = "", rng: random.Random | None = None) -> str:
+    years = _years(age)
+    generation = "middle" if years is None else "young" if years <= 25 else \
+        "middle" if years <= 55 else "old"
+    pool = _NAMES[("en" if lang.english() else "ru", "ж" if gender.startswith("ж") else "м")]
+    return (rng or random).choice(pool[generation])
+
+
+def blank(*, wants: str = "", their_age: str = "", band: str = "",
+          rng: random.Random | None = None) -> dict:
+    """Who somebody meets in the first second: a name and their own wishes,
+    and nothing else written yet (layers 0)."""
+    gender, age = wished(wants, their_age=their_age, band=band, rng=rng)
+    him = {"name": random_name(gender, age, rng), "gender": gender,
+           "address": address(their_age, age, band), "layers": 0}
+    if age:
+        him["age"] = age
+    if wants.strip():
+        him["given"] = wants.strip()
+    return him
+
+
+def create_blank(user_id: str, *, wants: str = "", their_age: str = "", band: str = "",
+                 rng: random.Random | None = None) -> dict:
+    """The companion, born blank — instantly, with no model at all. A new one
+    is a clean slate, as in create_companion."""
+    him = blank(wants=wants, their_age=their_age, band=band, rng=rng)
     erase.the_companion(user_id)
-    return persona.save_persona(user_id, {**shadow, "voice": voices.choose(shadow)})
+    return persona.save_persona(user_id, {**him, "voice": voices.choose(him)})
 
 
-def portrait_context(*, talks: str, facts: str, brief: str, band: str = "", wants: str = "") -> str:
-    """What the writer is given when the shadow becomes somebody: their talks
-    as they went, what the scribe kept about the person, the reading — and the
-    law of what he already said about himself, which he cannot take back."""
-    law = [part for part in (_PEER if band == "teen" else "", wants.strip()) if part]
+# ── the layers, written as they get to know each other ──────────────────────
+
+#: What each field is, said to the writer — the same as the whole-person
+#: schema's (_WRITE_SYSTEM), one field at a time.
+FIELD_HINTS = {
+    "one_liner": "кто он в двух словах — одной строкой, без оценок",
+    "age": "сколько ему лет, например «34 года»",
+    "home": "где он живёт — НЕ там, где человек: другая страна или дорога; если он уже сказал — ровно так",
+    "roots": "откуда он родом",
+    "personality": "его нрав — по-человечески, без ярлыков",
+    "speech_style": "его манера: как строит фразы, одно-два своих словечка — к месту и изредка",
+    "values": "что ему дорого",
+    "current_life": "что у него происходит на этой неделе — конкретно и живо",
+    "expertise": "его тема: то, что человек любит или по чему скучает, но не то, в чём человек сам силён; и он в ней АС",
+    "wants_to_learn": "одной-двумя фразами: в чём он почти ноль и загорелся научиться — там, где силён сам человек",
+    "hopeless": "список — одно-два, в чём он пустой",
+    "likes": "список",
+    "dislikes": "список — включая честное «не люблю» из того, что человек, похоже, любит",
+    "opinions": "список — включая одно житейское несогласие с человеком",
+    "habits": "список строк",
+    "things": "список — 3–4 его вещи или угла",
+    "cast": "список объектов {\"name\": ..., \"who\": ..., \"between\": ...} — 2–4 живых человека рядом и что между вами на самом деле",
+    "intention": "одно обычное дело, которое он затеял и никак не доделает",
+    "backstory": "3–5 предложений его судьбы — не споря ни с чем, что о нём уже известно",
+    "flaws": "список — два-три настоящих недостатка, не достоинства в маскировке",
+    "contradiction": "одно, в чём он сам себе не соответствует",
+    "wound": "что у него не зажило — он об этом не говорит и помощи не просит",
+    "inner_world": "что у него на душе, когда не с кем говорить",
+}
+
+#: The order people open up in (the owner: shy or neutral first, then «он
+#: показывает свой характер… ты понимаешь его персону, его интересы»): what he
+#: is like; then what he lives for and what he is for THIS person; then his
+#: depths. When each is written is shaping.py's.
+LAYERS = (
+    {"name": "какой он",
+     "fields": ("one_liner", "age", "home", "roots", "personality", "speech_style", "values",
+                "current_life"),
+     "required": ("home", "personality", "speech_style")},
+    {"name": "чем он живёт и зачем он этому человеку",
+     "fields": ("expertise", "wants_to_learn", "hopeless", "likes", "dislikes", "opinions",
+                "habits", "things", "cast", "intention"),
+     "required": ("expertise", "things", "intention")},
+    {"name": "его глубина",
+     "fields": ("backstory", "flaws", "contradiction", "wound", "inner_world"),
+     "required": ("backstory", "flaws")},
+)
+
+_LAYER_HEAD = """Ты пишешь человека, который уже существует, — постепенно, слой за слоем, так же, как в жизни человек открывается тому, с кем всё больше разговаривает.
+
+Он уже разговаривает с этим человеком. Начинал он почти пустым — с именем и с тем, каким его хотели встретить; что-то о нём написано раньше, что-то он сам сказал в разговорах. ВСЁ ЭТО ЗАКОН: ни одного противоречия, ни одной замены — разворачивай сказанное, а не переписывай. Твоя работа — дописать СЛЕДУЮЩИЙ СЛОЙ: только поля, перечисленные в конце. Остального не пиши — ему ещё рано.
+
+Порядок силы (строго):
+1. ПОЖЕЛАНИЯ ЧЕЛОВЕКА — закон.
+2. ТО, ЧТО О НЁМ УЖЕ ЕСТЬ, И ВСЁ, ЧТО ОН САМ СКАЗАЛ О СЕБЕ, — закон.
+3. ЧТЕНИЕ ЧЕЛОВЕКА — по нему ты решаешь, ЗАЧЕМ он ему и как говорит; не давай ему знать того, чего человек ему не рассказывал.
+4. Твой вкус — в глубине. СЛУЧАЙНЫЕ ИСКРЫ в конце — толчки воображению, чтобы он не вышел самым вероятным человеком на свете: пусть какие-то отзовутся местом, ремеслом, привычкой или историей; не вставляй их ради галочки.
+
+"""
+
+
+def _layer_system(layer: int, already: dict) -> str:
+    """The writer's rules for one layer: the whole-person rules — how a field
+    is written well does not depend on when — and only this layer's fields."""
+    rules = _WRITE_SYSTEM[_WRITE_SYSTEM.index("Правила:"):_WRITE_SYSTEM.index("Ответь ТОЛЬКО валидным JSON")]
+    asked = [f for f in LAYERS[layer - 1]["fields"] if not already.get(f)]
+    tail = ("Ответь ТОЛЬКО валидным JSON без пояснений — ТОЛЬКО с этими ключами, каждый заполни:\n"
+            + "\n".join(f"{f} — {FIELD_HINTS[f]}" for f in asked))
+    return _LAYER_HEAD + rules + tail + lang.write_in()
+
+
+def layer_context(*, now: dict, his_words: str, facts: str, brief: str, talks: str,
+                  band: str = "") -> str:
+    """What the writer is given for a layer: who he already is and what he
+    said (law), what the person told, the reading — and their talks."""
+    written = {k: v for k, v in now.items()
+               if not k.startswith("_") and k not in ("voice", "layers", "given")}
+    peer = ("ЕМУ САМОМУ НЕТ ВОСЕМНАДЦАТИ — друг его ровесник, и всё в друге — как у "
+            "человека его лет: школа, дом, родители, то, чем живут в эти годы.")
+    law = [part for part in (peer if band == "teen" else "", str(now.get("given") or "")) if part]
     parts = [
-        "Они уже разговаривали — он был с человеком незнакомцем, без характера, "
-        "просто собой снаружи. Теперь его пишут целиком, для этого человека.",
-        "ЧТО ЧЕЛОВЕК РАССКАЗАЛ О СЕБЕ (как запомнила память):\n" + (facts.strip() or "— почти ничего"),
+        "КТО ОН УЖЕ ЕСТЬ (закон):\n" + json.dumps(written, ensure_ascii=False, indent=1),
+        "ЧТО ОН САМ ГОВОРИЛ О СЕБЕ В РАЗГОВОРАХ (закон):\n" + (his_words.strip() or "— пока ничего"),
+        "ЧТО ЧЕЛОВЕК РАССКАЗАЛ О СЕБЕ (по памяти):\n" + (facts.strip() or "— почти ничего"),
     ]
     if law:
-        parts.append("Кого он хотел бы встретить (закон):\n" + "\n".join(law))
+        parts.append("Каким человек хотел его встретить (закон):\n" + "\n".join(law))
     if brief.strip():
         parts.append(brief.strip())
-    parts.append("ИХ РАЗГОВОРЫ — дословно. Всё, что он сам сказал здесь о себе, — закон:\n\n"
-                 + talks.strip())
+    parts.append("ИХ РАЗГОВОРЫ — дословно:\n\n" + talks.strip())
     return "\n\n".join(parts)
+
+
+async def write_layer(context: str, layer: int, already: dict,
+                      rng: random.Random | None = None) -> dict:
+    """One layer of him — only its fields, only those still empty. One retry,
+    as write_him: a broken JSON is a real, passing failure."""
+    spec = LAYERS[layer - 1]
+    prompt = context + "\n\nСЛУЧАЙНЫЕ ИСКРЫ (толчки воображению): " + ", ".join(_roll_sparks(rng))
+    failure: RuntimeError | None = None
+    for _attempt in range(2):
+        raw = await brain.think(
+            _layer_system(layer, already), prompt,
+            model=config.WRITER_MODEL, effort=config.WRITER_EFFORT,
+            max_tokens=_WRITE_MAX_TOKENS, timeout=_WRITE_TIMEOUT,
+        )
+        start, end = raw.find("{"), raw.rfind("}")
+        try:
+            data = json.loads(raw[start : end + 1]) if 0 <= start < end else None
+        except json.JSONDecodeError:
+            data = None
+        if isinstance(data, dict):
+            got = {f: data[f] for f in spec["fields"]
+                   if f in data and not already.get(f) and str(data[f]).strip()}
+            missing = [f for f in spec["required"] if not already.get(f) and f not in got]
+            if not missing:
+                return got
+            _log_extract_failure(f"слой {layer}: нет полей {', '.join(missing)}", raw)
+        else:
+            _log_extract_failure(f"слой {layer}: не JSON", raw)
+        failure = RuntimeError(_FAIL)
+    assert failure is not None
+    raise failure
 
 
 # ── the stages, each on its own ─────────────────────────────────────────────

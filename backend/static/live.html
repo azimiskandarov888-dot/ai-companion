@@ -94,8 +94,8 @@
       const statusEl = $("status"), hearingEl = $("hearing"), convo = $("convo");
       const startBtn = $("start"), doneBtn = $("done"), freshBtn = $("fresh"), duplexBox = $("duplex");
 
-      // Opened as /live#me: YOUR friend — the shadow `python3 myself.py shadow`
-      // made, and later who he becomes — the same token there and here. The
+      // Opened as /live#me: YOUR friend — born blank by `python3 myself.py begin`,
+      // and written as you talk — the same token there and here. The
       // «#» part never reaches the server, so it is never in any log.
       const MY_FRIEND = "myself-live-friend-0001";
       const mine = location.hash === "#me";
@@ -346,9 +346,9 @@
         add("note", "", "Новая встреча: нажми «Начать разговор» — он поздоровается первым.");
       };
       if (mine) {
-        // Your own friend: starting over with him is `python3 myself.py shadow`.
+        // Your own friend: starting over with him is `python3 myself.py begin`.
         freshBtn.style.display = "none";
-        add("note", "", "Твой друг. Совсем заново — python3 myself.py shadow в терминале.");
+        add("note", "", "Твой друг. Совсем заново — python3 myself.py begin в терминале.");
       }
       // Opened where no microphone will ever be given (an iPhone, an address
       // that is not https or localhost): say so now, not after a press.

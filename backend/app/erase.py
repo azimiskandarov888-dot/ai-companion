@@ -88,9 +88,9 @@ THEIRS = ("places", "usage", "alerts", "ages")
 #: them against a visit count that has just gone back to zero, gets a negative
 #: number, and quietly never re-reads the person again.
 _FRIENDSHIP_COUNTERS = ("_read_at_visit", "_read_at_turn", "_confirmed_at_read",
-                        # the shadow's readings (shaping.STATE): a new friend is
-                        # a new shadow, and is not written from the old one's count
-                        "_shadow")
+                        # the reader's count while he is being written
+                        # (shaping.STATE): a new friend is written from his own
+                        "_becoming")
 
 
 def _tables_about_people(conn) -> list[str]:

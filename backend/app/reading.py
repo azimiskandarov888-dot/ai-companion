@@ -148,7 +148,7 @@ hurt_by — ОСТАВЬ ПУСТЫМ. Это поле заполняется т
 # ── reading him from his talks with the shadow ──────────────────────────────
 #
 # The owner, 2026-10-08: no interviewer. The person talks to the companion from
-# the first second — at first a shadow with no character (persona.is_shadow) —
+# the first second — at first a blank with no character (persona.written) —
 # and the reader reads those talks instead of an interview's answers. The
 # method is the same and so is the shape of the answer; what differs is the
 # material, and the reader is told how: spoken and heard by a machine, with a
@@ -502,10 +502,11 @@ async def keep_reading(user_id: str) -> None:
     existing = load(user_id)
     if not existing:
         return
-    # A shadow is read after every talk, afresh, by shaping.py — that reading
-    # decides when he is written, and a revision slipped in between would be
-    # comparing the reader with itself.
-    if persona.is_shadow(persona.load_persona(user_id)):
+    # Until what he is for this person is written (his second layer), the
+    # reader reads after every talk, afresh, for shaping.py — whose readings
+    # decide when; a revision slipped in between would be the reader compared
+    # with itself.
+    if persona.written(persona.load_persona(user_id)) < 2:
         return
 
     with db.connect() as conn:

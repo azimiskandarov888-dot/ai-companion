@@ -1,22 +1,22 @@
 #!/usr/bin/env python3
 """Проверить всех агентов на себе — в том порядке, в каком их проходит человек.
 
-    python3 myself.py shadow           # 1. десять незнакомцев → кости → твоя тень
+    python3 myself.py begin            # 1. знакомство: он рождается пустым — имя и твои пожелания
       … потом поговори с ним 2–3 раза: ./run.sh и http://localhost:8000/live#me
     python3 myself.py scribe           # 2. что каждый писарь вынес из ваших разговоров
     python3 myself.py read             # 3. несколько чтений тебя по этим разговорам
-    python3 myself.py write            # 4. несколько «его» из твоей тени — выбранный им и станет
+    python3 myself.py write            # 4. несколько писателей дописывают его — выбранный и станет им
     python3 myself.py status           # что пройдено, сколько разговоров, сколько ушло
     python3 myself.py pick read Б      # выбрать позже, если сразу не решил
 
-ИНТЕРВЬЮ БОЛЬШЕ НЕТ
+ОДИН КОМПАНЬОН, С ПЕРВОЙ СЕКУНДЫ
 
-Владелец, 2026-10-08: с первой секунды человек говорит с ним самим — сначала
-с тенью без характера, а после нескольких разговоров, когда читатель уверен,
-что человеку нужно, писатель пишет его, и дальше его дописывают (shaping.py).
-Поэтому и проверка идёт так же: тень → твои живые разговоры с ней → писарь,
-читатель и писатель — по этим разговорам. Пока ты проверяешь, приложение
-само его не пишет (у тени стоит «_held»): пишет тот, кого выберешь ты.
+Владелец, 2026-10-09: никакой отдельной «тени» — с первой секунды человек
+говорит с тем же компаньоном, с которым будет говорить через месяц и через
+год. Сначала он пустая бланка: случайное имя и пожелания человека. Потом он
+дописывается слоями, как люди открываются: какой он; чем живёт и зачем он
+тебе; его глубина (shaping.py). Пока ты проверяешь, приложение само его не
+дописывает (у него стоит «_held»): первые два слоя пишет тот, кого выберешь ты.
 
 ЗАЧЕМ НА СЕБЕ
 
@@ -29,13 +29,13 @@ tryout.py слушает, как пятеро играют Фёдора для �
 КАК УСТРОЕНО, И ПОЧЕМУ ТАК
 
   · ПРОМПТЫ — ПРИЛОЖЕНИЯ, И ДОРОГА ТОЖЕ. Здесь не написано ни одного промпта.
-    Каждый этап вызывает ту же функцию, что приложение (matchmaker.
-    sketch_shadows, learn.extraction_prompt, reading.read_talks,
-    matchmaker.write_him), и тем же путём — brain.think / generate_text,
-    через OpenRouter. Подменяется одно: какая модель отвечает.
+    Каждый этап вызывает ту же функцию, что приложение (learn.extraction_prompt,
+    reading.read_talks, matchmaker.write_layer), и тем же путём —
+    brain.think / generate_text, через OpenRouter. Подменяется одно: какая
+    модель отвечает.
 
   · ПО ПОРЯДКУ, И МЕНЯЕТСЯ ОДНО. Каждый этап ест то, что выбрано на прошлом:
-    все писатели пишут ОДНУ и ту же тень из ОДНОГО и того же чтения.
+    все писатели дописывают ОДНОГО и того же его из ОДНОГО и того же чтения.
 
   · ВСЛЕПУЮ. Ответы подписаны буквами и перетасованы; имена открываются
     только после выбора. Судить слова, а не марку.
@@ -71,15 +71,6 @@ HOME = config.DATA_DIR / "myself"
 #
 # Откуда они и почему именно эти — docs/MODELS-FOR-EACH-AGENT.md. Любой этап
 # принимает --models id,id,… — чтобы добавить кандидата, не трогая файл.
-
-#: Двое — и третьим набором их смесь. Исследование 2026-10-09 оставило этих
-#: же: десять в одном вызове уже дают Opus 5 больше разнообразия, чем почти
-#: любой другой модели (NoveltyBench), а смесь семейств помогает меньше, чем
-#: кажется (ответы разных семейств похожи на 71–82%) — но это дешёвая проверка.
-SKETCHERS = [
-    ("Claude Opus 5", "anthropic/claude-opus-5"),
-    ("GLM-5.3", "z-ai/glm-5.3"),
-]
 
 #: Писарь — без размышления (так и в приложении, learn._extract). Из прежнего
 #: списка ушли Sonnet 5.5, Gemini 3.8 Flash и GLM-5.3: размышление у них не
@@ -296,7 +287,7 @@ def _talked() -> tuple[str, str]:
     """Твои разговоры с ним — так, как их получат читатель и писатель."""
     uid = _me()
     if not persona.has_persona(uid):
-        sys.exit("Сначала тень: python3 myself.py shadow")
+        sys.exit("Сначала знакомство: python3 myself.py begin")
     talks = memory.talks(uid)
     if not talks:
         sys.exit("Вы ещё не разговаривали: ./run.sh и http://localhost:8000/live#me")
@@ -305,7 +296,7 @@ def _talked() -> tuple[str, str]:
     return uid, shaping.transcript(uid, persona.persona_name(persona.load_persona(uid)))
 
 
-# ── 1 · тень ────────────────────────────────────────────────────────────────
+# ── 1 · знакомство ──────────────────────────────────────────────────────────
 
 def _door() -> dict:
     """Как при входе в приложение — обычная регистрация, не анкета."""
@@ -315,56 +306,15 @@ def _door() -> dict:
         "name": _ask("Как тебя зовут?"),
         "age": _ask("Сколько тебе лет?"),
         "country": _ask("Из какой ты страны?"),
-        "wants": _ask("С кем хочешь познакомиться? Например: «с парнем», «с девушкой постарше». "
-                      "Можно пусто."),
+        "wants": _ask("С кем хочешь познакомиться? Например: «с парнем», «с девушкой постарше», "
+                      "«чтобы любил футбол». Можно пусто."),
     }
 
 
-def mixed(first: list, second: list) -> list:
-    """Пять от одного и пять от другого, через одного."""
-    out: list = []
-    for a, b in zip(first[:5], second[:5]):
-        out += [a, b]
-    return out
-
-
-def _as_strangers(ten: list[dict]) -> str:
-    return "\n\n".join(f"{n}. {matchmaker.as_sketch(s)}" for n, s in enumerate(ten, 1))
-
-
-async def shadow(args) -> None:
-    door = _door()
-    context = matchmaker.newcomer(country=door["country"], wants=door["wants"],
-                                  band=young.band(door["age"]))
-    # Одни и те же искры для всех: иначе разница в наборах — это разница в
-    # искрах, а не в моделях.
-    seed = random.randrange(1 << 30)
-    entries = await _race(
-        _candidates(args, SKETCHERS),
-        lambda m: (lambda: matchmaker.sketch_shadows(context, random.Random(seed))),
-    )
-    alive = [e for e in entries if not e["error"]]
-    if len(alive) >= 2:
-        entries.append({
-            "name": f"смесь: {alive[0]['name']} + {alive[1]['name']}", "model": "",
-            "result": mixed(alive[0]["result"], alive[1]["result"]), "error": None,
-            "cost": 0.0, "seconds": 0.0, "label": _LABELS[len(entries)],
-        })
-    record = {"stage": "shadow", "seed": seed, "door": door, "entries": entries}
-    _save("shadow", record)
-    at = _paper("shadow", "Наборы по десять незнакомцев — вслепую", entries, _as_strangers)
-    print(f"\nПрочитай спокойно: {at}")
-    _judge("shadow", "В каком наборе люди правда РАЗНЫЕ, а не один человек десять раз?", record)
-    if record.get("pick"):
-        _become_shadow(record)
-
-
-def _become_shadow(record: dict) -> None:
-    """Кубик, а не модель и не ты — так в приложении, так и здесь. И совсем
-    заново: прежний друг уходит со всем, что было."""
-    ten = next(e for e in record["entries"] if e["label"] == record["pick"])["result"]
-    n = random.randrange(len(ten))
-    door, uid = record["door"], _me()
+def begin(args) -> None:
+    """Он рождается — без модели, сразу: случайное имя и твои пожелания. И
+    совсем заново: прежний друг уходит со всем, что было."""
+    door, uid = _door(), _me()
     erase.everything(uid)
     young.remember(uid, door["age"])
     if door["country"]:
@@ -372,13 +322,16 @@ def _become_shadow(record: dict) -> None:
     if door["name"] and not young.keeps_nothing(uid):
         memory.add_memory(uid, "fact", f"имя: {door['name']}", owner="elder", title="имя",
                           importance=3)
-    him = matchmaker.as_shadow(ten[n], their_age=door["age"], band=young.of(uid))
-    # Held: while you test, the app does not write him itself — you choose who does.
-    persona.save_persona(uid, {**him, "voice": voices.choose(him), "_held": True})
-    record["rolled"], record["stranger"] = n + 1, ten[n]
-    _save("shadow", record)
-    print(f"\nКубик выбрал №{n + 1}: {matchmaker.as_sketch(ten[n])}")
-    print("\nТеперь поговори с ним 2–3 раза — как с незнакомцем, как есть:")
+    him = matchmaker.create_blank(uid, wants=door["wants"], their_age=door["age"],
+                                  band=young.of(uid))
+    # Held: while you test, the app does not write his layers itself.
+    persona.save_persona(uid, {**him, "_held": True})
+    HOME.mkdir(parents=True, exist_ok=True)
+    _path("begin").write_text(json.dumps({"door": door, "him": him}, ensure_ascii=False,
+                                         indent=2), encoding="utf-8")
+    about = ", ".join(x for x in (him["name"], him.get("age", "")) if x)
+    print(f"\nТвой друг: {about}. Больше о нём пока ничего не известно — даже ему самому.")
+    print("\nТеперь поговори с ним 2–3 раза — как с незнакомым, как есть:")
     print("  ./run.sh   →   http://localhost:8000/live#me   →   «Начать разговор»")
     print("Между разговорами — перерыв больше 10 минут, иначе это один разговор.")
     print("Потом: python3 myself.py scribe")
@@ -489,28 +442,38 @@ def _as_reading(r: dict) -> str:
 
 # ── 4 · писатель ────────────────────────────────────────────────────────────
 
+def _his_words_kept(found: list[dict]) -> str:
+    """What the chosen scribe kept of what HE said about himself — law."""
+    return "\n".join(f"- {b}" for d in found for b in d.get("bob_facts", []) if str(b).strip())
+
+
 async def write(args) -> None:
     uid, said = _talked()
     who = persona.load_persona(uid)
-    if not persona.is_shadow(who):
-        sys.exit("Он уже написан. Совсем заново: python3 myself.py shadow")
+    if persona.written(who) >= 2:
+        sys.exit("Первые два слоя уже написаны. Совсем заново: python3 myself.py begin")
     chosen = _chosen("read")["result"]
     kept = _chosen("scribe", needed=False)
-    context = matchmaker.portrait_context(
-        talks=said,
-        facts=_facts_kept(kept["result"]) if kept else memory.facts_context(uid),
-        brief=reading.as_brief(chosen),
-        band=young.of(uid),
-    )
+    facts = _facts_kept(kept["result"]) if kept else memory.facts_context(uid)
+    his_words = _his_words_kept(kept["result"]) if kept else memory.bob_self_context(uid)
+    brief, band = reading.as_brief(chosen), young.of(uid)
 
     async def job():
-        written = persona.clean(await matchmaker.write_him(context, who.get("sketch") or ""))
-        return shaping.becoming(who, written)
+        # The two layers that are due after a few talks — what he is like, then
+        # what he lives for and is for you — each on what the first one wrote.
+        him = dict(who)
+        for layer in (1, 2):
+            if persona.written(him) >= layer:
+                continue
+            context = matchmaker.layer_context(now=him, his_words=his_words, facts=facts,
+                                               brief=brief, talks=said, band=band)
+            him = shaping.grown(him, layer, await matchmaker.write_layer(context, layer, him))
+        return him
 
     entries = await _race(_candidates(args, WRITERS), lambda m: job)
-    record = {"stage": "write", "sketch": who.get("sketch"), "entries": entries}
+    record = {"stage": "write", "entries": entries}
     _save("write", record)
-    at = _paper("write", "Он — из твоей тени, разными писателями — вслепую", entries,
+    at = _paper("write", "Он — дописанный разными писателями — вслепую", entries,
                 persona.build_persona_block)
     print(f"\nПрочитай спокойно: {at}")
     _judge("write", "С кем из них тебе хотелось бы разговаривать каждый день — "
@@ -521,23 +484,24 @@ async def write(args) -> None:
 
 def _become(record: dict) -> None:
     """Выбранный становится им — и выбранное чтение становится тем, как он
-    с тобой говорит. Со следующего разговора он целиком он."""
+    с тобой говорит. Его глубину приложение допишет само, когда вы будете
+    знакомы, — уже тем писателем, кто здесь выиграл."""
     uid = _me()
-    written = next(e for e in record["entries"] if e["label"] == record["pick"])["result"]
+    him = next(e for e in record["entries"] if e["label"] == record["pick"])["result"]
     kept = reading.with_what_stays(reading.load(uid), _chosen("read")["result"])
     # Read just now: the app's own re-reading starts counting from here.
     kept.update({"_read_at_visit": memory.visits_so_far(uid),
                  "_confirmed_at_read": mood.confirmed_count(uid)})
     reading.save(uid, kept)
-    persona.save_persona(uid, {**written, "_shaped_at": time.time()})
-    print(f"\nГотово: {written.get('name')}, {written.get('age')} — {written.get('one_liner', '')}")
-    print("Со следующего разговора он — он. Дальше его дописывают сами: читатель понял "
-          "новое — писатель добавляет.")
+    persona.save_persona(uid, {k: v for k, v in him.items() if k != "_held"})
+    print(f"\nГотово: {him.get('name')} — {him.get('one_liner', '')}")
+    print("Со следующего разговора он открывается тебе: какой он, чем живёт и зачем он тебе. "
+          "Глубина — потом, когда вы будете знакомы.")
 
 
 # ── служебное ───────────────────────────────────────────────────────────────
 
-STAGES = ("shadow", "scribe", "read", "write")
+STAGES = ("scribe", "read", "write")
 
 
 def status(args) -> None:
@@ -556,9 +520,9 @@ def status(args) -> None:
     uid = _me()
     if persona.has_persona(uid):
         who = persona.load_persona(uid)
-        state = "тень" if persona.is_shadow(who) else "написан"
-        print(f"\n  Твой друг: {who.get('name')} ({state}) — разговоров "
-              f"{len(memory.talks(uid))}, твоих слов {memory.words_said(uid)}")
+        print(f"\n  Твой друг: {who.get('name')} — написано слоёв {persona.written(who)} из "
+              f"{len(matchmaker.LAYERS)}; разговоров {len(memory.talks(uid))}, "
+              f"твоих слов {memory.words_said(uid)}")
 
 
 def pick(args) -> None:
@@ -571,8 +535,6 @@ def pick(args) -> None:
     record["pick"], record["why"] = letter, args.why or record.get("why", "")
     _save(args.stage, record)
     _reveal(record)
-    if args.stage == "shadow":
-        _become_shadow(record)
     if args.stage == "write":
         _become(record)
 
@@ -588,6 +550,7 @@ def main() -> None:
     for name in STAGES:
         s = sub.add_parser(name)
         s.add_argument("--models", help="свои кандидаты: id,id,… (имена OpenRouter)")
+    sub.add_parser("begin")
     sub.add_parser("status")
     p = sub.add_parser("pick")
     p.add_argument("stage", choices=STAGES)
@@ -597,6 +560,8 @@ def main() -> None:
 
     if args.stage == "status":
         return status(args)
+    if args.stage == "begin":
+        return begin(args)
     if args.stage == "pick":
         return pick(args)
     asyncio.run(_staged(globals()[args.stage](args)))

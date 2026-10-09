@@ -227,8 +227,8 @@ _VISIT_SCAN = 500
 
 def in_a_talk(user_id: str) -> bool:
     """Is a conversation going on right now — a word in the last ten minutes?
-    (The same boundary as everything here.) A shadow becomes the friend
-    written for the person only between talks, never in the middle of one
+    (The same boundary as everything here.) A layer of him written for the
+    person becomes part of him only between talks, never in the middle of one
     (shaping.settle)."""
     with db.connect() as conn:
         last = conn.execute(

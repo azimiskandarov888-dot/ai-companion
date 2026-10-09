@@ -90,12 +90,6 @@ def test_a_failing_provider_costs_one_line_not_the_stage(routed):
     assert "пустой ответ" in entry["error"]
 
 
-def test_the_mix_takes_five_from_each_in_turn():
-    a = [f"a{i}" for i in range(10)]
-    b = [f"b{i}" for i in range(10)]
-    assert myself.mixed(a, b) == ["a0", "b0", "a1", "b1", "a2", "b2", "a3", "b3", "a4", "b4"]
-
-
 def test_the_scribe_sees_every_exchange_and_his_own_first_hello():
     """What he says about himself is the writer's law — including in the hello
     he says before the person has said a word."""
@@ -109,31 +103,43 @@ def test_the_scribe_sees_every_exchange_and_his_own_first_hello():
                                        ("снова я", "Рад.")]
 
 
-def test_the_shadow_he_becomes_is_held_for_the_owner_and_starts_from_nothing(monkeypatch):
-    """«Совсем заново»: the previous friend goes with everything that was; and
-    while the owner tests, the app does not write him first."""
-    monkeypatch.setattr(myself, "_save", lambda *a, **k: None)
+def test_he_is_born_blank_held_for_the_owner_and_from_nothing(monkeypatch):
+    """«Совсем заново»: the previous friend goes with everything that was; he
+    is born with a random name and the owner's wishes, no model asked; and
+    while the owner tests, the app does not write his layers first."""
+    door = {"name": "Азим", "age": "15", "country": "Узбекистан", "wants": "парень"}
+    monkeypatch.setattr(myself, "_door", lambda: door)
+    monkeypatch.setattr(myself, "HOME", config.DATA_DIR / "myself")
     uid = myself._me()
     persona.save_persona(uid, {"name": "Старый", "personality": "был"})
     memory.log_turn(uid, "user", "старый разговор")
-    stranger = {"name": "Лукас", "gender": "мужской", "age": "16 лет",
-                "home": "Лиссабон, Португалия", "doing": "учится", "now": "экзамены"}
-    record = {"pick": "А", "door": {"name": "Азим", "age": "15", "country": "Узбекистан",
-                                    "wants": ""},
-              "entries": [{"label": "А", "result": [stranger]}]}
-    myself._become_shadow(record)
+
+    async def nobody(*a, **k):
+        raise AssertionError("no model may be asked to make a blank")
+
+    monkeypatch.setattr(brain, "think", nobody)
+    monkeypatch.setattr(brain, "generate_text", nobody)
+    myself.begin(None)
 
     who = persona.load_persona(uid)
-    assert persona.is_shadow(who) and who["_held"] and who["name"] == "Лукас"
+    assert persona.written(who) == 0 and who["_held"] and who["gender"] == "мужской"
+    assert 14 <= int(who["age"]) <= 18                      # a teenager's friend: a peer
     assert not shaping.waiting(uid)
     assert young.of(uid) == young.TEEN
     assert memory.recent_turns(uid) == []
     assert "Азим" in memory.facts_context(uid)
 
 
+def test_a_candidate_may_be_told_how_to_think():
+    """«anthropic/claude-sonnet-5@high» — the owner's question whether the
+    scribe should think is decided by the test itself."""
+    assert myself.candidate("anthropic/claude-sonnet-5@high") == ("anthropic/claude-sonnet-5", "high")
+    assert myself.candidate("openai/gpt-5.4-nano") == ("openai/gpt-5.4-nano", None)
+
+
 def test_the_stages_read_his_real_talks_as_the_app_does(monkeypatch):
     uid = myself._me()
-    persona.save_persona(uid, {"name": "Лукас", "shadow": True})
+    persona.save_persona(uid, {"name": "Лукас", "layers": 0})
     memory.log_turn(uid, "assistant", "Привет.")
     memory.log_turn(uid, "user", "привет, я из Ташкента")
     _uid, said = myself._talked()

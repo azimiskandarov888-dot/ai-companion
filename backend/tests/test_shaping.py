@@ -1,12 +1,12 @@
-"""From a shadow to somebody — and on (shaping.py).
+"""One companion, from a blank to somebody, written in layers (shaping.py).
 
-The owner, 2026-10-08: no interviewer. From the first second the person talks
-to him, and at first he is a shadow «with no exact personality»; after several
-talks, once the reader is sure what this person needs, the writer writes him —
-and from then on «its a build that we are always shaping and making better».
-Pinned here is everything that would otherwise first show up in front of
-somebody: what a shadow is told, how one is born, when he is written, that he
-never changes mid-talk, and that nothing he said about himself is lost.
+The owner, 2026-10-09: no separate «shadow» — the same companion from the
+first second, «как пустая бланка», a random name and the person's own wishes;
+then «дописываться и раскрываться» the way people open up, because to write
+him we must know the person. Pinned here: he is born with no model at all,
+the person's wishes hold from the first minute, the layers come in the order
+people open up and only when it is time, nothing written or said is ever
+replaced, and he never changes in the middle of a talk.
 """
 
 from __future__ import annotations
@@ -18,58 +18,44 @@ import time
 
 import pytest
 
-from app import (brain, config, db, erase, main, matchmaker, memory, persona, reading, shaping,
-                 voices)
+from app import (brain, config, db, erase, main, matchmaker, memory, meeting, persona,
+                 reading, shaping, voices, young)
 
-U = "shaped-one"
+U = "being-written"
 
-STRANGERS = [
-    {"name": "Лукас", "gender": "мужской", "age": "16 лет", "home": "Лиссабон, Португалия",
-     "doing": "учится в школе и летом помогает дяде в веломастерской",
-     "now": "готовится к экзамену по истории"},
-    {"name": "Ира", "gender": "женский", "age": "17 лет", "home": "на пароме между Хельсинки и Таллином",
-     "doing": "ездит с отцом-механиком", "now": "впервые сама ведёт его журнал рейсов"},
-    {"name": "Тимур", "gender": "мужской", "age": "15 лет", "home": "Ванкувер, Канада",
-     "doing": "учится и разносит газеты по утрам", "now": "копит на подержанный велосипед"},
-]
-
-WRITTEN = {
-    "name": "Лука",                       # the writer slipped — the person has heard «Лукас»
-    "gender": "женский",                  # and slipped again
-    "age": "19 лет",
-    "address": "вы",
-    "home": "Лиссабон, Алфама, квартира над булочной матери",
-    "one_liner": "спокойный, с сухим юмором",
-    "backstory": "Вырос в Лиссабоне. Отец уехал рано.",
-    "personality": "спокойный, наблюдательный, с сухим юмором",
-    "speech_style": "короткие фразы",
-    "flaws": ["упрям в мелочах"],
-    "intention": "собрать велосипед из запчастей до осени",
-    "things": ["ящик с запчастями под кроватью"],
-    "expertise": "старые велосипеды",
+#: What the writer would give for every field; each layer takes only its own.
+EVERYTHING = {
+    "name": "Кто-то другой", "gender": "женский", "age": "40 лет",   # never taken: law
+    "one_liner": "спокойный, с сухим юмором", "home": "Лиссабон, квартира над булочной",
+    "roots": "из Одессы", "personality": "спокойный, наблюдательный, с сухим юмором",
+    "speech_style": "короткие фразы", "values": "честность", "current_life": "чинит велосипед",
+    "expertise": "старые велосипеды", "wants_to_learn": "программировать",
+    "hopeless": ["деньги"], "likes": ["дождь"], "dislikes": ["спешку"],
+    "opinions": ["зима лучше лета"], "habits": ["встаёт рано"],
+    "things": ["ящик с запчастями"], "cast": [{"name": "Жозе", "who": "дядя", "between": "долг"}],
+    "intention": "собрать велосипед до осени",
+    "backstory": "Вырос у моря. Учился на механика.", "flaws": ["упрям в мелочах"],
+    "contradiction": "ругает город, а уезжать не хочет", "wound": "отец уехал рано",
+    "inner_world": "думает о море",
 }
 
 
 @pytest.fixture
 def models(monkeypatch):
-    """Every model this file reaches, answered by what it is asked to be — told
-    apart by its system prompt, as production tells them apart by model."""
+    """Every model this file reaches, answered by what it is asked to be."""
     seen: list[dict] = []
-    plan = {"verdicts": ["не с кем говорить всерьёз"] * 9, "same": [True] * 9,
-            "strangers": json.dumps(STRANGERS, ensure_ascii=False)}
+    plan = {"verdicts": ["не с кем говорить всерьёз"] * 9, "same": [True] * 9}
 
     async def answer(system, user_text, **kw):
         seen.append({"system": system, "user": user_text, **kw})
-        if system.startswith("Ты придумываешь людей"):
-            return plan["strangers"]
         if system.startswith("Ты читаешь человека по тому, КАК он говорил"):
             return json.dumps({"verdict": plan["verdicts"].pop(0), "register": "коротко",
                                "would_reach_them": "спокойно", "do_not_touch": "про отца"},
                               ensure_ascii=False)
         if system.startswith("Перед тобой два чтения"):
             return json.dumps({"same": plan["same"].pop(0), "why": "—"})
-        if "знакомишь людей" in system:
-            return json.dumps(WRITTEN, ensure_ascii=False)
+        if system.startswith("Ты пишешь человека, который уже существует"):
+            return json.dumps(EVERYTHING, ensure_ascii=False)
         if "дописываешь человека" in system:
             return json.dumps({"likes": ["смотреть на звёзды с крыши"]}, ensure_ascii=False)
         return "{}"   # the scribe: nothing to keep
@@ -84,15 +70,15 @@ def _asked(seen: list[dict], opening: str) -> list[dict]:
     return [c for c in seen if c["system"].startswith(opening)]
 
 
-def _shadow(**over) -> dict:
-    shadow = matchmaker.as_shadow(STRANGERS[0], their_age="15", band="teen")
-    return persona.save_persona(U, {**shadow, "voice": voices.choose(shadow), **over})
+def _born(**over) -> dict:
+    him = matchmaker.blank(wants="парень, любит футбол", their_age="15", band="teen",
+                           rng=random.Random(1))
+    return persona.save_persona(U, {**him, "voice": voices.choose(him), **over})
 
 
 def _talk(words: int = 60, *, goodbye: bool = True) -> None:
-    """One more talk, over: the person said `words` words, and each talk lies
-    twenty minutes after the one before — two visits, not one — all of them
-    well in the past."""
+    """One more talk, over: the person said `words` words, each talk twenty
+    minutes after the one before — separate visits — all in the past."""
     with db.connect() as conn:
         held = conn.execute("SELECT COUNT(*) n FROM turns WHERE user_id=?", (U,)).fetchone()["n"]
     memory.log_turn(U, "user", " ".join(["слово"] * words))
@@ -102,166 +88,197 @@ def _talk(words: int = 60, *, goodbye: bool = True) -> None:
                      (time.time() - 36_000 + 1_200 * held, U, time.time() - 5))
 
 
-def _after() -> None:
+def _after_and_settle() -> int:
+    """A talk ends; the next begins. Returns how many layers he has then."""
     asyncio.run(shaping.after_talk(U))
+    shaping.settle(U)
+    return persona.written(persona.load_persona(U))
 
 
-# ── what a shadow is ────────────────────────────────────────────────────────
+# ── born blank ──────────────────────────────────────────────────────────────
 
-def test_a_shadow_is_told_to_be_ordinary_and_that_what_he_says_is_kept():
-    """Said to somebody with nothing written yet, «you live like a real person:
-    friends, habits, your own stories» is an invitation to invent them on the
-    spot — and everything he invents becomes law for the writer."""
-    block = persona.build_persona_block(_shadow())
-    assert "Ты живой обычный человек" in block
+def test_he_is_born_with_no_model_at_all(monkeypatch):
+    """A random name and the person's wishes — instant, free."""
+    async def nobody(*a, **k):
+        raise AssertionError("no model may be asked to make a blank")
+
+    monkeypatch.setattr(brain, "generate_text", nobody)
+    monkeypatch.setattr(brain, "think", nobody)
+    him = matchmaker.create_blank(U, wants="с девушкой постарше, весёлой", their_age="30",
+                                  rng=random.Random(2))
+    assert persona.written(him) == 0
+    assert him["gender"] == "женский" and int(him["age"]) > 30
+    assert him["name"] in matchmaker._NAMES[("ru", "ж")]["middle"]
+    assert him["given"] == "с девушкой постарше, весёлой"
+    assert him["voice"]["name"] in voices.NAMES
+
+
+@pytest.mark.parametrize("wants,their_age,band,gender,age", [
+    ("с парнем", "15", "teen", "мужской", range(14, 19)),      # a teenager: always a peer
+    ("a girl my age", "40", "", "женский", range(37, 44)),
+    ("мне бы собеседника лет 70", "35", "", None, range(70, 71)),
+])
+def test_their_words_decide_what_they_say(wants, their_age, band, gender, age):
+    for seed in range(5):
+        g, a = matchmaker.wished(wants, their_age=their_age, band=band, rng=random.Random(seed))
+        assert int(a) in age and (gender is None or g == gender)
+
+
+def test_with_nothing_said_his_age_stays_blank_until_he_says_it():
+    for seed in range(5):
+        assert matchmaker.blank(their_age="45", rng=random.Random(seed)).get("age") is None
+
+
+def test_a_blank_is_told_to_be_ordinary_and_what_was_wished_is_true_at_once():
+    block = persona.build_persona_block(_born())
+    assert "вы только начинаете знакомиться" in block
     assert "станет правдой о тебе навсегда" in block
+    assert "не там, где он" in block
+    assert "любит футбол" in block                    # the wish, true from the first minute
     assert "Ты просто живёшь как настоящий человек" not in block
-    assert "Лукас" in block and "Лиссабон" in block
-    assert "Обращайся к нему на «ты»" in block
-    # …and a man already written is not told he is a shadow.
-    assert "Ты просто живёшь как настоящий человек" in persona.build_persona_block(WRITTEN)
 
 
-def test_the_shadow_has_an_english_twin(monkeypatch):
+def test_he_opens_up_and_then_simply_lives(monkeypatch):
+    base = _born()
+    assert "понемногу открываешься" in persona.build_persona_block({**base, "layers": 1})
+    assert "понемногу открываешься" in persona.build_persona_block({**base, "layers": 2})
+    assert "Ты просто живёшь как настоящий человек" in persona.build_persona_block(
+        {**base, "layers": 3})
+    # …and a companion written whole at once (the intake path) simply lives.
+    assert persona.written({"name": "Фёдор"}) == 3
+
+
+def test_the_blank_has_an_english_twin(monkeypatch):
     monkeypatch.setattr(config, "LANGUAGE", "en")
-    block = persona.build_persona_block({**_shadow(), "name": "Lucas", "home": "Lisbon",
-                                         "one_liner": "at school", "current_life": "exams",
-                                         "age": "16"})
-    assert "You're an ordinary living person" in block
+    him = matchmaker.blank(wants="a guy", their_age="30", rng=random.Random(3))
+    assert him["name"] in matchmaker._NAMES[("en", "м")]["middle"]
+    block = persona.build_persona_block({**him, "given": "a guy"})
+    assert "only starting to get to know each other" in block
     assert not any("а" <= ch.lower() <= "я" for ch in block)
 
 
-# ── how one is born ─────────────────────────────────────────────────────────
+# ── written in layers ───────────────────────────────────────────────────────
 
-def test_ten_strangers_from_the_door_and_the_dice_choose(models):
-    born = asyncio.run(matchmaker.create_shadow(U, age="15", country="Узбекистан", band="teen",
-                                                rng=random.Random(4)))
-    assert persona.is_shadow(persona.load_persona(U))
-    assert born["name"] in {s["name"] for s in STRANGERS}
-    assert born["voice"]["name"] in voices.NAMES
-    assert born["address"] == "ты"
-    # The sketch is kept whole: it is what the writer unfolds later.
-    assert born["name"] in born["sketch"] and "Где живёт" in born["sketch"]
-    asked = _asked(models["seen"], "Ты придумываешь людей")[0]
-    assert "РОВЕСНИКОМ" in asked["user"]                     # a teenager meets his own age
-    assert "Узбекистан — друг живёт НЕ там" in asked["user"]  # never where the person lives
-    assert "СЛУЧАЙНЫЕ ИСКРЫ" in asked["user"]
-    assert asked["model"] == config.WRITER_MODEL and asked["effort"] == "low"
-
-
-def test_a_new_shadow_replaces_the_old_friend_entirely(models):
-    persona.save_persona(U, WRITTEN)
-    memory.add_memory(U, "fact", "у него есть брат", owner="bob")
-    asyncio.run(matchmaker.create_shadow(U, band="teen"))
-    assert persona.is_shadow(persona.load_persona(U))
-    assert memory.bob_self_context(U) == ""
-
-
-def test_a_broken_list_of_strangers_is_asked_once_more_then_given_up(models):
-    models["plan"]["strangers"] = "не знаю"
-    with pytest.raises(RuntimeError):
-        asyncio.run(matchmaker.create_shadow(U))
-    assert len(_asked(models["seen"], "Ты придумываешь людей")) == 2
-    assert not persona.has_persona(U)        # nobody erased for nobody
-
-
-def test_ty_or_vy_between_two_strangers():
-    assert matchmaker.address("15", "16 лет", "teen") == "ты"
-    assert matchmaker.address("24", "27 лет") == "ты"
-    assert matchmaker.address("45", "70 лет") == "вы"
-    assert matchmaker.address("", "30 лет") == "вы"       # unknown: polite mends itself
-
-
-# ── when he is written ──────────────────────────────────────────────────────
-
-def test_one_talk_is_read_but_never_enough_to_write_him(models):
-    _shadow()
+def test_after_the_first_real_talk_he_shows_what_he_is_like(models):
+    _born()
     _talk()
-    _after()
-    kept = reading.load(U)
-    assert kept["verdict"] == "не с кем говорить всерьёз"
-    assert kept[shaping.STATE]["reads"] == 1
-    assert "_portrait" not in persona.load_persona(U)
+    assert _after_and_settle() == 1
+    him = persona.load_persona(U)
+    assert him["personality"] == EVERYTHING["personality"] and him["home"]
+    # …and nothing of the later layers yet: no subject, no wound.
+    assert "expertise" not in him and "wound" not in him
+    # What the person has been hearing stays as heard.
+    assert (him["name"], him["gender"]) == (_born()["name"], "мужской")
 
 
-def test_two_readings_that_agree_write_him(models):
-    _shadow()
-    for _ in range(2):
-        _talk()
-        _after()
-    written = persona.load_persona(U)["_portrait"]
-    assert persona.is_shadow(persona.load_persona(U)), "he must not change until the next talk"
-    # What the person has heard stays exactly as heard.
-    assert (written["name"], written["gender"], written["age"], written["address"]) == (
-        "Лукас", "мужской", "16 лет", "ты")
-    assert written["voice"]["name"] == persona.load_persona(U)["voice"]["name"]
-    assert "сухим юмором" in written["voice"]["style"]
-    assert not written.get("shadow")
-    write = [c for c in models["seen"] if "знакомишь людей" in c["system"]][0]
-    assert "Лукас" in write["user"] and "разговор 2" in write["user"]
-    assert "закон" in write["user"]
-
-
-def test_readings_that_disagree_wait_but_never_past_the_fifth(models):
-    _shadow()
-    models["plan"]["same"] = [False] * 9
-    for n in range(1, 6):
-        _talk()
-        _after()
-        has = "_portrait" in persona.load_persona(U)
-        assert has == (n == 5), f"after talk {n}"
-
-
-def test_a_hello_and_goodbye_is_not_a_talk_worth_reading(models):
-    _shadow()
+def test_a_hello_is_not_a_talk_worth_writing_from(models):
+    _born()
     _talk(words=5)
-    _after()
-    assert not _asked(models["seen"], "Ты читаешь человека")
+    assert _after_and_settle() == 0
+    assert not models["seen"]
 
 
-def test_what_wounds_him_survives_a_fresh_reading(models):
-    """A person who starts over with a new friend has not become somebody else."""
-    _shadow()
-    reading.save(U, {"verdict": "старое", "hurt_by": ["когда торопят"], "learned": ["любит тишину"]})
-    _talk()
-    _after()
-    kept = reading.load(U)
-    assert "когда торопят" in kept["hurt_by"]
-    assert "любит тишину" in kept["learned"]
-    assert "про отца" in reading._as_lines(kept["do_not_touch"])
-
-
-def test_held_for_the_owners_test_the_app_never_writes_him(models):
-    _shadow(_held=True)
-    for _ in range(3):
+def test_what_he_is_for_waits_for_the_reader_to_be_sure(models):
+    _born()
+    models["plan"]["same"] = [False] * 9
+    layers = []
+    for _ in range(6):
         _talk()
-        _after()
-    assert not models["seen"]
+        layers.append(_after_and_settle())
+    # Layer 1 at once; layer 2 at the 5th reading, the reader never sure.
+    assert layers[:5] == [1, 1, 1, 1, 2]
+    assert persona.load_persona(U)["expertise"] == EVERYTHING["expertise"]
 
 
-def test_only_a_shadow_is_read_this_way(models):
-    persona.save_persona(U, WRITTEN)
+def test_two_readings_that_agree_bring_what_he_is_for_sooner(models):
+    _born()
     _talk()
-    _after()
-    assert not models["seen"]
+    assert _after_and_settle() == 1
+    _talk()
+    assert _after_and_settle() == 2
 
 
-# ── between talks, never during one ─────────────────────────────────────────
-
-def test_he_becomes_the_written_man_only_once_the_talk_is_over(models):
-    _shadow()
+def test_his_depths_wait_until_they_know_each_other(models, monkeypatch):
+    _born()
     for _ in range(2):
         _talk()
-        _after()
-    memory.log_turn(U, "user", "а, слушай, ещё одно")    # «пока» — and then they carried on
+        _after_and_settle()
+    assert persona.written(persona.load_persona(U)) == 2
+    _talk()
+    assert _after_and_settle() == 2, "depths before they know each other"
+    _talk(words=meeting.KNOWN_AT[1])
+    assert _after_and_settle() == 3
+    him = persona.load_persona(U)
+    assert him["wound"] == EVERYTHING["wound"] and him["flaws"]
+
+
+def test_nothing_written_or_said_is_ever_replaced(models):
+    """The writer is told it is law — and the code holds it too: a layer only
+    fills empty places, whatever the model sends."""
+    _born(home="Порту, у реки")           # he already said where he lives
+    _talk()
+    _after_and_settle()
+    him = persona.load_persona(U)
+    assert him["home"] == "Порту, у реки"
+    assert him["name"] != EVERYTHING["name"] and him["gender"] == "мужской"
+    write = _asked(models["seen"], "Ты пишешь человека, который уже существует")[0]
+    assert "home —" not in write["system"]          # not even asked for
+    assert "Порту, у реки" in write["user"]         # and shown as law
+
+
+def test_he_changes_only_between_talks(models):
+    _born()
+    _talk()
+    asyncio.run(shaping.after_talk(U))
+    memory.log_turn(U, "user", "а, слушай, ещё одно")    # «пока» — and they carried on
     assert not shaping.settle(U)
-    assert persona.is_shadow(persona.load_persona(U))
+    assert persona.written(persona.load_persona(U)) == 0
     with db.connect() as conn:
         conn.execute("UPDATE turns SET ts=? WHERE user_id=?", (time.time() - 3600, U))
     assert shaping.settle(U)
-    now = persona.load_persona(U)
-    assert not persona.is_shadow(now) and "_portrait" not in now
-    assert now["personality"] == WRITTEN["personality"] and now["name"] == "Лукас"
+    assert persona.written(persona.load_persona(U)) == 1
+
+
+def test_his_voice_stays_and_sounds_like_who_he_is_becoming(models):
+    born = _born()
+    _talk()
+    _after_and_settle()
+    him = persona.load_persona(U)
+    assert him["voice"]["name"] == born["voice"]["name"]
+    assert "сухим юмором" in him["voice"]["style"]
+
+
+def test_held_for_the_owners_test_the_app_writes_nothing(models):
+    _born(_held=True)
+    for _ in range(3):
+        _talk()
+        _after_and_settle()
+    assert not models["seen"]
+
+
+def test_a_companion_written_whole_is_left_alone(models):
+    persona.save_persona(U, {"name": "Фёдор", "personality": "был"})
+    _talk()
+    _after_and_settle()
+    assert not models["seen"]
+
+
+def test_what_wounds_him_survives_a_fresh_reading(models):
+    """Somebody who starts over with a new friend has not become somebody else."""
+    _born()
+    reading.save(U, {"verdict": "старое", "hurt_by": ["когда торопят"], "learned": ["любит тишину"]})
+    _talk()
+    asyncio.run(shaping.after_talk(U))
+    kept = reading.load(U)
+    assert "когда торопят" in kept["hurt_by"] and "любит тишину" in kept["learned"]
+
+
+def test_starting_over_starts_the_count_over(models):
+    _born()
+    _talk()
+    asyncio.run(shaping.after_talk(U))
+    erase.the_companion(U)
+    assert shaping.STATE not in (reading.load(U) or {})
 
 
 def test_a_goodbye_ends_a_talk(models, monkeypatch):
@@ -280,33 +297,28 @@ def test_a_goodbye_ends_a_talk(models, monkeypatch):
     assert began == [U]
 
 
-def test_starting_over_starts_the_count_over(models):
-    _shadow()
-    _talk()
-    _after()
-    erase.the_companion(U)
-    assert shaping.STATE not in (reading.load(U) or {})
-
-
 # ── and then he goes on being shaped ────────────────────────────────────────
 
-def test_a_shadow_has_no_week_is_not_deepened_and_not_re_read(models):
-    """Not written yet: nothing of him to happen to, to add to, or to revise
-    the reading of in between the shadow's own readings."""
+def test_before_he_is_whole_no_week_no_deepening_no_re_reading_of_its_own(models):
+    """Written in order: a flaw slipped in now would be his depths arriving in
+    the second week."""
     from app import life
 
-    _shadow()
+    _born(layers=1)
     reading.save(U, {"verdict": "а", "register": "б", "would_reach_them": "в"})
     for _ in range(45):
         memory.log_turn(U, "user", "ну да")
     asyncio.run(persona.deepen(U, now=True))
-    asyncio.run(life.maybe_begin(U))
     asyncio.run(reading.keep_reading(U))
+    assert not models["seen"]
+    persona.save_persona(U, {**persona.load_persona(U), "layers": 0})
+    asyncio.run(life.maybe_begin(U))
     assert not models["seen"]
 
 
 def test_when_the_reader_learns_something_new_the_writer_adds_to_him(models, monkeypatch):
-    persona.save_persona(U, WRITTEN)
+    persona.save_persona(U, {k: v for k, v in EVERYTHING.items()} | {"name": "Лукас",
+                                                                        "gender": "мужской"})
     reading.save(U, {"verdict": "не с кем говорить всерьёз", "register": "коротко",
                      "would_reach_them": "спокойно"})
     for _ in range(reading.REREAD_MIN_TURNS):
@@ -318,8 +330,6 @@ def test_when_the_reader_learns_something_new_the_writer_adds_to_him(models, mon
     monkeypatch.setattr(reading, "reread", reread)
     asyncio.run(reading.keep_reading(U))
     assert "смотреть на звёзды с крыши" in persona.load_persona(U)["likes"]
-    deepen = [c for c in models["seen"] if "дописываешь человека" in c["system"]][0]
-    assert "некому показать то, что он рисует" in deepen["user"]
 
 
 def test_a_reading_that_only_learned_a_line_does_not_reshape_him():

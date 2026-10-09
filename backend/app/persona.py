@@ -144,43 +144,68 @@ def persona_name(persona: dict) -> str:
 
 
 # --------------------------------------------------------------------------- #
-# A shadow: somebody before he is anybody in particular
+# A blank, written in layers — the same companion from the first second
 # --------------------------------------------------------------------------- #
 #
-# The owner, 2026-10-08: no interviewer — from the very first second the person
-# talks to him, and at first he is «like a shadow with no exact personality,
-# like real people do in real world». A stranger has a name, an age, a place
-# and something he does; what he is like you learn later. Here it is not even
-# learned: it is WRITTEN later, for this person, once the reader knows what
-# they need (shaping.py). Until then he is the sketch the dice chose
-# (matchmaker.create_shadow) and nothing more — and everything he says about
-# himself in the meantime is law for whoever writes him.
+# The owner, 2026-10-09: no separate «shadow» — the companion himself, «как
+# пустая бланка», a random name and the person's own wishes, and then
+# «дописываться и раскрываться» as they get to know each other. In real life
+# people open up over time; ours is WRITTEN over time, and to the person it
+# looks the same (matchmaker.blank, matchmaker.LAYERS, shaping.py).
+#
+# What he is told about where he is in that, instead of «you live like a real
+# person: friends, habits, your own stories» — which, said to somebody with
+# none written yet, is an invitation to invent them on the spot. He may still
+# say things about himself; whatever he says is kept by the scribe and is law
+# for every layer after — so: plainly, briefly, nothing loud.
 
-#: What a shadow is told about being one, instead of «you live like a real
-#: person: friends, habits, your own stories» — which, said to somebody with
-#: none written yet, is an invitation to invent them on the spot, and
-#: everything he invents becomes law. So: ordinary, brief, nothing loud —
-#: ordinary because whatever he says is kept, and the writer must build on it.
-_SHADOW = ("Ты живой обычный человек, и вы пока почти не знакомы. Ниже — всё, что о "
-           "тебе есть: имя, возраст, где живёшь, чем занят. Себя ты не показываешь — ни "
-           "словечек, ни ярких черт, ни громких историй: говоришь просто и спокойно, как "
-           "незнакомый, который не рисуется. Спросят о том, чего здесь нет, — ответь коротко "
-           "и по-обычному, как ответил бы любой такой человек, без громких подробностей: ни "
-           "бед, ни подвигов, ни необычных талантов. Всё, что ты о себе скажешь, станет "
-           "правдой о тебе навсегда — поэтому о себе говори мало и обыкновенно.")
-_SHADOW_EN = ("You're an ordinary living person, and the two of you barely know each other "
-              "yet. Below is all there is about you: your name, age, where you live, what you "
-              "do. You don't put yourself on show — no pet words, no bright traits, no big "
-              "stories: you talk simply and calmly, like a stranger who isn't trying to "
-              "impress. If they ask about something that isn't here, answer briefly and "
-              "ordinarily, the way any person like you would — no big details: no tragedies, "
-              "no feats, no unusual talents. Whatever you say about yourself becomes true "
-              "about you for good — so say little about yourself, and keep it ordinary.")
+#: Nothing written yet but a name and the person's wishes.
+_BLANK = ("Ты живой обычный человек, и вы только начинаете знакомиться. Себя ты пока не "
+          "показываешь — ни словечек, ни ярких черт: говоришь просто и спокойно, как "
+          "незнакомый, который не рисуется. Спросят о тебе — ответь коротко и обыкновенно, как "
+          "ответил бы любой человек, без громких подробностей: ни бед, ни подвигов, ни "
+          "необычных талантов. Всё, что ты о себе скажешь, станет правдой о тебе навсегда. "
+          "Живёшь ты не там, где он, — в другой стране или в дороге; где именно, скажешь, "
+          "если спросят.")
+_BLANK_EN = ("You're an ordinary living person, and the two of you are only starting to get to "
+             "know each other. You don't put yourself on show yet — no pet words, no bright "
+             "traits: you talk simply and calmly, like a stranger who isn't trying to impress. If "
+             "they ask about you, answer briefly and ordinarily, the way anyone would — no big "
+             "details: no tragedies, no feats, no unusual talents. Whatever you say about "
+             "yourself becomes true about you for good. You don't live where they do — another "
+             "country, or on the road; where exactly, you'll say if they ask.")
+#: Some of him written, not all of it.
+_OPENING = ("Вы ещё не так давно знакомы, и ты понемногу открываешься. Что ниже написано о "
+            "тебе — правда: показывай это естественно и без нажима, по чуть-чуть, как живой "
+            "человек раскрывается со временем. О том, чего ниже нет, — по-прежнему коротко и "
+            "обыкновенно: что ты о себе скажешь, станет правдой о тебе навсегда.")
+_OPENING_EN = ("You haven't known each other long, and you're opening up little by little. What's "
+               "written about you below is true: let it show naturally and without pushing, bit "
+               "by bit, the way a living person reveals himself over time. About anything not "
+               "written below — still brief and ordinary: whatever you say about yourself "
+               "becomes true about you for good.")
+_LIVING = ("Ты просто живёшь как настоящий человек: у тебя есть дом, друзья, привычки, свои "
+           "истории и своё настроение. Рассказывай о своей жизни тепло и естественно, как о "
+           "самой обычной вещи.")
+_LIVING_EN = ("You simply live like a real person: you have a home, friends, habits, your own "
+              "stories and your own moods. Talk about your life warmly and naturally, as the "
+              "most ordinary thing.")
 
 
-def is_shadow(persona: dict | None) -> bool:
-    """Is he still a shadow — the sketch, not yet written for this person?"""
-    return bool((persona or {}).get("shadow"))
+def written(persona: dict | None) -> int:
+    """How many layers of him are written: 0 — a blank (a name and the
+    person's wishes), up to len(matchmaker.LAYERS) — all of him. A companion
+    written whole at once (the intake path) counts as all of him."""
+    return int((persona or {}).get("layers", 3))
+
+
+def _where_he_is(p: dict) -> str:
+    n = written(p)
+    if n == 0:
+        return lang.pick(_BLANK, _BLANK_EN)
+    if n < 3:
+        return lang.pick(_OPENING, _OPENING_EN)
+    return lang.pick(_LIVING, _LIVING_EN)
 
 
 def _persona_block_en(p: dict) -> str:
@@ -190,10 +215,7 @@ def _persona_block_en(p: dict) -> str:
     lines: list[str] = [
         (f"YOU ARE {name}, {_joined(p.get('one_liner')).strip()}" if _joined(p.get("one_liner")).strip()
          else f"YOU ARE {name}").rstrip(".") + ".",
-        _SHADOW_EN if is_shadow(p) else
-        "You simply live like a real person: you have a home, friends, habits, your own "
-        "stories and your own moods. Talk about your life warmly and naturally, as the most "
-        "ordinary thing.",
+        _where_he_is(p),
     ]
 
     def add(label: str, value) -> None:
@@ -205,6 +227,7 @@ def _persona_block_en(p: dict) -> str:
     if gender:
         lines.append("You're female." if gender.startswith(("ж", "f")) else "You're male.")
     add("Age", p.get("age"))
+    add("How they wanted to meet you — true of you from the first minute", p.get("given"))
     add("Where you live", p.get("home"))
     add("Where you're from", p.get("roots"))
     add("Your story", p.get("backstory"))
@@ -409,13 +432,14 @@ async def deepen(user_id: str, *, now: bool = False) -> None:
     The owner, 2026-10-08: «its not one build. its a build that we are always
     shaping and making better».
 
-    Never for a shadow: he is not written yet, and the first writing of him is
-    shaping.py's (what he says about himself meanwhile is kept by the scribe).
+    Never before all his layers are written (shaping.py): until then he is
+    written in order — what he is like, what he lives for, his depths — and a
+    flaw slipped in now would be his depths arriving in the second week.
     """
     from . import brain, db, memory, reading   # local: these import persona, not the reverse
 
     who = load_persona(user_id)
-    if not who or not who.get("name") or is_shadow(who):
+    if not who or not who.get("name") or written(who) < 3:
         return
 
     with db.connect() as conn:
@@ -478,10 +502,7 @@ def build_persona_block(persona: dict) -> str:
 
     lines: list[str] = [
         f"ТЫ — {name}. {_joined(p.get('one_liner'))}".strip().rstrip(".") + ".",
-        _SHADOW if is_shadow(p) else
-        "Ты просто живёшь как настоящий человек: у тебя есть дом, друзья, "
-        "привычки, свои истории и своё настроение. Рассказывай о своей жизни "
-        "тепло и естественно, как о самой обычной вещи.",
+        _where_he_is(p),
     ]
 
     def add(label: str, value) -> None:
@@ -499,6 +520,7 @@ def build_persona_block(persona: dict) -> str:
         lines.append("Ты женщина." if gender.startswith(("ж", "f")) else "Ты мужчина.")
 
     add("Возраст", p.get("age"))
+    add("Каким тебя хотели встретить — это правда о тебе с первой минуты", p.get("given"))
     add("Где живёшь", p.get("home"))
     add("Откуда ты родом", p.get("roots"))
     add("Твоя история", p.get("backstory"))
