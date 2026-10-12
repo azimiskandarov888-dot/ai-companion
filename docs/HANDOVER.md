@@ -7,7 +7,7 @@ or re-litigating decisions that are already made. Written 2026-09-17 on branch
 and since the evening of 2026-10-08 on **`claude/ai-model-selection-voice-f93485`**
 (worktree `~/ai-companion/.claude/worktrees/ai-model-selection-voice-f93485`),
 which is where all current work lives — ahead of the others; run the server
-from this one. **1345 tests pass** (2026-10-09). Every number below was
+from this one. **1361 tests pass** (2026-10-12). Every number below was
 measured by running the code, not estimated; where something is an estimate
 it says so.
 
@@ -132,6 +132,7 @@ each).
   0.58 to «внучка Маша звонит по воскресеньям», 0.39 to a bicycle. The
   `myself.py` shortlists are the research's. Not done: strict JSON schemas,
   the reader and writer on a moderation refusal (they retry at the next talk).
+- **Done 2026-10-12 — only the person's voice goes to the live ears** (`app/gate.py`; the owner: «чтобы слушали только наш голос»). Deepgram bills the audio it is sent, silence included, and the live channel sent it everything. Now the phone still streams to our server, and only speech goes on: opened by a voice (with the second before it), held until Flux's own EndOfTurn (it must hear the pause), opened by itself as he stops speaking (that is when people answer) and closed otherwise; between turns 80 ms of silence every 4 s keeps the line alive (Flux hangs up after ~10 s without audio; 8 s held, measured). Errs open: a noisy room saves less, never hears less. Real Flux, the same talk whole and gated, three trials: the same words; end of a turn 0.88 s vs 0.89 s; short answers 0.70 vs 0.79 s; 68% of the audio sent (long turns — a talk of short answers ~50%). Every talk logs «heard N s, sent to Deepgram M s». `LIVE_GATE=0` sends everything as before. Billing could not be read back: the Deepgram key has no `usage:read` — the console's usage page shows it.
 - **Speech for the reader** (the owner's idea, 2026-10-09): tempo, pauses before answering, length of turns, broken-off sentences, and the «э-э» the recognizer now throws away (0 in 252 of his heard lines) — the `speech` section asks for them, nothing measures them yet. Pure measurement, no model.
 - **A child (under 13), or a teenager who switched memory off, stays a
   blank**: nothing is kept to write him from. The owner's call.
@@ -901,7 +902,7 @@ the reason the tests that now hold them exist.
   or any repo artifact. Chat replies only.
 - **Commit attribution:** end every commit with the attribution line(s) the
   session's own instructions give — nothing else names a model.
-- **Tests:** `cd backend && .venv/bin/python -m pytest -q`. **1345 pass** (one,
+- **Tests:** `cd backend && .venv/bin/python -m pytest -q`. **1361 pass** (one,
   `test_somebody_past_sixty_gets_the_deep_breath`, fails now and then — §0). The suite is the
   design record — test docstrings carry the *reasoning*, including what went
   wrong before. Read the docstring before changing an assertion; several tests

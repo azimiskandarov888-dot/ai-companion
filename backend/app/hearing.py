@@ -30,8 +30,9 @@ which ends the line and is raised here rather than passed on.
 ── TWO THINGS THAT BITE ────────────────────────────────────────────────────
 
 1. Flux has NO KeepAlive. About ten seconds without audio and it hangs up, so
-   the line is never left without it: while he is speaking, or while the phone
-   has gone quiet, the live channel sends silence (live.py).
+   the line is never left without it. But it bills the audio it is sent, so
+   since 2026-10-11 it is sent only the person's voice, and a beat of 80 ms of
+   silence every few seconds between turns (gate.py, live.py).
 2. `mip_opt_out=true` on every connection. Without it Deepgram may keep the
    audio to improve its models — and some of the people talking to him are
    children, about whom this app keeps nothing (young.py). Opting out forgoes

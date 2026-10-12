@@ -102,8 +102,8 @@ from collections.abc import AsyncIterator, Iterable
 
 from fastapi import BackgroundTasks, WebSocket
 
-from . import (allowance, aloud, brain, config, first_sound, hearing, identity, lang, memory,
-               persona, shaping, tts, voices, vow, young)
+from . import (allowance, aloud, brain, config, first_sound, gate, hearing, identity, lang,
+               memory, persona, shaping, tts, voices, vow, young)
 
 #: Said the moment a question about the world is heard: the search takes
 #: seconds, and a friend who is looking something up says so.
@@ -112,8 +112,9 @@ _FILLERS_EN = ("Let me look.", "One sec, I'll check.", "Hang on, let me see.")
 #: After his last sound, how long before the microphone counts again — the
 #: room's echo has to die away first.
 _ECHO_TAIL = 0.3
-#: No audio from the phone for this long, and Flux gets silence in its place:
-#: it has no KeepAlive and hangs up after about ten seconds without audio.
+#: No audio from the phone for this long in the middle of a turn, and Flux
+#: gets silence in its place: it ends a turn by hearing the pause. Between
+#: turns the gate keeps the line alive on far less (gate.KEEPALIVE_EVERY).
 _FILL_AFTER = 1.0
 _FILL = 0.25
 #: How far ahead of what is playing the next piece of his voice is started:
@@ -592,6 +593,9 @@ class Session:
         #: to turn Flux's «the last word ended at 5.06 s» into a moment in time.
         self._clock = 0.0
         self._arrivals: deque[tuple[float, float]] = deque(maxlen=4000)
+        #: Only their voice goes on to Flux — billed for what it is sent
+        #: (gate.py; the owner, 2026-10-11: «чтобы слушали только наш голос»).
+        self._gate = gate.Gate(time.monotonic(), enabled=config.LIVE_GATE)
         #: When the lines to the brain and the voice were last opened ahead of need.
         self._warmed = 0.0
         #: When the brain was last asked to read this conversation — a draft,
@@ -734,6 +738,8 @@ class Session:
                 await self.ws.close()
             except Exception:  # noqa: BLE001 — already closed from the other side
                 pass
+            # What the ears cost this talk: how much of it was their voice.
+            print(f"[live] {self.user_id[:8]}: {self._gate.report()}", flush=True)
             # The talk is over, goodbye or not: the person is read now, and the
             # next layer of him perhaps written (shaping.py). Kept alive like
             # the turns' learning.
@@ -780,9 +786,19 @@ class Session:
         self._last_in = now
         if not self._mic_open():
             pcm = bytes(len(pcm))                 # his own voice, coming back
+        audible = self._audible()
+        for piece, arrived in self._gate.feed(pcm, now, over_him=self.duplex and audible,
+                                              he_speaks=audible):
+            await self._to_ears(piece, arrived)
+
+    async def _to_ears(self, pcm: bytes, arrived: float) -> None:
+        """Audio to Flux — counted, so that its «the last word ended at 5.06 s»
+        turns into the moment that audio arrived (_speech_end). Only what is
+        sent counts: Flux's clock is the audio it heard, gaps left out."""
+        assert self.ears is not None
         await self.ears.hear(pcm)
         self._clock += len(pcm) / (2 * hearing.RATE)
-        self._arrivals.append((self._clock, now))
+        self._arrivals.append((self._clock, arrived))
 
     async def _on_control(self, raw: str) -> None:
         try:
@@ -798,15 +814,22 @@ class Session:
             self._stopping.set()
 
     async def _tend_line(self) -> None:
-        """Silence into a quiet line, and the line closed when nobody is there."""
+        """Silence into a quiet line, and the line closed when nobody is there.
+
+        Two silences, and only the first is a pause: in the middle of a turn
+        (the gate open) a phone gone quiet is filled as it always was — Flux
+        must hear the pause to end the turn. Between turns a closed gate is
+        kept alive on a beat of 80 ms every few seconds, not on a stream."""
         while True:
             await asyncio.sleep(_FILL)
             now = time.monotonic()
-            if self.ears is not None and now - self._last_in > _FILL_AFTER:
-                silence = bytes(int(hearing.RATE * _FILL) * 2)
-                await self.ears.hear(silence)
-                self._clock += _FILL
-                self._arrivals.append((self._clock, now))
+            if self.ears is not None:
+                if self._gate.open and now - self._last_in > _FILL_AFTER:
+                    silence = bytes(int(hearing.RATE * _FILL) * 2)
+                    self._gate.sent(silence, now)
+                    await self._to_ears(silence, now)
+                elif (beat := self._gate.keepalive(now)) is not None:
+                    await self._to_ears(beat, now)
             idle = now - self._last_life > config.LIVE_IDLE_SECONDS
             busy = self._reply is not None and not self._reply.done()
             if idle and not busy and self._mic_open():
@@ -824,6 +847,8 @@ class Session:
                 continue
             event = message.get("event")
             text = (message.get("transcript") or "").strip()
+            # A turn Flux has open is followed to its end, whoever's it is.
+            self._gate.on_turn(event, time.monotonic())
             if event == "StartOfTurn":
                 self._over_him = self.duplex and self._audible()
             if self._over_him and event != "TurnResumed":

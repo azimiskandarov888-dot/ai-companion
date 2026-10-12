@@ -237,6 +237,10 @@ FLUX_EOT_TIMEOUT_MS: int = int(os.getenv("FLUX_EOT_TIMEOUT_MS", "5000"))
 #: open all night must not be a night of billing: after this long with nobody
 #: speaking, the live channel closes itself.
 LIVE_IDLE_SECONDS: float = float(os.getenv("LIVE_IDLE_SECONDS", "120"))
+#: Only the person's voice goes on to the live ears (app/gate.py): Deepgram
+#: bills the audio it is sent, and most of a talk is not their voice. 0 sends
+#: everything, as before (2026-10-11).
+LIVE_GATE: bool = os.getenv("LIVE_GATE", "1").strip().lower() not in ("0", "false", "no")
 
 # --- Memory: embeddings for semantic story recall (reuses the OpenAI key) --
 #: Through OpenRouter since 2026-10-09 (app/embeddings.py): the best Russian

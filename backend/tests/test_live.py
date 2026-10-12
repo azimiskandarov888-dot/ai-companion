@@ -22,7 +22,7 @@ import anyio
 import pytest
 from fastapi.testclient import TestClient
 
-from app import (allowance, aloud, body, brain, companion, config, db, first_sound, hearing,
+from app import (allowance, aloud, body, brain, companion, config, db, first_sound, gate, hearing,
                  identity, learn, live, main, meeting, memory, persona, safety, tts, vow)
 
 TOKEN = "live-token-0123456789-abcdefghij"
@@ -34,6 +34,17 @@ def turn(event: str, text: str = "", end: float = 1.0) -> dict:
     """A Flux TurnInfo message."""
     words = [{"word": w, "end": end} for w in text.split()]
     return {"type": "TurnInfo", "event": event, "transcript": text, "words": words}
+
+
+def voice_frame(db: float = -20.0) -> bytes:
+    """80 ms of a voice-loud tone — what the gate lets through (gate.py)."""
+    import math
+    amp = 32767 * 10 ** (db / 20) * math.sqrt(2)
+    return array.array("h", [int(amp * math.sin(2 * math.pi * 220 * i / 16000))
+                             for i in range(1280)]).tobytes()
+
+
+VOICE = voice_frame()
 
 
 class FakeEars:
@@ -334,19 +345,23 @@ def test_only_somebodys_line_can_be_a_draft():
 # ── he does not hear himself; over headphones he can be interrupted ─────────
 
 def test_he_does_not_hear_himself(env):
+    """Without headphones his own voice comes back into the microphone. It used
+    to reach Flux as silence — paid for as audio. Now it does not reach Flux at
+    all; the person's voice after him does (gate.py)."""
     env.voice.delay = 0.1
     with talk(env) as line:
         ears = line.ears()
         ears.send(turn("EndOfTurn", "расскажи что нибудь"))
         line.expect("say")
-        line.ws.send_bytes(b"\x01\x02" * 40)
-        wait_until(lambda: any(len(f) == 80 for f in ears.heard))
-        assert [f for f in ears.heard if len(f) == 80][-1] == bytes(80)
+        line.ws.send_bytes(VOICE)                 # his own voice, coming back
+        line.ws.send_bytes(VOICE)
+        time.sleep(0.05)
+        assert VOICE not in ears.heard
         line.expect("done")
         line.ws.send_json({"type": "played"})
-        time.sleep(0.05)
-        line.ws.send_bytes(b"\x01\x02" * 40)
-        wait_until(lambda: [f for f in ears.heard if len(f) == 80][-1] != bytes(80))
+        time.sleep(0.4)                           # the room's echo dies away (_ECHO_TAIL)
+        line.ws.send_bytes(VOICE)                 # and now it is the person
+        wait_until(lambda: VOICE in ears.heard)
 
 
 def test_over_headphones_talking_over_him_stops_him(env):
@@ -660,7 +675,7 @@ def test_ears_that_drop_mid_conversation_are_said(env):
             raise ConnectionError("Deepgram went away")
 
         line.ears().hear = gone
-        line.ws.send_bytes(bytes(hearing.CHUNK))
+        line.ws.send_bytes(VOICE)
         said = line.expect("trouble")
     assert "Deepgram went away" in said["detail"]
 
@@ -678,12 +693,54 @@ def test_a_second_window_replaces_the_first(env):
             first.expect("replaced")
 
 
-def test_a_quiet_line_is_kept_open_with_silence(env, monkeypatch):
-    monkeypatch.setattr(live, "_FILL_AFTER", 0.01)
+def test_a_quiet_line_is_kept_open_on_a_beat_of_silence(env, monkeypatch):
+    """Flux has no KeepAlive and hangs up after ~10 s without audio. It used to
+    be fed a stream of silence — billed second by second. Now 80 ms every few
+    seconds between turns (gate.KEEPALIVE_EVERY)."""
     monkeypatch.setattr(live, "_FILL", 0.02)
+    monkeypatch.setattr(gate, "KEEPALIVE_EVERY", 0.05)
     with talk(env) as line:
         wait_until(lambda: len(line.ears().heard) >= 3)
-    assert all(frame == bytes(len(frame)) for frame in line.ears().heard)
+    beats = line.ears().heard
+    assert all(frame == bytes(len(frame)) for frame in beats)
+    assert all(len(frame) == int(16000 * gate.KEEPALIVE) * 2 for frame in beats)
+
+
+def test_only_their_voice_reaches_the_ears(env):
+    """The room is not sent; their voice is, with the second before it."""
+    quiet = voice_frame(-70.0)
+    with talk(env) as line:
+        for _ in range(20):
+            line.ws.send_bytes(quiet)              # a quiet room, 1.6 s
+        time.sleep(0.1)
+        assert line.ears().heard == []
+        line.ws.send_bytes(VOICE)
+        wait_until(lambda: VOICE in line.ears().heard)
+        heard = line.ears().heard
+        # The second before it went too — and no more of the room than that.
+        assert heard[-1] == VOICE
+        assert gate.PREROLL - 0.1 <= heard.count(quiet) * 0.08 <= gate.PREROLL
+
+
+def test_a_turn_is_heard_to_its_end_pause_and_all(env):
+    """Flux ends a turn by HEARING the pause — so the pause must reach it."""
+    quiet = voice_frame(-70.0)
+    with talk(env) as line:
+        ears = line.ears()
+        line.ws.send_bytes(VOICE)
+        ears.send(turn("StartOfTurn", "я"))
+        wait_until(lambda: VOICE in ears.heard)
+        time.sleep(0.05)
+        for _ in range(12):
+            line.ws.send_bytes(quiet)              # a long pause, mid-turn: 0.96 s
+        wait_until(lambda: ears.heard.count(quiet) == 12)
+        ears.send(turn("EndOfTurn", "я"))
+        time.sleep(gate.AFTER_END + 0.1)
+        for _ in range(12):
+            line.ws.send_bytes(quiet)              # quiet after the turn: the gate closes
+        time.sleep(0.1)
+        # The first of them still goes — it is the one that closes it — the rest do not.
+        assert ears.heard.count(quiet) == 13
 
 
 def test_nobody_there_closes_the_line(env, monkeypatch):
@@ -1006,8 +1063,10 @@ def test_his_usual_first_word_is_played_ready_made_without_asking_the_voice(env)
 # He thinks where the ears say they may have finished, and nowhere else.
 
 def _audio(line, seconds: float) -> None:
+    """Their speech, as far as the ears are concerned: loud enough to pass the
+    gate, so that every frame reaches Flux and its clock (gate.py)."""
     for _ in range(int(seconds / 0.08)):
-        line.ws.send_bytes(bytes(2560))
+        line.ws.send_bytes(VOICE)
 
 
 def test_a_pause_of_theirs_is_not_paid_for(env):
