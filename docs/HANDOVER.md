@@ -25,10 +25,9 @@ the others were written earlier and some of them have drifted.
 
 | Document | Trust |
 |---|---|
-| `ALIVE-BRAIN.md` | **which brain could sound alive** (2026-10-01): not only Claude — ~20 candidates on OpenRouter worth a bake-off (GPT-6 Luna is newer and half Luna 5.6's price), and the case for training our own fast open model on a lively teacher's replies (~$50–120; also faster than Luna). Plan: bake-off first (~$2–3), own model only if nothing is alive and fast. Waiting for the owner's top-up and decision |
+| `VOICE-MODEL.md` | **the voice model — Gemma 4 since 2026-10-12** (owner's decision): what to change in code to switch it, how to choose by ear, every failure other models showed, what is known about speed and cost, the own-model path. Replaces `ALIVE-BRAIN.md` and `VOICE-MODELS-REHEARSAL.md` (both in git history) |
 | `SOUNDS-HUMAN.md` | **why he sounded like a robot, and what fixed it** (2026-09-30, the owner: «Понял, Азим. Программирование — дело непростое…» where a person says «Ого, программу? А про что?») — the research (Heritage's change-of-state token, Jones & Bergen's Turing tests, Reinhart et al. on instruction-tuned register), which of OUR rules caused half of it, the A/B on the real voice, what was tried and dropped (quoted prohibitions, example lines, a list of interjections, other models) |
 | `LATENCY.md` | **how fast he answers, measured, and the plan in four stages** — stage 1, the live channel, built 2026-09-30: 1.6–2.2 s from the end of the person's words to his first sound, against ~6.5 s before; where every tenth of a second goes, what was found on the way, stages 2–4 and what each needs from the owner |
-| `VOICE-MODELS-REHEARSAL.md` | **which voice for the conversation**, from 24 rehearsed first meetings — each model's pros and cons in plain words; GPT-5.6 Luna best, Gemini 3.5 Flash-Lite second (2026-09-27). **The owner chose Luna; it is the voice since 2026-09-28** |
 | `SOUNDS.md` | his coughs, «кхм», sighs, laughs and yawns made by the voice itself (our markers → Fish S2.1 tags) — **layer 1 built 2026-09-28**, and what listening showed; layer 2, the world around him as a quiet loop played by the phone, waits for the iOS screen |
 | `FIRST-MEETING.md` | **the plan that replaces the intake interview** — owner's decisions of 2026-09-26; step 1 (the conversation) built and rehearsed 2026-09-27, steps 2–3 ahead |
 | `BOUNDARIES.md`, `AUDIT-2026-09.md` | current, evidence-backed |
@@ -169,16 +168,15 @@ Do not reopen these without being asked.
 | **He is an ACE in what the person loves or misses — never on the ground the person is proudest of, and not in his daily work even from another side.** A friend who outdoes you where your self-image lives is a rival (Tesser's self-evaluation maintenance); one who knows what you love or lack is somebody to be proud of and come back to. And he is **hopeless exactly where the person is strong**, so the person gets to explain — help that goes one way is lonely on both sides (Buunk & Prins 1998). Amends the 2026-09-18 «ace in what the person loves most», which on the owner's own test produced a co-founder for his startup | owner's call 2026-09-23 (`matchmaker._WRITE_SYSTEM`, `reading` → `strong_at`) |
 | **On the person's own ground the friend is a PUPIL** — knows little or nothing, badly wants to become a master, and the person teaches him. Built as a mechanism, not a sentence: the scribe writes down what he was taught (`taught_bob` → memory `kind='lesson'`, HIS row, so it leaves with him), and `memory.lessons_block` hands it back every turn with the count — so he actually grows. Labour becomes love only when it ends in success (IKEA effect); a forever-beginner would be labour that went nowhere. Same mechanism carries life advice he acts on and reports back. And he now notices the person's change for the better, not only for the worse (Michelangelo phenomenon) | owner's call 2026-09-24 (`tests/test_pupil.py`) |
 | **The intake interview — a conversation first, a list second.** Every question is the interviewer's (Opus 5 — #1 on EQ-Bench 4, chosen by comparison). It talks like a person meeting someone: after the name, «Очень приятно» and how's your day (small talk builds trust — Bickmore & Cassell 2001); then, most often, a question about what was just said — «пишу программу» → «а про что она?» — because follow-up questions, not topic switches, are what make an asker liked (Huang 2017). **Shy first, closer by the end**: the server tells every call the stage — strangers for questions 1–8 (polite, «вы», quiet reactions or none, no exclamations, praise or «-то/же/ну»; warmth only as attention), a little acquainted for 9–11 (warmer, livelier; the under-thirties move to «ты»), almost friends from 12 (open, close, never an old friend) — and the model keeps pace with the person, never ahead. Why: acquaintance goes from light to personal (Altman & Taylor 1973; Kellermann 1991), the same intimacy is liked less early (Wortman 1976), and in Russian a stranger's warmth reads as put on (Стернин); the owner: «you don't talk to someone you just met like you've known him for years». The server keeps a memo of twelve topics (name; how the day is and what fills it — the friend's topic must NOT land there; what they love; what's coming up this week; country; age; what they love but haven't done in a while; what they're best at; who they last talked to «по душам»; who last asked them for something; what helped the last time it was hard; and, last and required, «А о чём бы поговорить, да не с кем?» with one gentle rescue if the answer is vague). Topics are taken up when they come up, in any order — except that his people and his hard times (`intake.DEEPER`) are offered only after the lighter topics, so never before question 9; up to three questions per thread; at most 18 in all — follow-ups only while every remaining topic still fits, so country and age cannot be lost, and a model that wanders off or stops early is overruled — as is a question filed under age or country that doesn't ask it (a simulated run filed «А кодить давно начали?» as the age). History: the owner rejected a fixed app warm-up («ничем» went unanswered) and then a strict list («it wants to end the interview as fast as possible») — both times rightly | owner + councils, 2026-09-24/25 (`tests/test_interview.py`, `tests/test_intake.py`) |
-| **The beginning becomes a first meeting — no interview at all.** The person meets the companion himself, in voice, as two strangers: the day and the moment, where from, a topic both care about, names (his first), and closer only as they talk more — measured by the amount of talk, never by days; no list of deep questions anywhere. He is a little shy, calm, more interested in the person than in himself — and NEUTRAL: no manner of speech, no bright traits at the meeting; the real him is not revealed but CREATED over time, in the portrait and after (owner, 2026-09-27; a sketch with «смеётся одним „ха“» opened seven replies of one rehearsal with it). Before: an ordinary sign-up (name, age, gender, country) and the person's choice of his gender and age. He exists as a SKETCH before the meeting and gets his PORTRAIT after it — everything he said about himself is law. He never lives where the person does: abroad or on the road. That he is an AI is written in small print, as on AI sites; he still never says it. The intake row above stands until step 3 replaces it. **Step 1 — the conversation itself — is built** (`meeting.py`; `/api/hello`; closeness by the person's words, 300 / 2,000 / 8,000, kept as a count in `acquaintance` because a child's log is deleted; the server tells him to say his name if he has not by the person's fifth line — and, once he has, that it is said, so he does not introduce himself twice (he did, in the very next reply, when the person answered with their work instead of their name; fixed 2026-09-30) — and to end a reply without a question after two in a row). **Since 2026-09-30, after the owner's first live conversation: the meeting is about the PERSON** — his first words ask how they are and say nothing of himself; he talks about himself only when asked or plainly wanted, in a phrase, never the same thing twice; replies of one or two sentences; he does not say goodbye first («it's weird that you are talking about yourself without knowing that the person you're talking to is even interested in it» — it reverses the meeting's earlier «his own day and weather unasked» and second stories. Scripted A/B on the real voice: talk about himself unasked 11 → 0 in 24 replies, coffee 10 → 2–4, opening with himself 4/4 → 0/8) and rehearsed in three rounds (`rehearse.py`): GPT-5.6 Luna was the best voice for it, Gemini 3.5 Flash-Lite next; Haiku 4.5, MiniMax (asterisk stage directions) and Qwen 3.5 (empty replies) were not | step 1 built 2026-09-27; owner's plan 2026-09-26 (`docs/FIRST-MEETING.md`, `tests/test_meeting.py`) |
+| **The beginning becomes a first meeting — no interview at all.** The person meets the companion himself, in voice, as two strangers: the day and the moment, where from, a topic both care about, names (his first), and closer only as they talk more — measured by the amount of talk, never by days; no list of deep questions anywhere. He is a little shy, calm, more interested in the person than in himself — and NEUTRAL: no manner of speech, no bright traits at the meeting; the real him is not revealed but CREATED over time, in the portrait and after (owner, 2026-09-27; a sketch with «смеётся одним „ха“» opened seven replies of one rehearsal with it). Before: an ordinary sign-up (name, age, gender, country) and the person's choice of his gender and age. He exists as a SKETCH before the meeting and gets his PORTRAIT after it — everything he said about himself is law. He never lives where the person does: abroad or on the road. That he is an AI is written in small print, as on AI sites; he still never says it. The intake row above stands until step 3 replaces it. **Step 1 — the conversation itself — is built** (`meeting.py`; `/api/hello`; closeness by the person's words, 300 / 2,000 / 8,000, kept as a count in `acquaintance` because a child's log is deleted; the server tells him to say his name if he has not by the person's fifth line — and, once he has, that it is said, so he does not introduce himself twice (he did, in the very next reply, when the person answered with their work instead of their name; fixed 2026-09-30) — and to end a reply without a question after two in a row). **Since 2026-09-30, after the owner's first live conversation: the meeting is about the PERSON** — his first words ask how they are and say nothing of himself; he talks about himself only when asked or plainly wanted, in a phrase, never the same thing twice; replies of one or two sentences; he does not say goodbye first («it's weird that you are talking about yourself without knowing that the person you're talking to is even interested in it» — it reverses the meeting's earlier «his own day and weather unasked» and second stories. Scripted A/B on the real voice: talk about himself unasked 11 → 0 in 24 replies, coffee 10 → 2–4, opening with himself 4/4 → 0/8) and rehearsed in three rounds (`rehearse.py`; what each voice model did there — `docs/VOICE-MODEL.md`) | step 1 built 2026-09-27; owner's plan 2026-09-26 (`docs/FIRST-MEETING.md`, `tests/test_meeting.py`) |
 | **The reader decides WHAT somebody needs; the writer decides WHO gives it.** The request is honoured literally and never overruled — it decides what he is like; the need decides what he is for. Stated ideals do not predict whom people actually warm to (Eastwick & Finkel 2008), but a visibly overridden request provokes reactance, so neither is traded for the other. The first reading is a hypothesis; the conversations correct it (re-reads, confirmed observations). **How the reader gets it right**, by Funder's Realistic Accuracy Model — the cue must exist, reach the reader, be noticed and be used right: the interview now asks the one closing question whose answer says what is missing («о чём тебе не с кем поговорить»); the reader is walked through perspective-taking, direct words over form, competing hypotheses and a Barnum check, in its thinking. Tested on the owner: without that answer every model correctly declined to guess «feelings»; with it, Opus 5.5 wrote «нет никого, с кем можно всерьёз, особенно о чувствах» | owner's question, 2026-09-23 |
 | **The rules stay a file you can read, plus mechanisms in code. No fine-tuning.** Four reasons, in order of weight: a fine-tune trained on our own prompt's output can at best COPY it and never exceed it; Anthropic has no fine-tuning API, so it means leaving Claude for a small model that writes worse Russian; catastrophic forgetting is documented and shows up where you did not test; and weights cannot be read, diffed, or fixed by one line with a test | settled 2026-09-22 |
 | **The constitution gets CUT, from 26,348 chars to ~8,000.** This is the whole answer to the 94/6 problem. Fine-tuning would have removed the last ~3,000 tokens for a month of work and no way back | **done 2026-09-23: 10,385 chars**, ~6,000 tokens off every request (estimate). Awaiting the owner's ear (§13.1) |
-| **Claude is out of the candidate list for the VOICE.** Owner's call on cost, and the observation is real. One caveat recorded in `tryout.py`: the audition runs uncached, so it charged ~4× what the app would. Still the dearest of the five | owner's call 2026-09-23 |
-| **The voice is GPT-5.6 Luna**, through OpenRouter — chosen from 24 rehearsed first meetings: the best Russian and the best listener, calm with somebody who answers in one word, among the cheapest. The watcher stays on Claude on purpose (`config.SAFETY_MODEL`) | done 2026-09-28 (`brain.py`, `docs/VOICE-MODELS-REHEARSAL.md`) |
+| **The voice is Gemma 4**, through OpenRouter. Everything known about choosing and switching the voice model — what to change in code, the failures other models showed, why Claude is not the voice (cost, owner's call 2026-09-23) — is in `docs/VOICE-MODEL.md`. The watcher keeps its own model on purpose (`config.SAFETY_MODEL`), so a change of voice cannot silently break it | owner's call 2026-10-12 |
 | **His sounds are PLAYED, not read** — a cough, «кхм», a sigh, a laugh, a yawn, made in his own voice (Fish S2.1) from our markers, never a recording of somebody else's; a sound no voice can make (a sneeze) is not offered at all | layer 1 done 2026-09-28 (`tts.SOUNDS`, `docs/SOUNDS.md`) |
 | **The model is chosen BY EAR, on the real prompt.** A 50-phrase scored set was proposed and the owner replaced it with listening himself — correctly: no published benchmark measures warm ordinary Russian said to a lonely person, and the ear is the instrument that does | owner's call (`tryout.py`) |
 | **He answers like a person, not an assistant** — a reaction first (surprise, gladness, pity — by the news), then something of HIS specific thing: a short live question or what it is to him, in half a sentence; no general truths about the activity («X — дело такое-то»), no receipts («Понял»), no name at the head of a reply, no menu of options, spoken rather than written Russian. The owner's call after his second live conversation; `companion.REACTING` on every turn, `situations._TERSE` for a reply that says nothing, `brain.without_receipt` as the code's guarantee | done 2026-09-30 (`docs/SOUNDS-HUMAN.md`) |
-| **He sounds spoken, not written** — the owner, 2026-10-01: too perfect is fake; live talk has stumbles and fillers. Prompting Luna for it does nothing measurable (six ways tried: 0.6–0.9 a reply against 0.4–0.6 untold); Claude Sonnet does it, a second slower and ~30× dearer. So a code layer puts them where speakers do, ~0.7 a reply (~1 with the voice's own «…»), the voice only | done 2026-10-01 (`aloud.py`, `docs/SOUNDS-HUMAN.md` part 2) |
+| **He sounds spoken, not written** — the owner, 2026-10-01: too perfect is fake; live talk has stumbles and fillers. Prompting the voice model for it did nothing measurable (six ways tried on the previous model: 0.6–0.9 a reply against 0.4–0.6 untold). So a code layer, which works with any model, puts them where speakers do, ~0.7 a reply (~1 with the model's own «…»), the voice only | done 2026-10-01 (`aloud.py`, `docs/SOUNDS-HUMAN.md` part 2) |
 | One background agent at a time — credits are limited | working constraint |
 
 On the last "left to the base model" row there is one honest caveat recorded in
@@ -224,7 +222,7 @@ These are not style preferences. They have each been earned by a bug.
 |---|---|---|---|
 | ① | **Ears** — speech to text | Deepgram Flux `flux-general-multi` (live channel, `hearing.py`); `whisper-1` (`/api/talk`) | Flux hears while they speak and says itself when they have finished — «похоже, договорил» ~0.36 s after the last word, «договорил» 0.8–1.6 s at the 0.85 threshold (~0.63 s at Deepgram's default 0.7, which cut people off mid-thought — measured 2026-09-30, `config.FLUX_EOT_THRESHOLD`); European address; `mip_opt_out=true`, so the audio is not kept. Whisper stays for the file-at-a-time path the iPhone app still uses |
 | ② | **Watchman** — danger in the person's words | Haiku 4.5 | runs as a task; **does not hold up the answer** |
-| ③ | **Voice** — the companion speaking | GPT-5.6 Luna, via OpenRouter | OpenAI's «fast» tier first (`CHAT_PROVIDERS`), no reasoning (`CHAT_REASONING=none`): 0.8–1.1 s to first words on the real prompt, the prompt ~all cached (2026-09-29/30). «minimal» reasoning still thought, a second of silence |
+| ③ | **Voice** — the companion speaking | Gemma 4, via OpenRouter | the fastest provider first (`CHAT_PROVIDERS`), no reasoning (`CHAT_REASONING=none`). Its time to first words on the real prompt is still to be measured (the previous model: 0.8–1.1 s). Switching checklist: `docs/VOICE-MODEL.md` |
 | ④ | **Mouth** — text to speech | Fish Audio `s2.1-pro` | #1 on TTS-Arena2; makes his sounds. Direct (`fish`) or through OpenRouter — which `fish` becomes by itself when there is an OpenRouter key and no Fish one (`config.voice_provider`). Streams raw PCM to the live channel (`tts.stream`). The owner's Fish key is in since 2026-09-30, so it goes directly, on Fish's starting credit. First sound ~0.45 s after a piece of text is sent — the same through OpenRouter (0.48 s; 10 phrases each), because the middleman costs nearly nothing. About 0.1 s of that is silence Fish puts at the start of every sound. Keep `latency=balanced`: `normal` took 0.78 s. `s2.1-pro-free` is slower (0.60–0.94 s) |
 
 **The watchman never blocks.** It used to be awaited before the prompt could be
@@ -275,8 +273,9 @@ it closes itself, because Deepgram bills every open second.
 
 **Measured 2026-09-30, end to end with the real services: 1.57–2.16 s from
 the end of the person's words to his first sound (median 1.83), against ~6.5 s
-on `/api/talk`.** Where it goes: the early signal 0.36 s, the prompt 0.03, Luna
-0.94, the first piece 0.12, the voice through OpenRouter 0.46. Heard in a
+on `/api/talk`.** Where it goes: the early signal 0.36 s, the prompt 0.03, the brain
+0.94 (the previous voice model — re-measure on Gemma 4), the first piece
+0.12, the voice through OpenRouter 0.46. Heard in a
 browser at `/live` (the page is a developer tool). The iPhone app still uses
 `/api/talk` — the live channel reaches it in stage 3. Everything else, and what
 is next: `docs/LATENCY.md`.
@@ -370,10 +369,8 @@ Three things worth knowing:
    *byte*, and Cyrillic is two bytes per letter: the same conversation is
    $0.29 in Russian and $0.21 in English.
 
-These were measured with Haiku as the voice. Luna, the voice since 2026-09-28,
-is among the cheapest of the rehearsed five; its cost per conversation still
-wants measuring in the app. **Its speed is measured** (2026-09-29/30, real
-prompt): 0.8–1.1 s to first words with no reasoning.
+These were measured with an earlier voice model. The voice is now Gemma 4;
+its cost per conversation and its speed still want measuring in the app.
 
 **Time to first sound, end to end** — from the end of the person's words to
 his first sound, with the real services, measured the same way for both:
@@ -424,7 +421,11 @@ stale mood and occasion through the whole history.
 
 ## 7b. Choosing the voice — the tool, and why it is shaped this way
 
-`backend/tryout.py` talks to the same friend on five different brains so the
+**The voice is Gemma 4 (2026-10-12).** This section is the tool for the day
+it is changed; the candidates once tried and what each did wrong are in
+`docs/VOICE-MODEL.md`.
+
+`backend/tryout.py` talks to the same friend on several different brains so the
 owner can pick by ear. `backend/audition.py` does the same for voices; this is
 its twin for brains, and the reasoning is the same: a provider's own samples
 are good enough to reject a candidate and not good enough to choose one.
@@ -458,24 +459,6 @@ Six decisions are baked into it, each earned:
 **What it cannot tell you: speed.** OpenRouter's routing is in those seconds.
 Real latency gets measured on the winner, at its own provider, in the app.
 
-**The five, with what the app would pay per person per month** (25 exchanges a
-day, after the constitution is cut, with caching as the app really does it):
-
-| | $/person/month | Why it is on the list |
-|---|---|---|
-| MiniMax M2-Her | $0.62 | built for companions; leads persona retention |
-| GPT-5.6 Luna | $0.44 | #1 by real roleplay usage on OpenRouter |
-| DeepSeek V4 Flash | $0.39 | #2 by real usage |
-| Gemini 3.5 Flash-Lite | ~$0.6 (estimate) | fastest and cheapest; per-request safety thresholds. The file had `gemini-3-flash-preview` — not Lite, and a preview; switched 2026-09-23. If it reads flat, `gemini-3.8-flash` is Gemini's best at ~2× |
-| Qwen 3.5 | ~$0.4 | 27B; id fixed 2026-09-23 to `qwen/qwen3.5-27b` (there is no `-instruct`) |
-
-Claude Haiku 4.5, the incumbent, was $2.12 and is out (§4). Sonnet 5 at $4.23
-is the fallback if all five read flat.
-
-**Two deliberately rejected:** DeepSeek V4 **Pro** — documented positivity
-bias, folds when pushed back, which breaks the one rule this product cannot
-lose; and self-hosting — GPUs idle at our size.
-
 ---
 
 ## 8. What each module is for
@@ -503,7 +486,7 @@ lose; and self-hosting — GPUs idle at our size.
 | `brain.py` | The model calls: `generate_reply`, `stream_reply`, `think`, `generate_text`; `without_glitches` (a word in an alphabet that is neither Russian nor Latin never reaches voice, screen or memory) |
 | `main.py` | The turn: assemble → race the watcher → stream → remember. `_assemble(pending=True)` / `_commit` are the live channel's draft and its becoming real |
 | `hearing.py` | The live ears: one line to Deepgram Flux per conversation, and what it is told (`mip_opt_out`, the language, his name as a word to expect) |
-| `aloud.py` | How a reply is SAID, not written: a hesitation or a filler where a speaker makes one (before a vague word, in an either-or question, a restart on «Я», «ну» while the next clause is planned) — about one a reply, never in a number or a warning. Only the voice gets it; memory keeps what he meant. Luna cannot be prompted into it (`docs/SOUNDS-HUMAN.md`, part 2) |
+| `aloud.py` | How a reply is SAID, not written: a hesitation or a filler where a speaker makes one (before a vague word, in an either-or question, a restart on «Я», «ну» while the next clause is planned) — about one a reply, never in a number or a warning. Only the voice gets it; memory keeps what he meant. The previous voice model could not be prompted into it (`docs/SOUNDS-HUMAN.md`, part 2); the layer works with any model |
 | `live.py` | The live channel, `/api/live`: drafts on the early signal, voice in pieces, he does not hear himself; the protocol is in its header |
 | `identity.py` | Hash-only user ids from the token — done properly |
 
@@ -627,7 +610,7 @@ the reason the tests that now hold them exist.
     `_parse_json` returned `{}`, the batch was marked read, and nothing was
     kept — least of all his own words about himself, which come last.
     `learn.SCRIBE_TOKENS` is 2,500; only what is written is paid for.
-16. ~~**Luna now and then ends a reply with letters Russian does not have**~~
+16. ~~**The voice model (it was Luna) now and then ended a reply with letters Russian does not have**~~
     — «…видно особенно ясно.АҞӘА», read aloud as gibberish. Fixed
     2026-09-28, widened 2026-09-29 when a Thai «อ่านข้อความเต็ม» got past a
     filter that only knew Cyrillic: `brain.without_glitches` takes out whole
@@ -659,9 +642,9 @@ the reason the tests that now hold them exist.
   module ("his body doesn't know about his week") was **checked and found
   false**: `life.block` already emits «Как это слышно: гнусавит, шмыгает».
 - **Model swaps** (Mistral Large for the reader). Needs a vendor key and
-  measurement. Untested vendor code is worse than none. (Luna for the voice is
-  done — 24 rehearsed meetings first, 2026-09-28; Deepgram Flux for the ears
-  is done for the live channel — measured on real Russian first, 2026-09-30.)
+  measurement. Untested vendor code is worse than none. (The voice is Gemma 4
+  since 2026-10-12, `docs/VOICE-MODEL.md`; Deepgram Flux for the ears is done
+  for the live channel — measured on real Russian first, 2026-09-30.)
 - ~~**Cutting the constitution.**~~ **Done** 2026-09-23 (§4). What changed the answer was working out where the win actually
   is: 12,500 tokens per request today, ~5,500 after the cut, ~2,400 if the
   rules were baked into weights. **The first step is bigger than the second**,
@@ -813,7 +796,7 @@ the reason the tests that now hold them exist.
    rarely — once a conversation, once in a friend's life — so they are a small
    part of the bill, and there quality of writing decides rather than price per
    turn. Left alone deliberately until the voice was chosen — it is now
-   (Luna, 2026-09-28), so this is the next question.
+   (Gemma 4, 2026-10-12), so this is the next question.
 8. **One key for everything?** The voice and his sounds now run on the
    OpenRouter key. The live ears have Deepgram's own key (since 2026-09-29).
    The file-path ears (Whisper), the watcher, the

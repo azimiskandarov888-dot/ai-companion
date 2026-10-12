@@ -1,7 +1,7 @@
 # Which model for which agent — research, 2026-09-23
 
-The voice already has its shortlist (HANDOVER §7b). This is the same exercise
-for everything else: the reader, the writer, the sketches, the interviewer,
+The voice is decided — Gemma 4 since 2026-10-12 (`VOICE-MODEL.md`). This is
+the same exercise for everything else: the reader, the writer, the sketches, the interviewer,
 the scribe, the biographer, the watchman. It produces **shortlists to test on
 the owner himself**, not decisions — the decision is made by the test, stage
 by stage, as HANDOVER §14 says it should be.
@@ -125,8 +125,7 @@ reading, sketches, writer — adds up to **under $1 per person even with the
 most expensive choice at every step.** So for those, price should not decide
 anything: take the best. The money is in what repeats: the **scribe** (up to
 $1.35/month — worth moving to a cheap model if it proves as faithful) and the
-**reader's re-reads** (up to $0.56/month). The voice, for comparison, is
-$0.2–0.6/month on the five candidates.
+**reader's re-reads** (up to $0.56/month).
 
 ## New models this month, and where they stand
 
@@ -217,7 +216,7 @@ and used as the fixed input for the next.
 2. **Reader** → «is this true about me?»
 3. **Sketches** → «which set of ten is most varied?»
 4. **Writer** → «which of these would I want as a friend?»
-5. **Voice** — the five from §7b, on HIS friend → «is he alive, does he hold?»
+5. **Voice** — decided (Gemma 4); check it on HIS friend → «is he alive, does he hold?»
 6. **Scribe** — over several days → «did he remember right, did he invent?»
 
 ## How to run it
@@ -229,7 +228,7 @@ python3 myself.py interview    # ~15 min — answer like a message to a friend
 python3 myself.py read         # 5 readings of you → which is true?
 python3 myself.py sketch       # sets of ten → which are really different people?
 python3 myself.py write        # 5 friends from one sketch → whom would you talk to daily?
-python3 myself.py talk         # the five voices, with YOUR friend
+python3 myself.py talk         # the voice, with YOUR friend
 python3 myself.py scribe       # what each scribe took from that talk
 python3 myself.py status       # what is chosen, and what it all cost
 ```
