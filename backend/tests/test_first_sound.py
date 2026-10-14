@@ -198,7 +198,7 @@ def test_they_are_made_once_in_his_voice_and_kept(monkeypatch):
     asyncio.run(run())
     breaths = [kind for kind, _how, count, _lengths in first_sound.BREATHS for _ in range(count)]
     sounds = list(dict.fromkeys(first_sound.STATEMENT + first_sound.QUESTION + first_sound.THINKING
-                                + first_sound.LISTENING))
+                                + first_sound.LISTENING + first_sound.SEARCHING))
     # A listener's sounds (listening.py), each in its colour — his own voice
     # told how (first_sound.TONES) — and his usual first words.
     along = [(first_sound._toned(GEMINI, tone), s) for tone in first_sound.TONES

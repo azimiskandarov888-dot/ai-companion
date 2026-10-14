@@ -51,6 +51,7 @@ from . import brain, config, first_sound, lang
 
 PACES = ("jump in", "quick", "easy", "patient")
 LISTENS = ("often", "sometimes", "rarely", "silent")
+SILENCES = ("short", "normal", "long")
 TONES = tuple(first_sound.TONES)
 
 
@@ -69,13 +70,20 @@ class Stance:
     #: His sounds while they talk, and when they break off and go quiet.
     go_on: tuple[str, ...] = ()
     nudge: tuple[str, ...] = ()
+    #: How long a silence between them is natural now before he says something
+    #: (SILENCES) — short in a lively chat, long after something heavy, or
+    #: when they said they would be a minute.
+    silence: str = "normal"
+    #: Would a light joke land now — «Я тебе что, справочное бюро?».
+    playful: bool = False
 
 
 def opening(*, older: bool) -> Stance:
     """Before anything has been read: an ordinary talk — given time, if older."""
     calm = first_sound.listener_sounds("calm")
     return Stance(mood="", pace="patient" if older else "easy", listen="sometimes", tone="calm",
-                  go_on=calm[:3], nudge=tuple(s for s in calm if s.endswith("?"))[:2])
+                  go_on=calm[:3], nudge=tuple(s for s in calm if s.endswith("?"))[:2],
+                  silence="long" if older else "normal")
 
 
 # ── WHEN, roughly: a person's spans, drawn anew each time ────────────────────
@@ -106,6 +114,11 @@ REST_AT = {"jump in": None, "quick": None, "easy": None, "patient": (1.2, 2.2)}
 CUT_IN_AT = {"jump in": (0.45, 0.9), "quick": None, "easy": None, "patient": None}
 #: Their words before a pause may get a sound at all — they have barely begun.
 WORDS_FIRST = 5
+#: Nobody has said anything — the app open, they still there: when he says
+#: something into it («Ты тут?», «Всё нормально?» — the brain's words, by the
+#: moment), and then once more, at most; never when they have left the app.
+SILENCE_AT = {"short": (9.0, 15.0), "normal": (16.0, 26.0), "long": (30.0, 50.0)}
+CHECK_INS = 2
 
 
 @dataclass
@@ -132,6 +145,11 @@ def plan(stance: Stance, rng: random.Random) -> Plan:
                 cut_in=_draw(CUT_IN_AT[pace], rng))
 
 
+def silence(stance: Stance, rng: random.Random) -> float:
+    """How long a silence between them may go on before he speaks up."""
+    return rng.uniform(*SILENCE_AT.get(stance.silence, SILENCE_AT["normal"]))
+
+
 def apart(stance: Stance, rng: random.Random) -> float:
     """How long after a sound of his before the next may come."""
     return rng.uniform(*GO_ON_APART.get(stance.listen, GO_ON_APART["sometimes"]))
@@ -152,6 +170,8 @@ Read the conversation, feel where it is, and choose:
 - tone — the colour of his sounds: "calm", "soft" (sympathy, sadness), "lively" (interest, fun, surprise), "heated" (a quarrel, impatience).
 - go_on: 2-5 sounds he makes WHILE they talk — from the list for that tone, the ones this moment calls for.
 - nudge: 1-3 sounds for when they break off mid-thought and go quiet — from the same list.
+- silence — if neither of them says anything, how long a silence is natural now before he speaks up: "short" (a lively chat), "normal", "long" (after something heavy; they are thinking; or they said they'd be a minute).
+- playful: true if a light joke would land right now, false if not.
 
 What real listeners do:
 - Plain sounds ("угу", "ага") say "I'm with you, go on". Sounds with feeling ("ох", "ого", "да ты что") show it reached you, and people tell more to a listener who makes them. Where something moves, feeling.
@@ -161,7 +181,7 @@ What real listeners do:
 - He is a person, not a metronome.
 
 Answer with JSON only, no other words:
-{{"mood": "...", "pace": "...", "listen": "...", "tone": "...", "go_on": ["..."], "nudge": ["..."]}}"""
+{{"mood": "...", "pace": "...", "listen": "...", "tone": "...", "go_on": ["..."], "nudge": ["..."], "silence": "...", "playful": false}}"""
 
 #: How much of the talk is read: the last few lines are what the moment is.
 LINES = 8
@@ -205,8 +225,10 @@ def parse(raw: str) -> Stance | None:
 
     go_on = chosen("go_on") or tuple(s for s in allowed if not s.endswith("?"))[:3]
     nudge = chosen("nudge") or tuple(s for s in allowed if s.endswith("?"))[:2] or go_on[:1]
+    silence = str(got.get("silence") or "").strip().lower()
     return Stance(mood=str(got.get("mood") or "")[:80], pace=pace, listen=listen, tone=tone,
-                  go_on=go_on, nudge=nudge)
+                  go_on=go_on, nudge=nudge, silence=silence if silence in SILENCES else "normal",
+                  playful=got.get("playful") is True)
 
 
 async def read(lines: list[tuple[str, str]], *, name: str = "", older: bool = False) -> Stance | None:

@@ -164,6 +164,8 @@ async def health(user_id: str = Depends(_user)) -> JSONResponse:
             "language": config.LANGUAGE,
             "brain_model": config.BRAIN_MODEL,
             "chat_model": config.CHAT_MODEL,
+            # The live channel's ears (hearing.py).
+            "ears_model": f"Soniox {config.SONIOX_MODEL}",
             "tts_provider": tts.provider_name(),
             "services": services,
             "all_ready": all(services.values()),
@@ -210,6 +212,7 @@ async def _assemble(
     by_ear: bool = False,
     said_meanwhile: str = "",
     between: str = "",
+    cue: str | None = None,
 ) -> tuple[str, str, list, str | None, asyncio.Task | None]:
     """Recall everything he should have in mind, and log that he was spoken to.
 
@@ -233,6 +236,9 @@ async def _assemble(
     mishears — he is told so (companion.BY_EAR). `said_meanwhile`: what he
     already said while they were quiet — a listener's «Ну?» — not to repeat.
     `between`: what is going on between them, as the listener read it.
+    `cue`: with no line of theirs, why he speaks up anyway — a silence
+    (live.Session._check_in): the conversation so far, then the cue, which,
+    like the hello cue, is never stored.
     """
     if pending and user_text is None:
         raise ValueError("Only somebody's line can be pending — he never drafts a hello.")
@@ -365,7 +371,8 @@ async def _assemble(
     return (
         system_stable,
         system_variable,
-        ([{"role": "user", "content": lang.pick(meeting.HELLO, meeting.HELLO_EN)}]
+        (recent + [{"role": "user", "content": cue}] if user_text is None and cue
+         else [{"role": "user", "content": lang.pick(meeting.HELLO, meeting.HELLO_EN)}]
          if user_text is None else recent),
         tts.voice_for(who),
         watcher,

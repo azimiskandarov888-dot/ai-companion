@@ -82,7 +82,7 @@
       <div class="convo" id="convo"></div>
 
       <div class="foot">
-        Страница для проверки на Mac: живой канал /api/live — уши Soniox, мозг Luna, голос Fish.<br />
+        Страница для проверки на Mac: живой канал /api/live — <span id="models">уши, мозг и голос — спрашиваю у сервера…</span><br />
         «Новая встреча» — новый человек: он встретит тебя как незнакомца.<br />
         Его можно перебить, как в жизни: начни говорить — он замолчит и послушает.<br />
         Если он перебивает сам себя (слышит свой голос из динамика) — сними галочку «можно перебивать» или надень наушники.
@@ -336,6 +336,18 @@
         start();
       };
       doneBtn.onclick = () => { if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: "done_talking" })); };
+      // Out of sight — another tab, the window hidden — he must not speak into
+      // a silence to somebody who is not there (live.Session._check_in).
+      document.addEventListener("visibilitychange", () => {
+        if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: document.hidden ? "away" : "here" }));
+      });
+      // What is really answering, from the server itself — never a line written once and left.
+      fetch("/api/health", { headers: { Authorization: "Bearer " + token() } })
+        .then((r) => r.json())
+        .then((h) => {
+          $("models").textContent = `уши ${h.ears_model || "?"}, мозг ${h.chat_model || "?"}, голос ${h.tts_provider || "?"}.`;
+        })
+        .catch(() => { $("models").textContent = "уши, мозг и голос — сервер не ответил."; });
       document.addEventListener("keydown", (e) => {
         if (e.code === "Space" && ws && e.target === document.body) { e.preventDefault(); doneBtn.click(); }
       });

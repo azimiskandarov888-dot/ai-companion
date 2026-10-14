@@ -121,3 +121,18 @@ def test_his_sounds_come_in_colours_his_own_voice_told_how():
     first_sound._made[(soft, "Ох…")] = [(16000, b"OH" * 10)]
     assert first_sound.listener(voice, "Ох…", "soft") == (16000, b"OH" * 10)
     assert first_sound.listener(voice, "Ох…", "heated") is None
+
+
+def test_how_long_a_silence_may_go_on_and_whether_a_joke_would_land_are_read_too():
+    stance = listening.parse(_answer(silence="long", playful=True))
+    assert (stance.silence, stance.playful) == ("long", True)
+    stance = listening.parse(_answer(silence="forever", playful="yes"))
+    assert (stance.silence, stance.playful) == ("normal", False)     # only what is allowed
+    assert listening.opening(older=True).silence == "long"
+
+
+def test_a_lively_chat_breaks_a_silence_sooner_than_a_heavy_one():
+    rng = random.Random(3)
+    short = [listening.silence(listening.Stance(silence="short"), rng) for _ in range(30)]
+    long = [listening.silence(listening.Stance(silence="long"), rng) for _ in range(30)]
+    assert max(short) < min(long) and len(set(short)) > 25

@@ -100,12 +100,17 @@ DEEP_BREATH = body.MARK_DEEP_BREATH
 STATEMENT = ("Да…", "Ну…")
 QUESTION = ("Ну…",)
 THINKING = ("Хм…", "Так…", "Ну…")
+#: While he looks something up — somebody searching, half to himself (the
+#: owner, 2026-10-14: «когда ищет, как и любой настоящий человек… "Эм..."
+#: "Так, ну тут это, а тут это..."»).
+SEARCHING = ("Эм…", "Так-так…", "Так, тут…", "Ага…", "Сейчас-сейчас…", "Ну-ка…")
 #: The same in an English conversation (lang.py) — said by an English voice,
 #: which would read «Так…» as a word.
 LISTENING_EN = ("Mm…",)
 STATEMENT_EN = ("Yeah…", "Well…")
 QUESTION_EN = ("Well…",)
 THINKING_EN = ("Hmm…", "So…", "Well…")
+SEARCHING_EN = ("Um…", "Let's see…", "Okay, so…", "Uh-huh…", "Hang on…", "Hmm, here…")
 #: How his breath is shown on the phone, where his words are.
 BREATH_SHOWN, BREATH_SHOWN_EN = "(вдох)", "(breath)"
 EXHALE_SHOWN, EXHALE_SHOWN_EN = "(выдох)", "(breath out)"
@@ -234,6 +239,7 @@ def _texts(kind: str) -> tuple[str, ...]:
     return {"thinking": THINKING_EN if english else THINKING,
             "question": QUESTION_EN if english else QUESTION,
             "statement": STATEMENT_EN if english else STATEMENT,
+            "searching": SEARCHING_EN if english else SEARCHING,
             }.get(kind, LISTENING_EN if english else LISTENING)
 
 
@@ -374,7 +380,7 @@ async def _make_all(voice: str | None) -> None:
     # like from its first minute (listening.py) — each in its colour.
     await _make_breaths(voice)
     sounds = list(dict.fromkeys(_texts("statement") + _texts("question") + _texts("thinking")
-                                + _texts("listening")))
+                                + _texts("listening") + _texts("searching")))
     reactions = [t for t in (REACTIONS_EN if lang.english() else REACTIONS) if t not in sounds]
     listening = [(toned, text) for tone in TONES if (toned := _toned(voice, tone)) is not None
                  for text in listener_sounds(tone)]

@@ -1515,3 +1515,90 @@ def test_in_a_quarrel_one_word_over_him_stops_him():
     assert not live.talks_over("нет", [])
     assert live.talks_over("нет", [], heated=True)
     assert not live.talks_over("угу", [], heated=True)    # still a listener's sound
+
+
+# ── a silence between them; looking something up, alive ────────────────────
+#
+# The owner, 2026-10-14: if they go quiet with the app open — «Ты тут?», «Всё
+# хорошо?», by what was going on — but never to somebody who has left the app;
+# and when he looks something up, a joke now and then, and «Эм…», «Так, тут…»
+# while he looks, as anybody does.
+
+@pytest.fixture
+def silence(monkeypatch, env):
+    monkeypatch.setattr(listening, "SILENCE_AT", {k: (0.3, 0.3) for k in listening.SILENCE_AT})
+    monkeypatch.setattr(live, "_GONE_AFTER", 60.0)    # no microphone in these tests
+    env.mind.replies = ["Ты тут?"]
+
+
+def test_a_silence_with_them_still_there_gets_his_voice_twice_at_most(env, silence):
+    with talk(env) as line:
+        wait_until(lambda: len(env.mind.calls) >= 1)
+        cue = env.mind.calls[0][-1]
+        assert cue["role"] == "user" and "молчит" in cue["content"] and "приложение открыто" in cue["content"]
+        wait_until(lambda: len(env.mind.calls) >= 2)
+        assert "уже подавал голос" in env.mind.calls[1][-1]["content"]
+        time.sleep(0.8)
+        assert len(env.mind.calls) == listening.CHECK_INS
+    # What he said is his; the cue is not stored as anybody's words.
+    assert all("молчит" not in t["content"] for t in memory.recent_turns(UID, limit=20))
+
+
+def test_never_into_a_silence_of_somebody_who_has_left_the_app(env, silence):
+    with talk(env) as line:
+        line.ws.send_json({"type": "away"})
+        time.sleep(0.7)
+        assert env.mind.calls == []
+        line.ws.send_json({"type": "here"})
+        wait_until(lambda: len(env.mind.calls) >= 1)
+
+
+def test_a_phone_that_stopped_listening_is_nobody_there(env, silence, monkeypatch):
+    monkeypatch.setattr(live, "_GONE_AFTER", 0.1)
+    with talk(env) as line:
+        time.sleep(0.7)
+        assert env.mind.calls == []
+
+
+def test_their_words_begin_a_new_silence(env, silence):
+    with talk(env) as line:
+        wait_until(lambda: len(env.mind.calls) >= 2)
+        line.ears().send(turn("StartOfTurn", "да тут я, тут"))
+        wait_until(lambda: live._open[UID]._check_ins == 0)
+
+
+def test_a_joke_as_he_starts_looking_when_one_would_land(env, monkeypatch):
+    monkeypatch.setattr(live, "_JOKE_CHANCE", 1.0)
+    asked = "какая сейчас погода в ташкенте"
+    with talk(env) as line:
+        live._open[UID]._listen_as(_stance(playful=True))
+        line.ears().send(turn("EndOfTurn", asked))
+        line.expect("done")
+    # Said as it is said: a joke can be two sentences, each its own piece.
+    assert any(joke.startswith(line.says()[0]) for joke in live._FILLERS_PLAYFUL)
+    with talk(env) as line:
+        live._open[UID]._listen_as(_stance(playful=True, tone="soft"))   # something sad: never
+        line.ears().send(turn("EndOfTurn", asked))
+        line.expect("done")
+    assert line.says()[0] in live._FILLERS
+
+
+def test_while_he_looks_he_mutters_as_anybody_does(env, monkeypatch):
+    for text, pcm in (("Эм…", MM), ("Так, тут…", HM)):
+        first_sound._made[(his_voice(), text)] = [(16000, pcm)]
+    monkeypatch.setattr(live, "_MUMBLE_EVERY", (0.05, 0.05))
+    looked = env.mind.whole
+
+    async def slow(*args, **kwargs):
+        await asyncio.sleep(0.6)       # a search takes a while
+        return await looked(*args, **kwargs)
+
+    monkeypatch.setattr(brain, "generate_reply", slow)
+    with talk(env) as line:
+        line.ears().send(turn("EndOfTurn", "какая сейчас погода в ташкенте"))
+        line.expect("done")
+    says = line.says()
+    assert says[0] in live._FILLERS
+    muttered = [s for s in says if s in ("Эм…", "Так, тут…")]
+    assert muttered and muttered == [s for s in says[1:len(muttered) + 1]]   # before his answer
+    assert all(a != b for a, b in zip(muttered, muttered[1:]))                # never twice running

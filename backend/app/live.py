@@ -63,6 +63,9 @@ the first message. Never in the URL: a URL is printed in every server log.
     {"type": "played"}             everything he sent has finished playing
     {"type": "done_talking"}       the person says they have finished — end the
                                    turn now (a button, like Verity's)
+    {"type": "away"} / {"type": "here"}   the app went out of sight / came back:
+                                   he never speaks into a silence to somebody
+                                   who has left (Session._check_in)
     {"type": "stop"}               end of conversation
 
   server → phone
@@ -118,9 +121,28 @@ from . import (allowance, aloud, brain, config, first_sound, gate, hearing, iden
                listening, memory, persona, shaping, tts, voices, vow, young)
 
 #: Said the moment a question about the world is heard: the search takes
-#: seconds, and a friend who is looking something up says so.
-_FILLERS = ("Сейчас гляну.", "Секунду, посмотрю.", "Дай гляну.")
-_FILLERS_EN = ("Let me look.", "One sec, I'll check.", "Hang on, let me see.")
+#: seconds, and a friend who is looking something up says so — plainly, or,
+#: when a joke would land (listening.Stance.playful), with one (the owner,
+#: 2026-10-14). Never one about what he is: he never says he is a program,
+#: nor that he is not (companion, «what you are»).
+_FILLERS = ("Сейчас гляну.", "Секунду, посмотрю.", "Дай гляну.", "Погоди, гляну…",
+            "Щас, посмотрю.")
+_FILLERS_EN = ("Let me look.", "One sec, I'll check.", "Hang on, let me see.", "Let me check…")
+_FILLERS_PLAYFUL = ("Я тебе что, справочное бюро? Ладно, щас гляну.",
+                    "Ох, ну ты спросил… Щас найду.", "Я тебе что, Гугл? Ладно, погоди.",
+                    "Ну ты задачки задаёшь… Сейчас.")
+_FILLERS_PLAYFUL_EN = ("What am I, an encyclopedia? Fine, let me look.",
+                       "Oh, you would ask that… One sec.", "Do I look like Google? Okay, hang on.")
+_ALL_FILLERS = _FILLERS + _FILLERS_EN + _FILLERS_PLAYFUL + _FILLERS_PLAYFUL_EN
+#: …with a joke in this share of the turns where one would land.
+_JOKE_CHANCE = 0.4
+#: While the search goes on: somebody looking, half to himself
+#: (first_sound.SEARCHING) — one now and then, never the same twice running.
+_MUMBLE_EVERY = (1.8, 3.4)
+_MUMBLES = 4
+#: No audio from the phone for this long: the app is not listening any more
+#: (out of sight, closed) — nobody to speak up to.
+_GONE_AFTER = 3.0
 #: After his last sound, how long before the microphone counts again — the
 #: room's echo has to die away first.
 _ECHO_TAIL = 0.3
@@ -309,10 +331,12 @@ class Draft:
     """
 
     def __init__(self, session: Session, transcript: str | None, *, web: bool = False,
-                 said_meanwhile: str = "") -> None:
+                 said_meanwhile: str = "", cue: str | None = None) -> None:
         self.session = session
         self.transcript = transcript
         self.web = web
+        #: With no line of theirs: why he speaks up — a silence (_check_in).
+        self.cue = cue
         #: What he said while they were quiet before it — «Ну?» — not to say again.
         self.said_meanwhile = said_meanwhile
         #: What is going on between them, as the listener last read it.
@@ -359,6 +383,7 @@ class Draft:
                 by_ear=True,
                 said_meanwhile=self.said_meanwhile,
                 between=self.between,
+                cue=self.cue,
             )
             self.voice = voice
             self.ready.set()
@@ -669,6 +694,12 @@ class Session:
         self._words_at_sound = 0
         self._last_along = ""
         self._apart = 0.0
+        #: A silence between them (_check_in): whether the app is out of
+        #: sight, how many times he has spoken into this silence, and how long
+        #: this one may go on before he does (drawn when it begins).
+        self._away = False
+        self._check_ins = 0
+        self._silence_wait: float | None = None
 
     # ── talking to the phone ────────────────────────────────────────────────
 
@@ -858,6 +889,8 @@ class Session:
             self._playing_until = min(self._playing_until, time.monotonic())
         elif kind == "done_talking" and self.ears is not None:
             await self.ears.finished()
+        elif kind in ("away", "here"):
+            self._away = kind == "away"
         elif kind == "stop":
             self._stopping.set()
 
@@ -937,10 +970,12 @@ class Session:
     # ── listening along (listening.py) ──────────────────────────────────────
 
     def _new_words(self) -> None:
-        """They said something more: a new pause will come, timed anew."""
+        """They said something more: a new pause will come, timed anew — and
+        the next silence between them is a new one."""
         self._turn_open, self._held, self._taking = True, None, False
         self._heard_at = time.monotonic()
         self._plan = listening.plan(self.stance, self._rng)
+        self._check_ins, self._silence_wait = 0, None
 
     def _listen_as(self, stance: listening.Stance) -> None:
         """From now he listens like this: what the ears hold for him to time
@@ -977,8 +1012,55 @@ class Session:
             await asyncio.sleep(_ALONG)
             try:
                 await self._along(time.monotonic())
+                await self._check_in(time.monotonic())
             except Exception as e:  # noqa: BLE001 — a listener's sound is a nicety
                 _log("👂 listening along", e)
+
+    async def _check_in(self, now: float) -> None:
+        """Nobody has said anything for a while, and they are still there:
+        he says something into it — «Ты тут?», «Всё нормально?», or what the
+        moment asks; the brain's words, from the talk. When — the stance's
+        (listening.SILENCE_AT): short in a lively chat, long after something
+        heavy. Twice in a silence at most; never to somebody who has left the
+        app (the owner, 2026-10-14: «если человек вышел с приложения, то,
+        само собой, уже лучше не говорить»)."""
+        if (self._turn_open or self.ears is None or self._check_ins >= listening.CHECK_INS
+                or self._away or now - self._last_in > _GONE_AFTER or self._audible()):
+            return
+        if self._reply is not None and not self._reply.done():
+            return
+        quiet = now - max(self._last_life, self._playing_until)
+        if self._silence_wait is None:
+            self._silence_wait = listening.silence(self.stance, self._rng)
+        if quiet < self._silence_wait:
+            return
+        self._check_ins += 1
+        self._silence_wait = None   # the next, if any, is drawn anew from his words' end
+        cue = _silence_cue(quiet, again=self._check_ins > 1)
+        self._reply = asyncio.create_task(self._answer(Draft(self, None, cue=cue), now))
+
+    def _filler(self) -> str:
+        """What he says as he starts looking something up — a joke now and
+        then, when one would land (never into something sad or a quarrel)."""
+        stance = self.stance
+        if (stance.playful and stance.tone not in ("soft", "heated")
+                and self._rng.random() < _JOKE_CHANCE):
+            return self._rng.choice(lang.pick(_FILLERS_PLAYFUL, _FILLERS_PLAYFUL_EN))
+        return self._rng.choice(lang.pick(_FILLERS, _FILLERS_EN))
+
+    async def _mumble(self, draft: Draft) -> None:
+        """While the search goes on: «Эм…», «Так, тут…» — now and then, as
+        somebody looking says to himself; over once his words are written."""
+        last = ""
+        for _ in range(_MUMBLES):
+            await asyncio.sleep(self._rng.uniform(*_MUMBLE_EVERY))
+            if draft.first_words is not None or self._answering_aloud:
+                return
+            if time.monotonic() < self._playing_until:
+                continue   # his last words still going out
+            made = first_sound.pick(self.voice, "searching", self._rng, avoid=last)
+            if made and await self._send_sound(*made):
+                last = made[0]
 
     async def _along(self, now: float) -> None:
         text = self._heard_so_far
@@ -1247,6 +1329,7 @@ class Session:
         cutter: asyncio.Task | None = None
         late: asyncio.Task | None = None
         soon: asyncio.Task | None = None
+        mumbling: asyncio.Task | None = None
         #: When his sound before his words stops playing, if one was sent —
         #: or his breath, going out as it plays (_Breath).
         sound_ends: float | None = None
@@ -1435,10 +1518,11 @@ class Session:
                 # From here it is their turn for keeps.
                 watcher = app_main._commit(user_id, draft.transcript, draft.marks)
             if draft.web:
-                filler = random.choice(lang.pick(_FILLERS, _FILLERS_EN))
+                filler = self._filler()
                 if await self._speak_line(filler, voice):
                     spoken.append(filler)
                     sounded = True
+                mumbling = asyncio.create_task(self._mumble(draft))
             cutter = asyncio.create_task(cut())
             breaking, verdict = "", None
             while await ready_ahead(wait=True):
@@ -1498,7 +1582,7 @@ class Session:
                 if dropped and not spoken and not reply:
                     reply = vow.last_resort()
                     sounded = await self._speak_line(reply, voice) or sounded
-                if draft.web and spoken and spoken[0] in _FILLERS + _FILLERS_EN:
+                if draft.web and spoken and spoken[0] in _ALL_FILLERS:
                     reply = f"{spoken[0]} {reply}".strip()
                 reply = app_main._body(user_id, reply)
             self._remember(draft, reply, leaving, sounded)
@@ -1537,7 +1621,7 @@ class Session:
             spent()
             await self._send({"kind": "trouble", "detail": str(e)})
         finally:
-            for task in (late, soon, breathing.task if breathing else None):
+            for task in (late, soon, mumbling, breathing.task if breathing else None):
                 if task is not None:
                     task.cancel()
             self._answering_aloud = False
@@ -1605,6 +1689,26 @@ class Session:
             self._leaving.cancel()
         self._leaving = asyncio.create_task(later())
         _track(self._leaving)
+
+
+def _silence_cue(quiet: float, *, again: bool) -> str:
+    """Why he speaks up with nobody having said anything — never stored, as
+    the hello cue is not (main._assemble `cue`)."""
+    seconds = max(5, int(round(quiet / 5) * 5))
+    if lang.english():
+        return (f"[They have said nothing for about {seconds} seconds; the app is open, they are "
+                "there. If it fits, say something into the silence the way a friend on the phone "
+                "would — short, and from what was just going on between you (after something sad, "
+                "quiet and warm; after a quarrel, your own way; after «hang on», with a smile); a "
+                "plain «You there?» only if nothing better asks to be said."
+                + (" You already spoke up once and they did not answer." if again else "")
+                + " If the silence is right as it is, answer with just «…».]")
+    return (f"[Собеседник молчит уже около {seconds} секунд — приложение открыто, он здесь. Если "
+            "уместно — подай голос, как друг по телефону: коротко и по тому, что сейчас было между "
+            "вами (после грустного — тихо и тепло, после спора — по-своему, после «подожди» — с "
+            "улыбкой); простое «Ты тут?» — только если ничего лучше не просится."
+            + (" Ты уже подавал голос — он не ответил." if again else "")
+            + " Если молчание сейчас правильное — ответь одним «…».]")
 
 
 def _after(moment: float | None, start: float | None) -> float | None:
