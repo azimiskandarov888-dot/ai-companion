@@ -157,19 +157,31 @@ Above all: let them feel listened to, interesting and not alone — and that tom
 #: «Азима» — and he said «Басанин» back, and called the owner «ты исчезла».
 #: A model reads a misheard word in context far better than any list could;
 #: it only has to be told that the words were HEARD.
+#:
+#: And a thought broken off — the owner, 2026-10-14, of «I've really been
+#: thinking about—» and a long pause: nothing in it to answer yet; «Ну?» or
+#: «О чём?», in his own manner. The ears hold such a turn a while first
+#: (hearing.py, «A thought broken off»), so it reaches him only after silence.
 BY_EAR = (
     "ТЫ ЕГО СЛЫШИШЬ, А НЕ ЧИТАЕШЬ: его слова доходят до тебя через распознавание речи, "
     "и оно иногда ослышивается. Странное или не к месту слово понимай по смыслу и вслух "
     "не повторяй — скажи правильное или просто продолжай; совсем не понял — переспроси "
     "коротко. Как говорить с ним — «ты пришёл» или «ты пришла», — решай по его собственным "
     "словам, а не по имени: имя тоже могло послышаться не так. Пока неясно — строй фразы "
-    "без рода."
+    "без рода. Если его слова обрываются на полуслове — в конце «—», «…» или запятая, — "
+    "он не договорил и замолчал, подбирая мысль: не отвечай по существу и не договаривай "
+    "за него, а одним-двумя словами подтолкни продолжить — так, как сказал бы ты сам: "
+    "«Ну?», «И?», «О чём?», «Так-так…». Если по смыслу мысль закончена — отвечай как обычно."
 )
 BY_EAR_EN = (
     "YOU HEAR THEM, YOU DON'T READ THEM: their words reach you through speech recognition, "
     "and it sometimes mishears. Take a strange or out-of-place word by its sense and don't repeat "
     "it out loud — say the right word or just carry on; if you didn't get it at all, ask back "
-    "briefly. Don't decide who they are from their name: the name may have been misheard too."
+    "briefly. Don't decide who they are from their name: the name may have been misheard too. "
+    "If their words break off mid-thought — ending in «—», «…» or a comma — they haven't "
+    "finished and have gone quiet, looking for the thought: don't answer the substance or "
+    "finish it for them; in a word or two, nudge them on, the way you would: «And?», «About "
+    "what?», «Go on…». If the thought is complete in meaning, answer as usual."
 )
 
 

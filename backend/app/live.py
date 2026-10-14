@@ -6,17 +6,21 @@ recording, Whisper transcribed it, the brain wrote a sentence, the voice made
 all of it — and only then did anything play. About 6.5 s, every turn
 (docs/LATENCY.md). Here every runner starts early:
 
-    the phone streams the microphone          → Flux hears it as it is said
+    the phone streams the microphone          → the ears hear it as it is said
     somebody starts talking                   → the brain reads ahead (prewarm),
                                                 if it has been quiet a while
-    Flux: «похоже, договорил» (~0.37 s)       → a DRAFT reply is already being
+    ears that guess: «похоже, договорил»      → a DRAFT reply is already being
                                                 written — by the brain alone
-    Flux: «договорил» (~0.64 s)               → the draft becomes the answer, and
+    the ears: «договорил» (Soniox: 0.4–0.9 s) → the draft becomes the answer, and
                                                 only now is any of it voiced
     its first pause («Ого,»)                  → that piece to the voice (or ready-made)
     first bytes of his voice                  → straight to the phone, played
 
 ── THINKING WHILE THEY TALK, AND WHAT IT COSTS ──────────────────────────────
+
+Soniox, the ears since 2026-10-14, does not guess: its «договорил» comes as
+early as Flux's «похоже» did, so with it there are no drafts on a guess — and
+none paid for. What follows is for ears that do guess.
 
 The owner, 2026-10-05, of drafting at every pause: «будет тратить больше
 денег и лишней энергии». Measured on the real ears (Flux, five phrases, two
@@ -78,14 +82,12 @@ remembering.
 speaks, and somebody who talks over him stops him — what the owner liked in
 ChatGPT's voice, and what a conversation is. A speaker and a microphone in one
 room, though: his voice comes back into the microphone. Echo cancellation in
-the phone or the browser takes most of it out; what it misses, Flux hears as
-HIS words, and talks_over tells those — and an «угу» — from somebody talking.
+the phone or the browser takes most of it out; what it misses, the ears hear
+as HIS words, and talks_over tells those — and an «угу» — from somebody talking.
 
 Without `duplex` (a room where he keeps hearing himself anyway): while his
-voice plays, and a moment after, Flux is sent silence instead of the
-microphone, and he cannot be interrupted. The end-of-turn threshold is then
-more patient (config.FLUX_EOT_THRESHOLD), because a turn he ends too early
-cannot be mended by carrying on.
+voice plays, and a moment after, the ears are sent silence instead of the
+microphone, and he cannot be interrupted.
 """
 
 from __future__ import annotations
@@ -112,9 +114,10 @@ _FILLERS_EN = ("Let me look.", "One sec, I'll check.", "Hang on, let me see.")
 #: After his last sound, how long before the microphone counts again — the
 #: room's echo has to die away first.
 _ECHO_TAIL = 0.3
-#: No audio from the phone for this long in the middle of a turn, and Flux
-#: gets silence in its place: it ends a turn by hearing the pause. Between
-#: turns the gate keeps the line alive on far less (gate.KEEPALIVE_EVERY).
+#: No audio from the phone for this long, and the ears get silence in its
+#: place: they end a turn by hearing the pause, and Soniox hangs up after 20 s
+#: without audio. (With the gate on, between turns it keeps the line alive on
+#: far less — gate.KEEPALIVE_EVERY.)
 _FILL_AFTER = 1.0
 _FILL = 0.25
 #: How far ahead of what is playing the next piece of his voice is started:
@@ -208,7 +211,7 @@ def _first_cut(voice: str | None, text: str) -> int:
 
 
 def _same(a: str | None, b: str | None) -> bool:
-    """The same words, whatever the punctuation and capitals Flux gave them."""
+    """The same words, whatever the punctuation and capitals the ears gave them."""
     return a is not None and b is not None and [
         w.lower().replace("ё", "е") for w in _WORD.findall(a)] == [
         w.lower().replace("ё", "е") for w in _WORD.findall(b)]
@@ -229,7 +232,7 @@ def talks_over(heard: str, said: Iterable[str]) -> bool:
     him — and not his own voice coming back from the speaker, nor a «угу»?
 
     Echo cancellation in the phone or browser takes his voice out of the
-    microphone; what it misses, Flux hears as words — HIS words, which is how
+    microphone; what it misses, the ears hear as words — HIS words, which is how
     they are told apart. A stop word interrupts at once; otherwise two words
     of their own, or one long one. Words under three letters do not count: a
     garbled echo is made of them as easily as «а я» is."""
@@ -589,12 +592,13 @@ class Session:
         self._last_in = time.monotonic()
         self._last_life = time.monotonic()
         self._heard_so_far = ""
-        #: Seconds of audio Flux has been sent, and when each piece arrived —
-        #: to turn Flux's «the last word ended at 5.06 s» into a moment in time.
+        #: Seconds of audio the ears have been sent, and when each piece arrived —
+        #: to turn their «the last word ended at 5.06 s» into a moment in time.
         self._clock = 0.0
         self._arrivals: deque[tuple[float, float]] = deque(maxlen=4000)
-        #: Only their voice goes on to Flux — billed for what it is sent
-        #: (gate.py; the owner, 2026-10-11: «чтобы слушали только наш голос»).
+        #: Only their voice to the ears (gate.py; the owner, 2026-10-11: «чтобы
+        #: слушали только наш голос») — off with Soniox, which bills the whole
+        #: stream (config.LIVE_GATE).
         self._gate = gate.Gate(time.monotonic(), enabled=config.LIVE_GATE)
         #: When the lines to the brain and the voice were last opened ahead of need.
         self._warmed = 0.0
@@ -686,12 +690,13 @@ class Session:
                 return
             try:
                 name = persona.persona_name(self.who)
-                threshold = (config.FLUX_EOT_THRESHOLD_DUPLEX if self.duplex
-                             else config.FLUX_EOT_THRESHOLD)
+                # A thought broken off waits longer for the rest of it when
+                # they are older (hearing.py, «A thought broken off»).
+                hold = config.HOLD_UNFINISHED_OLDER if self._older else config.HOLD_UNFINISHED
                 self.ears = await hearing.Ears.open(
-                    keyterms=(name.split()[0],) if name else (), eot_threshold=threshold)
+                    keyterms=(name.split()[0],) if name else (), hold=hold)
             except Exception as e:  # noqa: BLE001
-                _log("👂 the live ears (Deepgram)", e)
+                _log("👂 the live ears (Soniox)", e)
                 await self._send({"kind": "trouble", "detail": f"the ears: {e}"})
                 return
             self._warm()
@@ -714,15 +719,15 @@ class Session:
             if greeting:
                 self._reply = asyncio.create_task(self._answer(Draft(self, None), time.monotonic()))
             done, _ = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
-            # A line to Deepgram that drops fails whichever task touches it
+            # A line to the ears that drops fails whichever task touches it
             # first — the listener, or a send of the microphone or of silence —
-            # and a listener that simply ends means Deepgram hung up. Either
-            # way the phone is told why, never just hung up on.
+            # and a listener that simply ends means they hung up. Either way
+            # the phone is told why, never just hung up on.
             errors = [t.exception() for t in (listener, receiver, keeper)
                       if t in done and not t.cancelled() and t.exception()]
             if errors or (listener in done and not self._stopping.is_set()):
-                error = errors[0] if errors else RuntimeError("Deepgram closed the line")
-                _log("👂 the live ears (Deepgram)", error)
+                error = errors[0] if errors else RuntimeError("the ears closed the line")
+                _log("👂 the live ears (Soniox)", error)
                 await self._send({"kind": "trouble", "detail": f"the ears: {error}"})
         finally:
             for task in tasks:
@@ -792,9 +797,9 @@ class Session:
             await self._to_ears(piece, arrived)
 
     async def _to_ears(self, pcm: bytes, arrived: float) -> None:
-        """Audio to Flux — counted, so that its «the last word ended at 5.06 s»
-        turns into the moment that audio arrived (_speech_end). Only what is
-        sent counts: Flux's clock is the audio it heard, gaps left out."""
+        """Audio to the ears — counted, so that their «the last word ended at
+        5.06 s» turns into the moment that audio arrived (_speech_end). Only
+        what is sent counts: their clock is the audio they heard, gaps left out."""
         assert self.ears is not None
         await self.ears.hear(pcm)
         self._clock += len(pcm) / (2 * hearing.RATE)
@@ -816,9 +821,8 @@ class Session:
     async def _tend_line(self) -> None:
         """Silence into a quiet line, and the line closed when nobody is there.
 
-        Two silences, and only the first is a pause: in the middle of a turn
-        (the gate open) a phone gone quiet is filled as it always was — Flux
-        must hear the pause to end the turn. Between turns a closed gate is
+        A phone gone quiet is filled as it always was — the ears must hear the
+        pause to end the turn. With the gate on, between turns a closed gate is
         kept alive on a beat of 80 ms every few seconds, not on a stream."""
         while True:
             await asyncio.sleep(_FILL)
@@ -839,15 +843,11 @@ class Session:
     async def _listen(self) -> None:
         assert self.ears is not None
         async for message in self.ears.events():
-            kind = message.get("type")
-            if kind == "Warning":
-                print(f"[live] Deepgram warning: {message}", file=sys.stderr, flush=True)
-                continue
-            if kind != "TurnInfo":
+            if message.get("type") != "TurnInfo":
                 continue
             event = message.get("event")
             text = (message.get("transcript") or "").strip()
-            # A turn Flux has open is followed to its end, whoever's it is.
+            # A turn the ears have open is followed to its end, whoever's it is.
             self._gate.on_turn(event, time.monotonic())
             if event == "StartOfTurn":
                 self._over_him = self.duplex and self._audible()

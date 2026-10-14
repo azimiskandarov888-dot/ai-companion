@@ -29,7 +29,7 @@ def temp_data(tmp_path, monkeypatch):
     # and a key sitting there would otherwise turn an unpatched test into a
     # paid call — the voice, since «fish» with an OpenRouter key speaks through
     # OpenRouter (config.voice_provider). A test that needs a key sets a fake one.
-    for key in ("OPENROUTER_API_KEY", "DEEPGRAM_API_KEY", "FISH_API_KEY", "OPENAI_API_KEY",
+    for key in ("OPENROUTER_API_KEY", "SONIOX_API_KEY", "FISH_API_KEY", "OPENAI_API_KEY",
                 "ANTHROPIC_API_KEY", "ELEVENLABS_API_KEY", "YANDEX_API_KEY", "GEMINI_API_KEY",
                 "GOOGLE_CLOUD_API_KEY", "GOOGLE_CLOUD_PROJECT"):
         monkeypatch.setattr(config, key, None)

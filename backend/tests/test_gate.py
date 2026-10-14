@@ -138,7 +138,7 @@ def test_switched_off_it_sends_everything_as_before():
 def test_it_says_what_the_talk_cost():
     g = gate.Gate(0.0)
     run(g, [ROOM] * 40 + [VOICE] * 10)
-    assert "sent to Deepgram" in g.report() and g.sent_s < g.heard_s
+    assert "sent to the ears" in g.report() and g.sent_s < g.heard_s
 
 
 def test_as_he_stops_it_opens_and_waits_for_their_answer():

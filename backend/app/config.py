@@ -193,54 +193,43 @@ EMERGENCY_NUMBER: str = os.getenv("EMERGENCY_NUMBER", "103")
 OPENAI_API_KEY: str | None = os.getenv("OPENAI_API_KEY")
 WHISPER_MODEL: str = os.getenv("WHISPER_MODEL", "whisper-1")
 
-# --- The ears, live: Deepgram Flux (the live channel — live.py) ------------
+# --- The ears, live: Soniox (the live channel — live.py, hearing.py) -------
 #
-# Whisper hears a FINISHED recording: the phone waited 1.2 s of silence, sent
-# the file, and only then did 0.75–1.5 s of recognising begin. Flux hears while
-# the person is still talking, and says itself when they have finished — by
-# what was said and how, not by a timer. Measured on Russian through the
-# European address (2026-09-29): «похоже, договорил» 0.34 s after the last
-# word, «договорил» 0.63 s after it at the 0.7 threshold — 0.8–1.6 s at the
-# 0.85 it uses now, which cuts people off less (below). See docs/LATENCY.md.
-DEEPGRAM_API_KEY: str | None = os.getenv("DEEPGRAM_API_KEY")
-#: Europe: 80 ms there and back from Tashkent, against 240 for the US address.
-DEEPGRAM_URL: str = os.getenv("DEEPGRAM_URL", "wss://api.eu.deepgram.com/v2/listen")
-#: Russian lives in the multilingual model; the hint is COMPANION_LANGUAGE.
-FLUX_MODEL: str = os.getenv("FLUX_MODEL", "flux-general-multi")
-#: How sure Flux must be that somebody has finished. Deepgram's default, 0.7,
-#: cut the owner off in the middle of what he was saying (2026-09-30). Measured
-#: on six phrases with a pause in the middle, streamed in real time: 0.7 ended
-#: the turn inside the pause in four of the five that had one, 0.8 in three,
-#: 0.85 in two, 0.9 in none — but 0.9 then waited out the whole five-second
-#: timeout at the real end as well. 0.85 answers a finished phrase 0.8–1.6 s
-#: after its last word, which is mostly time the brain is still writing
-#: anyway (its first words take ~1.3 s from the end), so it costs at most
-#: ~0.2 s, on long phrases only. A pause after a finished sentence stays
-#: ambiguous at any threshold; the real answer to that is letting them talk
-#: over him (the live channel's `duplex`).
-FLUX_EOT_THRESHOLD: float = float(os.getenv("FLUX_EOT_THRESHOLD", "0.85"))
-#: The same when they CAN talk over him (the live channel's `duplex`, now the
-#: default): a turn ended too early is mended by carrying on — he stops and
-#: listens — so it can be quicker. 0.8 still cuts in less than 0.7 did, and
-#: its «договорил» (0.5–1.3 s after the last word) almost always comes while
-#: the brain is still writing.
-FLUX_EOT_THRESHOLD_DUPLEX: float = float(os.getenv("FLUX_EOT_THRESHOLD_DUPLEX", "0.8"))
-#: The earlier, less certain «похоже, договорил» — the brain starts writing
-#: then, and the draft is thrown away if they carry on. Lower is earlier and
-#: more drafts wasted (Deepgram: 0.3–0.5 costs 50–70% more calls — for Luna,
-#: fractions of a cent).
-FLUX_EAGER_EOT_THRESHOLD: float = float(os.getenv("FLUX_EAGER_EOT_THRESHOLD", "0.4"))
-#: The most silence that can still mean «not finished». Five seconds: an old
-#: man gathering a thought is not a man who has stopped.
-FLUX_EOT_TIMEOUT_MS: int = int(os.getenv("FLUX_EOT_TIMEOUT_MS", "5000"))
-#: Deepgram bills every second the line is open, silence included. A tab left
+# Hears while the person is still talking, and says itself when they have
+# finished. Since 2026-10-14, after Deepgram Flux: on the same audio the same
+# words and more of them, the end of a turn 0.4–0.9 s after the last sound
+# against Flux's 1.0–2.3 s, at half the price or less: $0.12 an hour of the
+# whole talk, where Deepgram took $0.47 an hour of the voice in it — half to
+# two thirds of a talk with the gate (docs/HANDOVER.md §0).
+SONIOX_API_KEY: str | None = os.getenv("SONIOX_API_KEY")
+SONIOX_URL: str = os.getenv("SONIOX_URL", "wss://stt-rt.soniox.com/transcribe-websocket")
+SONIOX_MODEL: str = os.getenv("SONIOX_MODEL", "stt-rt-v5")
+#: Both: an English word in a Russian talk, and a talk in English.
+SONIOX_LANGUAGES: tuple[str, ...] = tuple(
+    code.strip() for code in os.getenv("SONIOX_LANGUAGES", "ru,en").split(",") if code.strip())
+#: Patient endpoints. Soniox's defaults (0, 2000 ms) called «finished» on four
+#: thoughts the owner had only broken off — «I've really been thinking
+#: about—» after a second's pause, «…нет,» after three; these on two, both
+#: ending «—» (hearing.UNFINISHED catches them), and still 0.4–0.6 s after a
+#: finished phrase (2026-10-14). Soniox's «quicker» — 0.3, 1500 ms, latency
+#: level 2 — cut in nine times in three short answers: never.
+SONIOX_ENDPOINT_SENSITIVITY: float = float(os.getenv("SONIOX_ENDPOINT_SENSITIVITY", "-0.5"))
+SONIOX_MAX_ENDPOINT_DELAY_MS: int = int(os.getenv("SONIOX_MAX_ENDPOINT_DELAY_MS", "3000"))
+#: A thought broken off — «about—» — and then silence: this much more of it
+#: before it is their turn after all, and he nudges them on («Ну?»). On top of
+#: Soniox's own wait for an end, up to SONIOX_MAX_ENDPOINT_DELAY_MS. Longer for
+#: an older person: gathering a thought is not having stopped (the owner,
+#: 2026-10-14: «в зависимости от возраста»).
+HOLD_UNFINISHED: float = float(os.getenv("HOLD_UNFINISHED", "1.5"))
+HOLD_UNFINISHED_OLDER: float = float(os.getenv("HOLD_UNFINISHED_OLDER", "3.0"))
+#: Soniox bills every second the line is open, silence included. A tab left
 #: open all night must not be a night of billing: after this long with nobody
 #: speaking, the live channel closes itself.
 LIVE_IDLE_SECONDS: float = float(os.getenv("LIVE_IDLE_SECONDS", "120"))
-#: Only the person's voice goes on to the live ears (app/gate.py): Deepgram
-#: bills the audio it is sent, and most of a talk is not their voice. 0 sends
-#: everything, as before (2026-10-11).
-LIVE_GATE: bool = os.getenv("LIVE_GATE", "1").strip().lower() not in ("0", "false", "no")
+#: Only the person's voice to the live ears (app/gate.py) — built for Deepgram,
+#: which billed the audio it was sent. Soniox bills the whole stream, so the
+#: gate saves nothing there and is off; 1 turns it back on.
+LIVE_GATE: bool = os.getenv("LIVE_GATE", "0").strip().lower() not in ("0", "false", "no")
 
 # --- Memory: embeddings for semantic story recall (reuses the OpenAI key) --
 #: Through OpenRouter since 2026-10-09 (app/embeddings.py): the best Russian
@@ -492,6 +481,6 @@ def service_status() -> dict[str, bool]:
         "ears_whisper": bool(OPENAI_API_KEY),
         # The live channel's ears (live.py). Without them /api/live says so
         # and the file-by-file path above is all there is.
-        "ears_live": bool(DEEPGRAM_API_KEY),
+        "ears_live": bool(SONIOX_API_KEY),
         "mouth": tts_configured(),
     }

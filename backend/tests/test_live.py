@@ -2,7 +2,7 @@
 finished — and still exactly the same turn as every other path: the vows, the
 watcher, the farewell, the body, the remembering.
 
-Deepgram, the brain and the voice are all stand-ins here; the line to the phone
+The ears, the brain and the voice are all stand-ins here; the line to the phone
 is the real WebSocket. What is pinned is everything that would otherwise only
 show up in front of somebody: a guess that leaves a trace, a friend who hears
 himself, an alarm that comes after the words instead of before them.
@@ -31,7 +31,7 @@ REAL_EARS = hearing.Ears
 
 
 def turn(event: str, text: str = "", end: float = 1.0) -> dict:
-    """A Flux TurnInfo message."""
+    """A TurnInfo message, as the ears give it (hearing.Turns)."""
     words = [{"word": w, "end": end} for w in text.split()]
     return {"type": "TurnInfo", "event": event, "transcript": text, "words": words}
 
@@ -48,21 +48,21 @@ VOICE = voice_frame()
 
 
 class FakeEars:
-    """Flux, answered by the test: what it heard, and what it says back."""
+    """The ears, answered by the test: what they heard, and what they say back."""
 
     made: list[FakeEars] = []
 
-    def __init__(self, keyterms=(), eot_threshold=None) -> None:
+    def __init__(self, keyterms=(), hold=None) -> None:
         self.keyterms = keyterms
-        self.eot_threshold = eot_threshold
+        self.hold = hold
         self.heard: list[bytes] = []
         self.inbox: queue.Queue = queue.Queue()
         self.ends = 0
         self.closed = False
 
     @classmethod
-    async def open(cls, keyterms=(), eot_threshold=None):
-        ears = cls(keyterms, eot_threshold)
+    async def open(cls, keyterms=(), hold=None):
+        ears = cls(keyterms, hold)
         cls.made.append(ears)
         return ears
 
@@ -345,9 +345,9 @@ def test_only_somebodys_line_can_be_a_draft():
 # ── he does not hear himself; over headphones he can be interrupted ─────────
 
 def test_he_does_not_hear_himself(env):
-    """Without headphones his own voice comes back into the microphone. It used
-    to reach Flux as silence — paid for as audio. Now it does not reach Flux at
-    all; the person's voice after him does (gate.py)."""
+    """Without headphones his own voice comes back into the microphone: the
+    ears get silence in its place (with the gate on, nothing at all — gate.py);
+    the person's voice after him reaches them."""
     env.voice.delay = 0.1
     with talk(env) as line:
         ears = line.ears()
@@ -389,14 +389,18 @@ def test_he_can_be_interrupted_by_default(env):
         assert live._open[UID].duplex is False
 
 
-def test_a_turn_ended_too_early_is_mended_so_it_may_end_sooner(env):
-    """Where they can talk over him, a turn he took too early is mended by
-    carrying on — so the ears may decide sooner. Where they cannot, patience."""
-    with talk(env, duplex=True) as line:
-        assert line.ears().eot_threshold == config.FLUX_EOT_THRESHOLD_DUPLEX
-    with talk(env, duplex=False) as line:
-        assert line.ears().eot_threshold == config.FLUX_EOT_THRESHOLD
-    assert config.FLUX_EOT_THRESHOLD_DUPLEX < config.FLUX_EOT_THRESHOLD
+def test_an_older_person_is_given_longer_to_finish_a_thought(env, monkeypatch):
+    """A thought broken off waits for the rest of it before he nudges them on —
+    longer when they are older (the owner, 2026-10-14: «в зависимости от
+    возраста»; hearing.py)."""
+    monkeypatch.setattr(live.young, "is_elder", lambda user_id: False)
+    monkeypatch.setattr(live.voices, "years", lambda who: 30)
+    with talk(env) as line:
+        assert line.ears().hold == config.HOLD_UNFINISHED
+    monkeypatch.setattr(live.young, "is_elder", lambda user_id: True)
+    with talk(env) as line:
+        assert line.ears().hold == config.HOLD_UNFINISHED_OLDER
+    assert config.HOLD_UNFINISHED_OLDER > config.HOLD_UNFINISHED
 
 
 def test_his_own_voice_back_from_the_speaker_does_not_stop_him(env):
@@ -663,21 +667,21 @@ def test_without_live_ears_it_says_so(env, monkeypatch):
     with _raw(env) as ws:
         ws.send_json({"type": "start", "token": TOKEN})
         said = Line(ws).expect("trouble")
-    assert "DEEPGRAM_API_KEY" in said["detail"]
+    assert "SONIOX_API_KEY" in said["detail"]
 
 
 def test_ears_that_drop_mid_conversation_are_said(env):
-    """A dropped line to Deepgram fails whichever task touches it first — here
+    """A dropped line to the ears fails whichever task touches it first — here
     the one sending the microphone, not the one listening — and the phone is
     told why rather than just hung up on (it used to be, silently)."""
     with talk(env) as line:
         async def gone(pcm):
-            raise ConnectionError("Deepgram went away")
+            raise ConnectionError("the ears went away")
 
         line.ears().hear = gone
         line.ws.send_bytes(VOICE)
         said = line.expect("trouble")
-    assert "Deepgram went away" in said["detail"]
+    assert "the ears went away" in said["detail"]
 
 
 def test_ears_that_hang_up_are_said(env):
@@ -693,10 +697,21 @@ def test_a_second_window_replaces_the_first(env):
             first.expect("replaced")
 
 
-def test_a_quiet_line_is_kept_open_on_a_beat_of_silence(env, monkeypatch):
-    """Flux has no KeepAlive and hangs up after ~10 s without audio. It used to
-    be fed a stream of silence — billed second by second. Now 80 ms every few
-    seconds between turns (gate.KEEPALIVE_EVERY)."""
+def test_a_quiet_phone_is_filled_with_silence(env, monkeypatch):
+    """The ears end a turn by hearing the pause, and Soniox hangs up after 20 s
+    without audio: a phone gone quiet is filled with silence. Soniox bills
+    the whole stream, so the silence costs nothing more."""
+    monkeypatch.setattr(live, "_FILL", 0.02)
+    monkeypatch.setattr(live, "_FILL_AFTER", 0.05)
+    with talk(env) as line:
+        wait_until(lambda: len(line.ears().heard) >= 3)
+    assert all(frame == bytes(int(16000 * 0.02) * 2) for frame in line.ears().heard)
+
+
+def test_with_the_gate_a_quiet_line_is_kept_open_on_a_beat_of_silence(env, monkeypatch):
+    """For ears that bill the audio they are sent (Deepgram did): 80 ms every
+    few seconds between turns (gate.KEEPALIVE_EVERY), not a stream."""
+    monkeypatch.setattr(config, "LIVE_GATE", True)
     monkeypatch.setattr(live, "_FILL", 0.02)
     monkeypatch.setattr(gate, "KEEPALIVE_EVERY", 0.05)
     with talk(env) as line:
@@ -706,8 +721,9 @@ def test_a_quiet_line_is_kept_open_on_a_beat_of_silence(env, monkeypatch):
     assert all(len(frame) == int(16000 * gate.KEEPALIVE) * 2 for frame in beats)
 
 
-def test_only_their_voice_reaches_the_ears(env):
+def test_with_the_gate_only_their_voice_reaches_the_ears(env, monkeypatch):
     """The room is not sent; their voice is, with the second before it."""
+    monkeypatch.setattr(config, "LIVE_GATE", True)
     quiet = voice_frame(-70.0)
     with talk(env) as line:
         for _ in range(20):
@@ -722,8 +738,9 @@ def test_only_their_voice_reaches_the_ears(env):
         assert gate.PREROLL - 0.1 <= heard.count(quiet) * 0.08 <= gate.PREROLL
 
 
-def test_a_turn_is_heard_to_its_end_pause_and_all(env):
-    """Flux ends a turn by HEARING the pause — so the pause must reach it."""
+def test_with_the_gate_a_turn_is_heard_to_its_end_pause_and_all(env, monkeypatch):
+    """The ears end a turn by HEARING the pause — so the pause must reach them."""
+    monkeypatch.setattr(config, "LIVE_GATE", True)
     quiet = voice_frame(-70.0)
     with talk(env) as line:
         ears = line.ears()

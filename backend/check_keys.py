@@ -85,14 +85,14 @@ def shape_report() -> None:
 
         status = "; ".join(problems) if problems else "looks right"
         # Only a PUBLIC prefix is ever shown («sk-ant-», «sk-or-»). A key with
-        # none, like Deepgram's, is all secret from its first character.
+        # none, like Soniox's, is all secret from its first character.
         starts = f", starts {value[:len(expect)]}…" if expect else ""
         print(f"  {name:<20} {len(value)} chars{starts}  → {status}")
 
     describe("ANTHROPIC_API_KEY", config.ANTHROPIC_API_KEY, "sk-ant-")
     describe("OPENAI_API_KEY", config.OPENAI_API_KEY, "sk-")
     describe("OPENROUTER_API_KEY", config.OPENROUTER_API_KEY, "sk-or-")
-    describe("DEEPGRAM_API_KEY", config.DEEPGRAM_API_KEY, "")
+    describe("SONIOX_API_KEY", config.SONIOX_API_KEY, "")
     if config.FISH_API_KEY:
         describe("FISH_API_KEY", config.FISH_API_KEY, "")
     if config.GEMINI_API_KEY:
@@ -196,43 +196,39 @@ def check_conversation() -> bool:
 
 
 def check_live_ears() -> bool:
-    """The live channel's ears answer: open a line to Deepgram Flux, give it a
-    quarter of a second of silence, hang up. Costs a quarter of a second of
-    Deepgram's credit."""
+    """The live channel's ears answer: open a line to Soniox, give it a quarter
+    of a second of silence, and wait for it to say it has heard it all. Costs
+    a second or so of the Soniox balance — a fraction of a cent."""
     from app import hearing
 
-    if not config.DEEPGRAM_API_KEY:
-        print("👂 Живой канал (Deepgram): нет ключа в .env  → добавьте DEEPGRAM_API_KEY")
+    if not config.SONIOX_API_KEY:
+        print("👂 Живой канал (Soniox): нет ключа в .env  → добавьте SONIOX_API_KEY")
         return False
 
-    async def probe() -> bool:
+    async def probe() -> None:
         ears = await hearing.Ears.open()
         try:
             await ears.hear(bytes(hearing.CHUNK * 3))
-            async for message in ears.events():
-                if message.get("type") in ("Connected", "TurnInfo"):
-                    return True
-            return False
+            await ears.end_of_audio()
+            async for _ in ears.events():
+                pass
         finally:
             await ears.close()
 
     try:
-        heard = asyncio.run(asyncio.wait_for(probe(), 15))
+        asyncio.run(asyncio.wait_for(probe(), 15))
     except Exception as error:  # noqa: BLE001 — friendly report, not a crash
         reason = _classify(error)
         if reason == "rejected":
-            print("👂 Живой канал (Deepgram): ❌ ключ ОТКЛОНЁН — неверный или устаревший")
+            print("👂 Живой канал (Soniox): ❌ ключ ОТКЛОНЁН — неверный или устаревший")
         elif reason == "no_credit":
-            print("👂 Живой канал (Deepgram): ⚠️ ключ верный, но НЕТ КРЕДИТОВ — console.deepgram.com")
+            print("👂 Живой канал (Soniox): ⚠️ ключ верный, но НА СЧЕТУ НОЛЬ — console.soniox.com → Billing")
         else:
-            print("👂 Живой канал (Deepgram): ⚠️ не отвечает")
+            print("👂 Живой канал (Soniox): ⚠️ не отвечает")
         print(f"           {error}")
         return False
-    if heard:
-        print("👂 Живой канал (Deepgram): ✅ слышит")
-    else:
-        print("👂 Живой канал (Deepgram): ⚠️ открылся, но ничего не сказал")
-    return heard
+    print("👂 Живой канал (Soniox): ✅ слышит")
+    return True
 
 
 def check_openai() -> bool:
@@ -358,7 +354,7 @@ def main() -> None:
     check_gemini_stream()
 
     print()
-    # Either pair of ears will do: Whisper for the file-by-file path, Deepgram
+    # Either pair of ears will do: Whisper for the file-by-file path, Soniox
     # for the live channel (/live).
     if brain_ok and talk_ok and (ears_ok or live_ok) and voice_ok:
         print("✅ Всё готово — откройте http://localhost:8000 и поговорите с Бобом.")

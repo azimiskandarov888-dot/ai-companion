@@ -9,7 +9,7 @@ Talking loop (with memory + persona):
           → (in the background) learn new memories
 
 The live loop (live.py) is the same turn over one open line: the ears
-(Deepgram Flux) hear the person while they speak, his answer is drafted the
+(Soniox) hear the person while they speak, his answer is drafted the
 moment they seem to have finished, and his voice comes back in pieces as it is
 made — ~1.6–2.2 s from the end of their words to his first sound, against
 ~6.5 s for the file-at-a-time loop above (measured 2026-09-30).

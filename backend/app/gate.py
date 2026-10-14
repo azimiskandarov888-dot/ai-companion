@@ -1,5 +1,10 @@
 """What the live ears are sent: the person's voice, not the room.
 
+OFF since 2026-10-14 (config.LIVE_GATE): the ears are Soniox now, which
+bills the whole stream, not the audio in it — holding the room back saves
+nothing there. Kept, measured and tested, for ears that bill what they are
+sent, as Deepgram did:
+
 Deepgram bills a stream for the audio it is sent, silence included — «you will
 still be billed for an active connection if you're sending data»
 (developers.deepgram.com, Live Streaming Audio Transcription) — and the live
@@ -88,7 +93,7 @@ AFTER_END = 0.2
 #: A sound that never became a turn: closed after this much quiet.
 NO_TURN_QUIET = 1.5
 #: A turn Flux has open is followed to its end — but no longer than this
-#: without a voice: Flux ends a turn by itself after FLUX_EOT_TIMEOUT_MS (5 s).
+#: without a voice: the ears end a turn by themselves after a few seconds.
 TURN_QUIET_CAP = 7.0
 #: As he stops speaking, open and wait this long for their answer.
 EXPECT_FOR = 2.0
@@ -219,4 +224,4 @@ class Gate:
 
     def report(self) -> str:
         share = round(100 * self.sent_s / self.heard_s) if self.heard_s else 0
-        return f"heard {self.heard_s:.0f} s, sent to Deepgram {self.sent_s:.0f} s ({share}%)"
+        return f"heard {self.heard_s:.0f} s, sent to the ears {self.sent_s:.0f} s ({share}%)"

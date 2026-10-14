@@ -16,7 +16,7 @@ the phone it is the only sign of listening there is. The owner, 2026-10-02:
 ── WHAT, AND WHEN ──────────────────────────────────────────────────────────
 
   a pause in their turn          «м-м» — a listener's sound, now and then. If
-  (Flux: «похоже, договорил»)    they carry on, that is exactly what it was.
+  (ears: «похоже, договорил»)    they carry on, that is exactly what it was.
                                  Only when he may be talked over (duplex):
                                  otherwise the microphone is closed while he
                                  makes a sound, and their next words would be lost.
