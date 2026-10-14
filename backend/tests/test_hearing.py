@@ -73,7 +73,7 @@ def test_the_key_goes_in_a_header_and_the_request_first(monkeypatch):
     assert seen["additional_headers"] == {"Authorization": "Bearer test-key"}
     assert json.loads(line.sent[0]) == hearing.start_request(("Андрей",))
     assert "test-key" not in line.sent[0]
-    assert ears._turns.hold == config.HOLD_UNFINISHED
+    assert ears._turns.hold == hearing.HELD_AT_MOST
 
 
 # ── what is made of what it says ────────────────────────────────────────────
@@ -100,7 +100,8 @@ def test_a_turn_begins_grows_and_ends_with_when_each_word_was_said():
 def test_a_thought_broken_off_is_not_an_end(broken):
     turns = hearing.Turns(hold=1.5)
     got = turns.feed({"tokens": [tok(broken), END]}, 10.0)
-    assert [t["event"] for t in got] == ["StartOfTurn"]
+    # Held — and said, so that the live channel can time what comes next.
+    assert [(t["event"], t["transcript"]) for t in got] == [("StartOfTurn", broken), ("Pause", broken)]
     assert turns.held_until == pytest.approx(11.5)
 
 
@@ -141,6 +142,32 @@ def test_the_button_ends_a_broken_off_turn_at_once():
     turns.feed({"tokens": [tok("Я думаю,"), END]}, 0.0)
     ended = turns.feed({"tokens": [tok("<fin>")]}, 0.2)
     assert [(t["event"], t["transcript"]) for t in ended] == [("EndOfTurn", "Я думаю,")]
+
+
+def test_a_finished_sentence_is_held_too_when_he_lets_things_rest_but_never_a_question():
+    """listening.py: in a hard talk a sentence is let rest a moment — they
+    often go on. A question to him is answered."""
+    turns = hearing.Turns(hold=1.5)
+    turns.finished = True
+    got = turns.feed({"tokens": [tok("Мама умерла весной."), END]}, 0.0)
+    assert [t["event"] for t in got] == ["StartOfTurn", "Pause"]
+    turns = hearing.Turns(hold=1.5)
+    turns.finished = True
+    got = turns.feed({"tokens": [tok("А ты как думаешь?"), END]}, 0.0)
+    assert [t["event"] for t in got] == ["StartOfTurn", "EndOfTurn"]
+
+
+def test_when_he_jumps_in_nothing_broken_off_is_held():
+    turns = hearing.Turns(hold=1.5)
+    turns.unfinished = False
+    got = turns.feed({"tokens": [tok("Да это всё из-за—"), END]}, 0.0)
+    assert [t["event"] for t in got] == ["StartOfTurn", "EndOfTurn"]
+
+
+def test_what_is_held_is_the_live_channels_to_say():
+    ears = hearing.Ears(_Line([]))
+    ears.holding(unfinished=False, finished=True)
+    assert (ears._turns.unfinished, ears._turns.finished) == (False, True)
 
 
 def test_without_a_hold_a_broken_off_thought_ends_as_soniox_says():
@@ -255,9 +282,10 @@ def test_what_soniox_says_comes_through_as_turns_in_order():
 
 def test_a_held_thought_becomes_their_turn_with_nothing_more_coming():
     line = _Line([json.dumps({"tokens": [tok("Я вчера ходил в—"), END]})], then_wait=True)
-    got = _heard(line, hold=0.05, take=2)
+    got = _heard(line, hold=0.05, take=3)
     assert [(t["event"], t["transcript"]) for t in got] == [
-        ("StartOfTurn", "Я вчера ходил в—"), ("EndOfTurn", "Я вчера ходил в—")]
+        ("StartOfTurn", "Я вчера ходил в—"), ("Pause", "Я вчера ходил в—"),
+        ("EndOfTurn", "Я вчера ходил в—")]
 
 
 def test_an_error_from_soniox_ends_the_conversation_out_loud():

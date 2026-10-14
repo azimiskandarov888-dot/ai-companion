@@ -34,13 +34,13 @@ There is no «похоже, договорил»: Soniox's «договорил�
 ── A THOUGHT BROKEN OFF IS NOT AN END ───────────────────────────────────────
 
 The owner, on «I've really been thinking about—» and a long pause: there is
-nothing in it to answer yet — he should get «Ну?» or «О чём?», and only after
-a while, longer for an older person. Soniox writes a broken-off thought as it
-sounds — «about—», «последнее время... нет,» — so an «<end>» on words ending
-like that (UNFINISHED) is held: if they go on, it is all one turn; if they say
-nothing for `hold` seconds, it is their turn after all, and the brain, told by
-companion.BY_EAR what such an ending means, nudges them on. The button «I've
-finished» (finished()) ends a turn at once, broken off or not.
+nothing in it to answer yet. Soniox writes a broken-off thought as it sounds —
+«about—», «последнее время... нет,» — so an «<end>» on words ending like that
+(UNFINISHED) is HELD, and said as a Pause: if they go on, it is all one turn.
+How long it waits, whether he says «Ну?» meanwhile, and whether a finished
+sentence is let rest a moment too, is the live channel's, by how he is
+listening right now (listening.py) — ending a held turn is finished(), as the
+button «I've finished» is. If nobody ends it, it ends by itself (HELD_AT_MOST).
 """
 
 from __future__ import annotations
@@ -64,6 +64,8 @@ CHUNK = RATE * 2 * 80 // 1000
 #: A turn quiet this much longer than Soniox should ever take to end it ends
 #: by itself (Turns.quiet).
 QUIET_MARGIN = 1.0
+#: A held turn nobody ended — the live channel ends them sooner — ends by itself.
+HELD_AT_MOST = 9.0
 #: Words ending like this are a thought broken off, not a turn finished.
 UNFINISHED = ("—", "–", "-", ",", ":", "…", "...")
 _WORD = re.compile(r"\w")
@@ -105,9 +107,13 @@ class Turns:
     """Soniox's tokens, as the turns the live channel follows. No I/O: what
     Ears reads goes in (feed), and the time, when nothing has come (due)."""
 
-    def __init__(self, hold: float, quiet: float | None = None) -> None:
-        #: How long a broken-off thought waits for more before it is their turn.
+    def __init__(self, hold: float = HELD_AT_MOST, quiet: float | None = None) -> None:
+        #: How long a held turn waits, at most, if nobody ends it.
         self.hold = hold
+        #: What is held (holding): a thought broken off — and a finished
+        #: sentence that asks nothing, when he is letting things rest.
+        self.unfinished = True
+        self.finished = False
         #: A turn in which nothing has changed for this long is over, whatever
         #: Soniox says — as Flux's eot_timeout was: it should always have said
         #: «<end>» well before (SONIOX_MAX_ENDPOINT_DELAY_MS), and a turn left
@@ -190,9 +196,13 @@ class Turns:
         """`unsure`: Soniox never said — its words still changing count too."""
         text = _text(self._final + self._pending if unsure else self._final)
         said = bool(_WORD.search(text))
-        if said and not forced and self.hold > 0 and unfinished(text):
+        broken = unfinished(text)
+        if said and not forced and self.hold > 0 and (
+                (broken and self.unfinished)
+                or (not broken and self.finished and not text.rstrip().endswith("?"))):
             if self._held_since is None:
                 self._held_since, self._held_at = now, len(self._final)
+                return [_turn("Pause", text)]
             return []
         tokens = self._final + self._pending if unsure else self._final
         out = [_turn("EndOfTurn", text if said else "", self._words(tokens))] if self._in_turn else []
@@ -214,7 +224,7 @@ class Turns:
 class Ears:
     """One conversation's line to Soniox."""
 
-    def __init__(self, ws: ClientConnection, hold: float = 0.0) -> None:
+    def __init__(self, ws: ClientConnection, hold: float = HELD_AT_MOST) -> None:
         self._ws = ws
         # The phone's audio and the silence the live channel fills gaps with
         # come from two tasks; one send at a time keeps them whole.
@@ -222,9 +232,7 @@ class Ears:
         self._turns = Turns(hold)
 
     @classmethod
-    async def open(cls, keyterms: tuple[str, ...] = (), hold: float | None = None) -> Ears:
-        """`hold`: how long a broken-off thought waits for more — the
-        caller's, when it knows better (config.HOLD_UNFINISHED_OLDER)."""
+    async def open(cls, keyterms: tuple[str, ...] = ()) -> Ears:
         if not config.SONIOX_API_KEY:
             raise RuntimeError(
                 "SONIOX_API_KEY is not set — the live ears (Soniox) are not configured."
@@ -240,7 +248,13 @@ class Ears:
         except Exception:
             await ws.close()
             raise
-        return cls(ws, config.HOLD_UNFINISHED if hold is None else hold)
+        return cls(ws)
+
+    def holding(self, *, unfinished: bool, finished: bool) -> None:
+        """What an «<end>» is held on from now (Turns): a thought broken off,
+        and a finished sentence that asks nothing — the live channel's, by
+        how he is listening (listening.py)."""
+        self._turns.unfinished, self._turns.finished = unfinished, finished
 
     async def hear(self, pcm: bytes) -> None:
         """Audio from the person, as it comes."""

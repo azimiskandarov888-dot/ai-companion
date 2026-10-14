@@ -63,6 +63,10 @@ ANTHROPIC_API_KEY: str | None = os.getenv("ANTHROPIC_API_KEY")
 # The scribe, his week and the diary.
 BRAIN_MODEL: str = os.getenv("ANTHROPIC_MODEL", "anthropic/claude-sonnet-5")
 CHAT_MODEL: str = os.getenv("CHAT_MODEL", "google/gemma-4-31b-it")
+#: The listener (listening.py): after each of their turns, how he listens to
+#: the next — the mood, how soon he comes in, his sounds. One small call; the
+#: conversation's own model, whose line is already open.
+LISTENER_MODEL: str = os.getenv("LISTENER_MODEL", CHAT_MODEL)
 #: The key for every «vendor/model» id — the voice above, and the owner's tools.
 OPENROUTER_API_KEY: str | None = os.getenv("OPENROUTER_API_KEY")
 #: WHERE OpenRouter sends him. Left to itself it picks a place by price, not
@@ -215,13 +219,6 @@ SONIOX_LANGUAGES: tuple[str, ...] = tuple(
 #: level 2 — cut in nine times in three short answers: never.
 SONIOX_ENDPOINT_SENSITIVITY: float = float(os.getenv("SONIOX_ENDPOINT_SENSITIVITY", "-0.5"))
 SONIOX_MAX_ENDPOINT_DELAY_MS: int = int(os.getenv("SONIOX_MAX_ENDPOINT_DELAY_MS", "3000"))
-#: A thought broken off — «about—» — and then silence: this much more of it
-#: before it is their turn after all, and he nudges them on («Ну?»). On top of
-#: Soniox's own wait for an end, up to SONIOX_MAX_ENDPOINT_DELAY_MS. Longer for
-#: an older person: gathering a thought is not having stopped (the owner,
-#: 2026-10-14: «в зависимости от возраста»).
-HOLD_UNFINISHED: float = float(os.getenv("HOLD_UNFINISHED", "1.5"))
-HOLD_UNFINISHED_OLDER: float = float(os.getenv("HOLD_UNFINISHED_OLDER", "3.0"))
 #: Soniox bills every second the line is open, silence included. A tab left
 #: open all night must not be a night of billing: after this long with nobody
 #: speaking, the live channel closes itself.

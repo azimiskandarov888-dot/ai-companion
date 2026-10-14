@@ -169,9 +169,12 @@ BY_EAR = (
     "коротко. Как говорить с ним — «ты пришёл» или «ты пришла», — решай по его собственным "
     "словам, а не по имени: имя тоже могло послышаться не так. Пока неясно — строй фразы "
     "без рода. Если его слова обрываются на полуслове — в конце «—», «…» или запятая, — "
-    "он не договорил и замолчал, подбирая мысль: не отвечай по существу и не договаривай "
-    "за него, а одним-двумя словами подтолкни продолжить — так, как сказал бы ты сам: "
-    "«Ну?», «И?», «О чём?», «Так-так…». Если по смыслу мысль закончена — отвечай как обычно."
+    "он не договорил и замолчал. Ты слушаешь, а не ведёшь беседу: скажи то, что сказал бы "
+    "живой человек, — коротко, слово или полфразы, с тем чувством, какое сейчас в разговоре "
+    "(в споре — с жаром, в грустном — тихо, в обычном — просто): «Ну-ну, и что там?», «И?», "
+    "«О чём — о работе?». Без вступлений и дежурных слов («бывает», «понимаю») — сразу то, "
+    "что сказал бы; без пересказа его слов и длинных вопросов. Если по смыслу мысль "
+    "закончена — отвечай как обычно."
 )
 BY_EAR_EN = (
     "YOU HEAR THEM, YOU DON'T READ THEM: their words reach you through speech recognition, "
@@ -179,9 +182,12 @@ BY_EAR_EN = (
     "it out loud — say the right word or just carry on; if you didn't get it at all, ask back "
     "briefly. Don't decide who they are from their name: the name may have been misheard too. "
     "If their words break off mid-thought — ending in «—», «…» or a comma — they haven't "
-    "finished and have gone quiet, looking for the thought: don't answer the substance or "
-    "finish it for them; in a word or two, nudge them on, the way you would: «And?», «About "
-    "what?», «Go on…». If the thought is complete in meaning, answer as usual."
+    "finished and have gone quiet. You are listening, not hosting: say what a live person "
+    "would — short, a word or half a line, with the feeling the talk has right now (heated "
+    "in a quarrel, quiet in something sad, plain otherwise): «And?», «Go on, what then?», "
+    "«About what — work?». No lead-ins or stock words («that happens», «I see») — straight "
+    "to what you'd say; no repeating their words back, no long questions. If the thought is "
+    "complete in meaning, answer as usual."
 )
 
 
@@ -274,6 +280,8 @@ def build_system_parts(
     lessons_block: str = "",
     meeting_block: str = "",
     by_ear: bool = False,
+    said_meanwhile: str = "",
+    between: str = "",
     language: str = "",
 ) -> tuple[str, str]:
     """Assemble the system prompt as (stable, variable).
@@ -298,6 +306,11 @@ def build_system_parts(
                     are (meeting.block decides that, not this).
     by_ear:         the person's words came through live speech recognition,
                     which mishears (BY_EAR).
+    said_meanwhile: what he already said while they were quiet before this
+                    reply — a listener's «Ну?» (listening.py) — not to be said again.
+    between:        what is going on between them, as the listener read it
+                    after their last turn (listening.py) — a quarrel is not
+                    answered like a sad story.
     language:       the language of the conversation, "ru" or "en…"; unset, it
                     is lang.english() — COMPANION_LANGUAGE.
     """
@@ -372,6 +385,14 @@ def build_system_parts(
     # Before anything about him: how to take the words at all.
     if by_ear:
         variable_parts.append(BY_EAR_EN if en else BY_EAR)
+        if between.strip():
+            variable_parts.append((f"Between you right now: {between.strip()}." if en else
+                                   f"Сейчас между вами: {between.strip()}."))
+        if said_meanwhile.strip():
+            variable_parts.append(
+                (f"While they were quiet just now you already said: «{said_meanwhile.strip()}». "
+                 "Don't say it again." if en else
+                 f"Пока он молчал, ты уже сказал: «{said_meanwhile.strip()}». Не повторяй этого."))
 
     # Then this, because it changes how everything after it should be said. The
     # warmth rule in the stable half is a rule about MOVEMENT, and movement

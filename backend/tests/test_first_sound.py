@@ -199,16 +199,24 @@ def test_they_are_made_once_in_his_voice_and_kept(monkeypatch):
     breaths = [kind for kind, _how, count, _lengths in first_sound.BREATHS for _ in range(count)]
     sounds = list(dict.fromkeys(first_sound.STATEMENT + first_sound.QUESTION + first_sound.THINKING
                                 + first_sound.LISTENING))
-    reactions = [t for t in first_sound.REACTIONS if t not in sounds]
+    # A listener's sounds (listening.py), each in its colour — his own voice
+    # told how (first_sound.TONES) — and his usual first words.
+    along = [(first_sound._toned(GEMINI, tone), s) for tone in first_sound.TONES
+             for s in first_sound.LISTENER[tone]]
+    along = [(v, s) for v, s in dict.fromkeys(along) if not (v == GEMINI and s in sounds)]
+    once = along + [(GEMINI, r) for r in first_sound.REACTIONS
+                    if r not in sounds and (GEMINI, r) not in along]
     said = [t for t, _ in asked]
     assert said[:len(breaths)] == breaths                                    # his breaths first of all
-    rest = said[len(breaths):]
-    assert rest[:len(sounds) * first_sound.TAKES] == [
+    rest = asked[len(breaths):]
+    assert [t for t, _ in rest[:len(sounds) * first_sound.TAKES]] == [
         t for t in sounds for _ in range(first_sound.TAKES)]                 # then his sounds
     start = len(sounds) * first_sound.TAKES
-    assert rest[start:start + len(reactions)] == reactions                   # then one of each first word
-    assert all(v == GEMINI for t, v in asked if t not in breaths)         # his words in his voice
-    assert len(rest) == (len(sounds) + len(reactions)) * first_sound.TAKES
+    assert [(v, t) for t, v in rest[start:start + len(once)]] == once       # then one of each
+    assert len(rest) == (len(sounds) + len(once)) * first_sound.TAKES
+    colours = {v for v, _ in along}
+    assert GEMINI in colours and len(colours) == len(first_sound.TONES)     # four colours, one voice
+    assert all(v.startswith("gemini:Charon|a man of 68: ") for v in colours - {GEMINI})
     assert first_sound.ready(GEMINI) and not first_sound.ready(None)
     ordinary = first_sound._made[(GEMINI, first_sound.BREATH)][0]
     deep = first_sound._made[(GEMINI, first_sound.DEEP_BREATH)][0]

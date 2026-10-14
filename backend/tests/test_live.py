@@ -23,7 +23,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app import (allowance, aloud, body, brain, companion, config, db, first_sound, gate, hearing,
-                 identity, learn, live, main, meeting, memory, persona, safety, tts, vow)
+                 identity, learn, listening, live, main, meeting, memory, persona, safety, tts,
+                 vow)
 
 TOKEN = "live-token-0123456789-abcdefghij"
 UID = identity.user_id_from_token(TOKEN)
@@ -52,22 +53,26 @@ class FakeEars:
 
     made: list[FakeEars] = []
 
-    def __init__(self, keyterms=(), hold=None) -> None:
+    def __init__(self, keyterms=()) -> None:
         self.keyterms = keyterms
-        self.hold = hold
+        #: What the ears were told to hold, each time: (unfinished, finished).
+        self.holds: list[tuple[bool, bool]] = []
         self.heard: list[bytes] = []
         self.inbox: queue.Queue = queue.Queue()
         self.ends = 0
         self.closed = False
 
     @classmethod
-    async def open(cls, keyterms=(), hold=None):
-        ears = cls(keyterms, hold)
+    async def open(cls, keyterms=()):
+        ears = cls(keyterms)
         cls.made.append(ears)
         return ears
 
     async def hear(self, pcm: bytes) -> None:
         self.heard.append(bytes(pcm))
+
+    def holding(self, *, unfinished: bool, finished: bool) -> None:
+        self.holds.append((unfinished, finished))
 
     async def finished(self) -> None:
         self.ends += 1
@@ -96,12 +101,14 @@ class FakeBrain:
         self.replies = ["Привет. Рад тебя слышать, как прошёл день?"]
         self.whole_text = "Сегодня в Ташкенте тепло, около двадцати градусов."
         self.calls: list[list] = []
+        self.variables: list[str] = []
         self.whole_calls: list[dict] = []
         self.cancelled = 0
         self.delay = 0.0
 
     async def stream(self, history, system_stable, system_variable="", **_):
         self.calls.append(history)
+        self.variables.append(system_variable)
         text = self.replies.pop(0) if len(self.replies) > 1 else self.replies[0]
         try:
             for i in range(1, len(text) + 1, 4):
@@ -205,8 +212,17 @@ def env(monkeypatch):
 
     monkeypatch.setattr(learn, "learn_from_conversation", quiet)
     monkeypatch.setattr(live, "_ECHO_TAIL", 0.0)
+    # How he listens is read by a model after each turn (listening.read): here,
+    # whatever the test puts in `listens` — nothing, by default.
+    listens = SimpleNamespace(stance=None, read=[])
+
+    async def read(lines, **kwargs):
+        listens.read.append(list(lines))
+        return listens.stance
+
+    monkeypatch.setattr(listening, "read", read)
     with TestClient(main.app) as client:
-        yield SimpleNamespace(client=client, mind=mind, voice=voice)
+        yield SimpleNamespace(client=client, mind=mind, voice=voice, listens=listens)
 
 
 @contextmanager
@@ -389,18 +405,16 @@ def test_he_can_be_interrupted_by_default(env):
         assert live._open[UID].duplex is False
 
 
-def test_an_older_person_is_given_longer_to_finish_a_thought(env, monkeypatch):
-    """A thought broken off waits for the rest of it before he nudges them on —
-    longer when they are older (the owner, 2026-10-14: «в зависимости от
-    возраста»; hearing.py)."""
+def test_an_older_person_is_given_time_from_the_first_word(env, monkeypatch):
+    """Before anything is read, an ordinary talk — given time if they are
+    older: a finished sentence is let rest too (listening.opening)."""
     monkeypatch.setattr(live.young, "is_elder", lambda user_id: False)
     monkeypatch.setattr(live.voices, "years", lambda who: 30)
     with talk(env) as line:
-        assert line.ears().hold == config.HOLD_UNFINISHED
+        assert line.ears().holds[-1] == (True, False)
     monkeypatch.setattr(live.young, "is_elder", lambda user_id: True)
     with talk(env) as line:
-        assert line.ears().hold == config.HOLD_UNFINISHED_OLDER
-    assert config.HOLD_UNFINISHED_OLDER > config.HOLD_UNFINISHED
+        assert line.ears().holds[-1] == (True, True)
 
 
 def test_his_own_voice_back_from_the_speaker_does_not_stop_him(env):
@@ -1365,3 +1379,139 @@ def test_his_breath_gives_way_to_his_words_when_they_come_and_fades_under_them(e
     assert 0 < len(breath) < 32000                           # it gave way before its end
     assert abs(breath[-1]) < 300                             # …fading, not cut
     assert abs(done["timing"]["after_sound"]) < 0.25          # and his words came straight after
+
+
+# ── listening along (listening.py) ──────────────────────────────────────────
+#
+# The owner, 2026-10-14: a listener «просто скажет "ну" или "ну, ну, и что
+# там?"», by the mood — and comes in sooner or later by it too. What is pinned:
+# the stance read after their turn is the one he listens by; a pause gets his
+# sound, in the colour of the moment, never after a question; a thought broken
+# off gets a nudge and then his turn; a quarrel does not wait; a hard talk lets
+# a sentence rest. The spans are made short here: what they are is listening.py's.
+
+def _stance(**kw) -> listening.Stance:
+    return listening.Stance(**{"mood": "test", "pace": "easy", "listen": "often", "tone": "calm",
+                               "go_on": ("Угу.",), "nudge": ("Ну?",), **kw})
+
+
+@pytest.fixture
+def along(monkeypatch, env):
+    """His listener's sounds, made; every span short; every pause a chance."""
+    for text, pcm in (("Угу.", MM), ("Ну?", NU), ("Ох…", HM)):
+        first_sound._made[(his_voice(), text)] = [(16000, pcm)]
+    for name, span in (("GO_ON_AT", (0.05, 0.05)), ("NUDGE_AT", (0.1, 0.1)),
+                       ("GIVE_UP_AT", (0.4, 0.4)), ("REST_AT", (0.4, 0.4)),
+                       ("CUT_IN_AT", (0.15, 0.15))):
+        table = getattr(listening, name)
+        monkeypatch.setattr(listening, name, {k: None if v is None else span
+                                              for k, v in table.items()})
+    monkeypatch.setattr(listening, "GO_ON_CHANCE", {**listening.GO_ON_CHANCE, "often": 1.0})
+    monkeypatch.setattr(listening, "GO_ON_APART", {**listening.GO_ON_APART, "often": (0.0, 0.0)})
+    monkeypatch.setattr(first_sound, "LATE", None)
+
+
+def _pull_for(line, seconds: float) -> None:
+    """Read what the phone is sent for a while."""
+    deadline = time.monotonic() + seconds
+    while time.monotonic() < deadline:
+        try:
+            line.get(0.05)
+        except TimeoutError:
+            pass
+
+
+def _listening(line, stance: listening.Stance) -> None:
+    session = live._open[UID]
+    session._listen_as(stance)
+
+
+def test_how_he_listens_is_read_after_their_turn_and_followed(env):
+    env.listens.stance = _stance(mood="спор", pace="jump in", tone="heated",
+                                 go_on=("Ну-ну.",), nudge=("Ну и?",))
+    with talk(env) as line:
+        line.ears().send(turn("EndOfTurn", "да ты вообще ничего не понимаешь"))
+        line.expect("done")
+        wait_until(lambda: live._open[UID].stance.pace == "jump in")
+        # A quarrel: a thought broken off is no reason to wait, and nothing is let rest.
+        assert line.ears().holds[-1] == (False, False)
+        # …and his next answer knows what is going on between them.
+        line.ears().send(turn("EndOfTurn", "вот и не спорь со мной"))
+        line.expect("done")
+    assert env.listens.read[-1][-1] == ("user", "вот и не спорь со мной")
+    assert "Сейчас между вами: спор." in env.mind.variables[-1]
+
+
+def test_a_pause_in_their_story_gets_his_sound(env, along):
+    with talk(env, duplex=True) as line:
+        _listening(line, _stance())
+        line.ears().send(turn("StartOfTurn", "мы вчера с внуком ходили в парк и там"))
+        pull_until(line, lambda: "Угу." in line.says())
+        assert line.ears().ends == 0          # a sound, not his turn
+        assert env.mind.calls == []
+
+
+def test_never_a_listeners_sound_after_a_question(env, along):
+    with talk(env, duplex=True) as line:
+        _listening(line, _stance())
+        line.ears().send(turn("StartOfTurn", "а ты сам как думаешь, стоит туда ехать?"))
+        _pull_for(line, 0.3)
+        assert "Угу." not in line.says()
+
+
+def test_without_headphones_he_makes_no_sound_into_their_words(env, along):
+    """The microphone is closed while he makes a sound: their words would be lost."""
+    with talk(env, duplex=False) as line:
+        _listening(line, _stance())
+        line.ears().send(turn("StartOfTurn", "мы вчера с внуком ходили в парк и там"))
+        _pull_for(line, 0.3)
+        assert "Угу." not in line.says()
+
+
+def test_a_thought_broken_off_gets_a_nudge_then_his_turn(env, along):
+    """«I've really been thinking about—» and quiet: «Ну?»; still quiet — his
+    turn, and the answer knows he has already said «Ну?»."""
+    with talk(env, duplex=True) as line:
+        _listening(line, _stance())
+        line.ears().send(turn("StartOfTurn", "я вот последнее время всё думаю о—"))
+        pull_until(line, lambda: "Ну?" in line.says())
+        wait_until(lambda: line.ears().ends == 1)        # the ears asked to end it
+        line.ears().send(turn("EndOfTurn", "я вот последнее время всё думаю о—"))
+        line.expect("done")
+    assert "«Ну?»" in env.mind.variables[-1]
+
+
+def test_a_thought_broken_off_and_taken_up_again_is_never_cut(env, along):
+    with talk(env, duplex=True) as line:
+        _listening(line, _stance())
+        line.ears().send(turn("StartOfTurn", "я вот думаю о—"))
+        pull_until(line, lambda: "Ну?" in line.says())
+        line.ears().send(turn("Update", "я вот думаю о— о работе, понимаешь, и"))
+        time.sleep(0.25)
+        assert line.ears().ends == 0
+
+
+def test_in_a_quarrel_he_does_not_wait_for_them_to_finish(env, along):
+    with talk(env, duplex=True) as line:
+        _listening(line, _stance(pace="jump in", tone="heated"))
+        line.ears().send(turn("StartOfTurn", "да это вообще всё из-за тебя случилось"))
+        wait_until(lambda: line.ears().ends == 1)
+
+
+def test_a_hard_talk_lets_a_sentence_rest_with_a_soft_sound(env, along):
+    """«Мама умерла весной.» and a pause: not an answer at once — «Ох…», and a
+    moment for them to go on; then his turn."""
+    with talk(env, duplex=True) as line:
+        _listening(line, _stance(pace="patient", listen="sometimes", tone="calm",
+                                 go_on=("Ох…",)))
+        assert line.ears().holds[-1] == (True, True)
+        line.ears().send(turn("StartOfTurn", "мама умерла этой весной"),
+                         turn("Pause", "мама умерла этой весной."))
+        pull_until(line, lambda: "Ох…" in line.says())
+        wait_until(lambda: line.ears().ends == 1)
+
+
+def test_in_a_quarrel_one_word_over_him_stops_him():
+    assert not live.talks_over("нет", [])
+    assert live.talks_over("нет", [], heated=True)
+    assert not live.talks_over("угу", [], heated=True)    # still a listener's sound

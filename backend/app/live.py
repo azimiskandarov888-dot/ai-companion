@@ -36,6 +36,16 @@ And none of it is voiced until the turn is certain: on all five, «догово�
 came before the draft had written its first piece — waiting for it cost
 nothing, and a guess thrown away costs no voice (LiveKit's own default).
 
+── LISTENING ALONG ─────────────────────────────────────────────────────────
+
+While they talk he is a listener, not a silence: «угу» in their pauses, «Ну?»
+when a thought breaks off, a sentence let rest in a hard talk, and in a
+quarrel he comes in before they have finished. HOW is read from the talk after
+each of their turns (listening.py: mood, pace, how often, the colour, the
+words); WHEN, to the tenth of a second, is _along's — from that, drawn anew
+each pause. The owner, 2026-10-14: «не ставь тупые, точные правила… все
+должно быть основано на контексте, на эмоциях».
+
 ── THE WIRE ────────────────────────────────────────────────────────────────
 
 One WebSocket per conversation, /api/live. Identity is the `Authorization`
@@ -105,7 +115,7 @@ from collections.abc import AsyncIterator, Iterable
 from fastapi import BackgroundTasks, WebSocket
 
 from . import (allowance, aloud, brain, config, first_sound, gate, hearing, identity, lang,
-               memory, persona, shaping, tts, voices, vow, young)
+               listening, memory, persona, shaping, tts, voices, vow, young)
 
 #: Said the moment a question about the world is heard: the search takes
 #: seconds, and a friend who is looking something up says so.
@@ -187,6 +197,10 @@ _READ_AHEAD_AFTER = 45.0
 #: carries on talking is answered, not hung up on.
 _FAREWELL_GRACE = 8.0
 
+#: How often the live channel looks at a pause of theirs (listening.py: the
+#: spans it times are a third of a second and more).
+_ALONG = 0.1
+
 #: Said over him, these keep a person listening rather than take the turn…
 _BACKCHANNEL = frozenset({"а", "ага", "угу", "ну", "да", "мм", "м", "хм", "эм", "э",
                           "ой", "ок", "окей", "так", "ясно", "понятно", "ладно",
@@ -227,20 +241,21 @@ def _stem(word: str) -> str:
     return word[:3] if len(word) <= 4 else word[:4]
 
 
-def talks_over(heard: str, said: Iterable[str]) -> bool:
+def talks_over(heard: str, said: Iterable[str], *, heated: bool = False) -> bool:
     """Is what the ears caught while he was speaking somebody talking over
     him — and not his own voice coming back from the speaker, nor a «угу»?
 
     Echo cancellation in the phone or browser takes his voice out of the
     microphone; what it misses, the ears hear as words — HIS words, which is how
     they are told apart. A stop word interrupts at once; otherwise two words
-    of their own, or one long one. Words under three letters do not count: a
-    garbled echo is made of them as easily as «а я» is."""
+    of their own, or one long one — or, in a quarrel (`heated`: listening.py),
+    any one: «Нет!» over him there is not a «угу». Words under three letters do
+    not count: a garbled echo is made of them as easily as «а я» is."""
     his = _stems(said)
     new = [w for w in _words(heard) if _theirs(w, his)]
     if any(w in _STOP for w in new):
         return True
-    return len(new) >= 2 or any(len(w) >= 5 for w in new)
+    return len(new) >= (1 if heated else 2) or any(len(w) >= 5 for w in new)
 
 
 def their_part(heard: str, said: Iterable[str]) -> str:
@@ -293,10 +308,15 @@ class Draft:
     answer cuts and voices it once their turn is certain (Session._answer).
     """
 
-    def __init__(self, session: Session, transcript: str | None, *, web: bool = False) -> None:
+    def __init__(self, session: Session, transcript: str | None, *, web: bool = False,
+                 said_meanwhile: str = "") -> None:
         self.session = session
         self.transcript = transcript
         self.web = web
+        #: What he said while they were quiet before it — «Ну?» — not to say again.
+        self.said_meanwhile = said_meanwhile
+        #: What is going on between them, as the listener last read it.
+        self.between = session.stance.mood
         #: What memory recalled for this reply, to be marked if it is said.
         self.marks: list = []
         self.voice: str | None = None
@@ -337,6 +357,8 @@ class Draft:
                 pending=self.transcript is not None,
                 marks=self.marks,
                 by_ear=True,
+                said_meanwhile=self.said_meanwhile,
+                between=self.between,
             )
             self.voice = voice
             self.ready.set()
@@ -624,6 +646,29 @@ class Session:
         self._guesses = 0
         #: His last few breaths, not to be taken again straight away.
         self._breathed: deque[int] = deque(maxlen=3)
+        # ── listening along (listening.py) ──
+        #: How he listens to their next turn — read from the talk after each
+        #: of their turns; until the first reading, an ordinary talk.
+        self.stance = listening.opening(older=self._older)
+        #: The talk as the listener reads it: the last few lines, his and theirs.
+        self._dialogue: deque[tuple[str, str]] = deque(
+            ((t["role"], t["content"]) for t in memory.recent_turns(user_id, limit=listening.LINES)),
+            maxlen=listening.LINES)
+        self._reading: asyncio.Task | None = None
+        #: Their turn: open, when its last new word came, and what the ears
+        #: hold of it (a Pause: a thought broken off, or a sentence let rest).
+        self._turn_open = False
+        self._heard_at = 0.0
+        self._held: str | None = None
+        #: This pause of theirs: when each thing would happen in it (drawn anew
+        #: at every new word), and whether he has asked the ears to end it.
+        self._plan = listening.plan(self.stance, self._rng)
+        self._taking = False
+        #: His last listener's sound: when, after how many of their words, which.
+        self._went_on_at = 0.0
+        self._words_at_sound = 0
+        self._last_along = ""
+        self._apart = 0.0
 
     # ── talking to the phone ────────────────────────────────────────────────
 
@@ -690,11 +735,8 @@ class Session:
                 return
             try:
                 name = persona.persona_name(self.who)
-                # A thought broken off waits longer for the rest of it when
-                # they are older (hearing.py, «A thought broken off»).
-                hold = config.HOLD_UNFINISHED_OLDER if self._older else config.HOLD_UNFINISHED
-                self.ears = await hearing.Ears.open(
-                    keyterms=(name.split()[0],) if name else (), hold=hold)
+                self.ears = await hearing.Ears.open(keyterms=(name.split()[0],) if name else ())
+                self._listen_as(self.stance)
             except Exception as e:  # noqa: BLE001
                 _log("👂 the live ears (Soniox)", e)
                 await self._send({"kind": "trouble", "detail": f"the ears: {e}"})
@@ -714,8 +756,9 @@ class Session:
             receiver = asyncio.create_task(self._receive())
             listener = asyncio.create_task(self._listen())
             keeper = asyncio.create_task(self._tend_line())
+            along = asyncio.create_task(self._listen_along())
             stopper = asyncio.create_task(self._stopping.wait())
-            tasks = {receiver, listener, keeper, stopper}
+            tasks = {receiver, listener, keeper, along, stopper}
             if greeting:
                 self._reply = asyncio.create_task(self._answer(Draft(self, None), time.monotonic()))
             done, _ = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
@@ -855,7 +898,7 @@ class Session:
                 # The microphone is open while he speaks: what it heard may be
                 # his own voice back from the speaker, or an «угу». Neither is
                 # a turn. Somebody talking over him is — and he stops.
-                if not talks_over(text, self._said):
+                if not talks_over(text, self._said, heated=self.stance.tone == "heated"):
                     if event in ("EagerEndOfTurn", "EndOfTurn"):
                         self._drop_draft()
                     if event == "EndOfTurn":
@@ -871,6 +914,10 @@ class Session:
                 if event in ("StartOfTurn", "Update") and text != self._heard_so_far:
                     self._heard_so_far = text
                     await self._send({"kind": "hearing", "text": text})
+            if event in ("StartOfTurn", "Update") and text:
+                self._new_words()
+            elif event == "Pause":
+                self._held = text   # the ears hold it: broken off, or let rest
             if (event in ("StartOfTurn", "Update") and self._draft is not None
                     and not _same(self._draft.transcript, text)):
                 self._drop_draft()   # they said more: a draft for a turn that did not happen
@@ -883,8 +930,118 @@ class Session:
             elif event == "EndOfTurn":
                 self._heard_so_far = ""
                 self._over_him = False
+                self._turn_open, self._held, self._taking = False, None, False
                 await self._on_end_of_turn(text, message)
                 self._guesses = 0
+
+    # ── listening along (listening.py) ──────────────────────────────────────
+
+    def _new_words(self) -> None:
+        """They said something more: a new pause will come, timed anew."""
+        self._turn_open, self._held, self._taking = True, None, False
+        self._heard_at = time.monotonic()
+        self._plan = listening.plan(self.stance, self._rng)
+
+    def _listen_as(self, stance: listening.Stance) -> None:
+        """From now he listens like this: what the ears hold for him to time
+        (a thought broken off — not when he would jump in; a finished
+        sentence too, when the talk is a hard one)."""
+        self.stance = stance
+        if self.ears is not None:
+            self.ears.holding(unfinished=stance.pace != "jump in", finished=stance.pace == "patient")
+
+    def _read_the_moment(self, said: str) -> None:
+        """Their turn is over: how he should listen to the next one is read
+        from the talk while he answers (listening.read) — the newest reading
+        wins; until it comes, he listens as he was."""
+        self._dialogue.append(("user", said))
+        if self._reading is not None and not self._reading.done():
+            self._reading.cancel()
+        lines, name = list(self._dialogue), persona.persona_name(self.who)
+
+        async def read() -> None:
+            stance = await listening.read(lines, name=name, older=self._older)
+            if stance is not None:
+                self._listen_as(stance)
+                print(f"[live] {self.user_id[:8]}: listening — {stance.mood or '…'} "
+                      f"({stance.pace}, {stance.listen}, {stance.tone})", flush=True)
+
+        self._reading = asyncio.create_task(read())
+        _track(self._reading)
+
+    async def _listen_along(self) -> None:
+        """While they talk: a listener's sound in their pauses, a nudge when a
+        thought breaks off, and the turn taken when it is plainly his — each
+        when the stance of the moment says, with a person's unevenness."""
+        while True:
+            await asyncio.sleep(_ALONG)
+            try:
+                await self._along(time.monotonic())
+            except Exception as e:  # noqa: BLE001 — a listener's sound is a nicety
+                _log("👂 listening along", e)
+
+    async def _along(self, now: float) -> None:
+        text = self._heard_so_far
+        if not self._turn_open or not text or self._over_him or self.ears is None:
+            return
+        if self._reply is not None and not self._reply.done():
+            return   # he is answering: somebody talking over him is _listen's
+        stance, plan = self.stance, self._plan
+        pause = now - self._heard_at
+        words = len(_words(text))
+        if hearing.unfinished(text):
+            # A thought broken off: «Ну?» — and if still nothing, his turn.
+            if plan.nudge is not None and not plan.nudged and pause >= plan.nudge:
+                plan.nudged = True
+                await self._sound_along(stance.nudge, now, words)
+            if pause >= plan.give_up:
+                await self._take_turn()
+            return
+        if self._held is not None:
+            # A finished sentence let rest — a hard talk: a soft sound, then his turn.
+            if not plan.sounded and pause >= plan.go_on:
+                plan.sounded = True
+                await self._sound_along(stance.go_on, now, words)
+            if plan.rest is None or pause >= plan.rest:
+                await self._take_turn()
+            return
+        if text.rstrip().endswith("?"):
+            return   # asked him something: what comes is his answer, not «угу»
+        if plan.cut_in is not None and words >= listening.WORDS_FIRST and pause >= plan.cut_in:
+            await self._take_turn()   # a quarrel: he does not wait for them to finish
+            return
+        if plan.sounded or pause < plan.go_on:
+            return
+        plan.sounded = True   # one chance a pause, taken or not
+        if (words >= listening.WORDS_FIRST
+                and words - self._words_at_sound >= listening.WORDS_FIRST
+                and now - self._went_on_at >= self._apart
+                and self._rng.random() < listening.GO_ON_CHANCE.get(stance.listen, 0.0)):
+            await self._sound_along(stance.go_on, now, words)
+
+    async def _sound_along(self, choices: tuple[str, ...], now: float, words: int) -> None:
+        """One of his listener's sounds, in the colour of the moment — only
+        where they can carry on over it (duplex), never over his own voice,
+        never the one he made last."""
+        if not self.duplex or self._audible() or not choices:
+            return
+        fresh = [c for c in choices if c != self._last_along] or list(choices)
+        self._rng.shuffle(fresh)
+        for said in fresh:
+            made = first_sound.listener(self.voice, said, self.stance.tone)
+            if made is None:
+                continue   # not made in his voice yet
+            if await self._send_sound(said, *made):
+                self._went_on_at, self._words_at_sound, self._last_along = now, words, said
+                self._apart = listening.apart(self.stance, self._rng)
+            return
+
+    async def _take_turn(self) -> None:
+        """Their turn is his now: the ears are asked to end it — once."""
+        if self._taking or self.ears is None:
+            return
+        self._taking = True
+        await self.ears.finished()
 
     # ── turns ───────────────────────────────────────────────────────────────
 
@@ -972,8 +1129,9 @@ class Session:
         kind = first_sound.at_end(transcript)
         if kind is None or time.monotonic() - self._sound_at < first_sound.SPACING_AT_END:
             return None
-        return first_sound.choose(self.voice, kind, self._rng, older=self._older,
-                                  avoid=self._sound_text)
+        return first_sound.choose(self.voice, kind, self._rng,
+                                  older=self._older or self.stance.pace == "patient",
+                                  eager=self.stance.pace == "jump in", avoid=self._sound_text)
 
     async def _sound_if_late(self, ended: float, transcript: str) -> None:
         """His words still not there LATE seconds after their turn: one more sound."""
@@ -1023,7 +1181,11 @@ class Session:
         reused = draft is not None and _same(draft.transcript, text) and not web
         if not reused:
             self._drop_draft()
-            draft = Draft(self, text, web=web)
+            # A sound of his since their last word — «Ну?» into a thought they
+            # broke off — is already said: the answer must not say it again.
+            meanwhile = (self._sound_text if self._sound_at > self._heard_at
+                         and self._sound_text not in first_sound.BREATHS_SHOWN else "")
+            draft = Draft(self, text, web=web, said_meanwhile=meanwhile)
             self._read_at = time.monotonic()
         self._draft = None
         speech_end = self._speech_end(message)
@@ -1038,6 +1200,7 @@ class Session:
         self._reply = asyncio.create_task(
             self._answer(draft, ended, speech_end=speech_end, reused=reused)
         )
+        self._read_the_moment(text)
 
     def _speech_end(self, message: dict) -> float | None:
         """When — on this server's clock — the last word of the turn arrived."""
@@ -1339,6 +1502,8 @@ class Session:
                     reply = f"{spoken[0]} {reply}".strip()
                 reply = app_main._body(user_id, reply)
             self._remember(draft, reply, leaving, sounded)
+            if reply and not hello:
+                self._dialogue.append(("assistant", reply))
             spent()
             if draft.opened is not None and draft.opened < ended:
                 # His first piece was written before their turn was certain,

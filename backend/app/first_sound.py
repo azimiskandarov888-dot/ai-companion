@@ -126,6 +126,34 @@ REACTIONS_EN = ("Oh wow,", "Oh wow!", "Wow,", "Oh,", "Oh!", "Oh no,", "Yeah,", "
                 "Really?", "What?", "And then?", "I see.", "Right,", "Hmm,", "Huh,", "Nice!",
                 "No way!", "Okay,", "Well,", "Mm,",
                 "Wait,", "Hey.", "Hi.", "Ah,", "Exactly.", "I get that.")
+#: A listener's sounds while they talk, and when they stall — by the colour
+#: they are said in. listening.py chooses the colour and the words for the
+#: moment, from the talk itself. Short, on purpose — the owner, 2026-10-14:
+#: «он просто скажет "ну" или "ну, ну, и что там?"… что-то короткое, чтобы
+#: дать ему понять, что он слушает». Plain ones say «go on»; ones with feeling
+#: in them — «Ох…», «Да ты что!» — show that it reached him (Bavelas et al.
+#: 2000: listeners as co-narrators; Stivers 2008).
+LISTENER = {
+    "calm": ("Угу.", "Ага.", "Да-да.", "Так.", "М-м.", "Ну?", "И?", "А дальше?", "И что?"),
+    "soft": ("М-м…", "Ох…", "Да…", "Эх…", "Угу…", "Ну?", "И?"),
+    "lively": ("Ого!", "Ничего себе!", "Да ты что!", "Ха!", "Надо же!", "Ну-ну!", "И что там?",
+               "А дальше?"),
+    "heated": ("Ну-ну.", "Да ну?", "Ой, да ладно.", "Хм.", "Ну конечно.", "Ну?", "Ну и?",
+               "И что?"),
+}
+LISTENER_EN = {
+    "calm": ("Mm-hm.", "Uh-huh.", "Yeah.", "Right.", "And?", "And then?", "So?"),
+    "soft": ("Mm…", "Oh…", "Oh no…", "Yeah…", "Mm?", "Go on…"),
+    "lively": ("Wow!", "No way!", "Really?", "Ha!", "Huh!", "And then?", "What happened?"),
+    "heated": ("Oh, come on.", "Yeah, yeah.", "Hmm.", "Sure.", "So?", "And?"),
+}
+#: How each colour is said — told to his own voice, as his breaths are
+#: (_breathing): the same «Ну?» is a different word in a quarrel and over
+#: something sad. «calm» is his voice as it is.
+TONES = {"calm": None,
+         "soft": "quietly and gently, with sympathy — a listener's sound, barely more than a breath",
+         "lively": "with lively interest and warmth, a little amused — an engaged listener",
+         "heated": "impatiently, with heat, as in an argument"}
 #: How many versions of each sound are made.
 TAKES = 2
 #: Of the ends of their turns, by what was said: the share that gets his
@@ -239,19 +267,55 @@ def breaths(voice: str | None, *, older: bool = False) -> list[tuple[str, int, b
     return [(shown(kind), rate, pcm) for kind in kinds for rate, pcm in _made.get((voice, kind), [])]
 
 
+#: …and when he jumps in — a quarrel, a story he can't wait to answer — he
+#: mostly just speaks: nobody takes a calm breath to cut somebody off.
+SHARES_EAGER = (0.25, 0.1)
+
+
 def choose(voice: str | None, kind: str, rng: random.Random, *, older: bool = False,
-           avoid: str = "") -> tuple[str, int, bytes] | None:
+           eager: bool = False, avoid: str = "") -> tuple[str, int, bytes] | None:
     """His sound at the end of a turn of this kind (at_end): his breath most
     often — deeper and longer when `older` — a word sometimes, nothing the
-    rest of the time (SHARES). While his breath is not made yet, a word
-    stands in for it."""
-    breath, word = (SHARES_OLDER if older else SHARES).get(kind, SHARES["statement"])
+    rest of the time (SHARES); mostly nothing when `eager` (listening.py:
+    he is jumping in). While his breath is not made yet, a word stands in."""
+    breath, word = (SHARES_EAGER if eager else
+                    (SHARES_OLDER if older else SHARES).get(kind, SHARES["statement"]))
     roll = rng.random()
     if roll < breath and (made := pick(voice, "breath", rng)):
         return made
     if roll < breath + word:
         return pick(voice, kind, rng, avoid=avoid)
     return None
+
+
+def _toned(voice: str | None, tone: str) -> str | None:
+    """His voice saying a listener's sound in this colour (TONES): the same
+    voice, the same person, told how. His own voice for «calm»; None for a
+    colour a voice cannot be told (no Gemini voice)."""
+    from . import voices
+
+    how = TONES.get(tone)
+    if not how:
+        return voice
+    parsed = voices.parse(voice)
+    if parsed is None:
+        return None
+    name, style = parsed
+    who = re.split(r" \(|,", style or "", maxsplit=1)[0].strip() or "a person"
+    return voices.key({"name": name, "style": f"{who}: {how}"})
+
+
+def listener_sounds(tone: str) -> tuple[str, ...]:
+    """The listener's sounds of this colour, in the language of the talk."""
+    return (LISTENER_EN if lang.english() else LISTENER).get(tone, ())
+
+
+def listener(voice: str | None, text: str, tone: str) -> tuple[int, bytes] | None:
+    """One of his listener sounds in this colour, ready-made: (rate, PCM), a
+    different take each time — or None while it is not made."""
+    toned = _toned(voice, tone)
+    takes = _made.get((toned, text)) if toned is not None else None
+    return random.choice(takes) if takes else None
 
 
 def ready(voice: str | None) -> bool:
@@ -306,36 +370,43 @@ async def _make_all(voice: str | None) -> None:
     # voice rationed by the minute (tts.limited) all of it is made in the
     # requests his words leave over, so it can take a while — the most useful
     # first.
+    # His listener's sounds come next: they are what a talk with him sounds
+    # like from its first minute (listening.py) — each in its colour.
     await _make_breaths(voice)
     sounds = list(dict.fromkeys(_texts("statement") + _texts("question") + _texts("thinking")
                                 + _texts("listening")))
     reactions = [t for t in (REACTIONS_EN if lang.english() else REACTIONS) if t not in sounds]
-    order = [(t, k) for t in sounds for k in range(TAKES)] + [
-        (t, k) for k in range(TAKES) for t in reactions]
-    takes: dict[str, list[tuple[int, bytes]]] = {}
-    failed: set[str] = set()
-    for text, take in order:
-        if text in failed:
+    listening = [(toned, text) for tone in TONES if (toned := _toned(voice, tone)) is not None
+                 for text in listener_sounds(tone)]
+    listening = [(v, t) for v, t in dict.fromkeys(listening) if not (v == voice and t in sounds)]
+    order = ([(voice, t, k) for t in sounds for k in range(TAKES)]
+             + [(v, t, k) for k in range(TAKES)
+                for v, t in listening + [(voice, r) for r in reactions
+                                         if (voice, r) not in listening]])
+    takes: dict[tuple[str | None, str], list[tuple[int, bytes]]] = {}
+    failed: set[tuple[str | None, str]] = set()
+    for said_by, text, take in order:
+        if (said_by, text) in failed:
             continue
         try:
-            kept = _load(voice, text, take)
+            kept = _load(said_by, text, take)
             for _attempt in range(ATTEMPTS if kept is None else 0):
                 rate, pcm = None, b""
-                async for rate, chunk in tts.stream(text, voice, background=True):
+                async for rate, chunk in tts.stream(text, said_by, background=True):
                     pcm += chunk
                 if rate and (pcm := trimmed(pcm, rate)) and _kept(text, rate, pcm):
                     kept = (rate, pcm)
-                    _keep(voice, text, take, kept)
+                    _keep(said_by, text, take, kept)
                     break
             if kept is None:
                 continue
         except Exception as e:  # noqa: BLE001 — a sound is a nicety, never a failure
             print(f"[first_sound] could not make {text!r}: {type(e).__name__}: {e}",
                   file=sys.stderr, flush=True)
-            failed.add(text)
+            failed.add((said_by, text))
             continue
-        takes.setdefault(text, []).append(kept)
-        _made[(voice, text)] = list(takes[text])
+        takes.setdefault((said_by, text), []).append(kept)
+        _made[(said_by, text)] = list(takes[(said_by, text)])
 
 
 # ── his breaths ──────────────────────────────────────────────────────────────

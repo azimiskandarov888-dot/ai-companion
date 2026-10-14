@@ -208,6 +208,8 @@ async def _assemble(
     pending: bool = False,
     marks: list | None = None,
     by_ear: bool = False,
+    said_meanwhile: str = "",
+    between: str = "",
 ) -> tuple[str, str, list, str | None, asyncio.Task | None]:
     """Recall everything he should have in mind, and log that he was spoken to.
 
@@ -228,7 +230,9 @@ async def _assemble(
     writes the rest once the turn is really theirs.
 
     `by_ear`: their words came through live speech recognition, which
-    mishears — he is told so (companion.BY_EAR).
+    mishears — he is told so (companion.BY_EAR). `said_meanwhile`: what he
+    already said while they were quiet — a listener's «Ну?» — not to repeat.
+    `between`: what is going on between them, as the listener read it.
     """
     if pending and user_text is None:
         raise ValueError("Only somebody's line can be pending — he never drafts a hello.")
@@ -354,6 +358,8 @@ async def _assemble(
             words, named=named, heard=memory.times_heard(user_id) + (1 if pending else 0)
         ),
         by_ear=by_ear and user_text is not None,
+        said_meanwhile=said_meanwhile,
+        between=between,
     )
 
     return (
