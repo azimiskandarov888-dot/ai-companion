@@ -423,3 +423,17 @@ def test_the_constitutions_news_rule_is_not_contradicted():
     про неё можно и самому»); since 2026-09-30 it asks even less of him."""
     assert "Новости и погоду узнаёшь, только когда он правда спросил" in companion.BEHAVIOR_RULES
     assert "Это твоя жизнь, про неё можно и самому" not in meeting.block(0)
+
+
+def test_a_second_evening_is_not_a_first_meeting():
+    """The owner, 2026-10-16: «he knows my name already, but still asked: чем
+    обычно занимаешься в свободное время?» — 114 words in, a day and a half
+    later. Meeting again, he picks up where they were."""
+    first = meeting.block(100, named=True, heard=3)
+    again = meeting.block(100, named=True, heard=3, met_before=True)
+    assert "ПЕРВАЯ ВСТРЕЧА" in first and "чем занят" in first
+    assert "ВЫ УЖЕ ГОВОРИЛИ" in again and "ПЕРВАЯ ВСТРЕЧА" not in again
+    assert "чем занимаешься" in again and "не задавай" in again           # the question, named and ruled out
+    assert meeting.block(5_000, met_before=True) == ""                     # past meeting at all
+    assert meeting.where(100, met_before=True) == meeting.where(meeting.KNOWN_AT[0])
+    assert "только что познакомились" in meeting.where(100)

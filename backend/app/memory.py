@@ -166,10 +166,78 @@ def conversation(user_id: str, pending: str | None = None) -> list[dict[str, str
         ).fetchone()["n"])
     total = logged + (1 if pending is not None else 0)
     start = max(0, (total - WINDOW_MIN) // WINDOW_STEP * WINDOW_STEP)
-    lines = recent_turns(user_id, limit=total - start - (1 if pending is not None else 0))
+    n = total - start - (1 if pending is not None else 0)
+    with db.connect() as conn:
+        rows = [dict(r) for r in conn.execute(
+            "SELECT role, content, ts FROM turns WHERE user_id=? ORDER BY id DESC LIMIT ?",
+            (user_id, n + 1),     # one more: when the line before the window was said
+        ).fetchall()][::-1]
+    last = rows[0]["ts"] if len(rows) > n else None
+    rows = rows[-n:] if n > 0 else []
+    # WHEN each talk began. The log used to be handed over as one stream, so
+    # «Эй, привет» a day and a half after «Я с родителями живу, и.» read as the
+    # next second of the same talk — and got «Я тут, никуда не делся» (the
+    # owner, 2026-10-16: «he has no sense of time»). Now the first line of
+    # theirs in each new talk says how long it had been (_new_talk); what to
+    # make of it is his — a friend knows a day has passed, and says nothing
+    # about the gap unless it matters (the constitution: no bill).
+    lines: list[dict[str, str]] = []
+    gap: float | None = None
+    for row in rows:
+        if last is not None and row["ts"] - last >= NEW_CONVERSATION_GAP:
+            gap = row["ts"] - last
+        last = row["ts"]
+        content = row["content"]
+        if gap is not None and row["role"] == "user":
+            content, gap = f"{_new_talk(gap)} {content}", None
+        lines.append({"role": row["role"], "content": content})
     if pending is not None:
-        lines.append({"role": "user", "content": pending})
+        if last is not None and time.time() - last >= NEW_CONVERSATION_GAP:
+            gap = time.time() - last
+        lines.append({"role": "user",
+                      "content": f"{_new_talk(gap)} {pending}" if gap is not None else pending})
     return lines
+
+
+def _new_talk(gap: float) -> str:
+    """The mark on the first line of theirs in a new talk: how long it had been."""
+    if lang.english():
+        return f"(a new talk — {_ago_en(gap)} since the last one)"
+    return f"(новый разговор — прошло {_ago(gap)})"
+
+
+def _ago(seconds: float) -> str:
+    """«15 минут», «3 часа», «сутки», «полтора дня», «две недели» — a person's
+    sense of it, never to the minute."""
+    hours = seconds / 3600
+    if hours < 1:
+        return f"{max(10, int(round(seconds / 300)) * 5)} минут"
+    if hours < 20:
+        n = int(round(hours))
+        return "час" if n == 1 else f"{n} часа" if n in (2, 3, 4) else f"{n} часов"
+    if hours < 32:
+        return "сутки"
+    if hours < 44:
+        return "полтора дня"
+    if hours < 72:
+        return "два дня" if hours < 60 else "почти три дня"
+    return _days(hours / 24)
+
+
+def _ago_en(seconds: float) -> str:
+    hours = seconds / 3600
+    if hours < 1:
+        return f"{max(10, int(round(seconds / 300)) * 5)} minutes"
+    if hours < 20:
+        n = int(round(hours))
+        return "an hour" if n == 1 else f"{n} hours"
+    if hours < 32:
+        return "a day"
+    if hours < 44:
+        return "a day and a half"
+    if hours < 72:
+        return "two days" if hours < 60 else "nearly three days"
+    return _days_en(hours / 24)
 
 
 def recent_turns(user_id: str, limit: int = RECENT_TURNS) -> list[dict[str, str]]:
@@ -996,6 +1064,18 @@ def _fmt(row: dict) -> str:
     if not title:
         return content
     return f'"{title}" — {content}' if lang.english() else f"«{title}» — {content}"
+
+
+def met_before(user_id: str) -> bool:
+    """Have they had a talk before this one? — not «how much has been said»: a
+    second evening is not a first meeting however little was said in the
+    first (the owner, 2026-10-16: he knew my name and still asked what I do in
+    my free time). Asked before the turn is logged."""
+    with db.connect() as conn:
+        row = conn.execute("SELECT MAX(ts) last FROM turns WHERE user_id=?", (user_id,)).fetchone()
+    if not row or row["last"] is None:
+        return False
+    return time.time() - row["last"] >= NEW_CONVERSATION_GAP or visits_so_far(user_id) >= 2
 
 
 def visits_so_far(user_id: str) -> int:

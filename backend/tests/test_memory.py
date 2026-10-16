@@ -6,6 +6,8 @@ import asyncio
 import json
 import time
 
+import pytest
+
 from app import config, db, embeddings, erase, memory
 
 #: The person these tests are about. Every memory call names whose it is.
@@ -623,3 +625,60 @@ def test_a_draft_sees_the_window_its_turn_will_see():
     drafted = memory.conversation("d", pending="новая строка")
     memory.log_turn("d", "user", "новая строка")
     assert drafted == memory.conversation("d")
+
+
+# ── when each talk began (memory.conversation) ─────────────────────────────
+#
+# The owner, 2026-10-16: «he has no sense of time» — «Эй, привет» a day and a
+# half after «Я с родителями живу, и.» got «Я тут, никуда не делся», because
+# the log was handed over as one stream.
+
+def _turn(user: str, role: str, text: str, ago: float) -> None:
+    with db.connect() as conn:
+        conn.execute("INSERT INTO turns(user_id, role, content, ts, farewell) VALUES (?,?,?,?,0)",
+                     (user, role, text, time.time() - ago))
+
+
+def test_the_first_line_of_theirs_in_a_new_talk_says_how_long_it_had_been():
+    day = 24 * HOUR
+    _turn(U, "user", "Я с родителями живу, и.", 1.5 * day + 60)
+    _turn(U, "assistant", "И... что дальше?", 1.5 * day)
+    _turn(U, "user", "Эй, привет.", 30)
+    _turn(U, "assistant", "Привет.", 20)
+    _turn(U, "user", "Как дела?", 10)
+    said = [t["content"] for t in memory.conversation(U)]
+    assert said[0] == "Я с родителями живу, и."                 # the window's start: nothing to say
+    assert said[2] == "(новый разговор — прошло полтора дня) Эй, привет."
+    assert said[3:] == ["Привет.", "Как дела?"]                 # the same talk: no mark
+    # Stored as it was said: the mark is only in what he is handed.
+    assert memory.recent_turns(U, limit=3)[0]["content"] == "Эй, привет."
+
+
+def test_a_line_not_yet_logged_is_marked_too_and_his_hello_does_not_take_the_mark():
+    _turn(U, "user", "Ну всё, пока.", 5 * HOUR + 30)
+    _turn(U, "assistant", "Привет! Ты тут?", 40)          # he spoke first in the new talk…
+    said = memory.conversation(U, pending="Да, тут.")
+    assert said[-2]["content"] == "Привет! Ты тут?"
+    assert said[-1]["content"].startswith("(новый разговор — прошло 5 часов)")   # …theirs carries it
+    U2 = U + "-2"
+    _turn(U2, "user", "Привет", 3 * 24 * HOUR)
+    assert memory.conversation(U2, pending="Это я")[-1]["content"] == "(новый разговор — прошло 3 дня) Это я"
+
+
+@pytest.mark.parametrize("seconds, said", [(12 * 60, "10 минут"), (47 * 60, "45 минут"), (HOUR, "час"),
+                                           (3 * HOUR, "3 часа"), (7 * HOUR, "7 часов"),
+                                           (25 * HOUR, "сутки"), (40 * HOUR, "полтора дня"),
+                                           (50 * HOUR, "два дня")])
+def test_a_persons_sense_of_how_long_it_has_been(seconds, said):
+    assert memory._ago(seconds) == said
+
+
+def test_they_have_met_before_once_there_was_a_talk_before_this_one():
+    assert memory.met_before(U) is False                        # nobody has said anything
+    _turn(U, "user", "Привет", 60)
+    assert memory.met_before(U) is False                        # the same first talk, going on
+    U3 = U + "-3"
+    _turn(U3, "user", "Привет", 2 * 24 * HOUR)
+    assert memory.met_before(U3) is True                        # a new talk, days later
+    _turn(U3, "user", "Это снова я", 30)
+    assert memory.met_before(U3) is True                        # …and all through it

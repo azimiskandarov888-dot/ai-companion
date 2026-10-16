@@ -70,6 +70,9 @@
       </header>
 
       <div class="status" id="status">Нажми «Начать разговор».</div>
+      <button id="soundNote" hidden style="margin:6px 0;padding:8px 12px;border-radius:8px;border:1px solid #c33;background:#fff4f4;color:#900;cursor:pointer">
+        🔇 Браузер не даёт играть его голос — нажми сюда, чтобы включить звук
+      </button>
 
       <div class="controls">
         <button id="start">Начать разговор</button>
@@ -161,9 +164,21 @@
 
       function setStatus(html) { statusEl.innerHTML = html; }
 
+      // His voice arrives as audio the browser must be allowed to play: if it is
+      // held (a tab that has not been clicked, a browser that blocks sound), the
+      // words still show and nothing is heard — say so, and let one click fix it.
+      function watchSound() {
+        const note = $("soundNote");
+        const check = () => { note.hidden = !ctx || ctx.state === "running" || ctx.state === "closed"; };
+        note.onclick = async () => { try { await ctx.resume(); } catch (e) {} check(); };
+        ctx.onstatechange = check;
+        check();
+      }
+
       function scheduleAudio(buf) {
         const samples = new Int16Array(buf);
         if (!samples.length) return;
+        if (ctx.state === "suspended") { ctx.resume().catch(() => {}); $("soundNote").hidden = false; }
         const audio = ctx.createBuffer(1, samples.length, rate);
         const ch = audio.getChannelData(0);
         for (let i = 0; i < samples.length; i++) ch[i] = samples[i] / 0x8000;
@@ -234,6 +249,7 @@
         }
         ctx = new (window.AudioContext || window.webkitAudioContext)();
         await ctx.resume();
+        watchSound();
         const url = URL.createObjectURL(new Blob([WORKLET], { type: "application/javascript" }));
         await ctx.audioWorklet.addModule(url);
         source = ctx.createMediaStreamSource(stream);

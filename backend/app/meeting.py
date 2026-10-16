@@ -123,6 +123,27 @@ _FIRST_EN = """FIRST MEETING. You're two strangers who got talking. You get to k
 - Don't explain how you met — not with an app, not a phone, not a screen: you don't know those words, you just got talking.
 - Don't say goodbye first: you've only just got talking. A short answer isn't a goodbye. You say goodbye and put the end mark only when they say goodbye."""
 
+#: A second evening is not a first meeting, however little was said in the
+#: first: he remembers it. The owner, 2026-10-16, after a talk of 114 words and
+#: a day and a half: «he knows my name already, but still asked: чем обычно
+#: занимаешься в свободное время?» — the first meeting's «откуда он и чем
+#: занят», asked of somebody he had already met.
+_AGAIN = """ВЫ УЖЕ ГОВОРИЛИ — это не первая встреча, хоть знаете вы друг друга пока мало. Что он тебе рассказал, ты помнишь, как живой человек.
+- Начни с того, что между вами было: как он, как эти дни прошли, что с тем, о чём он говорил. Если в прошлый раз он не договорил — можно к этому вернуться, к слову.
+- Вопросов «для знакомства» с разбега — чем занимаешься, что любишь — не задавай: узнавай дальше из того, что он приносит сам.
+- Это разговор, а не расспросы: часто хватает отозваться; не больше одного вопроса за раз. Что он уже рассказал, не переспрашивай.
+- Тепло растёт, но вы ещё не близкие: не забегай вперёд. О близких, о трудном сам не заговаривай; пошёл туда он — иди с ним.
+- {name}
+- Чего он тебе сам не сказал, того ты вслух не знаешь. Как вы встретились, не объясняй — ни приложением, ни телефоном. Первым не прощайся."""
+
+_AGAIN_EN = """YOU'VE TALKED BEFORE — this isn't a first meeting, though you still know each other little. What they told you, you remember, like a living person.
+- Start from what was between you: how they are, how these days went, what came of what they talked about. If they didn't finish something last time, you can come back to it, in passing.
+- No "getting to know you" questions out of nowhere — what do you do, what do you like: learn more from what they bring themselves.
+- It's a conversation, not questioning: often it's enough to respond; never more than one question at a time. Don't ask again about what they've already told you.
+- Warmth grows, but you're not close yet: don't run ahead. Don't bring up family or hard things yourself; if they go there, go with them.
+- {name}
+- What they haven't told you themselves, you don't know out loud. Don't explain how you met — not with an app, not a phone. Don't say goodbye first."""
+
 #: What stands in for the person on the one call where he speaks first. The
 #: person opened the app and has not said anything — the blank page again, if
 #: it were left to them. Never stored: these are not their words.
@@ -170,21 +191,28 @@ def stage(words: int) -> int:
     return sum(words >= at for at in KNOWN_AT)
 
 
-def where(words: int, *, named: bool = True) -> str:
+def where(words: int, *, named: bool = True, met_before: bool = False) -> str:
     """Where the two of them are — one line, every turn. `named`: he has said
-    his own name to this person."""
-    line = lang.pick(_WHERE, _WHERE_EN)[stage(words)]
-    if stage(words) == 1 and not named:
+    his own name to this person. `met_before`: this is not their first talk —
+    however little was said, they are no longer people who have just met."""
+    at = max(stage(words), 1 if met_before else 0)
+    line = lang.pick(_WHERE, _WHERE_EN)[at]
+    if at == 1 and not named:
         line += lang.pick(" Вы так и не назвались друг другу — самое время, между делом.",
                           " You still haven't told each other your names — about time, in passing.")
     return line
 
 
-def block(words: int, *, named: bool = True, heard: int = 0) -> str:
+def block(words: int, *, named: bool = True, heard: int = 0, met_before: bool = False) -> str:
     """How to meet somebody — only while they are still strangers. `heard`:
-    how many times the person has spoken."""
+    how many times the person has spoken. `met_before`: they have had a talk
+    before this one — then it is meeting again (_AGAIN), not a first meeting."""
     if stage(words) != 0:
         return ""
+    if met_before:
+        return lang.pick(_AGAIN, _AGAIN_EN).format(
+            name=lang.pick(_NAME_SAID if named else _NAME_FIRST,
+                           _NAME_SAID_EN if named else _NAME_FIRST_EN))
     if lang.english():
         first = _FIRST_EN.format(name=_NAME_SAID_EN if named else _NAME_FIRST_EN)
         return first if named or heard < NAME_BY else f"{first}\n{_NAME_NOW_EN}"

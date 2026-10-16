@@ -252,12 +252,15 @@ async def _assemble(
     # would otherwise count themselves. How close they are is decided by how
     # much has been said, never by the calendar — see meeting.py.
     words = memory.words_said(user_id)
+    # …and whether this is a talk after another one: a second evening is not a
+    # first meeting, however little was said in the first (meeting._AGAIN).
+    met_before = memory.met_before(user_id)
     # Whether he has said his own name yet — the one thing a first meeting
     # owes that he did not do unasked (meeting.NAME_BY).
     # …and his voice, given once and kept (voices.py).
     who = voices.ensure(user_id)
     named = memory.named_himself(user_id, who.get("name", ""))
-    acquaintance = meeting.where(words, named=named)
+    acquaintance = meeting.where(words, named=named, met_before=met_before)
     # …and HOW LONG HE HAS BEEN GONE, which nothing used to say. See
     # memory.how_long_since_last_time. Before the log, like the two above.
     gap = memory.how_long_since_last_time(user_id)
@@ -361,7 +364,8 @@ async def _assemble(
         acquaintance=acquaintance,
         # How two strangers get talking — only while they still are.
         meeting_block=meeting.block(
-            words, named=named, heard=memory.times_heard(user_id) + (1 if pending else 0)
+            words, named=named, heard=memory.times_heard(user_id) + (1 if pending else 0),
+            met_before=met_before,
         ),
         by_ear=by_ear and user_text is not None,
         said_meanwhile=said_meanwhile,
