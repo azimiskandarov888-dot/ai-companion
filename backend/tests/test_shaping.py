@@ -5,8 +5,9 @@ first second, «как пустая бланка», a random name and the person
 then «дописываться и раскрываться» the way people open up, because to write
 him we must know the person. Pinned here: he is born with no model at all,
 the person's wishes hold from the first minute, the layers come in the order
-people open up and only when it is time, nothing written or said is ever
-replaced, and he never changes in the middle of a talk.
+people open up and only when it is time, a layer only fills what is empty —
+what he has said aloud is never replaced, what is only written is put right
+only when checked (consistency.py) — and he never changes in the middle of a talk.
 """
 
 from __future__ import annotations
@@ -44,7 +45,8 @@ EVERYTHING = {
 def models(monkeypatch):
     """Every model this file reaches, answered by what it is asked to be."""
     seen: list[dict] = []
-    plan = {"verdicts": ["не с кем говорить всерьёз"] * 9, "same": [True] * 9}
+    plan = {"verdicts": ["не с кем говорить всерьёз"] * 9, "same": [True] * 9,
+            "check": {"rejected": [], "fixes": {}}}
 
     async def answer(system, user_text, **kw):
         seen.append({"system": system, "user": user_text, **kw})
@@ -55,7 +57,10 @@ def models(monkeypatch):
         if system.startswith("Перед тобой два чтения"):
             return json.dumps({"same": plan["same"].pop(0), "why": "—"})
         if system.startswith("Ты пишешь человека, который уже существует"):
-            return json.dumps(EVERYTHING, ensure_ascii=False)
+            revise = {"revise": plan["revise"]} if plan.get("revise") else {}
+            return json.dumps({**EVERYTHING, **revise}, ensure_ascii=False)
+        if system.startswith("Ты сверщик собеседника"):
+            return json.dumps(plan["check"], ensure_ascii=False)
         if "дописываешь человека" in system:
             return json.dumps({"likes": ["смотреть на звёзды с крыши"]}, ensure_ascii=False)
         return "{}"   # the scribe: nothing to keep
@@ -212,9 +217,9 @@ def test_his_depths_wait_until_they_know_each_other(models, monkeypatch):
     assert him["wound"] == EVERYTHING["wound"] and him["flaws"]
 
 
-def test_nothing_written_or_said_is_ever_replaced(models):
-    """The writer is told it is law — and the code holds it too: a layer only
-    fills empty places, whatever the model sends."""
+def test_a_layer_only_fills_what_is_empty(models):
+    """Whatever the model sends as a layer, it fills only empty places — what
+    was written changes only through a checked revision (below)."""
     _born(home="Порту, у реки")           # he already said where he lives
     _talk()
     _after_and_settle()
@@ -224,6 +229,51 @@ def test_nothing_written_or_said_is_ever_replaced(models):
     write = _asked(models["seen"], "Ты пишешь человека, который уже существует")[0]
     assert "home —" not in write["system"]          # not even asked for
     assert "Порту, у реки" in write["user"]         # and shown as law
+
+
+def _two_layers(models, *, revise: dict, check: dict, said_aloud: str = "") -> dict:
+    """Layer 1, then layer 2 with the writer's revisions and the checker's
+    answer; `said_aloud` is what he told the person about himself meanwhile."""
+    _born()
+    _talk()
+    _after_and_settle()
+    if said_aloud:
+        memory.add_memory(U, "fact", said_aloud, owner="bob", importance=2)
+    models["plan"].update(revise=revise, check=check)
+    _talk()
+    _after_and_settle()
+    return persona.load_persona(U)
+
+
+def test_what_is_only_written_may_be_put_right(models):
+    him = _two_layers(models, revise={"roots": "из Николаева", "name": "Педро"},
+                      check={"rejected": [], "fixes": {}})
+    assert him["roots"] == "из Николаева"
+    assert him["name"] == _born()["name"]               # who he is to them: never
+    assert him["expertise"] == EVERYTHING["expertise"]  # and the layer itself is in
+
+
+def test_what_he_said_aloud_is_not_revised(models):
+    him = _two_layers(models, revise={"home": "Порту, у реки", "roots": "из Николаева"},
+                      check={"rejected": ["home"], "fixes": {}},
+                      said_aloud="живёт в Лиссабоне, над булочной")
+    assert him["home"] == EVERYTHING["home"] and him["roots"] == "из Николаева"
+    check = _asked(models["seen"], "Ты сверщик собеседника")[-1]
+    assert "живёт в Лиссабоне, над булочной" in check["user"]
+    assert "Порту, у реки" in check["user"]
+
+
+def test_what_contradicts_what_he_said_is_corrected_and_the_fix_wins(models):
+    him = _two_layers(models, revise={"roots": "из Николаева"},
+                      check={"rejected": [], "fixes": {"roots": "из Херсона",
+                                                       "expertise": "старые мотоциклы"}},
+                      said_aloud="вырос в Херсоне")
+    assert him["roots"] == "из Херсона" and him["expertise"] == "старые мотоциклы"
+
+
+def test_a_check_that_could_not_run_lets_the_layer_in_and_nothing_else(models):
+    him = _two_layers(models, revise={"roots": "из Николаева"}, check="не знаю")
+    assert him["roots"] == EVERYTHING["roots"] and him["expertise"] == EVERYTHING["expertise"]
 
 
 def test_he_changes_only_between_talks(models):
@@ -330,6 +380,20 @@ def test_when_the_reader_learns_something_new_the_writer_adds_to_him(models, mon
     monkeypatch.setattr(reading, "reread", reread)
     asyncio.run(reading.keep_reading(U))
     assert "смотреть на звёзды с крыши" in persona.load_persona(U)["likes"]
+
+
+def test_what_he_grows_is_checked_against_what_he_said(models):
+    """Deepening adds, and then all of him is read again against what he has
+    said aloud — a contradiction anywhere in him is put right."""
+    persona.save_persona(U, {**EVERYTHING, "name": "Лукас", "gender": "мужской"})
+    memory.add_memory(U, "fact", "вырос в Херсоне", owner="bob", importance=2)
+    memory.log_turn(U, "user", "ну да")
+    models["plan"]["check"] = {"rejected": [], "fixes": {"roots": "из Херсона"}}
+    asyncio.run(persona.deepen(U, now=True))
+    him = persona.load_persona(U)
+    assert him["roots"] == "из Херсона" and "смотреть на звёзды с крыши" in him["likes"]
+    check = _asked(models["seen"], "Ты сверщик собеседника")[-1]
+    assert "смотреть на звёзды с крыши" in check["user"] and "вырос в Херсоне" in check["user"]
 
 
 def test_a_reading_that_only_learned_a_line_does_not_reshape_him():

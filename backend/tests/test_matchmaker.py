@@ -701,3 +701,29 @@ def test_the_writer_writes_what_he_does_and_how_he_sounds_concretely():
     assert "длина фраз" in matchmaker.FIELD_HINTS["speech_style"]
     assert "никогда не скажет" in matchmaker.FIELD_HINTS["speech_style"]
     assert "поступками" in matchmaker._layer_system(1, {})
+
+
+def test_the_writer_may_propose_to_put_right_only_what_was_written_before(monkeypatch):
+    """The owner, 2026-10-16: «вдруг написанное раньше было не совсем точным».
+    What the writer proposes is gathered aside — consistency.py decides what
+    of it may be; who he is to the person is never proposed at all."""
+    already = {"name": "Лукас", "gender": "мужской", "address": "ты", "age": 16, "home": "Лиссабон",
+               "personality": "спокойный", "speech_style": "короткие фразы", "roots": "из Одессы"}
+    answer = {f: f"{f} — новое" for f in matchmaker.LAYERS[1]["fields"]}
+    answer["revise"] = {"home": "Порту", "name": "Педро", "gender": "женский", "address": "вы",
+                        "age": "22",
+                        "expertise": "чужое",       # this layer's own: written, not revised
+                        "humor": "сухой",           # never written: nothing to put right
+                        "roots": "  ", "nonsense": "x"}
+
+    async def think(system, prompt, **kw):
+        assert "ключ revise" in system and "Сказанное вслух не трогай" in system
+        return json.dumps(answer, ensure_ascii=False)
+
+    monkeypatch.setattr(brain, "think", think)
+    proposed: dict = {}
+    got = asyncio.run(matchmaker.write_layer("контекст", 2, already, revisions=proposed))
+    assert got["expertise"] == "expertise — новое" and "revise" not in got
+    assert proposed == {"home": "Порту"}
+    shown = matchmaker.layer_context(now=already, his_words="", facts="", brief="", talks="")
+    assert "что он сказал вслух — закон, остальное можно поправить в revise" in shown

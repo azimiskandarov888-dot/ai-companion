@@ -7,6 +7,8 @@
     python3 myself.py read             # 3. несколько чтений тебя по этим разговорам
     python3 myself.py write            # 4. несколько писателей дописывают его — выбранный и станет им
     python3 myself.py status           # что пройдено, сколько разговоров, сколько ушло
+    python3 myself.py show             # какой он сейчас — то, что он читает перед каждой репликой
+    python3 myself.py fix humor "…"    # поправить поле руками (список — через « | »)
     python3 myself.py pick read Б      # выбрать позже, если сразу не решил
 
 ОДИН КОМПАНЬОН, С ПЕРВОЙ СЕКУНДЫ
@@ -552,6 +554,33 @@ async def _staged(stage) -> None:
     await stage
 
 
+def show(args) -> None:
+    """Him, as he reads himself before every reply — and his fields by name."""
+    who = persona.load_persona(_me())
+    print(persona.build_persona_block(who))
+    print("\nПоля:", ", ".join(k for k in who if not k.startswith("_") and k != "voice"))
+
+
+def fix(args) -> None:
+    """The owner's own hand on him (2026-10-16: «нам все-таки нужно его хоть
+    как-то исправить»): one field, replaced — a list given as «a | b | c». No
+    check stops it: this is the owner's decision. But what he has already said
+    aloud the person has heard — the old value is printed, so it is a choice."""
+    uid = _me()
+    who = persona.load_persona(uid)
+    field = args.field
+    if field not in matchmaker.FIELD_HINTS and field not in ("name", "address", "gender"):
+        sys.exit(f"Нет такого поля: {field}. Поля: {', '.join(matchmaker.FIELD_HINTS)}")
+    old = who.get(field)
+    new = ([part.strip() for part in args.value.split("|") if part.strip()]
+           if isinstance(old, list) or "|" in args.value else args.value.strip())
+    persona.save_persona(uid, {**who, field: new})
+    print(f"{field}:\n  было: {json.dumps(old, ensure_ascii=False)}\n  стало: {json.dumps(new, ensure_ascii=False)}")
+    said = memory.bob_self_context(uid)
+    if said.strip():
+        print("\nЧто он уже сказал о себе вслух (человек это слышал):\n" + said)
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="stage", required=True)
@@ -560,6 +589,10 @@ def main() -> None:
         s.add_argument("--models", help="свои кандидаты: id,id,… (имена OpenRouter)")
     sub.add_parser("begin")
     sub.add_parser("status")
+    sub.add_parser("show")
+    f = sub.add_parser("fix")
+    f.add_argument("field")
+    f.add_argument("value")
     p = sub.add_parser("pick")
     p.add_argument("stage", choices=STAGES)
     p.add_argument("letter")
@@ -572,6 +605,10 @@ def main() -> None:
         return begin(args)
     if args.stage == "pick":
         return pick(args)
+    if args.stage == "show":
+        return show(args)
+    if args.stage == "fix":
+        return fix(args)
     asyncio.run(_staged(globals()[args.stage](args)))
 
 

@@ -60,8 +60,8 @@ from __future__ import annotations
 import sys
 import time
 
-from . import (brain, config, learn, matchmaker, meeting, memory, mood, persona, reading,
-               voices, young)
+from . import (brain, config, consistency, learn, matchmaker, meeting, memory, mood, persona,
+               reading, voices, young)
 
 #: The second layer — what he is for this person — never before this reading…
 FIRST_READ_TO_SHAPE = 2
@@ -146,10 +146,16 @@ async def _after_talk(user_id: str) -> None:
     else:
         await learn.learn_from_conversation(user_id, farewell=True)
 
-    fields = await write(user_id, layer)
+    proposed: dict = {}
+    fields = await write(user_id, layer, revisions=proposed)
+    # What he has said aloud is law, what is only written may be put right —
+    # and the check between is consistency.py's, here, between talks.
+    who = persona.load_persona(user_id)
+    checked = await consistency.check(before=who, layer=fields, proposed=proposed,
+                                      spoken=memory.bob_self_context(user_id))
     if waiting(user_id):     # still the same companion: nobody started over meanwhile
         persona.save_persona(user_id, {**persona.load_persona(user_id),
-                                       "_next": {"layer": layer, "fields": fields}})
+                                       "_next": {"layer": layer, "fields": fields, **checked}})
         print(f"  ✎ {user_id[:8]}: layer {layer} («{matchmaker.LAYERS[layer - 1]['name']}») "
               "written — part of him from the next talk", flush=True)
 
@@ -181,8 +187,10 @@ async def _read(user_id: str, words: int) -> bool:
     return True
 
 
-async def write(user_id: str, layer: int, said: str | None = None) -> dict:
-    """The writer: the next layer of this companion, for this person."""
+async def write(user_id: str, layer: int, said: str | None = None, *,
+                revisions: dict | None = None) -> dict:
+    """The writer: the next layer of this companion, for this person —
+    `revisions` filled with what it proposes to put right (matchmaker)."""
     who = persona.load_persona(user_id)
     context = matchmaker.layer_context(
         now=who,
@@ -192,19 +200,25 @@ async def write(user_id: str, layer: int, said: str | None = None) -> dict:
         talks=said if said is not None else transcript(user_id, persona.persona_name(who)),
         band=young.of(user_id),
     )
-    return await matchmaker.write_layer(context, layer, who)
+    return await matchmaker.write_layer(context, layer, who, revisions=revisions)
 
 
-def grown(who: dict, layer: int, fields: dict) -> dict:
-    """He, with one more layer: only empty places filled — nothing already
-    written or said is ever replaced — and the same voice the person has been
-    hearing, sounding now like who he is turning out to be (voices.style_for)."""
+def grown(who: dict, layer: int, fields: dict, *, revise: dict | None = None,
+          fixes: dict | None = None) -> dict:
+    """He, with one more layer: the new layer fills only empty places; what
+    was only written and checked unsaid may be put right (`revise`); and what
+    contradicted what he has said aloud is corrected (`fixes`, last — they
+    win) — consistency.py. And the same voice the person has been hearing,
+    sounding now like who he is turning out to be (voices.style_for)."""
     out = dict(who)
     for key, value in fields.items():
         if key == "more" and out.get("more"):
             # The one open field: each layer adds to it, nothing in it is replaced.
             out["more"] = persona.merge_growth(out, {"more": value})["more"]
         elif not out.get(key):
+            out[key] = value
+    for key, value in {**(revise or {}), **(fixes or {})}.items():
+        if key in consistency.REVISABLE:
             out[key] = value
     out["layers"] = max(persona.written(who), layer)
     voice = who.get("voice") if isinstance(who.get("voice"), dict) else {}
@@ -224,7 +238,9 @@ def settle(user_id: str) -> bool:
     if not isinstance(waiting_layer, dict) or memory.in_a_talk(user_id):
         return False
     persona.save_persona(user_id, grown(who, int(waiting_layer.get("layer") or 0),
-                                        dict(waiting_layer.get("fields") or {})))
+                                        dict(waiting_layer.get("fields") or {}),
+                                        revise=dict(waiting_layer.get("revise") or {}),
+                                        fixes=dict(waiting_layer.get("fixes") or {})))
     print(f"  ✎ {user_id[:8]}: {who.get('name')} — layer {waiting_layer.get('layer')} is part "
           "of him now", flush=True)
     return True

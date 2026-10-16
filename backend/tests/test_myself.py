@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from types import SimpleNamespace
 
 import httpx
 import pytest
@@ -145,3 +146,23 @@ def test_the_stages_read_his_real_talks_as_the_app_does(monkeypatch):
     _uid, said = myself._talked()
     assert said == shaping.transcript(uid, "Лукас")
     assert "ЧЕЛОВЕК: привет, я из Ташкента" in said and "ЛУКАС: Привет." in said
+
+
+def test_the_owner_puts_him_right_by_hand(capsys):
+    """«нам все-таки нужно его хоть как-то исправить» — by the owner's own
+    hand: one field, a list as «a | b»; what he has already said aloud is
+    shown, so that changing it is a choice, not an accident."""
+    uid = myself._me()
+    persona.save_persona(uid, {"name": "Лукас", "layers": 1, "personality": "спокойный",
+                               "humor": "сухой", "likes": ["дождь"]})
+    memory.add_memory(uid, "fact", "любит дождь", owner="bob", importance=2)
+    myself.fix(SimpleNamespace(field="likes", value="дождь | шахматы"))
+    myself.fix(SimpleNamespace(field="humor", value="смеётся над собой"))
+    who = persona.load_persona(uid)
+    assert who["likes"] == ["дождь", "шахматы"] and who["humor"] == "смеётся над собой"
+    out = capsys.readouterr().out
+    assert "было: \"сухой\"" in out and "любит дождь" in out
+    with pytest.raises(SystemExit):
+        myself.fix(SimpleNamespace(field="nonsense", value="x"))
+    myself.show(None)
+    assert "смеётся над собой" in capsys.readouterr().out
