@@ -70,6 +70,7 @@
       </header>
 
       <div class="status" id="status">Нажми «Начать разговор».</div>
+      <div id="soundInfo" style="font-size:12px;color:#777;margin:4px 0">звук: ещё не включён · <a href="#" id="beep">проверить звук</a></div>
       <button id="soundNote" hidden style="margin:6px 0;padding:8px 12px;border-radius:8px;border:1px solid #c33;background:#fff4f4;color:#900;cursor:pointer">
         🔇 Браузер не даёт играть его голос — нажми сюда, чтобы включить звук
       </button>
@@ -167,18 +168,42 @@
       // His voice arrives as audio the browser must be allowed to play: if it is
       // held (a tab that has not been clicked, a browser that blocks sound), the
       // words still show and nothing is heard — say so, and let one click fix it.
+      // Safari lets a page make sound only from inside a click: the context is
+      // made — and woken with a moment of silence — in the click itself, never
+      // after the microphone's permission has been waited for.
+      let voiceChunks = 0, soundError = "";
+      function ensureAudio() {
+        if (!ctx || ctx.state === "closed") ctx = new (window.AudioContext || window.webkitAudioContext)();
+        ctx.resume().catch(() => {});
+        try {
+          const quiet = ctx.createBufferSource();
+          quiet.buffer = ctx.createBuffer(1, 1, ctx.sampleRate);
+          quiet.connect(ctx.destination); quiet.start(0);
+        } catch (e) { soundError = e.name || String(e); }
+        return ctx;
+      }
+      function showSound() {
+        const state = ctx ? `${ctx.state}, ${ctx.sampleRate} Гц, кусков голоса: ${voiceChunks}` : "ещё не включён";
+        $("soundInfo").firstChild.textContent = `звук: ${state}${soundError ? ", ошибка: " + soundError : ""} · `;
+      }
       function watchSound() {
         const note = $("soundNote");
-        const check = () => { note.hidden = !ctx || ctx.state === "running" || ctx.state === "closed"; };
-        note.onclick = async () => { try { await ctx.resume(); } catch (e) {} check(); };
+        const check = () => { note.hidden = !ctx || ctx.state === "running" || ctx.state === "closed"; showSound(); };
+        note.onclick = async () => { ensureAudio(); try { await ctx.resume(); } catch (e) {} check(); };
         ctx.onstatechange = check;
         check();
       }
 
       function scheduleAudio(buf) {
+        try { playAudio(buf); } catch (e) { soundError = `${e.name || "Error"}: ${e.message || e}`; }
+        showSound();
+      }
+
+      function playAudio(buf) {
         const samples = new Int16Array(buf);
         if (!samples.length) return;
-        if (ctx.state === "suspended") { ctx.resume().catch(() => {}); $("soundNote").hidden = false; }
+        voiceChunks += 1;
+        if (ctx.state !== "running") { ctx.resume().catch(() => {}); $("soundNote").hidden = false; }
         const audio = ctx.createBuffer(1, samples.length, rate);
         const ch = audio.getChannelData(0);
         for (let i = 0; i < samples.length; i++) ch[i] = samples[i] / 0x8000;
@@ -247,8 +272,8 @@
           setStatus(micTrouble(e) + ` <span class="code">(${code})</span>`);
           startBtn.disabled = false; return;
         }
-        ctx = new (window.AudioContext || window.webkitAudioContext)();
-        await ctx.resume();
+        ensureAudio();
+        if (ctx.state !== "running") { try { await ctx.resume(); } catch (e) {} }
         watchSound();
         const url = URL.createObjectURL(new Blob([WORKLET], { type: "application/javascript" }));
         await ctx.audioWorklet.addModule(url);
@@ -345,11 +370,21 @@
 
       startBtn.onclick = async () => {
         if (ws) { stop(false); return; }
+        ensureAudio();   // now, inside the click — before anything is waited for
         if (wakeOnNextStart) {
           wakeOnNextStart = false;
           try { await fetch("/api/wake", { method: "POST", headers: { Authorization: "Bearer " + token() } }); } catch (e) {}
         }
         start();
+      };
+      $("beep").onclick = (e) => {
+        e.preventDefault();
+        ensureAudio();
+        const tone = ctx.createOscillator(), loud = ctx.createGain();
+        tone.frequency.value = 440; loud.gain.value = 0.15;
+        tone.connect(loud); loud.connect(ctx.destination);
+        tone.start(); tone.stop(ctx.currentTime + 0.35);
+        setTimeout(showSound, 60);
       };
       doneBtn.onclick = () => { if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: "done_talking" })); };
       // Out of sight — another tab, the window hidden — he must not speak into
