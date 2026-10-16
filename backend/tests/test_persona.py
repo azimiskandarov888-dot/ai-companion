@@ -399,3 +399,54 @@ def test_how_he_talks_and_what_he_is_reach_the_conversation():
     # An older persona with no gender says nothing rather than guess.
     unknown = persona.build_persona_block({"name": "Женя"})
     assert "Ты мужчина" not in unknown and "Ты женщина" not in unknown
+
+
+# ── what of him goes into the prompt (persona.PROMPT_BUDGET) ───────────────
+#
+# The owner, 2026-10-16: «он не должен быть слишком длинный… составлен
+# очень-очень правильно». He reads this before every reply.
+
+def _sprawling() -> dict:
+    sentence = "Он чинит старые радиоприёмники на балконе и спорит с соседом о футболе. "
+    return {"name": "Виктор", "gender": "м", "address": "ты", "layers": 3, "age": "48 лет",
+            "one_liner": "мастер на все руки", "home": "Пермь", "personality": sentence * 12,
+            "speech_style": "коротко, с присказками", "backstory": sentence * 20,
+            "likes": [f"любимое {n}" for n in range(30)], "flaws": [sentence * 3] * 9,
+            "cast": [{"name": f"Друг{n}", "who": "сосед", "between": sentence * 3} for n in range(9)],
+            "wound": "брат не пишет", "more": [sentence] * 20}
+
+
+def test_however_much_was_written_he_never_grows_past_the_budget():
+    block = persona.build_persona_block(_sprawling())
+    assert len(block) <= persona.PROMPT_BUDGET
+
+
+def test_a_long_field_is_cut_at_the_end_of_a_sentence_not_mid_word():
+    clipped = persona._clip("Первая фраза тут. Вторая фраза подлиннее идёт. Третья не влезет никак.", 50)
+    assert clipped == "Первая фраза тут. Вторая фраза подлиннее идёт."
+    assert persona._clip("одно длинное слово за другим без точек совсем", 20).endswith("…")
+    assert persona._clip("коротко", 50) == "коротко"
+
+
+def test_squeezed_nothing_of_him_is_lost_whole():
+    block = persona.build_persona_block(_sprawling())
+    for label in ("ТЫ — Виктор", "Твой характер", "Как ты говоришь", "Твоя история", "Что ты любишь",
+                  "Твои недостатки", "Что у тебя не зажило", "Люди в твоей жизни", "Ещё о тебе",
+                  "Обращайся к нему на «ты»"):
+        assert label in block, label
+
+
+def test_his_nature_and_voice_come_before_his_story():
+    block = persona.build_persona_block(_sprawling())
+    assert block.index("Твой характер") < block.index("Как ты говоришь") < block.index("Твоя история")
+
+
+def test_a_companion_written_as_asked_goes_in_whole():
+    """Written to the writer's own limits, nothing is cut."""
+    him = {"name": "Виктор", "gender": "м", "address": "ты", "layers": 2,
+           "personality": "Спокойный, упрямый в мелочах.", "speech_style": "Коротко, с присказкой «ну-ну».",
+           "likes": ["рыбалка", "старое кино"], "backstory": "Сорок лет водил автобус по Перми."}
+    block = persona.build_persona_block(him)
+    for value in ("Спокойный, упрямый в мелочах", "Коротко, с присказкой «ну-ну»", "рыбалка; старое кино",
+                  "Сорок лет водил автобус по Перми"):
+        assert value in block

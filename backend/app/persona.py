@@ -230,11 +230,11 @@ def _persona_block_en(p: dict) -> str:
     add("How they wanted to meet you — true of you from the first minute", p.get("given"))
     add("Where you live", p.get("home"))
     add("Where you're from", p.get("roots"))
-    add("Your story", p.get("backstory"))
     add("Your character", p.get("personality"))
     add("How you talk (your own words — where they fit and now and then, not in every "
         "sentence)", p.get("speech_style"))
     add("What makes you laugh and how you joke", p.get("humor"))
+    add("Your story", p.get("backstory"))
     add("What's on your mind (don't say it outright — just live with it)", p.get("inner_world"))
     add("Your subject — you know it inside out and could talk about it for ever. It isn't "
         "random: it's something THEY love or miss. When it comes up, don't just keep up — leave "
@@ -494,15 +494,76 @@ async def deepen(user_id: str, *, now: bool = False) -> None:
         print(f"  · deepening skipped ({e})", flush=True)
 
 
+#: WHAT OF HIM GOES INTO THE PROMPT HE READS BEFORE EVERY REPLY. The owner,
+#: 2026-10-16: «он не должен быть слишком длинный… составлен очень-очень
+#: правильно». The writer is told: a field in a phrase or two, all of him in
+#: ~2500 characters (matchmaker «ЭТО ЧИТАЕТ ОН САМ»). This is the guarantee
+#: behind the request, whatever was written and however he has grown: at
+#: most this much of a field…
+_FIELD_CHARS = {"backstory": 600, "given": 400, "expertise": 360, "one_liner": 140, "age": 30}
+_FIELD_CHARS_DEFAULT = 280
+#: …of an item in a list, and so many items (the first, which the writer put first)…
+_ITEM_CHARS = 160
+_ITEMS = {"likes": 6, "dislikes": 5, "habits": 4, "opinions": 4, "flaws": 3, "things": 4,
+          "hopeless": 2, "more": 6}
+_CAST = 4
+#: …and of all of him together — kept by squeezing every field alike, never by
+#: dropping one: instructions are followed worse the more of them a prompt
+#: carries, and the first best (IFScale, arXiv 2507.11538).
+PROMPT_BUDGET = 4_000
+_SQUEEZE = (1.0, 0.75, 0.55, 0.4)
+
+
+def _clip(text, limit: int) -> str:
+    """At most `limit` characters, cut at the end of a sentence if there is
+    one in the second half, else at a word — never mid-word."""
+    text = " ".join(str(text).split())
+    if len(text) <= limit:
+        return text
+    cut = text[:limit]
+    for mark in (". ", "! ", "? ", "… "):
+        at = cut.rfind(mark)
+        if at >= limit // 2:
+            return cut[:at + 1]
+    at = cut.rfind(" ")
+    return (cut[:at] if at > 0 else cut).rstrip(",;:—– ") + "…"
+
+
+def _fitted(p: dict, squeeze: float = 1.0) -> dict:
+    """Him, with every field no longer than the prompt can carry well."""
+    out = dict(p)
+    for key, value in p.items():
+        if key.startswith("_") or key in ("name", "gender", "address", "voice", "layers"):
+            continue
+        if key == "cast" and isinstance(value, list):
+            out[key] = [{k: _clip(v, int(140 * squeeze)) if isinstance(v, str) else v
+                         for k, v in c.items()}
+                        for c in value if isinstance(c, dict)][:max(2, round(_CAST * squeeze))]
+        elif isinstance(value, (list, tuple)):
+            out[key] = [_clip(v, int(_ITEM_CHARS * squeeze)) for v in value
+                        if str(v).strip()][:max(1, round(_ITEMS.get(key, 6) * squeeze))]
+        elif isinstance(value, str):
+            out[key] = _clip(value, int(_FIELD_CHARS.get(key, _FIELD_CHARS_DEFAULT) * squeeze))
+    return out
+
+
 def build_persona_block(persona: dict) -> str:
-    """Assemble the Russian persona description injected into the system prompt.
+    """Assemble the persona description injected into the system prompt —
+    never longer than PROMPT_BUDGET.
 
     Pure: takes the loaded dict, never touches disk. Whose persona it is was
     decided by whoever called load_persona().
     """
     p = persona or DEFAULT_PERSONA
-    if lang.english():
-        return _persona_block_en(p)
+    render = _persona_block_en if lang.english() else _persona_block_ru
+    for squeeze in _SQUEEZE:
+        block = render(_fitted(p, squeeze))
+        if len(block) <= PROMPT_BUDGET:
+            break
+    return block
+
+
+def _persona_block_ru(p: dict) -> str:
     name = p.get("name") or "Боб"
     address = "вы" if str(p.get("address", "ты")).strip() == "вы" else "ты"
 
@@ -529,7 +590,8 @@ def build_persona_block(persona: dict) -> str:
     add("Каким тебя хотели встретить — это правда о тебе с первой минуты", p.get("given"))
     add("Где живёшь", p.get("home"))
     add("Откуда ты родом", p.get("roots"))
-    add("Твоя история", p.get("backstory"))
+    # His nature and his voice first, his story after: what shapes every reply
+    # comes earliest, where a prompt is followed best (IFScale).
     add("Твой характер", p.get("personality"))
     # HOW HE TALKS — his words, how he builds a sentence. The writer is
     # required to write it (matchmaker._REQUIRED) and the reading is baked into
@@ -540,6 +602,7 @@ def build_persona_block(persona: dict) -> str:
     add("Как ты говоришь (свои словечки — к месту и изредка, не в каждой фразе)",
         p.get("speech_style"))
     add("Над чем ты смеёшься и как шутишь", p.get("humor"))
+    add("Твоя история", p.get("backstory"))
     # What's on his mind when nobody's listening. Never recited out loud — it
     # is there so that what he DOES say comes from somewhere.
     add("Что у тебя на душе (не рассказывай это прямо — просто живи с этим)",

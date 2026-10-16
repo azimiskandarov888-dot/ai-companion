@@ -683,3 +683,12 @@ def test_the_interview_hears_about_a_love_that_is_not_his_work():
     assert "тема друга должна лечь НЕ сюда" in by_id["days"][1]
     assert by_id["miss"][2] == "А что любите, да давно не делали?"
 
+
+
+def test_the_writer_is_told_that_he_reads_it_before_every_reply():
+    """The owner, 2026-10-16: «учили мы его, как правильно писать промпт?»"""
+    for layer in (1, 2, 3):
+        system = matchmaker._layer_system(layer, {})
+        assert "ЭТО ЧИТАЕТ ОН САМ ПЕРЕД КАЖДОЙ РЕПЛИКОЙ" in system and "2500 знаков" in system
+    assert "во что он верит" in matchmaker.FIELD_HINTS["values"]
+    assert all("фраз" in matchmaker.FIELD_HINTS[f] for f in ("personality", "current_life", "wound", "dream"))

@@ -79,9 +79,11 @@ def test_a_reading_and_a_writer_are_counted():
                                 "russian_errors": 1}, {"verdict": "ok"})
     assert s["found"] == round(100 * 5 / len(olga["must_find"])) and s["wrong"] == 1
     assert (s["invented"], s["specific"], s["useful"], s["fake_quotes"]) == (2, 8.0, 7.0, 0)
+    him = {"name": "Виктор", "address": "ты", "personality": "спокойный"}
     w = bench.score_write(olga, {"contradictions": ["x"], "fit": 9, "alive": 8, "would_talk": 7,
-                                 "russian_errors": 0})
-    assert w == {"contradictions": 1, "fit": 9.0, "alive": 8.0, "would_talk": 7.0, "russian_errors": 0.0}
+                                 "compact": 6, "russian_errors": 0}, him)
+    assert w == {"contradictions": 1, "fit": 9.0, "alive": 8.0, "would_talk": 7.0, "compact": 6.0,
+                 "russian_errors": 0.0, "length": len(bench.persona.build_persona_block(him))}
 
 
 # ── end to end, with no paid call ───────────────────────────────────────────

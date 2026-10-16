@@ -262,9 +262,10 @@ _WRITE_JUDGE = """Ты строгий проверяющий. Писатель �
 - fit: 0–10 — подходит ли он именно этому человеку: даёт то, чего человеку не хватает, а не копирует его;
 - alive: 0–10 — живой ли это человек, конкретный и правдоподобный, а не шаблон и не «помощник»;
 - would_talk: 0–10 — захотел бы этот человек говорить с ним каждый день;
+- compact: 0–10 — написан ли он сжато и конкретно: это он сам перечитывает перед каждой репликой, и вода, повторы и общие слова там мешают;
 - russian_errors: сколько ошибок русского языка в тексте.
 
-Ответь ТОЛЬКО JSON: {"contradictions": ["…"], "fit": 0, "alive": 0, "would_talk": 0, "russian_errors": 0}"""
+Ответь ТОЛЬКО JSON: {"contradictions": ["…"], "fit": 0, "alive": 0, "would_talk": 0, "compact": 0, "russian_errors": 0}"""
 
 
 def scribe_items(found: list[dict]) -> list[str]:
@@ -438,13 +439,17 @@ def score_read(person: dict, verdict: dict, result: dict) -> dict:
     }
 
 
-def score_write(person: dict, verdict: dict) -> dict:
+def score_write(person: dict, verdict: dict, result: dict | None = None) -> dict:
     return {
         "contradictions": len(verdict.get("contradictions") or []),
         "fit": _num(verdict.get("fit")),
         "alive": _num(verdict.get("alive")),
         "would_talk": _num(verdict.get("would_talk")),
+        "compact": _num(verdict.get("compact")),
         "russian_errors": _num(verdict.get("russian_errors")),
+        # What of him reaches the prompt he reads before every reply — counted
+        # by code, as written (persona.PROMPT_BUDGET cuts beyond it).
+        "length": len(persona.build_persona_block(result or {})),
     }
 
 
@@ -494,7 +499,7 @@ def table(stage: str, candidates=None) -> list[dict]:
                 elif stage == "read":
                     s = score_read(p, j["verdict"], done["result"])
                 else:
-                    s = score_write(p, j["verdict"])
+                    s = score_write(p, j["verdict"], done["result"])
                 per_judge.setdefault(jmodel, []).append(s)
         if not per_judge and not failed:
             continue
@@ -517,8 +522,8 @@ def _composite(stage: str, m: dict) -> float:
     if stage == "read":
         return round(m["found"] / 10 - 2 * m["wrong"] - m["invented"] - 2 * m["fake_quotes"]
                      + (m["specific"] + m["useful"]) / 2 - m["russian_errors"] / 5, 1)
-    return round((m["fit"] + m["alive"] + m["would_talk"]) / 3 - 2 * m["contradictions"]
-                 - m["russian_errors"] / 5, 1)
+    return round((m["fit"] + m["alive"] + m["would_talk"] + m["compact"]) / 4 - 2 * m["contradictions"]
+                 - m["russian_errors"] / 5 - max(0.0, m["length"] - 2500) / 500, 1)
 
 
 COLUMNS = {
@@ -528,7 +533,8 @@ COLUMNS = {
              ("fake_quotes", "цитат, которых не было"), ("specific", "про него, 0–10"),
              ("useful", "по нему можно писать, 0–10"), ("russian_errors", "ошибок русского")],
     "write": [("contradictions", "противоречий"), ("fit", "подходит ему, 0–10"), ("alive", "живой, 0–10"),
-              ("would_talk", "хотелось бы говорить, 0–10"), ("russian_errors", "ошибок русского")],
+              ("would_talk", "хотелось бы говорить, 0–10"), ("compact", "сжато, 0–10"),
+              ("length", "знаков в промпте"), ("russian_errors", "ошибок русского")],
 }
 
 
