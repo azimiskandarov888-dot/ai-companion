@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 from types import SimpleNamespace
 
 import pytest
@@ -24,7 +25,7 @@ from app import matchmaker, reading
 
 @pytest.mark.parametrize("person", bench_people.PEOPLE, ids=lambda p: p["id"])
 def test_each_person_is_whole(person):
-    assert len(person["talks"]) == 3
+    assert len(person["talks"]) == 4
     ids = [i for i, _t, _w in person["facts"]] + [i for i, _t in person["bob_facts"]]
     assert len(ids) == len(set(ids))
     assert all(w in (1, 2, 3) for _i, _t, w in person["facts"])
@@ -33,15 +34,37 @@ def test_each_person_is_whole(person):
     assert len(person["must_find"]) >= 4 and len(person["must_not"]) >= 3
     assert set(reading._REQUIRED) <= set(person["reading"]) and person["reading"]["verdict"]
     said = bench_people.transcript(person)
+    # As the ears write them: no stage directions.
+    assert "(смеётся)" not in said and "(пауза)" not in said
     # He says his own name in the talks — the writer must keep it.
     assert f"Я {person['bob']['name']}" in said or f"А я {person['bob']['name']}" in said
     assert person["name"].split()[0] in said
 
 
+@pytest.mark.parametrize("person", bench_people.PEOPLE, ids=lambda p: p["id"])
+def test_a_reader_must_find_things_of_every_depth(person):
+    """The owner, 2026-10-16: «настоящий живой человек, он не такой. В нем есть
+    очень-очень много всего». What a reader must find is said, hinted — and
+    seen only across the talks, in at least two of them."""
+    depths = [depth for depth, _t, _where in person["must_find"]]
+    assert set(depths) == set(bench_people.DEPTH_WEIGHT)
+    assert depths.count(bench_people.ACROSS) >= 3
+    for depth, text, where in person["must_find"]:
+        talks = {n for group in re.findall(r"\(([\d, ]+)\)", where) for n in re.findall(r"\d", group)}
+        if depth == bench_people.ACROSS:
+            assert len(talks) >= 2, text
+    # The deepest is never said outright: its words are not in the talks.
+    said = bench_people.transcript(person).lower()
+    assert all(text.lower() not in said for depth, text, _w in person["must_find"]
+               if depth == bench_people.ACROSS)
+
+
 def test_what_the_traps_are_made_of_was_really_said():
     said = {p["id"]: bench_people.transcript(p) for p in bench_people.PEOPLE}
-    for pid, words in (("timur", ("две сестры", "миллионер", "Азис", "с тренировки")),
-                       ("olga", ("про визор", "медсестра", "в Казани", "кот болеет", "медик", "не особо верующая")),
+    for pid, words in (("timur", ("две сестры", "миллионер", "Азис", "с тренировки", "брат в армии",
+                                  "Дырявым")),
+                       ("olga", ("про визор", "медсестра", "в Казани", "кот болеет", "медик", "не особо верующая",
+                                 "У мамы в Сызрани огород")),
                        ("nikolai", ("сто лет в обед", "четырнадцать", "Михалычу", "Немец стал"))):
         for w in words:
             assert w in said[pid], (pid, w)
@@ -63,21 +86,30 @@ def test_a_scribe_is_counted_as_the_judge_says():
                "missed": ["T10", "T11", "nonsense"], "missed_bob": ["B3"]}
     s = bench.score_scribe(timur, verdict)
     total = sum(w for _i, _t, w in timur["facts"])
-    assert s == {"recall": round(100 * (total - 6) / total), "invented": 1, "traps": 1, "owner": 1, "bob": 2}
+    assert s == {"recall": round(100 * (total - 6) / total), "invented": 1, "traps": 1, "owner": 1,
+                 "bob": len(timur["bob_facts"]) - 1}
 
 
 def test_a_quote_never_said_is_caught_by_code():
     olga = bench_people.by_id("olga")
-    result = {"verdict": "Говорит «Я сама за себя» и «я всегда мечтала петь на сцене»."}
+    result = {"verdict": "Говорит «В хоре ведь не притворишься» и «я всегда мечтала петь на сцене»."}
     assert bench.fake_quotes(result, olga) == ["я всегда мечтала петь на сцене"]
 
 
 def test_a_reading_and_a_writer_are_counted():
     olga = bench_people.by_id("olga")
-    s = bench.score_read(olga, {"found": [True, True, False, True, True, True, True], "wrong": [False, True],
+    # Everything said or hinted, nothing seen across the talks: well under half by weight.
+    shallow = [depth != bench_people.ACROSS for depth, _t, _w in olga["must_find"]]
+    s = bench.score_read(olga, {"found": shallow, "wrong": [False, True],
                                 "invented": ["a", "b"], "specific": 8, "useful": "7",
                                 "russian_errors": 1}, {"verdict": "ok"})
-    assert s["found"] == round(100 * 5 / len(olga["must_find"])) and s["wrong"] == 1
+    weights = [bench_people.DEPTH_WEIGHT[d] for d, _t, _w in olga["must_find"]]
+    assert s["found"] == round(100 * sum(w for w, hit in zip(weights, shallow) if hit) / sum(weights)) < 50
+    assert s["deep"] == 0 and s["wrong"] == 1
+    deep = bench.score_read(olga, {"found": [True] * len(shallow)}, {})
+    assert (deep["found"], deep["deep"]) == (100, 100)
+    # A judge that answered for fewer things than asked: the rest are not found.
+    assert bench.score_read(olga, {"found": [True]}, {})["found"] == round(100 * weights[0] / sum(weights))
     assert (s["invented"], s["specific"], s["useful"], s["fake_quotes"]) == (2, 8.0, 7.0, 0)
     him = {"name": "Виктор", "address": "ты", "personality": "спокойный"}
     w = bench.score_write(olga, {"contradictions": ["x"], "fit": 9, "alive": 8, "would_talk": 7,

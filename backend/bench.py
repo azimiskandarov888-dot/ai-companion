@@ -37,7 +37,7 @@ from pathlib import Path
 
 import myself
 from app import brain, config, lang, learn, matchmaker, persona, reading, shaping
-from bench_people import PEOPLE, exchanges, transcript
+from bench_people import ACROSS, DEPTH_WEIGHT, PEOPLE, exchanges, transcript
 
 HOME = config.DATA_DIR / "bench"
 
@@ -243,12 +243,12 @@ _SCRIBE_JUDGE = """Ты строгий проверяющий. Писарь сл
 
 _READ_JUDGE = """Ты строгий проверяющий. Читатель прочитал разговоры человека и написал, кто этот человек и что ему нужно. Проверь чтение по разговорам и по правде о человеке — её читатель не видел.
 
-Тебе дают: разговоры; правду о человеке; что в чтении обязательно должно быть (пронумеровано); чего в нём быть не должно (пронумеровано); и само чтение.
+Тебе дают: разговоры; правду о человеке; что в чтении обязательно должно быть — пронумеровано, с глубиной («явно» — сказано прямо; «намёком» — видно из сказанного; «по повторам» — видно только по тому, что повторяется через разговоры) и где это видно; чего в нём быть не должно (пронумеровано); и само чтение.
 
 Оцени строго, как редактор, а не как поклонник:
-- found: для каждого «обязательно» по порядку — есть ли это в чтении по смыслу (true/false);
+- found: для каждого «обязательно» по порядку — есть ли это в чтении по смыслу (true/false). Засчитывай, если чтение пришло к той же сути — своими словами или осторожно («похоже, …»); не засчитывай, если там лишь пересказ слов человека без этой сути;
 - wrong: для каждого «не должно быть» по порядку — утверждает ли это чтение (true/false);
-- invented: утверждения чтения, которых нет в разговорах и которые из них не следуют, — коротко, по одному;
+- invented: утверждения чтения, у которых в разговорах нет опоры, — коротко, по одному. Вывод из намёков или из того, что повторяется через разговоры, — не выдумка, даже если в правде о человеке его нет: проверяй по разговорам;
 - specific: 0–10 — про ЭТОГО ли человека чтение, а не общие слова, подходящие любому;
 - useful: 0–10 — можно ли по нему написать друга, который правда подойдёт этому человеку;
 - russian_errors: сколько ошибок русского языка в тексте чтения (грамматика, кальки, не те слова).
@@ -305,7 +305,8 @@ def reading_text(result: dict) -> str:
 
 
 def _read_question(person: dict, result: dict) -> str:
-    must = "\n".join(f"{n}. {t}" for n, t in enumerate(person["must_find"], 1))
+    must = "\n".join(f"{n}. [{depth}] {t} — где видно: {where}"
+                     for n, (depth, t, where) in enumerate(person["must_find"], 1))
     must_not = "\n".join(f"{n}. {t}" for n, t in enumerate(person["must_not"], 1))
     return (f"РАЗГОВОРЫ:\n{transcript(person)}\n\nПРАВДА О ЧЕЛОВЕКЕ:\n{person['truth']}\n\n"
             f"ОБЯЗАТЕЛЬНО ДОЛЖНО БЫТЬ:\n{must}\n\nНЕ ДОЛЖНО БЫТЬ:\n{must_not}\n\n"
@@ -428,10 +429,16 @@ def score_scribe(person: dict, verdict: dict) -> dict:
 
 
 def score_read(person: dict, verdict: dict, result: dict) -> dict:
-    found = [bool(x) for x in (verdict.get("found") or [])][:len(person["must_find"])]
+    """«found» by weight — a thing seen only across the talks is worth three
+    said straight out — and «deep», how much of only that was seen."""
+    must = person["must_find"]
+    found = ([bool(x) for x in (verdict.get("found") or [])] + [False] * len(must))[:len(must)]
     wrong = [bool(x) for x in (verdict.get("wrong") or [])][:len(person["must_not"])]
+    weight = [DEPTH_WEIGHT[depth] for depth, _t, _w in must]
+    deep = [hit for hit, (depth, _t, _w) in zip(found, must) if depth == ACROSS]
     return {
-        "found": round(100 * sum(found) / len(person["must_find"])),
+        "found": round(100 * sum(w for w, hit in zip(weight, found) if hit) / sum(weight)),
+        "deep": round(100 * sum(deep) / len(deep)) if deep else 0,
         "wrong": sum(wrong),
         "invented": len(verdict.get("invented") or []),
         "fake_quotes": len(fake_quotes(result, person)),
@@ -522,7 +529,7 @@ def _composite(stage: str, m: dict) -> float:
     if stage == "scribe":
         return round(m["recall"] / 10 - 2 * m["invented"] - 2 * m["traps"] - 2 * m["owner"], 1)
     if stage == "read":
-        return round(m["found"] / 10 - 2 * m["wrong"] - m["invented"] - 2 * m["fake_quotes"]
+        return round(m["found"] / 10 + m["deep"] / 20 - 2 * m["wrong"] - m["invented"] - 2 * m["fake_quotes"]
                      + (m["specific"] + m["useful"]) / 2 - m["russian_errors"] / 5, 1)
     return round((m["fit"] + m["alive"] + m["would_talk"] + m["compact"]) / 4 - 2 * m["contradictions"]
                  - m["russian_errors"] / 5 - max(0.0, m["length"] - 2500) / 500, 1)
@@ -531,7 +538,8 @@ def _composite(stage: str, m: dict) -> float:
 COLUMNS = {
     "scribe": [("recall", "запомнил, % по весу"), ("invented", "выдумал"), ("traps", "попался в ловушку"),
                ("owner", "перепутал чьё"), ("bob", "о Бобе верно")],
-    "read": [("found", "нашёл главное, %"), ("wrong", "сказал неправду"), ("invented", "домыслил"),
+    "read": [("found", "нашёл главное, % по весу"), ("deep", "увидел по повторам, %"),
+             ("wrong", "сказал неправду"), ("invented", "домыслил"),
              ("fake_quotes", "цитат, которых не было"), ("specific", "про него, 0–10"),
              ("useful", "по нему можно писать, 0–10"), ("russian_errors", "ошибок русского")],
     "write": [("contradictions", "противоречий"), ("fit", "подходит ему, 0–10"), ("alive", "живой, 0–10"),
@@ -542,7 +550,7 @@ COLUMNS = {
 
 def report() -> Path:
     lines = ["# Первый круг: кто лучше делает работу агента — по цифрам", "",
-             "Три выдуманных человека (подросток 15 лет, женщина 46, вдовец 79), по три разговора; правду о них "
+             "Три выдуманных человека (подросток 15 лет, женщина 46, вдовец 79), по четыре разговора; правду о них "
              "модели не видели. Числа — среднее по людям и по двум судьям от разных компаний "
              f"({', '.join(n for n, _ in JUDGES)}); в скобках — каждый судья отдельно, если они расходятся. "
              "Цена — настоящая, за работу на всех троих, без судей.", ""]
@@ -563,7 +571,7 @@ def report() -> Path:
             cells = []
             for key, _c in cols:
                 vals = [bj[key] for bj in r["by_judge"].values() if key in bj]
-                apart = len(vals) == 2 and abs(vals[0] - vals[1]) >= (2 if key in ("recall", "found") else 1.5)
+                apart = len(vals) == 2 and abs(vals[0] - vals[1]) >= (2 if key in ("recall", "found", "deep") else 1.5)
                 cells.append(f"{r['mean'][key]:g}" + (f" ({vals[0]:g}/{vals[1]:g})" if apart else ""))
             lines.append(f"| {n} | **{r['name']}** | " + " | ".join(cells)
                          + f" | {r['cost']:.3f} | {r['seconds']:.0f} |")
@@ -586,8 +594,9 @@ def report() -> Path:
 # ── план и цена — до того, как платить ─────────────────────────────────────
 
 #: Tokens per job, roughly, from the app's own calls (in, out incl. thinking).
-_TOKENS = {"scribe": (9 * 4_000, 9 * 1_500), "read": (14_000, 10_000), "write": (2 * 14_000, 2 * 8_000)}
-_JUDGE_TOKENS = {"scribe": (9_000, 2_000), "read": (11_000, 1_500), "write": (10_000, 1_500)}
+#: Four talks a person since 2026-10-16 (deeper people): ≈ 1.35× the talk text.
+_TOKENS = {"scribe": (9 * 4_000, 9 * 1_500), "read": (15_000, 10_000), "write": (2 * 15_000, 2 * 8_000)}
+_JUDGE_TOKENS = {"scribe": (10_000, 2_000), "read": (12_000, 1_500), "write": (11_000, 1_500)}
 
 
 def plan(args) -> None:
