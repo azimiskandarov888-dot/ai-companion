@@ -623,7 +623,7 @@ class Session:
         self.voice = tts.voice_for(self.who)
         #: An older friend — or a friend to somebody past sixty, by their own
         #: answer at the warm-up (young.ELDER) — breathes more before he
-        #: answers, deeper and longer (first_sound.SHARES_OLDER).
+        #: answers, deeper and longer (first_sound.SHARES_OLDER, DEEP_SHARE).
         self._older = (young.is_elder(user_id)
                        or (voices.years(self.who) or 0) >= first_sound.OLDER_FROM)
         self.ears: hearing.Ears | None = None
@@ -1445,20 +1445,20 @@ class Session:
             at all before a first word that is ready-made: that one plays at
             once, and is itself the start.
 
-            A breath is any of his breaths — in or out, deep ones too when he
-            is older — never one of the last he took. It is started so as to
-            be still going, by _BREATH_OUTLASTS, when his words are expected —
-            from the middle of it, faded in, when there is less time than it
-            lasts (first_sound.joined) — and gives way to them when they come
+            A breath is one of his breaths — an older friend's most often a
+            deep one, otherwise one in or out (first_sound.breath) — never
+            one of the last he took. It is started so as to be still going,
+            by _BREATH_OUTLASTS, when his words are expected — from the
+            middle of it, faded in, when there is less time than it lasts
+            (first_sound.joined) — and gives way to them when they come
             (_Breath). A word — «ну…» — is said whole, and only if it fits."""
             nonlocal sound_ends, breathing
             text = made[0]
             if breath := text in first_sound.BREATHS_SHOWN:
                 # Never the breath he has just taken: «breathing cant sound
                 # identical 6 times in a row» (the owner, 2026-10-08).
-                every = first_sound.breaths(voice, older=self._older) or [made]
-                fresh = [c for c in every if id(c[2]) not in self._breathed] or every
-                made = self._rng.choice(fresh)
+                made = first_sound.breath(voice, self._rng, older=self._older,
+                                          taken=self._breathed) or made
             shown, rate, pcm = made
             length = len(pcm) / (2 * rate)
             while not self._answering_aloud:

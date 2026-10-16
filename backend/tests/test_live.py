@@ -1325,17 +1325,28 @@ def test_no_breath_before_a_first_word_that_is_ready_made(env, sounds):
 
 
 def test_somebody_past_sixty_gets_the_deep_breath(env, sounds, monkeypatch):
+    """The owner, 2026-10-08: «чем старше, тем больше вдоха… и дольше, и
+    сильнее». A friend to somebody past sixty (young.ELDER) takes a deep
+    breath before his words most of the time (first_sound.DEEP_SHARE, the
+    owner's «чаще глубокий»). This test failed about half its runs once his
+    breaths became thirteen: the deep one was taken no more often than any
+    other, and the test wanted it every time. How often is a coin, pinned
+    here as SHARES_OLDER is — every breath deep — so what the test holds is
+    that a deep one is there for him and is what he breathes, shown as his
+    breath; how often is test_first_sound's."""
     from app import young
 
     young.remember(UID, "72")
     first_sound._made[(his_voice(), first_sound.DEEP_BREATH)] = [(16000, b"DB" * 9600)]   # 0.6 s
     monkeypatch.setattr(first_sound, "SHARES_OLDER", {k: (1.0, 0.0) for k in first_sound.SHARES})
     monkeypatch.setattr(first_sound, "SHARES", {k: (0.0, 0.0) for k in first_sound.SHARES})
+    monkeypatch.setattr(first_sound, "DEEP_SHARE", 1.0)
     with talk(env) as line:
         line.ears().send(turn("EndOfTurn", "я сегодня в саду работал"))
         line.expect("done")
     assert after_heard(line)[0] == "(вдох)"
-    assert any(audio.endswith(b"DB" * 200) for audio in line.audio)          # the deep one
+    assert any(audio.endswith(b"DB" * 200) for audio in line.audio)          # the deep one…
+    assert BR[:400] not in breath_heard(line)                                # …not the ordinary one
 
 
 def test_his_words_start_on_the_word_not_on_the_voice_s_silence():

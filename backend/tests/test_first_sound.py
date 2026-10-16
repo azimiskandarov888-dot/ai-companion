@@ -152,6 +152,35 @@ def test_an_older_friend_breathes_more():
     assert old[0] > young[0] and old[1] < young[1]
 
 
+def test_an_older_friend_mostly_breathes_deep_and_never_the_same_breath_again(monkeypatch):
+    """The owner, 2026-10-08: «чем старше, тем больше вдоха… и дольше, и
+    сильнее» — and «breathing cant sound identical 6 times in a row». When
+    his breaths became thirteen, the four deep ones were taken no more often
+    than any other — about one breath in three — and the live test that
+    wanted a deep one every time failed about half its runs. Asked, the
+    owner chose «чаще глубокий»: most of an older friend's breaths deep
+    (DEEP_SHARE), not all of them; never one of the last he took while there
+    is another, even if that one is not deep; nobody younger gets a deep one."""
+    in1, in2, out, deep1, deep2 = b"IN1", b"IN2", b"OUT", b"DEEP1", b"DEEP2"
+    for kind, takes in ((first_sound.BREATH, (in1, in2)), (first_sound.EXHALE, (out,)),
+                        (first_sound.DEEP_BREATH, (deep1, deep2))):
+        first_sound._made[("v", kind)] = [(1000, pcm) for pcm in takes]
+    rng = random.Random()
+    monkeypatch.setattr(rng, "choice", lambda seq: seq[0])
+
+    def breath(roll: float, *, older: bool = True, taken: tuple[bytes, ...] = ()) -> bytes:
+        monkeypatch.setattr(rng, "random", lambda: roll)
+        return first_sound.breath("v", rng, older=older, taken={id(pcm) for pcm in taken})[2]
+
+    share = first_sound.DEEP_SHARE
+    assert 0.5 < share < 1                                           # most of them, not every one
+    assert breath(share - 0.01) == deep1 and breath(share) == in1    # deep, or else in or out
+    assert breath(0.0, taken=(deep1,)) == deep2                      # never the one just taken…
+    assert breath(0.0, taken=(deep1, deep2, in1)) == in2             # …even if it means not deep
+    assert breath(0.0, older=False) == in1                           # nobody younger: never deep
+    assert breath(0.0, older=False, taken=(in1, in2, out)) == in1
+
+
 def test_he_does_not_make_the_same_sound_twice_running_when_there_is_another():
     first_sound._made[(None, "Хм…")] = [(16000, b"HM")]
     first_sound._made[(None, "Так…")] = [(16000, b"TA")]

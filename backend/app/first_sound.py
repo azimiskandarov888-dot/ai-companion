@@ -25,7 +25,8 @@ the phone it is the only sign of listening there is. The owner, 2026-10-02:
                                  opens with — «да…», «ну…» after something told,
                                  «ну…» after a question, «хм…», «так…» before
                                  something he must weigh; sometimes nothing
-                                 (SHARES). An older friend breathes more.
+                                 (SHARES). An older friend breathes more, and
+                                 mostly deep (DEEP_SHARE).
   his words still not there      one more — a word, once
   LATE seconds after
 
@@ -85,6 +86,7 @@ import random
 import re
 import sys
 import wave
+from collections.abc import Container
 
 from . import body, config, lang, tts
 
@@ -167,6 +169,12 @@ TAKES = 2
 SHARES = {"statement": (0.6, 0.2), "question": (0.6, 0.2), "thinking": (0.45, 0.4)}
 SHARES_OLDER = {"statement": (0.75, 0.1), "question": (0.75, 0.1), "thinking": (0.6, 0.25)}
 OLDER_FROM = 55
+#: …and of an older friend's breaths, the share that are deep — the owner,
+#: 2026-10-08: «чем старше, тем больше вдоха… и дольше, и сильнее». Asked, he
+#: chose «чаще глубокий»: not every one deep, and not a deep one only as often
+#: as any other of his thirteen (about one in three, as it had become). The
+#: rest are in or out, so that they still vary.
+DEEP_SHARE = 0.75
 #: How often a pause in their turn gets a listener's «м-м». None now: half of
 #: those pauses are the end of their turn after all, and the «м-м» became the
 #: start of his answer with a silence after it — the very thing the owner
@@ -267,10 +275,24 @@ def pick(voice: str | None, kind: str, rng: random.Random,
 
 def breaths(voice: str | None, *, older: bool = False) -> list[tuple[str, int, bytes]]:
     """His breaths that are made, as (shown, rate, PCM) — in and out, and for
-    an older friend the deep ones too — for live.py to take whichever fits
-    the moment before his words."""
+    an older friend the deep ones too."""
     kinds = (BREATH, EXHALE, DEEP_BREATH) if older else (BREATH, EXHALE)
     return [(shown(kind), rate, pcm) for kind in kinds for rate, pcm in _made.get((voice, kind), [])]
+
+
+def breath(voice: str | None, rng: random.Random, *, older: bool = False,
+           taken: Container[int] = ()) -> tuple[str, int, bytes] | None:
+    """His breath before his words, as (shown, rate, PCM): an older friend's
+    most often a deep one (DEEP_SHARE), anybody's otherwise one in or out —
+    and never one of those he took last (`taken`, by the id of their PCM)
+    while there is another, deep or not: «breathing cant sound identical 6
+    times in a row». None while none is made."""
+    every = breaths(voice, older=older)
+    fresh = [b for b in every if id(b[2]) not in taken] or every
+    deep = {id(pcm) for _rate, pcm in _made.get((voice, DEEP_BREATH), [])}
+    wanted = older and rng.random() < DEEP_SHARE
+    choices = [b for b in fresh if (id(b[2]) in deep) == wanted] or fresh
+    return rng.choice(choices) if choices else None
 
 
 #: …and when he jumps in — a quarrel, a story he can't wait to answer — he
@@ -281,9 +303,10 @@ SHARES_EAGER = (0.25, 0.1)
 def choose(voice: str | None, kind: str, rng: random.Random, *, older: bool = False,
            eager: bool = False, avoid: str = "") -> tuple[str, int, bytes] | None:
     """His sound at the end of a turn of this kind (at_end): his breath most
-    often — deeper and longer when `older` — a word sometimes, nothing the
+    often — more often still when `older` — a word sometimes, nothing the
     rest of the time (SHARES); mostly nothing when `eager` (listening.py:
-    he is jumping in). While his breath is not made yet, a word stands in."""
+    he is jumping in). While his breath is not made yet, a word stands in.
+    Which of his breaths it is, deep or not, is taken when it is time (breath)."""
     breath, word = (SHARES_EAGER if eager else
                     (SHARES_OLDER if older else SHARES).get(kind, SHARES["statement"]))
     roll = rng.random()
@@ -427,8 +450,8 @@ async def _make_all(voice: str | None) -> None:
 # voice at all», the same voice breathed: eight takes of eight unvoiced.
 #
 # So: a dozen of them, in and out, none voiced, none cut — and before his
-# words he takes whichever fits the moment (live.Session._answer), never one
-# he has just taken.
+# words he takes one of them (breath; an older friend most often a deep one),
+# never one he has just taken.
 
 #: (kind, how it is breathed, how many takes are kept, how long one may be)
 BREATHS = (

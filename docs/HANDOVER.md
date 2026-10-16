@@ -146,9 +146,6 @@ each).
   blank companion (`docs/FIRST-MEETING.md` step 3).
 - **No automatic check that a written layer does not contradict what he said**
   (FIRST-MEETING §9) — the owner's eye in the test for now.
-- `tests/test_live.py::test_somebody_past_sixty_gets_the_deep_breath` fails
-  now and then — on the code before this evening too (2 of 3 runs); the reason
-  not yet found.
 - Whisper and the embeddings still need an OpenAI key (the iPhone's
   `/api/talk` ears; recall by meaning).
 
@@ -179,7 +176,7 @@ each).
 - **A breath, most of the time** — otherwise «ну…»/«да…» (or «хм…», «так…» before something to weigh), sometimes nothing (`first_sound.SHARES`).
 - **13 breaths per voice** — 6 in, 3 out, 4 deep — made by the voice told «just air, no voice at all»: half of Gemini's plain `<breath>` takes were voiced, an «э». Every take is checked for a pitch (`first_sound._voiced`) and made again if it has one; never shortened; never one of the last three.
 - **Timed to his words and never cut:** streamed to the phone a little ahead of playback, it fades out over 80 ms under his first word when the words come (`live._Breath`); joined from its middle when there is less time than it lasts (`first_sound.joined`). Measured: breath-to-word 0.06–0.20 s, no silence. The voice's own silence before his first word is cut off.
-- **Older → deeper and stronger** (the owner: «чем старше, тем больше вдоха… и дольше, и сильнее»): a companion of 55+ or a person who said 60+ at the warm-up — `young.ELDER`, the one band now kept about an adult, which changes nothing but his breathing.
+- **Older → deeper and stronger** (the owner: «чем старше, тем больше вдоха… и дольше, и сильнее»): a companion of 55+ or a person who said 60+ at the warm-up — `young.ELDER`, the one band now kept about an adult, which changes nothing but his breathing. Three breaths in four are deep for them (`first_sound.DEEP_SHARE`), the rest in or out, still never one of the last three: the owner chose «чаще глубокий» over «всегда» and over a deep one as just one of thirteen — which it had become by mistake, so `test_somebody_past_sixty_gets_the_deep_breath` failed half its runs.
 - **«м-м» in their pauses is off:** half those pauses were the end of the turn, and it became the start of his answer followed by a silence.
 - His mid-sentence «э-э…» / «м-м…» stumbles stay (the owner: keep both).
 
@@ -908,8 +905,7 @@ the reason the tests that now hold them exist.
   or any repo artifact. Chat replies only.
 - **Commit attribution:** end every commit with the attribution line(s) the
   session's own instructions give — nothing else names a model.
-- **Tests:** `cd backend && .venv/bin/python -m pytest -q`. **1361 pass** (one,
-  `test_somebody_past_sixty_gets_the_deep_breath`, fails now and then — §0). The suite is the
+- **Tests:** `cd backend && .venv/bin/python -m pytest -q`. **1429 pass**. The suite is the
   design record — test docstrings carry the *reasoning*, including what went
   wrong before. Read the docstring before changing an assertion; several tests
   exist because a previous fix was subtly wrong.
