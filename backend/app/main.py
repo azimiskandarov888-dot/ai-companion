@@ -370,6 +370,7 @@ async def _assemble(
         by_ear=by_ear and user_text is not None,
         said_meanwhile=said_meanwhile,
         between=between,
+        anchor=persona.anchor(who),
     )
 
     return (

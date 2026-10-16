@@ -450,3 +450,26 @@ def test_a_companion_written_as_asked_goes_in_whole():
     for value in ("Спокойный, упрямый в мелочах", "Коротко, с присказкой «ну-ну»", "рыбалка; старое кино",
                   "Сорок лет водил автобус по Перми"):
         assert value in block
+
+
+def test_what_he_does_in_ordinary_moments_comes_with_his_nature():
+    """A persona holds across situations by its words that are actions
+    (arXiv 2607.18566) — so they are part of him, said as him."""
+    him = {"name": "Виктор", "address": "ты", "personality": "Спокойный.", "humor": "Сухой.",
+           "moments": ["когда тебе грустно — ставит чайник и молчит рядом",
+                       "когда с ним спорят — сначала соглашается, потом гнёт своё"],
+           "backstory": "Сорок лет водил автобус."}
+    block = persona.build_persona_block(him)
+    assert "Что ты делаешь в обычные минуты" in block and "ставит чайник и молчит рядом" in block
+    assert block.index("Над чем ты смеёшься") < block.index("обычные минуты") < block.index("Твоя история")
+
+
+def test_who_he_is_is_said_again_last_in_a_line():
+    """A long prompt is held best at its start and end (Lost in the Middle)."""
+    him = {"name": "Виктор", "one_liner": "бывший водитель автобуса из Перми",
+           "speech_style": "коротко, с присказкой «ну-ну»; вопросы в лоб. " * 10}
+    line = persona.anchor(him)
+    assert line.startswith("ПОМНИ, КТО ТЫ: Виктор — бывший водитель автобуса из Перми.")
+    assert "Как ты говоришь: коротко" in line and len(line) <= persona.ANCHOR_CHARS + 20
+    assert persona.anchor({"name": "Рустам"}) == "ПОМНИ, КТО ТЫ: Рустам."     # a blank: his name, nothing made up
+    assert not persona.anchor({"name": "Рустам", "speech_style": "Коротко."}).endswith("..")

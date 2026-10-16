@@ -869,3 +869,13 @@ def test_an_english_conversation_is_told_so_last_and_a_russian_one_is_not():
     _, unset = companion.build_system_parts()
     assert english.endswith(companion.IN_ENGLISH)
     assert companion.IN_ENGLISH not in russian and companion.IN_ENGLISH not in unset
+
+
+def test_who_he_is_is_the_last_thing_he_is_told_before_the_language():
+    from app import lang
+    stable, variable = companion.build_system_parts(persona_block="ТЫ — Виктор.",
+                                                    anchor="ПОМНИ, КТО ТЫ: Виктор.")
+    assert variable.rstrip().endswith("ПОМНИ, КТО ТЫ: Виктор.")
+    _s, english = companion.build_system_parts(persona_block="YOU ARE Victor.", anchor="REMEMBER WHO YOU ARE: Victor.",
+                                               language="en")
+    assert english.index("REMEMBER WHO YOU ARE") < english.index(companion.IN_ENGLISH)

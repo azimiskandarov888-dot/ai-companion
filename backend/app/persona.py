@@ -234,6 +234,7 @@ def _persona_block_en(p: dict) -> str:
     add("How you talk (your own words — where they fit and now and then, not in every "
         "sentence)", p.get("speech_style"))
     add("What makes you laugh and how you joke", p.get("humor"))
+    add("What you do in ordinary moments (this is you, not rules)", p.get("moments"))
     add("Your story", p.get("backstory"))
     add("What's on your mind (don't say it outright — just live with it)", p.get("inner_world"))
     add("Your subject — you know it inside out and could talk about it for ever. It isn't "
@@ -505,7 +506,7 @@ _FIELD_CHARS_DEFAULT = 280
 #: …of an item in a list, and so many items (the first, which the writer put first)…
 _ITEM_CHARS = 160
 _ITEMS = {"likes": 6, "dislikes": 5, "habits": 4, "opinions": 4, "flaws": 3, "things": 4,
-          "hopeless": 2, "more": 6}
+          "hopeless": 2, "more": 6, "moments": 4}
 _CAST = 4
 #: …and of all of him together — kept by squeezing every field alike, never by
 #: dropping one: instructions are followed worse the more of them a prompt
@@ -563,6 +564,27 @@ def build_persona_block(persona: dict) -> str:
     return block
 
 
+#: The reminder at the end of what he is handed: a long prompt is held best at
+#: its start and its end (Liu et al., «Lost in the Middle»), and a persona in
+#: the middle of one fades as a talk goes on (arXiv 2402.10962, 2512.12775) —
+#: role-play tools put a short note at the bottom for exactly this (SillyTavern's
+#: Author's Note: «the closer… to the bottom… the more impact»).
+ANCHOR_CHARS = 300
+
+
+def anchor(persona: dict) -> str:
+    """Who he is, in a line or two — said again last (companion `anchor`)."""
+    p = persona or DEFAULT_PERSONA
+    name = str(p.get("name") or ("Bob" if lang.english() else "Боб")).strip()
+    one = _clip(_joined(p.get("one_liner")), 120).rstrip(" .")
+    voice = _clip(_joined(p.get("speech_style")), ANCHOR_CHARS - len(name) - len(one) - 40).rstrip(" .")
+    if lang.english():
+        return (f"REMEMBER WHO YOU ARE: {name}" + (f", {one}" if one else "") + "."
+                + (f" How you talk: {voice}." if voice else ""))
+    return (f"ПОМНИ, КТО ТЫ: {name}" + (f" — {one}" if one else "") + "."
+            + (f" Как ты говоришь: {voice}." if voice else ""))
+
+
 def _persona_block_ru(p: dict) -> str:
     name = p.get("name") or "Боб"
     address = "вы" if str(p.get("address", "ты")).strip() == "вы" else "ты"
@@ -602,6 +624,10 @@ def _persona_block_ru(p: dict) -> str:
     add("Как ты говоришь (свои словечки — к месту и изредка, не в каждой фразе)",
         p.get("speech_style"))
     add("Над чем ты смеёшься и как шутишь", p.get("humor"))
+    # WHAT HE DOES, not what he is: a persona holds across situations by its
+    # words that are actions (arXiv 2607.18566 — without them, 95% of that
+    # consistency went), and Anthropic's own advice is to plan the moments.
+    add("Что ты делаешь в обычные минуты (это ты сам, а не правила)", p.get("moments"))
     add("Твоя история", p.get("backstory"))
     # What's on his mind when nobody's listening. Never recited out loud — it
     # is there so that what he DOES say comes from somewhere.

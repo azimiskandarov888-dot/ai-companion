@@ -282,6 +282,7 @@ def build_system_parts(
     by_ear: bool = False,
     said_meanwhile: str = "",
     between: str = "",
+    anchor: str = "",
     language: str = "",
 ) -> tuple[str, str]:
     """Assemble the system prompt as (stable, variable).
@@ -308,6 +309,8 @@ def build_system_parts(
                     which mishears (BY_EAR).
     said_meanwhile: what he already said while they were quiet before this
                     reply — a listener's «Ну?» (listening.py) — not to be said again.
+    anchor:         who he is, in a line — said again at the very end
+                    (persona.anchor), where a long prompt is held best.
     between:        what is going on between them, as the listener read it
                     after their last turn (listening.py) — a quarrel is not
                     answered like a sad story.
@@ -518,6 +521,11 @@ def build_system_parts(
             "- Если он начал с чего-то тяжёлого, или ему сейчас явно не до того — "
             "промолчи и просто будь рядом."
         )
+
+    # Who he is, once more, last of all he is told about himself: a persona in
+    # the middle of a long prompt fades as a talk goes on (persona.anchor).
+    if anchor.strip():
+        variable_parts.append(anchor.strip())
 
     # The very last line: what language every word above is to come out in.
     if en:

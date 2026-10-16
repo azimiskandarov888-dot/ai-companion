@@ -692,3 +692,12 @@ def test_the_writer_is_told_that_he_reads_it_before_every_reply():
         assert "ЭТО ЧИТАЕТ ОН САМ ПЕРЕД КАЖДОЙ РЕПЛИКОЙ" in system and "2500 знаков" in system
     assert "во что он верит" in matchmaker.FIELD_HINTS["values"]
     assert all("фраз" in matchmaker.FIELD_HINTS[f] for f in ("personality", "current_life", "wound", "dream"))
+
+
+def test_the_writer_writes_what_he_does_and_how_he_sounds_concretely():
+    """Behavioural anchors (arXiv 2607.18566) and a voice by its marks."""
+    assert "moments" in matchmaker.LAYERS[0]["fields"]
+    assert "когда" in matchmaker.FIELD_HINTS["moments"] and "ДЕЛАЕТ" in matchmaker.FIELD_HINTS["moments"]
+    assert "длина фраз" in matchmaker.FIELD_HINTS["speech_style"]
+    assert "никогда не скажет" in matchmaker.FIELD_HINTS["speech_style"]
+    assert "поступками" in matchmaker._layer_system(1, {})
