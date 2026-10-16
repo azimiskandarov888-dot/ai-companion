@@ -92,9 +92,13 @@ SCRIBES = [
 #: худший русский в сравнении переводов на Habr), Kimi K3 вернулся (3-й в
 #: EQ-Bench 4; по-русски не проседает — 16-й против 15-го по-английски).
 #: Gemini 3.8 Flash — дешёвая проверка: 5-я на русской арене, в 7 раз дешевле.
+#: 2026-10-16: Gemini 4 Argon — в исследовании первая на русской арене (1533),
+#: но купить было нельзя; с 13 октября есть на OpenRouter, и без хранения
+#: разговоров (ZDR через Google). Проверена: отвечает.
 READERS = [
     ("Claude Opus 5", "anthropic/claude-opus-5"),
     ("Claude Opus 5.5", "anthropic/claude-opus-5.5"),
+    ("Gemini 4 Argon", "google/gemini-4-argon"),
     ("Kimi K3", "moonshotai/kimi-k3"),
     ("GPT-5.5", "openai/gpt-5.5"),
     ("Gemini 3.8 Flash", "google/gemini-3.8-flash"),
@@ -110,6 +114,7 @@ READERS = [
 WRITERS = [
     ("Claude Opus 5", "anthropic/claude-opus-5"),
     ("Claude Opus 5.5", "anthropic/claude-opus-5.5"),
+    ("Gemini 4 Argon", "google/gemini-4-argon"),   # 2026-10-16, как у читателей
     ("GPT-6 Astra", "openai/gpt-6-astra"),
     ("GLM-5.3", "z-ai/glm-5.3"),
 ]
