@@ -146,16 +146,12 @@ async def _after_talk(user_id: str) -> None:
     else:
         await learn.learn_from_conversation(user_id, farewell=True)
 
-    proposed: dict = {}
+    proposed: dict = {}      # what the writer puts right in what was written before
     fields = await write(user_id, layer, revisions=proposed)
-    # What he has said aloud is law, what is only written may be put right —
-    # and the check between is consistency.py's, here, between talks.
-    who = persona.load_persona(user_id)
-    checked = await consistency.check(before=who, layer=fields, proposed=proposed,
-                                      spoken=memory.bob_self_context(user_id))
     if waiting(user_id):     # still the same companion: nobody started over meanwhile
         persona.save_persona(user_id, {**persona.load_persona(user_id),
-                                       "_next": {"layer": layer, "fields": fields, **checked}})
+                                       "_next": {"layer": layer, "fields": fields,
+                                                 "revise": proposed}})
         print(f"  ✎ {user_id[:8]}: layer {layer} («{matchmaker.LAYERS[layer - 1]['name']}») "
               "written — part of him from the next talk", flush=True)
 
@@ -203,13 +199,12 @@ async def write(user_id: str, layer: int, said: str | None = None, *,
     return await matchmaker.write_layer(context, layer, who, revisions=revisions)
 
 
-def grown(who: dict, layer: int, fields: dict, *, revise: dict | None = None,
-          fixes: dict | None = None) -> dict:
-    """He, with one more layer: the new layer fills only empty places; what
-    was only written and checked unsaid may be put right (`revise`); and what
-    contradicted what he has said aloud is corrected (`fixes`, last — they
-    win) — consistency.py. And the same voice the person has been hearing,
-    sounding now like who he is turning out to be (voices.style_for)."""
+def grown(who: dict, layer: int, fields: dict, *, revise: dict | None = None) -> dict:
+    """He, with one more layer: the new layer fills only empty places, and
+    what the writer put right in what was only written goes in as far as the
+    code allows (`revise`, consistency.admit) — never who he is to them, never
+    somebody else in his place. And the same voice the person has been
+    hearing, sounding now like who he is turning out to be (voices.style_for)."""
     out = dict(who)
     for key, value in fields.items():
         if key == "more" and out.get("more"):
@@ -217,9 +212,7 @@ def grown(who: dict, layer: int, fields: dict, *, revise: dict | None = None,
             out["more"] = persona.merge_growth(out, {"more": value})["more"]
         elif not out.get(key):
             out[key] = value
-    for key, value in {**(revise or {}), **(fixes or {})}.items():
-        if key in consistency.REVISABLE:
-            out[key] = value
+    out.update(consistency.admit(who, revise))
     out["layers"] = max(persona.written(who), layer)
     voice = who.get("voice") if isinstance(who.get("voice"), dict) else {}
     if voice.get("name"):
@@ -239,8 +232,7 @@ def settle(user_id: str) -> bool:
         return False
     persona.save_persona(user_id, grown(who, int(waiting_layer.get("layer") or 0),
                                         dict(waiting_layer.get("fields") or {}),
-                                        revise=dict(waiting_layer.get("revise") or {}),
-                                        fixes=dict(waiting_layer.get("fixes") or {})))
+                                        revise=dict(waiting_layer.get("revise") or {})))
     print(f"  ✎ {user_id[:8]}: {who.get('name')} — layer {waiting_layer.get('layer')} is part "
           "of him now", flush=True)
     return True

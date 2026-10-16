@@ -477,7 +477,9 @@ async def write(args) -> None:
                 continue
             context = matchmaker.layer_context(now=him, his_words=his_words, facts=facts,
                                                brief=brief, talks=said, band=band)
-            him = shaping.grown(him, layer, await matchmaker.write_layer(context, layer, him))
+            proposed: dict = {}     # what it puts right, as in the app (shaping.grown)
+            fields = await matchmaker.write_layer(context, layer, him, revisions=proposed)
+            him = shaping.grown(him, layer, fields, revise=proposed)
         return him
 
     entries = await _race(_candidates(args, WRITERS), lambda m: job)

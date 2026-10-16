@@ -172,7 +172,9 @@ def write_job(person: dict):
             context = matchmaker.layer_context(now=him, his_words=_gold_bob(person),
                                                facts=_gold_facts(person), brief=brief,
                                                talks=said, band=person["band"])
-            him = shaping.grown(him, layer, await matchmaker.write_layer(context, layer, him))
+            proposed: dict = {}     # what it puts right, as in the app (shaping.grown)
+            fields = await matchmaker.write_layer(context, layer, him, revisions=proposed)
+            him = shaping.grown(him, layer, fields, revise=proposed)
         return him
     return job
 

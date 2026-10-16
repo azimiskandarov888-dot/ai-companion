@@ -425,11 +425,15 @@ def build_system_parts(
     if body_block.strip():
         variable_parts.append(body_block.strip())
 
+    # What he has said aloud is law — over his own description too, where the
+    # two part ways (consistency.py; the owner, 2026-10-16: «просто поставить
+    # запрет» rather than a second model to check him).
     if bob_facts.strip():
         variable_parts.append(
             ("WHAT YOU HAVE ALREADY TOLD THEM ABOUT YOURSELF (stick to it, don't contradict "
-             "yourself):\n" if en else
-             "ЧТО ТЫ УЖЕ РАССКАЗЫВАЛ О СЕБЕ (держись этого, не противоречь себе):\n")
+             "yourself; where «WHO YOU ARE» above says otherwise, what you said is true):\n" if en else
+             "ЧТО ТЫ УЖЕ РАССКАЗЫВАЛ О СЕБЕ (держись этого, не противоречь себе; если «КТО ТЫ» "
+             "выше говорит иначе — верно то, что ты сказал):\n")
             + bob_facts.strip()
         )
 

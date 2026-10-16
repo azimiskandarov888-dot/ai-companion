@@ -76,6 +76,7 @@ immediately speaks as him.
 
 from __future__ import annotations
 
+import datetime
 import json
 import random
 import re
@@ -579,11 +580,12 @@ def _layer_system(layer: int, already: dict) -> str:
     rules = _WRITE_SYSTEM[_WRITE_SYSTEM.index("Правила:"):_WRITE_SYSTEM.index("Ответь ТОЛЬКО валидным JSON")]
     asked = [f for f in LAYERS[layer - 1]["fields"] if f == "more" or not already.get(f)]
     tail = ("Поля — минимум, а не потолок: всё, что делает его им в этом слое и не легло в поля, — "
-            "в more.\nЕсли что-то из уже написанного о нём явно не так — противоречит разговорам "
-            "или не подходит этому человеку по чтению — и он этого ВСЛУХ ЕЩЁ НЕ ГОВОРИЛ, можно "
-            "поправить: ключ revise — {поле: новое значение}. Сказанное вслух не трогай; имя, пол, "
-            "возраст и обращение — никогда; характер и речь — только оттенками, не переворачивай. "
-            "Нечего править — revise не пиши.\n"
+            "в more.\nСверь уже написанное о нём с тем, что он сам сказал вслух: сказанное — закон. "
+            "Что расходится с ним (город, годы, имена, кто кому кто), поправь в его пользу — ключ "
+            "revise: {поле: всё поле заново, изменено только противоречащее}. Что явно не подходит "
+            "этому человеку по чтению, а вслух ещё не сказано, — тоже можно. Имя, пол, возраст и "
+            "обращение не меняются никогда: не сходится с ними — правь другое; характер и речь — "
+            "только оттенками. Нечего править — revise не пиши.\n"
             "Ответь ТОЛЬКО валидным JSON без пояснений — ТОЛЬКО с этими ключами (и revise, если "
             "нужно), каждый заполни (more — можно пустым):\n"
             + "\n".join(f"{f} — {FIELD_HINTS[f]}" for f in asked))
@@ -600,6 +602,10 @@ def layer_context(*, now: dict, his_words: str, facts: str, brief: str, talks: s
             "человека его лет: школа, дом, родители, то, чем живут в эти годы.")
     law = [part for part in (peer if band == "teen" else "", str(now.get("given") or "")) if part]
     parts = [
+        # Years are counted from today — a model's own idea of «now» is the
+        # year it was trained in (a live check, 2026-10-16, counted a
+        # sixteen-year-old from 2004).
+        f"СЕГОДНЯ: {datetime.date.today().isoformat()} — годы считай от этой даты.",
         # What he has said aloud is law; what is only written may be put right
         # (consistency.py) — the owner, 2026-10-16.
         "КТО ОН УЖЕ ЕСТЬ (написано раньше; что он сказал вслух — закон, остальное можно "
@@ -620,8 +626,8 @@ async def write_layer(context: str, layer: int, already: dict,
                       revisions: dict | None = None) -> dict:
     """One layer of him — only its fields, only those still empty. One retry,
     as write_him: a broken JSON is a real, passing failure. `revisions`, if
-    given, is filled with what the writer proposes to put right in what was
-    written before (consistency.py decides what of it may be)."""
+    given, is filled with what the writer puts right in what was written
+    before — as sent: what of it may be made is consistency.admit's."""
     spec = LAYERS[layer - 1]
     prompt = context + "\n\nСЛУЧАЙНЫЕ ИСКРЫ (толчки воображению): " + ", ".join(_roll_sparks(rng))
     failure: RuntimeError | None = None
@@ -642,9 +648,7 @@ async def write_layer(context: str, layer: int, already: dict,
             missing = [f for f in spec["required"] if not already.get(f) and f not in got]
             if not missing:
                 if revisions is not None and isinstance(data.get("revise"), dict):
-                    revisions.update({f: v for f, v in data["revise"].items()
-                                      if f in FIELD_HINTS and f not in ("name", "gender", "age", "address")
-                                      and f not in got and already.get(f) and str(v).strip()})
+                    revisions.update({f: v for f, v in data["revise"].items() if f not in got})
                 return got
             _log_extract_failure(f"слой {layer}: нет полей {', '.join(missing)}", raw)
         else:

@@ -443,7 +443,7 @@ async def deepen(user_id: str, *, now: bool = False) -> None:
     written in order — what he is like, what he lives for, his depths — and a
     flaw slipped in now would be his depths arriving in the second week.
     """
-    from . import brain, consistency, db, memory, reading   # local: these import persona, not the reverse
+    from . import brain, db, memory, reading   # local: these import persona, not the reverse
 
     who = load_persona(user_id)
     if not who or not who.get("name") or written(who) < 3:
@@ -488,10 +488,6 @@ async def deepen(user_id: str, *, now: bool = False) -> None:
             return
 
         grown = merge_growth(who, growth)
-        # What he grew must not contradict what he has said aloud, nor himself
-        # (consistency.py) — all of him read again, between talks; fixes win.
-        checked = await consistency.check(before=grown, spoken=memory.bob_self_context(user_id))
-        grown.update(checked["fixes"])
         grown["_deepened_at_turn"] = total
         save_persona(user_id, grown)
         print(f"  ✎ deepened {user_id[:8]} at turn {total}", flush=True)

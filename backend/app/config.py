@@ -180,9 +180,6 @@ SAFETY_MODEL: str = os.getenv("SAFETY_MODEL", "anthropic/claude-haiku-4.5")
 #: clean Russian for its family (RuQualBench), zero-retention routes
 #: (docs/MODELS-RESEARCH-2026-10-09.md).
 UNMODERATED_MODEL: str = os.getenv("UNMODERATED_MODEL", "deepseek/deepseek-v4.1-flash")
-#: The check of him against what he has said aloud (consistency.py), after every
-#: layer and deepening: cheap, careful, not moderated — he has wounds and griefs.
-CHECKER_MODEL: str = os.getenv("CHECKER_MODEL", UNMODERATED_MODEL)
 #: Zero data retention on every background call (brain._router_once): the
 #: provider keeps nothing of what it is sent and cannot train on it.
 BACKGROUND_ZDR: bool = os.getenv("BACKGROUND_ZDR", "1").strip().lower() not in ("0", "false", "no")
