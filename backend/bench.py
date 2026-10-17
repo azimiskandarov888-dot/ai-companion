@@ -121,9 +121,23 @@ def _load(path: Path) -> dict | None:
 
 
 def _done(record: dict | None, key: str = "result") -> bool:
-    """Done is what came back. A failure — refused, cut off, a balance run dry
-    — is kept on disk to be seen, and tried again by the next run."""
+    """Done is what came back — a work, or a judge's verdict."""
     return bool(record) and not record.get("error") and record.get(key) is not None
+
+
+#: What the road did, not the model: a server error, the balance run dry, too
+#: many at once, a line gone quiet (brain._router_failed and the stream's own
+#: errors). Tried again by the next run; anything else — a broken JSON, a
+#: refusal — is the model's own doing, and counts against it.
+_ROAD = re.compile(r"OpenRouter: (?:5\d\d|408|429)\b|'code': (?:5\d\d|402|408|429)\b|\(402\)"
+                   r"|timeout|timed out|ConnectError|ReadError|RemoteProtocolError|WriteError", re.I)
+
+
+def _settled(record: dict | None) -> bool:
+    """Nothing more to do for this work: it came back, or it failed by the
+    model's own doing. A failure of the road is kept on disk to be seen and
+    tried again by the next run — with no --again, which would pay twice."""
+    return bool(record) and (_done(record) or not _ROAD.search(str(record.get("error") or "")))
 
 
 # ── работа агентов — та же, что в приложении ───────────────────────────────
@@ -204,7 +218,7 @@ async def run(stage: str, args) -> float:
     done before is not done — nor paid for — again. Returns what it cost."""
     myself._patch()
     todo = [(name, model, p) for name, model in _candidates(stage, args) for p in _people(args)
-            if args.again or not _done(_load(_at(stage, p["id"], model)))]
+            if args.again or not _settled(_load(_at(stage, p["id"], model)))]
     if not todo:
         print(f"{TITLES[stage]}: всё уже сделано (заново — --again).")
         return 0.0

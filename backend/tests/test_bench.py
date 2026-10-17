@@ -264,16 +264,21 @@ def test_a_judge_is_never_told_whose_work_it_is(offline, monkeypatch):
     assert not [u for u in shown if "secretvendor" in u or "hidden-model" in u]
 
 
-def test_a_failure_is_tried_again_by_the_next_run(offline, monkeypatch):
+@pytest.mark.parametrize("road", [
+    "OpenRouter: на счету кончились деньги (402) — пополни openrouter.ai/credits",
+    "OpenRouter: {'code': 500, 'message': 'Internal Server Error'}",
+    "OpenRouter: 429 — rate limited", "ReadTimeout",
+])
+def test_a_failure_of_the_road_is_tried_again_by_the_next_run(offline, monkeypatch, road):
     """A balance run dry, a provider down: kept to be seen, and done by the
     next run — without --again, which would pay for everything twice."""
     async def broke(*args, **kwargs):
-        raise RuntimeError("402 insufficient credits")
+        raise RuntimeError(road)
 
     real = myself._real["think"]
     monkeypatch.setitem(myself._real, "think", broke)
     asyncio.run(bench.run("read", _args(models="vendor/model-a")))
-    assert "402" in bench._load(bench._at("read", "timur", "vendor/model-a"))["error"]
+    assert bench._load(bench._at("read", "timur", "vendor/model-a"))["error"]
     monkeypatch.setitem(myself._real, "think", real)
     asyncio.run(bench.run("read", _args(models="vendor/model-a")))
     done = bench._load(bench._at("read", "timur", "vendor/model-a"))
@@ -319,3 +324,18 @@ def test_a_judge_that_favours_its_own_company_is_marked(offline, monkeypatch):
     found = bench.own_company("write")
     assert any("Gemini 4 Argon" in line and "подсуживает своим" in line for line in found)
     assert not any("Claude Opus 5.5" in line and "подсуживает" in line for line in found)
+
+
+def test_a_failure_of_the_models_own_counts_and_is_not_given_another_go(offline, monkeypatch):
+    """A broken JSON is the model's own doing — in the app it would cost that
+    reading too — so it stays a failure in its row, and is not paid for again."""
+    async def broken(*args, **kwargs):
+        raise RuntimeError("Чтение вернулось битым JSON-ом: Expecting ',' delimiter")
+
+    monkeypatch.setitem(myself._real, "think", broken)
+    asyncio.run(bench.run("read", _args(models="vendor/model-a")))
+    calls = len(offline)
+    monkeypatch.setitem(myself._real, "think", lambda *a, **k: pytest.fail("asked again"))
+    asyncio.run(bench.run("read", _args(models="vendor/model-a")))
+    assert len(offline) == calls
+    assert "битым JSON" in bench._load(bench._at("read", "timur", "vendor/model-a"))["error"]
