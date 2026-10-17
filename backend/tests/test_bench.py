@@ -262,3 +262,60 @@ def test_a_judge_is_never_told_whose_work_it_is(offline, monkeypatch):
         asyncio.run(bench.judge(stage, args))
     assert len(shown) == len(bench.STAGES) * len(bench.JUDGES)
     assert not [u for u in shown if "secretvendor" in u or "hidden-model" in u]
+
+
+def test_a_failure_is_tried_again_by_the_next_run(offline, monkeypatch):
+    """A balance run dry, a provider down: kept to be seen, and done by the
+    next run — without --again, which would pay for everything twice."""
+    async def broke(*args, **kwargs):
+        raise RuntimeError("402 insufficient credits")
+
+    real = myself._real["think"]
+    monkeypatch.setitem(myself._real, "think", broke)
+    asyncio.run(bench.run("read", _args(models="vendor/model-a")))
+    assert "402" in bench._load(bench._at("read", "timur", "vendor/model-a"))["error"]
+    monkeypatch.setitem(myself._real, "think", real)
+    asyncio.run(bench.run("read", _args(models="vendor/model-a")))
+    done = bench._load(bench._at("read", "timur", "vendor/model-a"))
+    assert done["error"] is None and done["result"]
+
+
+def test_everything_written_is_kept_for_the_owners_eyes(offline):
+    """«сохраняй все результаты, все написанное»: every work, with the model's
+    name, and every judge's word on it — what the numbers stand on."""
+    args = _args(models="vendor/model-a")
+    for stage in bench.STAGES:
+        asyncio.run(bench.run(stage, args))
+        asyncio.run(bench.judge(stage, args))
+    bench.report()
+    for stage in bench.STAGES:
+        text = (bench.HOME / f"{stage}.md").read_text(encoding="utf-8")
+        assert "`vendor/model-a`" in text and "**Судья Gemini 4 Argon:**" in text, stage
+        assert "**Судья Claude Opus 5.5:**" in text, stage
+    read = (bench.HOME / "read.md").read_text(encoding="utf-8")
+    assert "✓ [явно]" in read and "verdict: verdict — про него" in read
+    assert "[read.md](read.md)" in (bench.HOME / "report.md").read_text(encoding="utf-8")
+
+
+def test_a_judge_that_favours_its_own_company_is_marked(offline, monkeypatch):
+    """The owner's own suspicion, counted: against the other judge, on the
+    same works — its own company's and everybody else's."""
+    models = "google/own-model,vendor/other-model"
+    asyncio.run(bench.run("write", _args(models=models)))
+    first, second = (m for _n, m in bench.JUDGES)
+
+    def judged_by(kind):
+        async def verdict(system, user, max_tokens=1500, model=None, timeout=None, effort=None):
+            own = kind == "biased" and "own-model" in user
+            fit = 9 if own else 6
+            return json.dumps({"contradictions": [], "fit": fit, "alive": fit, "would_talk": fit,
+                               "compact": fit, "russian_errors": 0})
+        return verdict
+
+    monkeypatch.setitem(myself._real, "generate_text", judged_by("biased"))
+    asyncio.run(bench.judge("write", _args(models=models, judges=first)))
+    monkeypatch.setitem(myself._real, "generate_text", judged_by("fair"))
+    asyncio.run(bench.judge("write", _args(models=models, judges=second)))
+    found = bench.own_company("write")
+    assert any("Gemini 4 Argon" in line and "подсуживает своим" in line for line in found)
+    assert not any("Claude Opus 5.5" in line and "подсуживает" in line for line in found)

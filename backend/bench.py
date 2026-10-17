@@ -120,6 +120,12 @@ def _load(path: Path) -> dict | None:
     return json.loads(path.read_text(encoding="utf-8")) if path.exists() else None
 
 
+def _done(record: dict | None, key: str = "result") -> bool:
+    """Done is what came back. A failure — refused, cut off, a balance run dry
+    — is kept on disk to be seen, and tried again by the next run."""
+    return bool(record) and not record.get("error") and record.get(key) is not None
+
+
 # ── работа агентов — та же, что в приложении ───────────────────────────────
 
 def _known(found: list[dict], key: str) -> str:
@@ -198,7 +204,7 @@ async def run(stage: str, args) -> float:
     done before is not done — nor paid for — again. Returns what it cost."""
     myself._patch()
     todo = [(name, model, p) for name, model in _candidates(stage, args) for p in _people(args)
-            if args.again or _load(_at(stage, p["id"], model)) is None]
+            if args.again or not _done(_load(_at(stage, p["id"], model)))]
     if not todo:
         print(f"{TITLES[stage]}: всё уже сделано (заново — --again).")
         return 0.0
@@ -357,7 +363,7 @@ async def judge(stage: str, args) -> float:
             if not done or done.get("error") or done.get("result") is None:
                 continue
             for jname, jmodel in judges:
-                if args.again or _load(_at(stage, p["id"], model, jmodel)) is None:
+                if args.again or not _done(_load(_at(stage, p["id"], model, jmodel)), "verdict"):
                     todo.append((model, p, done, jname, jmodel))
     if not todo:
         print(f"{TITLES[stage]}: судить нечего (или уже рассужено).")
@@ -462,6 +468,14 @@ def score_write(person: dict, verdict: dict, result: dict | None = None) -> dict
     }
 
 
+def _score(stage: str, person: dict, verdict: dict, result) -> dict:
+    if stage == "scribe":
+        return score_scribe(person, verdict)
+    if stage == "read":
+        return score_read(person, verdict, result)
+    return score_write(person, verdict, result)
+
+
 def _num(x) -> float:
     try:
         return float(x)
@@ -503,13 +517,7 @@ def table(stage: str, candidates=None) -> list[dict]:
                 j = _load(_at(stage, p["id"], model, jmodel))
                 if not j or not j.get("verdict"):
                     continue
-                if stage == "scribe":
-                    s = score_scribe(p, j["verdict"])
-                elif stage == "read":
-                    s = score_read(p, j["verdict"], done["result"])
-                else:
-                    s = score_write(p, j["verdict"], done["result"])
-                per_judge.setdefault(jmodel, []).append(s)
+                per_judge.setdefault(jmodel, []).append(_score(stage, p, j["verdict"], done["result"]))
         if not per_judge and not failed:
             continue
         everything = [s for ss in per_judge.values() for s in ss]
@@ -546,6 +554,114 @@ COLUMNS = {
               ("would_talk", "хотелось бы говорить, 0–10"), ("compact", "сжато, 0–10"),
               ("length", "знаков в промпте"), ("russian_errors", "ошибок русского")],
 }
+
+
+# ── всё написанное — для глаз владельца ────────────────────────────────────
+#
+# The owner, 2026-10-17: «даже если мы увидим что-то подозрительное, например,
+# то, что он судит своих... лучше, чем других компаний, то я уже сам лично
+# начну смотреть каждого. Поэтому сохраняй все результаты, все написанное».
+
+def _work_text(stage: str, result) -> str:
+    """The work as the judge was shown it."""
+    if stage == "scribe":
+        return "\n".join(f"{n}. {t}" for n, t in enumerate(scribe_items(result), 1)) or "(ничего не записал)"
+    if stage == "read":
+        return reading_text(result)
+    return persona.build_persona_block(result or {})
+
+
+def _verdict_text(stage: str, person: dict, record: dict, result) -> str:
+    """One judge's word on one work: the numbers, and what they stand on."""
+    v = record.get("verdict")
+    if not v:
+        return f"*не ответил: {record.get('error')}*"
+    s = _score(stage, person, v, result)
+    lines = [", ".join(f"{label} — {s[key]:g}" for key, label in COLUMNS[stage] if key in s)
+             + f" · итог {_composite(stage, s):g}"]
+    if stage == "scribe":
+        items = scribe_items(result)
+        for i in v.get("items") or []:
+            if isinstance(i, dict) and isinstance(i.get("n"), int) and 0 < i["n"] <= len(items):
+                lines.append(f"  - {i['n']}. {items[i['n'] - 1]} → {i.get('is')}")
+        facts = {f: t for f, t, _w in person["facts"]}
+        missed = [f"{m} ({facts[m]})" for m in v.get("missed") or [] if m in facts]
+        if missed:
+            lines.append("  - не записал: " + "; ".join(missed))
+    elif stage == "read":
+        found = list(v.get("found") or [])
+        for n, (depth, text, _where) in enumerate(person["must_find"]):
+            lines.append(f"  - {'✓' if n < len(found) and found[n] else '✗'} [{depth}] {text}")
+        wrong = list(v.get("wrong") or [])
+        lines += [f"  - ⚠ сказал неправду: {t}" for n, t in enumerate(person["must_not"])
+                  if n < len(wrong) and wrong[n]]
+        lines += [f"  - домыслил: {t}" for t in v.get("invented") or []]
+        lines += [f"  - цитата, которой не было: «{q}»" for q in fake_quotes(result, person)]
+    else:
+        lines += [f"  - противоречие: {t}" for t in v.get("contradictions") or []]
+    return "\n".join(lines)
+
+
+def paper(stage: str) -> Path:
+    """Everything written on this stage and every judge's word on it, with
+    the names — the report's numbers stand on this."""
+    lines = [f"# {TITLES[stage]} — всё, что написали, и что сказали судьи", "",
+             "Модели здесь названы — судьи их имён не видели.", ""]
+    for p in PEOPLE:
+        lines += [f"## {p['name']}", ""]
+        for name, model in done_candidates(stage):
+            done = _load(_at(stage, p["id"], model))
+            if done is None:
+                continue
+            lines += [f"### {name} — `{model}` · ${done.get('cost') or 0:.4f} · {done.get('seconds') or 0} с", ""]
+            if not _done(done):
+                lines += [f"*не получилось: {done.get('error')}*", ""]
+                continue
+            lines += [_work_text(stage, done["result"]), ""]
+            for jname, jmodel in JUDGES:
+                j = _load(_at(stage, p["id"], model, jmodel))
+                if j:
+                    lines += [f"**Судья {jname}:** " + _verdict_text(stage, p, j, done["result"]), ""]
+    at = HOME / f"{stage}.md"
+    at.parent.mkdir(parents=True, exist_ok=True)
+    at.write_text("\n".join(lines), encoding="utf-8")
+    return at
+
+
+#: How much higher a judge may score its own company, beyond what it does
+#: for everybody else (against the other judge, on the same works), before
+#: the report says so.
+OWN_FLAG = 1.0
+
+
+def own_company(stage: str) -> list[str]:
+    """Does a judge score its own company's work higher than the other judge
+    does — more than it does for everybody else's? Only works both judged."""
+    both: list[tuple[str, dict]] = []
+    for _name, model in done_candidates(stage):
+        for p in PEOPLE:
+            done = _load(_at(stage, p["id"], model))
+            if not _done(done):
+                continue
+            got = {}
+            for _jn, jm in JUDGES:
+                j = _load(_at(stage, p["id"], model, jm))
+                if _done(j, "verdict"):
+                    got[jm] = _composite(stage, _score(stage, p, j["verdict"], done["result"]))
+            if len(got) == len(JUDGES):
+                both.append((model, got))
+    lines = []
+    for jname, jm in JUDGES:
+        other = next(m for _n, m in JUDGES if m != jm)
+        own = [g[jm] - g[other] for model, g in both if _company(model) == _company(jm)]
+        rest = [g[jm] - g[other] for model, g in both if _company(model) != _company(jm)]
+        if not own or not rest:
+            continue
+        d_own, d_rest = sum(own) / len(own), sum(rest) / len(rest)
+        flag = "  **⚠ похоже, подсуживает своим**" if d_own - d_rest >= OWN_FLAG else ""
+        lines.append(f"- {jname}: своим ({_company(jm)}, {len(own)} работ) — {d_own:+.1f} к оценке "
+                     f"второго судьи, остальным ({len(rest)}) — {d_rest:+.1f}{flag}")
+    return lines
 
 
 def report() -> Path:
@@ -585,6 +701,18 @@ def report() -> Path:
                     j = _load(_at(stage, p["id"], model, jm))
                     judges_cost += (j or {}).get("cost") or 0.0
     lines += [f"Судьи всего: ${judges_cost:.2f}.", ""]
+    own = [(stage, own_company(stage)) for stage in STAGES]
+    if any(found for _st, found in own):
+        lines += ["## Не судят ли своих выше", "",
+                  "На одних и тех же работах: насколько судья ставит выше или ниже второго — своей компании "
+                  f"и всем остальным (итог, в баллах). Разница в {OWN_FLAG:g} и больше помечена.", ""]
+        for stage, found in own:
+            if found:
+                lines += [f"**{TITLES[stage]}**", *found, ""]
+    papers = [paper(stage) for stage in STAGES if done_candidates(stage)]
+    if papers:
+        lines += ["Всё написанное и каждое слово судей, с именами моделей: "
+                  + ", ".join(f"[{at.name}]({at.name})" for at in papers), ""]
     at = HOME / "report.md"
     at.parent.mkdir(parents=True, exist_ok=True)
     at.write_text("\n".join(lines), encoding="utf-8")
