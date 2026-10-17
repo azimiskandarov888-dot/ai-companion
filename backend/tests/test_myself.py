@@ -120,7 +120,7 @@ def test_he_is_born_blank_held_for_the_owner_and_from_nothing(monkeypatch):
 
     monkeypatch.setattr(brain, "think", nobody)
     monkeypatch.setattr(brain, "generate_text", nobody)
-    myself.begin(None)
+    myself.begin(SimpleNamespace(held=True))
 
     who = persona.load_persona(uid)
     assert persona.written(who) == 0 and who["_held"] and who["gender"] == "мужской"
@@ -166,3 +166,14 @@ def test_the_owner_puts_him_right_by_hand(capsys):
         myself.fix(SimpleNamespace(field="nonsense", value="x"))
     myself.show(None)
     assert "смеётся над собой" in capsys.readouterr().out
+
+
+def test_with_the_models_chosen_the_app_writes_him_itself(monkeypatch):
+    """2026-10-17: the owner — «I don't even need to do the testing myself».
+    Born blank, and not held: his layers are the app's, between talks."""
+    door = {"name": "Азим", "age": "15", "country": "", "wants": "парень"}
+    monkeypatch.setattr(myself, "_door", lambda: door)
+    monkeypatch.setattr(myself, "HOME", config.DATA_DIR / "myself")
+    myself.begin(SimpleNamespace(held=False))
+    who = persona.load_persona(myself._me())
+    assert persona.written(who) == 0 and "_held" not in who

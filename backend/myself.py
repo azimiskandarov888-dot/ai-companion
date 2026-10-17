@@ -2,6 +2,7 @@
 """Проверить всех агентов на себе — в том порядке, в каком их проходит человек.
 
     python3 myself.py begin            # 1. знакомство: он рождается пустым — имя и твои пожелания
+                                       #    (--held — приложение его не дописывает: проверка руками)
       … потом поговори с ним 2–3 раза: ./run.sh и http://localhost:8000/live#me
     python3 myself.py scribe           # 2. что каждый писарь вынес из ваших разговоров
     python3 myself.py read             # 3. несколько чтений тебя по этим разговорам
@@ -334,8 +335,10 @@ def begin(args) -> None:
                           importance=3)
     him = matchmaker.create_blank(uid, wants=door["wants"], their_age=door["age"],
                                   band=young.of(uid))
-    # Held: while you test, the app does not write his layers itself.
-    persona.save_persona(uid, {**him, "_held": True})
+    # The models are chosen (2026-10-17): the app writes his layers itself.
+    # Held (--held) only to test the agents by hand again: then it does not.
+    held = bool(getattr(args, "held", False))
+    persona.save_persona(uid, {**him, "_held": True} if held else him)
     HOME.mkdir(parents=True, exist_ok=True)
     _path("begin").write_text(json.dumps({"door": door, "him": him}, ensure_ascii=False,
                                          indent=2), encoding="utf-8")
@@ -344,7 +347,10 @@ def begin(args) -> None:
     print("\nТеперь поговори с ним 2–3 раза — как с незнакомым, как есть:")
     print("  ./run.sh   →   http://localhost:8000/live#me   →   «Начать разговор»")
     print("Между разговорами — перерыв больше 10 минут, иначе это один разговор.")
-    print("Потом: python3 myself.py scribe")
+    if held:
+        print("Потом: python3 myself.py scribe")
+    else:
+        print("Дописывать его будет само приложение — между разговорами.")
 
 
 # ── 2 · писарь ──────────────────────────────────────────────────────────────
@@ -589,7 +595,9 @@ def main() -> None:
     for name in STAGES:
         s = sub.add_parser(name)
         s.add_argument("--models", help="свои кандидаты: id,id,… (имена OpenRouter)")
-    sub.add_parser("begin")
+    b = sub.add_parser("begin")
+    b.add_argument("--held", action="store_true",
+                   help="приложение его не дописывает — чтобы снова проверить агентов руками")
     sub.add_parser("status")
     sub.add_parser("show")
     f = sub.add_parser("fix")

@@ -243,7 +243,7 @@ async def learn_from_conversation(user_id: str, *, farewell: bool = False) -> No
     explicitly for that reason: there is no ambient "current user" to fall
     back on, and inventing one would file this conversation under a stranger.
     """
-    if not brain.can_call(config.BRAIN_MODEL):
+    if not brain.can_call(config.SCRIBE_MODEL):
         return
     rows = unread(user_id, farewell=farewell)
     if not rows:
@@ -324,7 +324,7 @@ async def _extract(user_id: str, said: str) -> dict:
             # written is paid for.
             max_tokens=SCRIBE_TOKENS,
             model=model,
-            # NOT thinking — said, not left to the model: Sonnet 5 thinks at
+            # NOT thinking — said, not left to the model: many think at
             # «high» before every answer unless told not to. The scribe writes
             # down what was said; it composes nothing, and thinking makes the
             # same model invent more (Vectara: 8.4% at low effort, 10.8% at
@@ -334,7 +334,7 @@ async def _extract(user_id: str, said: str) -> dict:
         )
 
     try:
-        text = await write_down(config.BRAIN_MODEL)
+        text = await write_down(config.SCRIBE_MODEL)
     except brain.Refused:
         # Moderation stopped the batch — and what it stops is the heaviest
         # thing said, the last a friend may forget. Retried on the next turn it
@@ -409,7 +409,7 @@ async def from_intake(user_id: str, story: str) -> None:
     is not a visit, and the observation register is for what is watched in
     conversation. Never raises; the friend arrives either way.
     """
-    if not brain.can_call(config.BRAIN_MODEL) or not str(story or "").strip():
+    if not brain.can_call(config.SCRIBE_MODEL) or not str(story or "").strip():
         return
     said = ("ИНТЕРВЬЮ ПЕРЕД ЗНАКОМСТВОМ — спрашивало приложение, отвечал ЧЕЛОВЕК; "
             "БОБ ещё не сказал ни слова:\n" + str(story).strip())

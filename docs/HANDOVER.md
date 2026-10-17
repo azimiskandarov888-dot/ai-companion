@@ -39,6 +39,16 @@ the others were written earlier and some of them have drifted.
 
 ## 0. Where things stand, and what is next (2026-10-08, evening)
 
+### Models — decided 2026-10-17
+
+| Agent | Model | Setting |
+|---|---|---|
+| Reader | Claude Opus 5.5 | `READING_MODEL` |
+| Writer | Claude Opus 5.5 | `WRITER_MODEL` |
+| Scribe | Gemini 3.8 Flash | `SCRIBE_MODEL` |
+
+By round 1 (`bench.py`, both judges). No blind round of the owner's own: «if they win with such difference… I don't even need to do the testing myself». `myself.py begin` now lets the app write him (`--held` only to test agents by hand).
+
 ### The decision: no interviewer — one companion, born blank, written in layers
 
 The owner, 2026-10-08: no interviewer; from the very beginning the person

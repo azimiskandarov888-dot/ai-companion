@@ -60,8 +60,10 @@ ANTHROPIC_API_KEY: str | None = os.getenv("ANTHROPIC_API_KEY")
 # (myself.py, docs/MODELS-FOR-EACH-AGENT.md). A bare «claude-…» id set in .env
 # still goes straight to Anthropic.
 #
-# The scribe, his week and the diary.
+# His week and the diary (the scribe has its own: SCRIBE_MODEL).
 BRAIN_MODEL: str = os.getenv("ANTHROPIC_MODEL", "anthropic/claude-sonnet-5")
+#: The scribe (learn.py) — chosen 2026-10-17 (bench.py).
+SCRIBE_MODEL: str = os.getenv("SCRIBE_MODEL", "google/gemini-3.8-flash")
 CHAT_MODEL: str = os.getenv("CHAT_MODEL", "google/gemma-4-31b-it")
 #: The listener (listening.py): after each of their turns, how he listens to
 #: the next — the mood, how soon he comes in, his sounds. One small call; the
@@ -111,7 +113,8 @@ BRAIN_HEDGE_AFTER: float = float(os.getenv("BRAIN_HEDGE_AFTER", "1.1"))
 # reading.py). This is the one call where the best model and real thinking
 # time are worth minutes and cents, because it happens once per person and
 # every other stage is built on its output.
-READING_MODEL: str = os.getenv("READING_MODEL", "anthropic/claude-opus-5")
+#: Chosen 2026-10-17 (bench.py).
+READING_MODEL: str = os.getenv("READING_MODEL", "anthropic/claude-opus-5.5")
 
 # WRITING him — also once, immediately after the reading, and by the same
 # argument. This used to run on BRAIN_MODEL (Sonnet) purely because it sat in
@@ -125,7 +128,8 @@ READING_MODEL: str = os.getenv("READING_MODEL", "anthropic/claude-opus-5")
 # generous enough that a rich character is never cut off (see
 # matchmaker._WRITE_MAX_TOKENS — the previous 2500 was truncating people
 # mid-backstory).
-WRITER_MODEL: str = os.getenv("WRITER_MODEL", "anthropic/claude-opus-5")
+#: Chosen 2026-10-17 (bench.py).
+WRITER_MODEL: str = os.getenv("WRITER_MODEL", "anthropic/claude-opus-5.5")
 #: How long the writer may think before it starts writing him.
 #:
 #: This used to be "medium", on the argument that «the reading is inference and

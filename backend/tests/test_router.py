@@ -306,7 +306,7 @@ def test_the_line_is_watched_for_stalls_and_the_key_is_named(monkeypatch):
 # only, and the owner's machine has no Anthropic key: every one of them quietly
 # did nothing — the watcher answered «no danger» to everybody.
 
-AGENTS = ("BRAIN_MODEL", "READING_MODEL", "WRITER_MODEL", "INTAKE_MODEL", "SAFETY_MODEL")
+AGENTS = ("BRAIN_MODEL", "SCRIBE_MODEL", "READING_MODEL", "WRITER_MODEL", "INTAKE_MODEL", "SAFETY_MODEL")
 
 
 @pytest.fixture

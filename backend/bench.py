@@ -49,7 +49,7 @@ HOME = config.DATA_DIR / "bench"
 
 SCRIBES = [
     ("Claude Haiku 5.5", "anthropic/claude-haiku-5.5"),
-    ("Claude Sonnet 5 (сейчас)", "anthropic/claude-sonnet-5"),
+    ("Claude Sonnet 5", "anthropic/claude-sonnet-5"),
     ("GPT-5.4 Mini", "openai/gpt-5.4-mini"),
     ("GPT-5.4 Nano", "openai/gpt-5.4-nano"),
     ("Gemini 3.8 Flash", "google/gemini-3.8-flash"),
