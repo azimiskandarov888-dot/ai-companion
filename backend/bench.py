@@ -130,7 +130,8 @@ def _done(record: dict | None, key: str = "result") -> bool:
 #: errors). Tried again by the next run; anything else — a broken JSON, a
 #: refusal — is the model's own doing, and counts against it.
 _ROAD = re.compile(r"OpenRouter: (?:5\d\d|408|429)\b|'code': (?:5\d\d|402|408|429)\b|\(402\)"
-                   r"|timeout|timed out|ConnectError|ReadError|RemoteProtocolError|WriteError", re.I)
+                   r"|timeout|timed out|ConnectError|ReadError|RemoteProtocolError|WriteError"
+                   r"|\[Errno \d+\]|nodename nor servname|name or service not known|name resolution", re.I)
 
 
 def _settled(record: dict | None) -> bool:

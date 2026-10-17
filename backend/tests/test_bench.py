@@ -279,6 +279,7 @@ def test_a_judge_is_never_told_whose_work_it_is(offline, monkeypatch):
     "OpenRouter: на счету кончились деньги (402) — пополни openrouter.ai/credits",
     "OpenRouter: {'code': 500, 'message': 'Internal Server Error'}",
     "OpenRouter: 429 — rate limited", "ReadTimeout",
+    "[Errno 8] nodename nor servname provided, or not known",      # the Mac lost its network, 2026-10-17
 ])
 def test_a_failure_of_the_road_is_tried_again_by_the_next_run(offline, monkeypatch, road):
     """A balance run dry, a provider down: kept to be seen, and done by the
