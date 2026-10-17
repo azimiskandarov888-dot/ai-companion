@@ -236,3 +236,29 @@ def test_the_second_judge_sees_the_finalists_and_the_first_judges_own_company(of
     judged = [bench._load(bench._at("write", "timur", m, second)) is not None for m in models.split(",")]
     assert judged == [True, False, True]
     assert len(offline) - before == 2
+
+
+def test_a_judge_is_never_told_whose_work_it_is(offline, monkeypatch):
+    """The owner, 2026-10-17: «замаскировать модели… чтобы когда судьи
+    проверяли, они не знали, какая конкретная модель что ответила». A judge
+    is given the talks, the truth and the work — never the name, the id or
+    the company of whoever did it."""
+    shown: list[str] = []
+    judge = myself._real["generate_text"]
+
+    async def watching(system, user, **kw):
+        if system.startswith("Ты строгий проверяющий"):
+            shown.append(user)
+        return await judge(system, user, **kw)
+
+    async def think(system, user, *, model=None, **kw):
+        return _layer_json(system) if "слой" in system.lower() else _reading_json()
+
+    monkeypatch.setitem(myself._real, "generate_text", watching)
+    monkeypatch.setitem(myself._real, "think", think)
+    args = _args(models="secretvendor/hidden-model")
+    for stage in bench.STAGES:
+        asyncio.run(bench.run(stage, args))
+        asyncio.run(bench.judge(stage, args))
+    assert len(shown) == len(bench.STAGES) * len(bench.JUDGES)
+    assert not [u for u in shown if "secretvendor" in u or "hidden-model" in u]
