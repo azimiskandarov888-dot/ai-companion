@@ -96,6 +96,17 @@ def test_a_quote_never_said_is_caught_by_code():
     assert bench.fake_quotes(result, olga) == ["я всегда мечтала петь на сцене"]
 
 
+def test_a_quote_said_in_another_form_or_an_example_for_bob_is_not_made_up():
+    """The first run (2026-10-17) counted «Дырявого» for «Дырявым» and every
+    «what never to say» example as made up — and ranked a fine reading last."""
+    timur = bench_people.by_id("timur")
+    result = {"verdict": "Его дразнят «Дырявого» — нет, «Дырявым»; дома он «ленивый».",
+              "speech": "Говорит «в хоре ведь не притворишься»?",          # not his: Ольга's
+              "would_ring_false": "«Я понимаю, как тебе тяжело», «Тебе надо вернуться на футбол»",
+              "needs_pushback_on": "Не «ты молодец», а «это реально сложно»."}
+    assert bench.fake_quotes(result, timur) == ["в хоре ведь не притворишься"]
+
+
 def test_a_reading_and_a_writer_are_counted():
     olga = bench_people.by_id("olga")
     # Everything said or hinted, nothing seen across the talks: well under half by weight.

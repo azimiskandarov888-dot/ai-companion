@@ -424,12 +424,40 @@ def _norm(text: str) -> str:
     return re.sub(r"[^\w]+", " ", (text or "").lower().replace("ё", "е")).strip()
 
 
+#: Where a reading tells Bob how to speak — what would ring false, what would
+#: reach them — a phrase in «» is an example for HIM («Я понимаю, как тебе
+#: тяжело»: never to be said), not the person's words, and is not held to the
+#: talks. The first run, 2026-10-17, counted those as made up and put one of
+#: the best readings near the bottom.
+_FOR_BOB = frozenset({"register", "would_ring_false", "would_reach_them", "needs_pushback_on",
+                      "what_lifts_him", "closeness", "do_not_touch"})
+#: A quote is the person's if most of its words were said — in any form:
+#: «Дырявого» is «Дырявым» said; «в хоре не притворишься» is «в хоре ведь не
+#: притворишься».
+QUOTE_KEPT = 0.6
+
+
+def _stem(word: str) -> str:
+    return word[:5] if len(word) >= 6 else word[:max(3, len(word) - 1)]
+
+
+def _said_stems(text: str) -> set[str]:
+    return {_stem(w) for w in re.findall(r"\w{3,}", _norm(text))}
+
+
 def fake_quotes(result: dict, person: dict) -> list[str]:
-    """Quotes in a reading that are not in the talks word for word — the one
-    thing about a reading code can check without anybody's taste."""
-    said = _norm(transcript(person))
-    quotes = re.findall(r"«([^«»]{6,})»", reading_text(result))
-    return [q for q in quotes if _norm(q) and _norm(q) not in said]
+    """Quotes of the person that they never said — the one thing about a
+    reading code can check without anybody's taste."""
+    said = _said_stems(transcript(person))
+    fake = []
+    for key, value in (result or {}).items():
+        if str(key).startswith("_") or key in _FOR_BOB:
+            continue
+        for quote in re.findall(r"«([^«»]{6,})»", str(value)):
+            words = _said_stems(quote)
+            if words and len(words & said) / len(words) < QUOTE_KEPT:
+                fake.append(quote)
+    return fake
 
 
 def score_scribe(person: dict, verdict: dict) -> dict:
