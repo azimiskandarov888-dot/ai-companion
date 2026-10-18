@@ -99,3 +99,14 @@ in the app, and the near grass is live, so it moves with the wind and with him.
 - Gemini: a new composition with frame-3 as the reference for light, colour and film look —
   `framing/frame-4.prompt.txt` → `framing/frame-4.jpg`
 - Midjourney: `cinematic wide shot, 35mm lens, standing eye level about forty metres away across a flat open field of tall pampas grass and meadow grass, a single magnificent old tree with a full broad rounded crown of dense amber and golden autumn leaves on a thick characterful trunk, tree on the left third line, crown around the upper left third intersection, a few leaves drifting to the right in the wind, low flat horizon a little below the middle, layered far hills fading into haze, open calm sky on the right as negative space, late afternoon warm back light, soft rim light on the leaves and grass tips, no sun in frame, only the very bottom edge softly out of focus, no house, no path, no people, the field continues beyond the frame, restrained deliberate composition, muted natural colours, gentle film grain --ar 9:16 --style raw --s 100`
+
+## Framing test — frame-5 (Midjourney only): the tree belongs to the land (owner: "framing and distance all good; the tree looks super alone, like it was put there on purpose — uncanny in nature")
+
+The tree is the closest and largest of several (smaller trees, shrubs, an uneven tree line), grass grows up to
+its trunk, and the left edge of the frame cuts some of its branches. Negatives go in `--no`, never in the
+prompt: Midjourney reads "no house" as "house".
+
+`cinematic wide shot, 35mm lens, standing eye level about forty metres away, a flat open field of tall pampas grass and meadow grass in late autumn, a large old tree with a full broad crown of dense amber and golden leaves stands on the left third of the frame, some of its outer branches cut off by the left edge of the frame, tall grass growing right up to its trunk with fallen leaves among it, a few smaller trees and low shrubs scattered through the middle distance, a soft uneven tree line along the far edge of the field, the big tree is simply the closest and largest of them, low flat horizon a little below the middle, layered far hills fading into haze, open calm sky on the right, late afternoon warm back light, soft rim light on the leaves and grass tips, a few leaves drifting to the right in the wind, only the very bottom edge softly out of focus, natural and unstaged, muted natural colours, gentle film grain --ar 9:16 --style raw --stylize 100 --chaos 10 --no house, path, fence, people, animals, sun, text, watermark`
+
+Settings: newest version · Raw · 9:16 · Stylization 100 · Variety 10 · Weirdness 0 · Personalize off · Fast.
+Optional: `framing/frame-4.jpg` as a Style reference. Then Upscale (Subtle).
