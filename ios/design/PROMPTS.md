@@ -140,3 +140,9 @@ silver-gold plumes — and whole fields of flowers (red spider lilies, white and
 
 Next prompt (with mj-11 dragged in as an Image prompt):
 `cinematic film still, an enormous old tree with an amber-gold autumn crown about 3 metres from the camera, its thick gnarled trunk large on the left edge of the frame, the crown spreading across the top of the frame, falling leaves drifting right, camera at chest height about 1.3 metres tilted slightly upward, sharp focus on the tree, one continuous field of white silver grass plumes running to low green hills, deep blue clear sky on the right, warm low sunlight, photorealistic, shot on ARRI Alexa, 35mm, natural colour, film grain --ar 9:16 --style raw --stylize 200 --iw 1.5 --no house, people, animals, sun, text, centered composition, gap`
+
+## Midjourney — mj-12 prompt: split with `::` so colours don't leak (owner: "the grass is blurred, the tree is still too far, and the orange leaves made the grass orange")
+
+`::` makes Midjourney treat each part separately, so "amber leaves" stays on the tree. No blur words at all.
+
+`cinematic film still, photorealistic, shot on ARRI Alexa, 35mm, camera at chest height, deep focus, everything sharp:: a field of pure white silver grass plumes with green stems, crisp and detailed, filling the bottom half of the frame::2 an enormous old tree two metres from the camera on the left edge, thick gnarled trunk, crown of amber autumn leaves cropped by the top of the frame::1.5 clear deep blue sky and low green hills on the right::1 --ar 9:16 --style raw --stylize 150 --no orange grass, blur, bokeh, shallow depth of field, centered composition, house, people, text`
