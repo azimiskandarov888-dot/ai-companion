@@ -189,3 +189,14 @@ Lesson: a prompt that works is a recipe — change as few words as possible.
 Now: the original, verbatim, with the V8 settings — `--ar 16:9 --raw --stylize 250 --chaos 5 --hd` — then the
 phone shape by **outpainting** (Editor → aspect ratio 9:16 → Submit: the picture stays, sky is added above for the
 title and meadow below for the buttons), not by re-prompting.
+
+## Ours, on the reference's recipe (2026-10-18)
+
+Changed only what the app needs: mood "cold loneliness" → "serene, vast solitude"; the sage → a tiny lone traveler
+with a small warm lantern (a human figure keeps it a film still; the lantern is someone being there); the meadow →
+pale silver grass under the crimson leaves and frost. Everything else word for word.
+
+- Nano Banana, portrait: `framing/ours-1.prompt.txt` → `framing/ours-1.jpg` (moody and cinematic; "distant tower"
+  became a castle turret; whiter and colder than the reference).
+- Midjourney (16:9, then Editor → 9:16 to add sky above and meadow below):
+  `Serene and vast solitude, detached from the noise of the world. Shot on 12mm ultra-wide lens. Completely clear, open foreground with no obstructions. A small, sparse twisted red maple tree stands far in the midground, its tiny branches gracefully extending naturally into the empty space, leaving the entire sky and expansive area unobstructed. A colossal smooth white wall cuts the frame diagonally in the far background. The ground is a misty sacred meadow of pale silver grass covered in fallen crimson leaves and morning frost. A microscopically small lone traveler in a long pale coat, holding a tiny warm lantern, stands as the only anchor. The distant tower is swallowed by heavy autumn atmospheric perspective. Purely sacred realm. --ar 16:9 --raw --stylize 250 --chaos 5 --hd`
