@@ -146,3 +146,9 @@ Next prompt (with mj-11 dragged in as an Image prompt):
 `::` makes Midjourney treat each part separately, so "amber leaves" stays on the tree. No blur words at all.
 
 `cinematic film still, photorealistic, shot on ARRI Alexa, 35mm, camera at chest height, deep focus, everything sharp:: a field of pure white silver grass plumes with green stems, crisp and detailed, filling the bottom half of the frame::2 an enormous old tree two metres from the camera on the left edge, thick gnarled trunk, crown of amber autumn leaves cropped by the top of the frame::1.5 clear deep blue sky and low green hills on the right::1 --ar 9:16 --style raw --stylize 150 --no orange grass, blur, bokeh, shallow depth of field, centered composition, house, people, text`
+
+## Midjourney — mj-13 prompt: no `::` (not supported in V7 / V8.2)
+
+Plain sentences, each colour right next to its own thing, the grass colour said twice, "orange" never used.
+
+`Photorealistic cinematic film still, shot on ARRI Alexa, 35mm, deep focus, everything sharp. Camera at chest height. A field of pure snow-white silver grass plumes on green stems fills the bottom half, crisp and detailed. On the left edge, two metres from the camera, the thick gnarled trunk of an enormous old tree; its crown of golden-brown autumn leaves is cut off by the top of the frame. Clear deep blue sky and low green hills on the right. --ar 9:16 --style raw --stylize 150 --no orange grass, yellow grass, blur, bokeh, shallow depth of field, centered composition, house, people, text`
