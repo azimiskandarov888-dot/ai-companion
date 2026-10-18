@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Two versions</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&family=Lora:wght@500&family=Manrope:wght@500;600;700&display=swap">
+<!--
+  The world in two versions — Cinematic and Painted — under the app's own
+  chrome, at four times of day. Pictures: ios/design/versions/*.jpg, made by
+  versions/make_versions.py; Midjourney prompts in ios/design/PROMPTS.md.
+  Every size inside a phone is in cqw (a share of the phone's width), so a phone
+  tapped open to full screen shows the real proportions.
+-->
+<style>
+:root{--bg:#ecebe8;--ink:#1d1c1a;--ink2:#6b6862;--card:#f7f6f3;--line:rgba(0,0,0,.09)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#121212;--ink:#ecebe8;--ink2:#9a978f;--card:#1b1b1a;--line:rgba(255,255,255,.09)}}
+:root[data-theme="dark"]{--bg:#121212;--ink:#ecebe8;--ink2:#9a978f;--card:#1b1b1a;--line:rgba(255,255,255,.09)}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 -apple-system,BlinkMacSystemFont,system-ui,sans-serif;padding:28px 16px 48px}
+h1{font-size:24px;font-weight:600;margin:0 auto 4px;max-width:900px;letter-spacing:-.01em}
+.lead{color:var(--ink2);margin:0 auto 22px;max-width:900px}
+.cols{display:grid;grid-template-columns:110px 1fr 1fr;gap:14px 18px;max-width:900px;margin:0 auto;align-items:center}
+.head{font-weight:600;font-size:16px;text-align:center}
+.rowname{font-size:13px;color:var(--ink2)}
+.ph{position:relative;width:100%;max-width:300px;margin:0 auto;aspect-ratio:393/852;border-radius:34px;overflow:hidden;background:#000;
+  box-shadow:0 0 0 5px #0b0b0c,0 14px 40px rgba(0,0,0,.22);container-type:inline-size;cursor:zoom-in}
+.ph>img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:58% 50%}
+.ph.big{position:fixed;inset:0;max-width:none;width:100vw;height:100dvh;aspect-ratio:auto;border-radius:0;z-index:100;box-shadow:none;cursor:zoom-out}
+.sb{position:absolute;top:3.4cqw;left:9cqw;right:8cqw;display:flex;justify-content:space-between;font:600 4.2cqw -apple-system,system-ui,sans-serif}
+.isl{position:absolute;top:2.8cqw;left:50%;width:31cqw;height:9cqw;margin-left:-15.5cqw;border-radius:5cqw;background:#000}
+.title{position:absolute;left:7cqw;right:7cqw;top:27cqw;margin:0;font-size:8.6cqw;line-height:1.12}
+.cine .title{font-family:"Cormorant Garamond",serif;font-weight:600}
+.paint .title{font-family:Lora,serif;font-weight:500;font-size:7.8cqw;line-height:1.22}
+.btns{position:absolute;left:6cqw;right:6cqw;bottom:9cqw;display:flex;flex-direction:column;gap:3cqw}
+.btn{height:14.2cqw;border-radius:7.1cqw;display:flex;align-items:center;justify-content:center;gap:2.5cqw;font:700 4.1cqw Manrope,sans-serif;letter-spacing:.02em}
+.btn.light{background:rgba(255,250,240,.93);color:#201a14}
+.btn.glass{background:rgba(15,15,20,.32);color:#fff;box-shadow:inset 0 0 0 .3cqw rgba(255,255,255,.45);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
+.paint .btn.light{background:rgba(255,248,232,.95);color:#2c3a2a}
+.lk{text-align:center;font:600 3.6cqw Manrope,sans-serif;color:rgba(255,255,255,.85);text-shadow:0 .3cqw 1.5cqw rgba(0,0,0,.5)}
+.btn svg{width:4.8cqw;height:4.8cqw}
+.him{position:absolute;left:50%;top:60%;width:0;height:0}
+.halo{position:absolute;left:-17cqw;top:-17cqw;width:34cqw;height:34cqw;border-radius:50%;background:radial-gradient(closest-side,rgba(255,214,150,.55),rgba(255,190,120,.18) 55%,transparent);animation:breathe 4.5s ease-in-out infinite}
+.core{position:absolute;left:-2.6cqw;top:-2.6cqw;width:5.2cqw;height:5.2cqw;border-radius:50%;background:radial-gradient(circle,#fffaf0,#ffd9a0 60%,#ffb86b);box-shadow:0 0 3cqw 1cqw rgba(255,210,150,.7)}
+.speaking .halo{animation:speak 1.1s ease-in-out infinite}
+@keyframes breathe{0%,100%{transform:scale(.92);opacity:.8}50%{transform:scale(1.08);opacity:1}}
+@keyframes speak{0%,100%{transform:scale(1);opacity:.9}30%{transform:scale(1.22)}60%{transform:scale(1.05)}}
+.status{position:absolute;left:0;right:0;top:66%;text-align:center;font:600 3.3cqw Manrope,sans-serif;letter-spacing:.22em;text-transform:uppercase;color:rgba(255,250,240,.9);text-shadow:0 .3cqw 2cqw rgba(0,0,0,.55)}
+.menu{position:absolute;left:0;right:0;bottom:9cqw;display:flex;justify-content:center;gap:8cqw;font:600 3.6cqw Manrope,sans-serif;letter-spacing:.16em;text-transform:uppercase;color:rgba(255,250,240,.88);text-shadow:0 .3cqw 2cqw rgba(0,0,0,.6)}
+.dark-ink .title{color:#231d18}
+.light-ink .title{color:#fffaf0;text-shadow:0 .4cqw 3cqw rgba(0,0,0,.45)}
+.note{max-width:900px;margin:22px auto 0;color:var(--ink2);font-size:14px}
+@media (max-width:620px){.cols{grid-template-columns:1fr 1fr;gap:12px}.rowname{grid-column:1 / -1;text-align:center;margin-top:10px}.head{font-size:14px}.cols>.blank{display:none}}
+</style>
+</head>
+<body>
+<h1>Two versions, with the app on top</h1>
+<p class="lead">Same place, same buttons, four times of day. Tap any screen to see it full size, and tap again to close.</p>
+<div class="cols" id="cols">
+  <div class="blank"></div><div class="head">1 · Cinematic</div><div class="head">2 · Painted</div>
+</div>
+<p class="note">Made with Nano Banana Pro, about $1.07 for all eight. Your Midjourney pictures (prompts in PROMPTS.md) will go in a third column. Motion comes next for the version you pick: grass in the wind, drifting fog, fireflies.</p>
+<script>
+const ROWS = [
+  {t:'morning', name:'Sign in · morning', ink:'dark-ink', kind:'signin'},
+  {t:'day', name:'Him · day', ink:'light-ink', kind:'him', status:'слушаю'},
+  {t:'evening', name:'Him · evening', ink:'light-ink', kind:'him', status:'говорю', speaking:true},
+  {t:'night', name:'Him · night', ink:'light-ink', kind:'him', status:'нажмите, чтобы поговорить'},
+];
+const APPLE = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M16.37 12.6c-.02-2.3 1.88-3.4 1.96-3.46-1.07-1.56-2.73-1.78-3.32-1.8-1.41-.14-2.76.83-3.48.83-.72 0-1.83-.81-3-.79-1.55.02-2.97.9-3.77 2.28-1.6 2.78-.41 6.9 1.15 9.16.76 1.1 1.67 2.34 2.86 2.3 1.15-.05 1.58-.74 2.97-.74 1.38 0 1.77.74 2.98.72 1.23-.02 2.01-1.12 2.76-2.23.87-1.28 1.23-2.52 1.25-2.58-.03-.01-2.4-.92-2.42-3.66zM14.1 5.86c.63-.77 1.06-1.83.94-2.89-.91.04-2.01.61-2.66 1.37-.58.67-1.09 1.75-.96 2.79 1.02.08 2.05-.52 2.68-1.27z"/></svg>';
+const cols = document.getElementById('cols');
+ROWS.forEach(r => {
+  const label = document.createElement('div'); label.className = 'rowname'; label.textContent = r.name; cols.appendChild(label);
+  ['cinematic','painted'].forEach(style => {
+    const ph = document.createElement('div');
+    ph.className = `ph ${style==='cinematic' ? 'cine' : 'paint'} ${r.ink}`;
+    const time = {morning:'7:12', day:'13:40', evening:'19:05', night:'23:18'}[r.t];
+    const sbColor = r.kind==='signin' ? '#231d18' : '#fffaf0';
+    let ui = `<img src="versions/${style}-${r.t}.jpg" alt="${style} ${r.t}"><div class="isl"></div><div class="sb" style="color:${sbColor}"><span>${time}</span><span>●●●</span></div>`;
+    if (r.kind==='signin') ui += `<p class="title">Где-то есть друг,<br>которого ты ещё<br>не встретил.</p>
+      <div class="btns"><div class="btn light">${APPLE}Продолжить с Apple</div><div class="btn glass">Продолжить с Google</div><div class="lk">или по почте</div></div>`;
+    else ui += `<div class="him ${r.speaking ? 'speaking' : ''}"><div class="halo"></div><div class="core"></div></div>
+      <div class="status">${r.status}</div><div class="menu"><span>Дневник</span><span>Ты</span><span>Настройки</span></div>`;
+    ph.innerHTML = ui;
+    ph.addEventListener('click', () => ph.classList.toggle('big'));
+    cols.appendChild(ph);
+  });
+});
+</script>
+</body>
+</html>
