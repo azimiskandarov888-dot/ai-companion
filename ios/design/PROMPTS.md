@@ -81,3 +81,9 @@ in the app, and the near grass is live, so it moves with the wind and with him.
 
 - Gemini (Nano Banana Pro): `framing/frame-1.prompt.txt` → `framing/frame-1.jpg`
 - Midjourney: `cinematic film still, 50mm lens, eye level inside a field of tall pampas grass on a hillside, late afternoon warm side light, nearest blades soft and out of focus along the bottom edge, focus on the grass a few metres away, beyond the slope only haze and the faint line of far hills, open calm sky in the upper half, no sun in frame, no tree, no house, no flowers, no people, the field continues beyond the frame, restrained natural composition, muted colours, shallow depth of field, gentle film grain --ar 9:16 --style raw --s 100`
+
+## Framing test — frame-2: a little further (owner: "the idea is perfect, but super close up")
+
+- Gemini: the SAME picture (frame-1) pulled back a few steps by image editing, so the place stays the same —
+  `framing/frame-2.prompt.txt` → `framing/frame-2.jpg`
+- Midjourney: `cinematic film still, 35mm lens, standing eye level a few steps back from the edge of a field of tall pampas grass on a hillside, late afternoon warm side light, the grass fills the lower half of the frame, more of the slope and a hazy valley visible below, faint line of far hills, open calm sky in the upper half, no sun in frame, no tree, no house, no people, the field continues beyond the frame, restrained natural composition, muted colours, gentle film grain --ar 9:16 --style raw --s 100`
