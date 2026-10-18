@@ -69,3 +69,15 @@ Pick your favourite of each four, upscale it, download it, and send it to me
 
 The same scenes, written for Gemini, which follows plain descriptions better
 than tags and is not asked to copy a named studio: see the script.
+
+---
+
+## Framing test — frame-1 (after the owner's corrections, 2026-10-18)
+
+AI pictures look AI because they cram everything into one frame. Films and
+games **frame**: one subject, cropped by the edges, the world going on beyond.
+The place is made **once**; time of day and mood change only light and colour
+in the app, and the near grass is live, so it moves with the wind and with him.
+
+- Gemini (Nano Banana Pro): `framing/frame-1.prompt.txt` → `framing/frame-1.jpg`
+- Midjourney: `cinematic film still, 50mm lens, eye level inside a field of tall pampas grass on a hillside, late afternoon warm side light, nearest blades soft and out of focus along the bottom edge, focus on the grass a few metres away, beyond the slope only haze and the faint line of far hills, open calm sky in the upper half, no sun in frame, no tree, no house, no flowers, no people, the field continues beyond the frame, restrained natural composition, muted colours, shallow depth of field, gentle film grain --ar 9:16 --style raw --s 100`
