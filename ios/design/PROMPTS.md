@@ -177,3 +177,15 @@ anchor for scale; heavy atmospheric perspective.
 Ours (the tiny ember is where his light will sit; the app replaces it with the living one):
 
 `Quiet, vast calm at the edge of the world, the hush just before someone speaks. Shot on 12mm ultra-wide lens, vertical frame. Completely clear, open foreground with no obstructions. A small, sparse twisted red maple tree stands far in the midground on the left, its fine branches extending naturally into the empty space, leaving the entire sky and the wide meadow unobstructed. A colossal smooth white cliff cuts the frame diagonally in the far background and rises into the clouds. The ground is a misty meadow of pale silver grass and fallen crimson leaves under morning frost. A tiny warm light, glowing like a distant ember just above the grass near the tree, stands as the only anchor. The far distance is swallowed by heavy autumn atmospheric perspective. A calm, sacred, timeless realm. --ar 9:16 --style raw --stylize 250 --chaos 5 --hd`
+
+### Why my adaptation of it looked off (owner, 2026-10-18: "the image I found is insanely beautiful, the same prompt run by me is gorgeous, mine is totally off")
+
+1. Vertical 9:16 forced a different composition; the reference is built wide (16:9) — the empty space and the diagonal wall need width.
+2. "A tiny warm light, like a distant ember" instead of the tiny robed figure — a glowing dot reads as an AI orb; a small human figure is what makes it a film still.
+3. Strong concrete words swapped for weak or abstract ones ("wall" → "cliff", the sage → a light, "the hush before someone speaks").
+
+Lesson: a prompt that works is a recipe — change as few words as possible.
+
+Now: the original, verbatim, with the V8 settings — `--ar 16:9 --raw --stylize 250 --chaos 5 --hd` — then the
+phone shape by **outpainting** (Editor → aspect ratio 9:16 → Submit: the picture stays, sky is added above for the
+title and meadow below for the buttons), not by re-prompting.
