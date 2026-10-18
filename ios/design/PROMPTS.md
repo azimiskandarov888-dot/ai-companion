@@ -152,3 +152,10 @@ Next prompt (with mj-11 dragged in as an Image prompt):
 Plain sentences, each colour right next to its own thing, the grass colour said twice, "orange" never used.
 
 `Photorealistic cinematic film still, shot on ARRI Alexa, 35mm, deep focus, everything sharp. Camera at chest height. A field of pure snow-white silver grass plumes on green stems fills the bottom half, crisp and detailed. On the left edge, two metres from the camera, the thick gnarled trunk of an enormous old tree; its crown of golden-brown autumn leaves is cut off by the top of the frame. Clear deep blue sky and low green hills on the right. --ar 9:16 --style raw --stylize 150 --no orange grass, yellow grass, blur, bokeh, shallow depth of field, centered composition, house, people, text`
+
+## Midjourney — mj-14 prompt: describe what's VISIBLE when you stand at the tree, not a distance (owner: "the tree is still too far away")
+
+Midjourney ignores distances in metres. It follows what fills the frame: a trunk filling half of it, bark in
+detail, branches overhead.
+
+`Photorealistic cinematic film still, shot on ARRI Alexa, 24mm wide lens, everything sharp. Standing right next to an enormous old tree: its huge gnarled trunk fills the left half of the frame, rough bark in crisp detail, thick branches reaching over the camera, golden-brown autumn leaves overhead filling the top of the frame. A field of pure snow-white silver grass plumes on green stems around the base and stretching away to low green hills. Deep blue sky visible only in the upper right. --ar 9:16 --style raw --stylize 150 --no orange grass, yellow grass, blur, bokeh, distant tree, small tree, centered composition, house, people, text`
