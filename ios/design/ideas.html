@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Four ideas</title>
+<!--
+  Four ideas instead of the glowing orb, made with Nano Banana Pro
+  (ios/design/ideas/*.jpg; the prompts are in ios/design/ideas/make_ideas.py).
+  His colour is the same example — warm ochre — in all eight, so only the
+  idea differs. Each is shown at night and by day, under the app's own chrome.
+-->
+<style>
+:root{--bg:#ecebe8;--ink:#1d1c1a;--ink2:#6b6862;--card:#f7f6f3;--line:rgba(0,0,0,.09)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#121212;--ink:#ecebe8;--ink2:#9a978f;--card:#1b1b1a;--line:rgba(255,255,255,.09)}}
+:root[data-theme="dark"]{--bg:#121212;--ink:#ecebe8;--ink2:#9a978f;--card:#1b1b1a;--line:rgba(255,255,255,.09)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 -apple-system,BlinkMacSystemFont,system-ui,sans-serif;padding:28px 16px 48px}
+h1{font-size:24px;font-weight:600;margin:0 auto 4px;max-width:1080px;letter-spacing:-.01em}
+.lead{color:var(--ink2);margin:0 auto 24px;max-width:1080px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,500px),1fr));gap:18px;max-width:1080px;margin:0 auto}
+.idea{background:var(--card);border:.5px solid var(--line);border-radius:22px;padding:18px 18px 20px}
+.idea h2{font-size:18px;font-weight:600;margin:0}
+.idea p{margin:4px 0 14px;color:var(--ink2);font-size:14px}
+.pair{display:flex;gap:14px;justify-content:center}
+.ph{position:relative;width:min(230px,44vw);aspect-ratio:393/852;border-radius:34px;overflow:hidden;background:#000;box-shadow:0 0 0 5px #0b0b0c,0 14px 40px rgba(0,0,0,.22)}
+.ph img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transform:scale(1.07)}
+.ph .breathe{animation:breathe 6s ease-in-out infinite}
+@keyframes breathe{0%,100%{transform:scale(1.07)}50%{transform:scale(1.095)}}
+.isl{position:absolute;top:6px;left:50%;width:31%;height:4.2%;margin-left:-15.5%;border-radius:20px;background:#000}
+.time{position:absolute;top:7px;left:11%;font:600 11px -apple-system,system-ui,sans-serif}
+.st{position:absolute;left:0;right:0;text-align:center;font:400 11px -apple-system,system-ui,sans-serif;letter-spacing:.07em}
+.his{position:absolute;left:12%;right:12%;text-align:center;font:400 13px/1.45 ui-serif,"New York","Iowan Old Style",Georgia,serif}
+.pill{position:absolute;bottom:4.2%;left:50%;width:40px;height:22px;margin-left:-20px;border-radius:11px;display:flex;align-items:center;justify-content:center;gap:3px;-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
+.pill i{width:3.5px;height:3.5px;border-radius:50%;background:currentColor;opacity:.75}
+.light{color:rgba(244,236,220,.82)} .light .pill{background:rgba(255,255,255,.12)}
+.dark{color:rgba(48,40,30,.78)} .dark .pill{background:rgba(255,255,255,.45)}
+.cap{text-align:center;font-size:12px;color:var(--ink2);margin-top:8px}
+.note{max-width:1080px;margin:22px auto 0;color:var(--ink2);font-size:14px}
+</style>
+</head>
+<body>
+<h1>Four ideas instead of the orb</h1>
+<p class="lead">Same example colour in all of them (warm ochre), so only the idea differs. Night on the left, day on the right.</p>
+<div class="grid">
+
+<section class="idea"><h2>1 · Paint, not light</h2><p>His colour as watercolour on paper. Abstract, closest to what we had. It would spread a little when he talks.</p>
+<div class="pair">
+ <div><div class="ph light"><img class="breathe" src="ideas/1-paint-night.jpg" alt="Ochre watercolour blot on dark paper"><div class="isl"></div><span class="time">21:40</span><span class="st" style="top:73%">слушаю</span><span class="pill"><i></i><i></i><i></i></span></div><div class="cap">night</div></div>
+ <div><div class="ph dark"><img class="breathe" src="ideas/1-paint-day.jpg" alt="Ochre watercolour blot on cream paper"><div class="isl"></div><span class="time">9:15</span><span class="st" style="top:73%">слушаю</span><span class="pill"><i></i><i></i><i></i></span></div><div class="cap">day</div></div>
+</div></section>
+
+<section class="idea"><h2>2 · His window</h2><p>A painted window of his room: his lamp, his chair, his kettle. Shows that he has a life. The lamp would brighten when he speaks.</p>
+<div class="pair">
+ <div><div class="ph light"><img src="ideas/2-window-night.jpg" alt="Lit window at night with a lamp and an armchair"><div class="isl"></div><span class="time">21:40</span><span class="st" style="top:63%">слушаю</span><span class="pill dark" style="color:rgba(48,40,30,.78);background:rgba(255,255,255,.5)"><i></i><i></i><i></i></span></div><div class="cap">night</div></div>
+ <div><div class="ph dark"><img src="ideas/2-window-day.jpg" alt="The same window by day with the curtain half open"><div class="isl"></div><span class="time">9:15</span><span class="st" style="top:66%">слушаю</span><span class="pill"><i></i><i></i><i></i></span></div><div class="cap">day</div></div>
+</div></section>
+
+<section class="idea"><h2>3 · Words, like a letter</h2><p>A brush circle in his colour, drawn by hand, and his words in a serif under it. A circle like the orb, but made by a person.</p>
+<div class="pair">
+ <div><div class="ph light"><img class="breathe" src="ideas/3-letter-night.jpg" alt="Ochre brush circle on dark handmade paper"><div class="isl"></div><span class="time">21:40</span><span class="st" style="top:49%">говорю</span><span class="his" style="top:55%">Ну, рассказывай — как прошёл день?</span><span class="pill"><i></i><i></i><i></i></span></div><div class="cap">night</div></div>
+ <div><div class="ph dark"><img class="breathe" src="ideas/3-letter-day.jpg" alt="Brown brush circle on cream handmade paper"><div class="isl"></div><span class="time">9:15</span><span class="st" style="top:51%">говорю</span><span class="his" style="top:57%">Доброе утро. Как спалось?</span><span class="pill"><i></i><i></i><i></i></span></div><div class="cap">day</div></div>
+</div></section>
+
+<section class="idea"><h2>4 · A drawn person</h2><p>Him, drawn simply, with no face. Warmest, but every friend would need his own drawing, and a man alone by a window can look lonely himself.</p>
+<div class="pair">
+ <div><div class="ph light"><img src="ideas/4-person-night.jpg" alt="Pencil drawing of a man in an armchair by a lamp at night"><div class="isl"></div><span class="time">21:40</span><span class="st" style="top:76%">слушаю</span><span class="pill"><i></i><i></i><i></i></span></div><div class="cap">night</div></div>
+ <div><div class="ph dark"><img src="ideas/4-person-day.jpg" alt="Pencil drawing of a man in an armchair by a sunny window"><div class="isl"></div><span class="time">9:15</span><span class="st" style="top:24%">слушаю</span><span class="pill"><i></i><i></i><i></i></span></div><div class="cap">day</div></div>
+</div></section>
+
+</div>
+<p class="note">Made with Nano Banana Pro, about $1.07 for all eight. Motion comes after you pick: the paint spreading, the lamp brightening, the circle being drawn as he speaks.</p>
+</body>
+</html>
