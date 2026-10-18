@@ -133,3 +133,10 @@ silver-gold plumes — and whole fields of flowers (red spider lilies, white and
 ## Framing test — frame-11 (Midjourney only): tree off-centre and closer, one continuous field (owner: "the tree is centered and still too far; the foreground grass is made differently from the middle and background, with an empty space in between")
 
 `cinematic film still, asymmetrical off-center composition, an old tree with an irregular amber-gold crown stands on the left side of the frame about 4 metres from the camera, its crown cropped by the top left edge, the right two thirds of the frame open sky and grass, camera at waist height tilted slightly upward, 35mm lens at f/8, sharp focus on the tree, one continuous dense field of the same Japanese silver grass with soft white glowing plumes running unbroken from the bottom edge to the tree and on to the horizon, low horizon, calm sky, late afternoon backlight, rim light on the plumes and leaves, a few leaves drifting, photorealistic, shot on ARRI Alexa, natural colour, film grain --ar 9:16 --style raw --stylize 200 --chaos 10 --no house, people, animals, sun, text, centered composition, symmetry, gap, empty foreground, macro`
+
+## Midjourney result — mj-11 (owner: "almost perfect; the tree is still too far and needs to be closer; the camera a little, just a little bit up")
+
+`framing/mj-11.webp` — huge old amber tree on the left, a field of white silver-grass plumes, deep blue sky, low green hills.
+
+Next prompt (with mj-11 dragged in as an Image prompt):
+`cinematic film still, an enormous old tree with an amber-gold autumn crown about 3 metres from the camera, its thick gnarled trunk large on the left edge of the frame, the crown spreading across the top of the frame, falling leaves drifting right, camera at chest height about 1.3 metres tilted slightly upward, sharp focus on the tree, one continuous field of white silver grass plumes running to low green hills, deep blue clear sky on the right, warm low sunlight, photorealistic, shot on ARRI Alexa, 35mm, natural colour, film grain --ar 9:16 --style raw --stylize 200 --iw 1.5 --no house, people, animals, sun, text, centered composition, gap`
