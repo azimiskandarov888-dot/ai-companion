@@ -200,3 +200,12 @@ pale silver grass under the crimson leaves and frost. Everything else word for w
   became a castle turret; whiter and colder than the reference).
 - Midjourney (16:9, then Editor → 9:16 to add sky above and meadow below):
   `Serene and vast solitude, detached from the noise of the world. Shot on 12mm ultra-wide lens. Completely clear, open foreground with no obstructions. A small, sparse twisted red maple tree stands far in the midground, its tiny branches gracefully extending naturally into the empty space, leaving the entire sky and expansive area unobstructed. A colossal smooth white wall cuts the frame diagonally in the far background. The ground is a misty sacred meadow of pale silver grass covered in fallen crimson leaves and morning frost. A microscopically small lone traveler in a long pale coat, holding a tiny warm lantern, stands as the only anchor. The distant tower is swallowed by heavy autumn atmospheric perspective. Purely sacred realm. --ar 16:9 --raw --stylize 250 --chaos 5 --hd`
+
+## OUR picture, written better (owner: "the tree must be orange as in our old image — same grass, same tree, same framing, just a better prompt")
+
+Not the reference's scene — its techniques, on mj-15. Put `framing/mj-15-hd.jpg` in the **Image Prompt** slot so the
+framing holds (`--iw` 1–2), then:
+
+`Quiet golden autumn afternoon, warm and timeless. Shot on 24mm lens from chest height, looking slightly up. An enormous old tree with a dense crown of glowing orange and amber leaves stands close on the left side of the frame, its thick gnarled trunk rising from the grass, its heavy branches spreading across the top of the frame and cut by the frame's edges. A vast field of soft white silver grass plumes, thick and lush, rolls away from the camera to a low horizon. A few orange leaves drift to the right on a gentle wind. The rest of the sky is clear, deep blue and unobstructed. Warm low sunlight from the side, rim light on every plume and leaf, soft atmospheric haze on the horizon. Cinematic film still, photorealistic, rich natural colour, fine film grain. --ar 9:16 --raw --stylize 250 --chaos 5 --hd --iw 1.5 --no people, house, text`
+
+Or Quick Edit on mj-15: `make this a sharper, more detailed cinematic photograph with denser white grass plumes and a fuller orange crown, keep the same composition --raw`
