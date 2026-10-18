@@ -1,0 +1,386 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>His field in 3D</title>
+<!--
+  His field as a real 3D scene, the way Ghost of Tsushima builds its fields:
+  thousands of separate grass plumes and a tree with a real skeleton of
+  branches, all moved by ONE wind. Each thing bends by wind × its own
+  flexibility — the trunk holds, branches sway, leaves flutter, plumes bend
+  one by one — and gusts travel downwind, so the grass ripples before the tree
+  answers and leaves only tear off when the gust reaches the crown. Touch the
+  grass and it parts around your finger, the way it will around him.
+  Three.js, from jsDelivr; everything else is generated here, in code.
+-->
+<style>
+:root{--bg:#ecebe8;--ink:#1d1c1a;--ink2:#6b6862;--chip:#fff;--line:rgba(0,0,0,.1)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#121212;--ink:#ecebe8;--ink2:#9a978f;--chip:#1f1f1f;--line:rgba(255,255,255,.12)}}
+:root[data-theme="dark"]{--bg:#121212;--ink:#ecebe8;--ink2:#9a978f;--chip:#1f1f1f;--line:rgba(255,255,255,.12)}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%}
+body{background:var(--bg);color:var(--ink);font:14px/1.4 -apple-system,BlinkMacSystemFont,system-ui,sans-serif;display:flex;flex-direction:column;align-items:center;padding:24px 16px}
+.phone{position:relative;width:393px;height:852px;border-radius:56px;overflow:hidden;background:#8fb7df;box-shadow:0 0 0 12px #0b0b0c,0 30px 80px rgba(0,0,0,.3);touch-action:none}
+.phone canvas{position:absolute;inset:0;width:100%!important;height:100%!important;display:block}
+.bar{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin-top:30px;max-width:520px}
+.bar button{border:.5px solid var(--line);background:var(--chip);color:var(--ink);border-radius:999px;padding:8px 13px;font:500 14px -apple-system,system-ui,sans-serif;cursor:pointer}
+.bar button[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.hint{color:var(--ink2);font-size:13px;margin-top:10px;text-align:center}
+.msg{position:absolute;left:20px;right:20px;top:45%;color:#fff;text-align:center;font-weight:600;text-shadow:0 1px 6px rgba(0,0,0,.5)}
+@media (max-width:760px){
+  body{padding:0;display:block}
+  .phone{position:fixed;inset:0;width:100vw;height:100dvh;border-radius:0;box-shadow:none}
+  .bar{position:fixed;left:0;right:0;bottom:0;margin:0;max-width:none;padding:10px 10px calc(10px + env(safe-area-inset-bottom));background:linear-gradient(transparent,rgba(0,0,0,.3));z-index:5}
+  .bar button{background:rgba(255,255,255,.22);color:#fff;border-color:rgba(255,255,255,.35);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
+  .bar button[aria-pressed="true"]{background:#fff;color:#111}
+  .hint{display:none}
+}
+</style>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
+</head>
+<body>
+<div class="phone" id="phone"><p class="msg" id="msg">Growing the field…</p></div>
+<div class="bar">
+  <button data-wind="calm">Calm</button><button data-wind="breeze" aria-pressed="true">Breeze</button><button data-wind="gusty">Gusty</button><button data-wind="strong">Strong</button>
+  <button id="dir">Wind →</button>
+</div>
+<p class="hint">Touch or drag on the grass: it parts around your finger, the way it will around him.</p>
+<script type="module">
+import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+THREE.ColorManagement.enabled = false;          // every colour below is written as it should look
+
+/* ═══ The one wind (GLSL, shared by every shader) and its JS twin ═══════════ */
+const WIND_GLSL = `
+uniform float uT, uWind, uGust; uniform vec2 uDir;
+float h1(float n){ return fract(sin(n * 12.9898) * 43758.5453); }
+float n1(float x){ float i = floor(x), f = fract(x); f = f*f*(3.-2.*f); return mix(h1(i), h1(i+1.), f); }
+float h2(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float n2(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.-2.*f);
+  return mix(mix(h2(i), h2(i+vec2(1.,0.)), f.x), mix(h2(i+vec2(0.,1.)), h2(i+vec2(1.,1.)), f.x), f.y); }
+// gusts travel downwind: a place further along the wind gets the same gust later
+float windAt(vec2 xz){
+  float along = dot(xz, uDir) * .085 + n2(xz * .05) * .6;
+  return uWind * (.6 + .4 * n1(uT * .13 + 3.)) + uGust * smoothstep(.35, 1., n1(uT * .45 - along));
+}`;
+const fract = x => x - Math.floor(x), h1 = n => fract(Math.sin(n * 12.9898) * 43758.5453);
+const n1 = x => { const i = Math.floor(x); let f = x - i; f = f*f*(3 - 2*f); return h1(i) + (h1(i + 1) - h1(i))*f; };
+const h2 = (x, y) => fract(Math.sin(x*127.1 + y*311.7) * 43758.5453);
+const n2 = (x, y) => { const ix = Math.floor(x), iy = Math.floor(y); let fx = x - ix, fy = y - iy; fx = fx*fx*(3 - 2*fx); fy = fy*fy*(3 - 2*fy);
+  const a = h2(ix, iy), b = h2(ix + 1, iy), c = h2(ix, iy + 1), d = h2(ix + 1, iy + 1); return a + (b - a)*fx + (c - a)*fy + (a - b - c + d)*fx*fy; };
+const smooth = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a)/(b - a))); return t*t*(3 - 2*t); };
+const PRESET = {calm:{wind:.12, gust:.12}, breeze:{wind:.32, gust:.28}, gusty:{wind:.3, gust:.75}, strong:{wind:.75, gust:.6}};
+const W = {t:0, wind:.32, gust:.28, target:PRESET.breeze, dir:new THREE.Vector2(1, 0), dirTarget:1};
+function windAt(x, z){ const along = (x*W.dir.x + z*W.dir.y)*.085 + n2(x*.05, z*.05)*.6;
+  return W.wind*(.6 + .4*n1(W.t*.13 + 3)) + W.gust*smooth(.35, 1, n1(W.t*.45 - along)); }
+const windU = () => ({uT:{value:0}, uWind:{value:W.wind}, uGust:{value:W.gust}, uDir:{value:W.dir}});
+
+/* ═══ Light and air: low warm sun, deep blue sky, haze towards the horizon ═══ */
+const SUN = new THREE.Vector3(.55, .32, -.77).normalize();      // behind and to the right: the plumes glow
+const SUNCOL = new THREE.Color(1., .86, .66), FOG = new THREE.Color(.70, .79, .88);
+const LIGHT_GLSL = `uniform vec3 uSun, uSunCol, uFog, uCam; uniform float uFogNear, uFogFar;
+vec3 airy(vec3 col, vec3 world){ return mix(col, uFog, smoothstep(uFogNear, uFogFar, length(uCam - world))); }`;
+const lightU = () => ({uSun:{value:SUN}, uSunCol:{value:SUNCOL}, uFog:{value:FOG}, uCam:{value:new THREE.Vector3()}, uFogNear:{value:18}, uFogFar:{value:140}});
+
+const phone = document.getElementById('phone');
+const renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
+renderer.setPixelRatio(Math.min(2, devicePixelRatio || 1));
+phone.prepend(renderer.domElement);
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(58, 393/852, .05, 900);
+camera.position.set(0, 1.3, 0);                                  // chest height
+camera.lookAt(0, 2.4, -9);                                       // a little upward
+const shared = [];                                               // every material that needs time, wind and the camera
+
+const sky = new THREE.Mesh(new THREE.SphereGeometry(600, 32, 16), new THREE.ShaderMaterial({
+  side:THREE.BackSide, depthWrite:false, uniforms:{uSun:{value:SUN}},
+  vertexShader:`varying vec3 vD; void main(){ vD = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.); }`,
+  fragmentShader:`uniform vec3 uSun; varying vec3 vD;
+    void main(){ float e = max(vD.y, 0.);
+      vec3 col = mix(vec3(.66,.78,.90), vec3(.13,.33,.67), pow(e, .55));
+      float s = max(dot(vD, uSun), 0.);
+      col += vec3(1., .85, .62) * (pow(s, 9.) * .22 + pow(s, 400.) * 2.);
+      gl_FragColor = vec4(col, 1.); }`}));
+scene.add(sky);
+
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(800, 800).rotateX(-Math.PI/2), new THREE.ShaderMaterial({
+  uniforms:{...lightU()},
+  vertexShader:`varying vec3 vW; void main(){ vW = (modelMatrix * vec4(position, 1.)).xyz; gl_Position = projectionMatrix * viewMatrix * vec4(vW, 1.); }`,
+  fragmentShader:LIGHT_GLSL + `varying vec3 vW;
+    float h(vec2 p){ return fract(sin(dot(p, vec2(12.9, 78.2))) * 43758.5); }
+    void main(){ float d = length(uCam.xz - vW.xz);
+      vec3 near = mix(vec3(.24,.21,.11), vec3(.36,.31,.16), h(floor(vW.xz * 3.)));
+      vec3 far = vec3(.76,.73,.64);                         // far away the plumes merge into a pale field
+      gl_FragColor = vec4(airy(mix(near, far, smoothstep(8., 45., d)), vW), 1.); }`}));
+scene.add(ground); shared.push(ground.material);
+
+/* ═══ The grass: thousands of separate susuki plants, each a stalk with a
+   feathery white plume. One shared shape, drawn many times (instancing); each
+   copy has its own place, height, turn, stiffness and rhythm. ══════════════ */
+function plumeTexture(){
+  const c = document.createElement('canvas'); c.width = 64; c.height = 128; const x = c.getContext('2d');
+  x.lineCap = 'round';
+  for (let i = 0; i < 70; i++){
+    const t = i/70, sx = 32 + (Math.random() - .5)*4, sy = 124 - t*20;
+    const ex = 32 + (Math.random() - .5)*(18 + 40*t), ey = 6 + Math.random()*50 + (1 - t)*30;
+    x.strokeStyle = `rgba(255,251,242,${.35 + Math.random()*.4})`; x.lineWidth = .8 + Math.random()*1.4;
+    x.beginPath(); x.moveTo(sx, sy); x.quadraticCurveTo(32 + (ex - 32)*.3, (sy + ey)/2, ex, ey); x.stroke();
+  }
+  x.strokeStyle = 'rgba(235,225,200,.9)'; x.lineWidth = 1.6; x.beginPath(); x.moveTo(32, 128); x.lineTo(32, 20); x.stroke();
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.NoColorSpace; return t;
+}
+function plantGeometry(){
+  const pos = [], h = [], part = [], uv = [], idx = [];
+  const add = (x, y, z, hh, p, u, v) => { pos.push(x, y, z); h.push(hh); part.push(p); uv.push(u, v); return pos.length/3 - 1; };
+  const rows = 6;                                         // the stalk: a thin tapering strip that curves a little
+  for (let r = 0; r <= rows; r++){ const y = r/rows*.82, w = .034*(1 - r/rows) + .005, z = -.06*(y*y);
+    add(-w/2, y, z, y, 0, 0, 0); add(w/2, y, z, y, 0, 1, 0); }
+  for (let r = 0; r < rows; r++){ const a = r*2; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); }
+  for (const ang of [0, Math.PI/2]){                      // the plume: two crossed feathery cards
+    const cx = Math.cos(ang)*.09, cz = Math.sin(ang)*.09, b = pos.length/3;
+    add(-cx, .70, -cz, .70, 1, 0, 1); add(cx, .70, cz, .70, 1, 1, 1); add(-cx, 1.12, -cz, 1.12, 1, 0, 0); add(cx, 1.12, cz, 1.12, 1, 1, 0);
+    idx.push(b, b + 1, b + 2, b + 1, b + 3, b + 2);
+  }
+  const g = new THREE.InstancedBufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('aH', new THREE.Float32BufferAttribute(h, 1));
+  g.setAttribute('aPart', new THREE.Float32BufferAttribute(part, 1));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  g.setIndex(idx); return g;
+}
+const PLANTS = 26000;
+const grassGeo = plantGeometry();
+const off = new Float32Array(PLANTS*3), prm = new Float32Array(PLANTS*4);
+for (let i = 0; i < PLANTS; i++){
+  const z = -.4 - 40*Math.pow(Math.random(), 1.7);        // more of them near the camera, where you see each one
+  const half = 1.6 + Math.abs(z)*.75;
+  off[i*3] = (Math.random()*2 - 1)*half; off[i*3 + 2] = z;
+  prm[i*4] = .72 + Math.random()*.45;                     // height, metres
+  prm[i*4 + 1] = Math.random()*Math.PI*2;                 // turn
+  prm[i*4 + 2] = Math.random()*20;                        // its own rhythm
+  prm[i*4 + 3] = .5 + Math.random()*.45;                  // how easily it bends
+}
+grassGeo.setAttribute('aOffset', new THREE.InstancedBufferAttribute(off, 3));
+grassGeo.setAttribute('aParams', new THREE.InstancedBufferAttribute(prm, 4));
+grassGeo.instanceCount = PLANTS;
+const grassMat = new THREE.ShaderMaterial({
+  side:THREE.DoubleSide,
+  uniforms:{...windU(), ...lightU(), uPlume:{value:plumeTexture()}, uPush:{value:new THREE.Vector3(0, 0, 999)}, uPushS:{value:0}},
+  vertexShader:WIND_GLSL + `
+    attribute vec3 aOffset; attribute vec4 aParams; attribute float aH, aPart;
+    uniform vec3 uPush; uniform float uPushS;
+    varying float vH, vPart; varying vec2 vUv; varying vec3 vW;
+    void main(){
+      float hs = aParams.x, c = cos(aParams.y), s = sin(aParams.y);
+      vec3 p = position; p.y *= hs;
+      p = vec3(c*p.x + s*p.z, p.y, -s*p.x + c*p.z);
+      vec3 w = aOffset + p;
+      float h = aH;
+      float wind = windAt(aOffset.xz);
+      float bend = wind * aParams.w * .75 * h * h;                       // the higher up the stalk, the further it goes
+      float flutter = sin(uT * (2.2 + aParams.w * 1.5) + aParams.z) * .05 * h * (.35 + wind);
+      vec2 o = uDir * (bend + flutter) * hs;
+      vec2 dp = aOffset.xz - uPush.xz; float d = length(dp);              // a finger (later: him) pushes it aside
+      o += dp / max(d, .001) * smoothstep(1.3, 0., d) * uPushS * .85 * h * hs;
+      w.xz += o; w.y -= dot(o, o) * .4 / max(hs, .3);                    // bending brings the tip down
+      vH = h; vPart = aPart; vUv = uv; vW = w;
+      gl_Position = projectionMatrix * viewMatrix * vec4(w, 1.);
+    }`,
+  fragmentShader:LIGHT_GLSL + `
+    uniform sampler2D uPlume; varying float vH, vPart; varying vec2 vUv; varying vec3 vW;
+    void main(){
+      vec3 col;
+      if (vPart > .5){
+        vec4 t = texture2D(uPlume, vUv); if (t.a < .45) discard;
+        vec3 V = normalize(uCam - vW);
+        float back = pow(max(dot(-V, uSun), 0.), 2.);                     // the sun behind a plume makes it glow
+        col = vec3(.68, .65, .58) * t.rgb * (.8 + .2 * vH) + uSunCol * (.05 + .42 * back);
+      } else {
+        col = mix(vec3(.16, .14, .07), vec3(.58, .50, .27), smoothstep(0., .8, vH));
+      }
+      gl_FragColor = vec4(airy(col, vW), 1.);
+    }`});
+const grass = new THREE.Mesh(grassGeo, grassMat); grass.frustumCulled = false;
+scene.add(grass); shared.push(grassMat);
+
+/* ═══ The tree: a real skeleton. A thick trunk splits into wide limbs, limbs
+   into branches, branches into twigs that carry the leaves. Every piece knows
+   how high it is and how far out from the trunk — that is its flexibility:
+   the trunk holds, the outer branches sway, the leaves flutter. ═══════════ */
+const TREE = new THREE.Vector3(-1.2, 0, -7);                      // on the left, its crown reaching across the top
+let seed = 7; const rnd = () => (seed = (seed*16807) % 2147483647)/2147483647;
+const segs = [], tips = [];
+function grow(start, dir, len, rad, depth, phase){
+  const end = start.clone().addScaledVector(dir, len);
+  segs.push({start, end, r0:rad, r1:rad*.7, depth, phase});
+  if (depth >= 6){ tips.push({p:end, phase}); return; }
+  const n = depth === 0 ? 4 : 2 + (rnd() < .45 ? 1 : 0);
+  for (let i = 0; i < n; i++){
+    const side = new THREE.Vector3(rnd() - .5, 0, rnd() - .5).normalize();
+    const out = side.clone().projectOnPlane(dir).normalize();
+    const tilt = depth === 0 ? .75 + rnd()*.35 : .35 + rnd()*.5;   // old, wide crown: limbs spread out
+    const nd = dir.clone().multiplyScalar(Math.cos(tilt)).addScaledVector(out, Math.sin(tilt));
+    nd.y = Math.max(nd.y, depth < 2 ? .35 : .05); nd.normalize();
+    grow(end, nd, len*(depth === 0 ? .72 : .66 + rnd()*.14), rad*.58, depth + 1, depth === 0 ? rnd()*6.28 : phase + (rnd() - .5));
+  }
+}
+grow(new THREE.Vector3(0, -.2, 0), new THREE.Vector3(.08, 1, -.04).normalize(), 2.9, .32, 0, 0);
+const HEIGHT = Math.max(...segs.map(s => s.end.y)), REACH = Math.max(...segs.map(s => Math.hypot(s.end.x, s.end.z)));
+function swayAttrs(g, phase){                             // per vertex: height share, reach share, branch rhythm
+  const p = g.attributes.position, n = p.count, H = new Float32Array(n), F = new Float32Array(n), P = new Float32Array(n).fill(phase);
+  for (let i = 0; i < n; i++){ H[i] = Math.max(0, p.getY(i))/HEIGHT; F[i] = Math.hypot(p.getX(i), p.getZ(i))/REACH; }
+  g.setAttribute('aTH', new THREE.BufferAttribute(H, 1)); g.setAttribute('aTF', new THREE.BufferAttribute(F, 1)); g.setAttribute('aTP', new THREE.BufferAttribute(P, 1));
+  g.deleteAttribute('uv'); return g;
+}
+const up = new THREE.Vector3(0, 1, 0);
+const barkGeo = mergeGeometries(segs.map(s => {
+  const v = s.end.clone().sub(s.start), len = v.length();
+  const g = new THREE.CylinderGeometry(s.r1, s.r0, len, s.depth < 2 ? 10 : 6, 1, true);
+  g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(up, v.normalize()));
+  g.translate((s.start.x + s.end.x)/2, (s.start.y + s.end.y)/2, (s.start.z + s.end.z)/2);
+  return swayAttrs(g, s.phase);
+}));
+const TREE_GLSL = `
+  attribute float aTH, aTF, aTP; uniform vec3 uTree;
+  vec3 sway(vec3 p){                                      // p: tree space
+    float wind = windAt(uTree.xz + vec2(1.5, 0.));
+    float lean = wind * pow(aTH, 2.2) * .55;              // the whole crown leans a little downwind
+    float branch = sin(uT * (1.25 + aTP * .07) + aTP) * (.35 + wind) * pow(aTF, 1.5) * .22;   // each limb its own sway
+    vec2 o = uDir * (lean + branch * .6) + vec2(-uDir.y, uDir.x) * branch * .35;
+    return p + vec3(o.x, branch * .18 * aTF, o.y);
+  }`;
+const barkMat = new THREE.ShaderMaterial({
+  uniforms:{...windU(), ...lightU(), uTree:{value:TREE}},
+  vertexShader:WIND_GLSL + TREE_GLSL + `varying vec3 vW, vN;
+    void main(){ vec3 p = sway(position); vW = p + uTree; vN = normal; gl_Position = projectionMatrix * viewMatrix * vec4(vW, 1.); }`,
+  fragmentShader:LIGHT_GLSL + `varying vec3 vW, vN;
+    void main(){ float l = .45 + .55 * max(dot(normalize(vN), uSun), 0.);
+      gl_FragColor = vec4(airy(vec3(.30, .24, .18) * l + vec3(.05, .05, .06), vW), 1.); }`});
+const bark = new THREE.Mesh(barkGeo, barkMat); bark.frustumCulled = false; scene.add(bark); shared.push(barkMat);
+
+/* the leaves: small amber cards clustered on the twigs */
+function leafTexture(){
+  const c = document.createElement('canvas'); c.width = c.height = 64; const x = c.getContext('2d');
+  x.fillStyle = '#fff'; x.beginPath(); x.moveTo(32, 4); x.bezierCurveTo(58, 18, 54, 50, 32, 60); x.bezierCurveTo(10, 50, 6, 18, 32, 4); x.fill();
+  x.strokeStyle = 'rgba(120,90,50,.45)'; x.lineWidth = 1.5; x.beginPath(); x.moveTo(32, 6); x.lineTo(32, 60); x.stroke();
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.NoColorSpace; return t;
+}
+const LEAFTEX = leafTexture();
+const leafSpots = [];                                     // where leaves are, for the falling ones
+const lpos = [], lrot = [], lcol = [], lsway = [];
+const AMBER = [[.86,.55,.18], [.92,.64,.24], [.78,.45,.14], [.95,.72,.33], [.70,.40,.13]];
+for (const s of segs) if (s.depth >= 4) {
+  const n = s.depth === 6 ? 40 : 14;
+  for (let i = 0; i < n; i++){
+    const p = s.end.clone().lerp(s.start, rnd()*.6).add(new THREE.Vector3(rnd() - .5, rnd() - .4, rnd() - .5).multiplyScalar(1.4));
+    lpos.push(p.x, p.y, p.z); lrot.push(rnd()*6.28, rnd()*6.28, .07 + rnd()*.05);
+    const col = AMBER[Math.floor(rnd()*AMBER.length)], k = .85 + rnd()*.3; lcol.push(col[0]*k, col[1]*k, col[2]*k);
+    lsway.push(Math.max(0, p.y)/HEIGHT, Math.hypot(p.x, p.z)/REACH, s.phase);
+    if (rnd() < .25) leafSpots.push(p);
+  }
+}
+const leafGeo = new THREE.InstancedBufferGeometry();
+leafGeo.setAttribute('position', new THREE.Float32BufferAttribute([-.5,-.5,0, .5,-.5,0, -.5,.5,0, .5,.5,0], 3));
+leafGeo.setAttribute('uv', new THREE.Float32BufferAttribute([0,1, 1,1, 0,0, 1,0], 2));
+leafGeo.setIndex([0, 1, 2, 1, 3, 2]);
+leafGeo.setAttribute('aPos', new THREE.InstancedBufferAttribute(new Float32Array(lpos), 3));
+leafGeo.setAttribute('aRot', new THREE.InstancedBufferAttribute(new Float32Array(lrot), 3));
+leafGeo.setAttribute('aCol', new THREE.InstancedBufferAttribute(new Float32Array(lcol), 3));
+leafGeo.setAttribute('aSw', new THREE.InstancedBufferAttribute(new Float32Array(lsway), 3));
+leafGeo.instanceCount = lpos.length/3;
+const leafMat = new THREE.ShaderMaterial({
+  side:THREE.DoubleSide,
+  uniforms:{...windU(), ...lightU(), uTree:{value:TREE}, uLeaf:{value:LEAFTEX}},
+  vertexShader:WIND_GLSL + `
+    attribute vec3 aPos, aRot, aCol, aSw; uniform vec3 uTree; varying vec3 vCol, vW; varying vec2 vUv; varying float vLit;
+    mat3 rot(vec3 a){ float cx = cos(a.x), sx = sin(a.x), cy = cos(a.y), sy = sin(a.y);
+      return mat3(cy, 0., -sy, 0., 1., 0., sy, 0., cy) * mat3(1., 0., 0., 0., cx, sx, 0., -sx, cx); }
+    void main(){
+      float wind = windAt(uTree.xz + vec2(1.5, 0.));
+      float lean = wind * pow(aSw.x, 2.2) * .55;
+      float branch = sin(uT * (1.25 + aSw.z * .07) + aSw.z) * (.35 + wind) * pow(aSw.y, 1.5) * .22;
+      vec2 o = uDir * (lean + branch * .6) + vec2(-uDir.y, uDir.x) * branch * .35;
+      float flut = sin(uT * 9. + aRot.x * 7.) * (.15 + wind) * .5;     // every leaf flutters on its own
+      vec3 local = rot(aRot + vec3(flut, flut * .7, 0.)) * (position * aRot.z);
+      vec3 p = aPos + vec3(o.x, branch * .18 * aSw.y, o.y) + local;
+      vW = p + uTree; vCol = aCol; vUv = uv;
+      vLit = (.55 + .45 * abs(dot(rot(aRot) * vec3(0., 0., 1.), vec3(.55, .32, -.77)))) * mix(.5, 1., smoothstep(.15, .8, aSw.y));
+      gl_Position = projectionMatrix * viewMatrix * vec4(vW, 1.);
+    }`,
+  fragmentShader:LIGHT_GLSL + `uniform sampler2D uLeaf; varying vec3 vCol, vW; varying vec2 vUv; varying float vLit;
+    void main(){ vec4 t = texture2D(uLeaf, vUv); if (t.a < .4) discard;
+      vec3 V = normalize(uCam - vW); float back = pow(max(dot(-V, uSun), 0.), 3.);
+      vec3 col = vCol * t.rgb * vLit + uSunCol * vCol * back * .6;      // leaves with the sun behind them glow
+      gl_FragColor = vec4(airy(col, vW), 1.); }`});
+const leaves = new THREE.Mesh(leafGeo, leafMat); leaves.frustumCulled = false; scene.add(leaves); shared.push(leafMat);
+
+/* ═══ Falling leaves: torn off the crown only when a gust gets there, then
+   carried by the same wind and brought down by their own weight ══════════ */
+scene.fog = new THREE.Fog(FOG, 18, 140);
+const FALL = 40;
+const fallMesh = new THREE.InstancedMesh(new THREE.PlaneGeometry(.18, .18),
+  new THREE.MeshBasicMaterial({map:LEAFTEX, alphaTest:.4, side:THREE.DoubleSide, fog:true}), FALL);
+fallMesh.frustumCulled = false; scene.add(fallMesh);
+const falling = [], dummy = new THREE.Object3D(), hidden = new THREE.Matrix4().makeScale(0, 0, 0);
+for (let i = 0; i < FALL; i++){ fallMesh.setMatrixAt(i, hidden); fallMesh.setColorAt(i, new THREE.Color(...AMBER[i % AMBER.length])); }
+function leavesFrame(dt){
+  const w = windAt(TREE.x + 1.5, TREE.z);
+  const rate = 10*Math.pow(Math.max(0, w - .45), 1.5);
+  if (falling.length < FALL && Math.random() < rate*dt){
+    const p = leafSpots[Math.floor(Math.random()*leafSpots.length)].clone().add(TREE);
+    falling.push({p, v:new THREE.Vector3(W.dir.x*.5, 0, W.dir.y*.5), r:new THREE.Euler(Math.random()*6, Math.random()*6, 0),
+      spin:new THREE.Vector3(2 + Math.random()*4, 1 + Math.random()*3, 0), ph:Math.random()*9, s:1});
+  }
+  for (let i = falling.length - 1; i >= 0; i--){ const L = falling[i];
+    const wl = windAt(L.p.x, L.p.z), push = .6 + 3.2*wl;
+    L.v.x += (W.dir.x*push - L.v.x)*1.3*dt; L.v.z += (W.dir.y*push - L.v.z)*1.3*dt;
+    L.v.y = Math.max(L.v.y - 1.4*dt + Math.sin(W.t*4 + L.ph)*.9*dt, -1.2);
+    L.p.addScaledVector(L.v, dt); L.r.x += L.spin.x*dt; L.r.y += L.spin.y*dt;
+    if (L.p.y < .5) L.s -= dt*2.5;                       // settles into the grass
+    if (L.s <= 0 || Math.abs(L.p.x) > 40) falling.splice(i, 1);
+  }
+  for (let i = 0; i < FALL; i++){ const L = falling[i];
+    if (!L){ fallMesh.setMatrixAt(i, hidden); continue; }
+    dummy.position.copy(L.p); dummy.rotation.copy(L.r); dummy.scale.setScalar(Math.max(0, L.s)); dummy.updateMatrix(); fallMesh.setMatrixAt(i, dummy.matrix);
+  }
+  fallMesh.instanceMatrix.needsUpdate = true;
+}
+
+/* ═══ A finger in the grass (later: him) ═══ */
+const ray = new THREE.Raycaster(), groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), hit = new THREE.Vector3();
+const touch = {on:false, s:0};
+function aim(e){ const r = phone.getBoundingClientRect();
+  ray.setFromCamera(new THREE.Vector2((e.clientX - r.left)/r.width*2 - 1, -((e.clientY - r.top)/r.height*2 - 1)), camera);
+  if (ray.ray.intersectPlane(groundPlane, hit)) grassMat.uniforms.uPush.value.copy(hit); }
+phone.addEventListener('pointerdown', e => { touch.on = true; aim(e); phone.setPointerCapture(e.pointerId); });
+phone.addEventListener('pointermove', e => { if (touch.on) aim(e); });
+['pointerup', 'pointercancel'].forEach(t => phone.addEventListener(t, () => touch.on = false));
+
+/* ═══ Controls ═══ */
+document.querySelectorAll('[data-wind]').forEach(b => b.addEventListener('click', () => {
+  W.target = PRESET[b.dataset.wind]; document.querySelectorAll('[data-wind]').forEach(q => q.setAttribute('aria-pressed', q===b)); }));
+document.getElementById('dir').addEventListener('click', e => { W.dirTarget *= -1; e.target.textContent = W.dirTarget > 0 ? 'Wind →' : 'Wind ←'; });
+
+/* ═══ Size and time ═══ */
+function resize(){ const w = phone.clientWidth, h = phone.clientHeight; renderer.setSize(w, h, false); camera.aspect = w/h; camera.updateProjectionMatrix(); }
+new ResizeObserver(resize).observe(phone); resize();
+const clock = new THREE.Clock();
+renderer.setAnimationLoop(() => {
+  const dt = Math.min(.05, clock.getDelta()); W.t += dt;
+  const k = 1 - Math.exp(-dt*1.2);
+  W.wind += (W.target.wind - W.wind)*k; W.gust += (W.target.gust - W.gust)*k;
+  W.dir.x += (W.dirTarget - W.dir.x)*(1 - Math.exp(-dt*1.5));       // a turning wind dies down, then picks up the other way
+  touch.s += ((touch.on ? 1 : 0) - touch.s)*(1 - Math.exp(-dt*(touch.on ? 10 : 3)));
+  for (const m of shared){ const u = m.uniforms; if (u.uT) u.uT.value = W.t; if (u.uWind) u.uWind.value = W.wind; if (u.uGust) u.uGust.value = W.gust; u.uCam.value.copy(camera.position); }
+  grassMat.uniforms.uPushS.value = touch.s;
+  leavesFrame(dt);
+  renderer.render(scene, camera);
+});
+document.getElementById('msg').remove();
+window.__world = {W, scene, camera, renderer, falling, grassMat};   // for checking
+</script>
+</body>
+</html>
