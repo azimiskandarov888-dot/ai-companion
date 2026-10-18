@@ -87,3 +87,9 @@ in the app, and the near grass is live, so it moves with the wind and with him.
 - Gemini: the SAME picture (frame-1) pulled back a few steps by image editing, so the place stays the same —
   `framing/frame-2.prompt.txt` → `framing/frame-2.jpg`
 - Midjourney: `cinematic film still, 35mm lens, standing eye level a few steps back from the edge of a field of tall pampas grass on a hillside, late afternoon warm side light, the grass fills the lower half of the frame, more of the slope and a hazy valley visible below, faint line of far hills, open calm sky in the upper half, no sun in frame, no tree, no house, no people, the field continues beyond the frame, restrained natural composition, muted colours, gentle film grain --ar 9:16 --style raw --s 100`
+
+## Framing test — frame-3: a wide shot with a key subject (owner: "nothing on the screen, no key thing — like the katana in Ghost of Tsushima; further back; cinematography ratios")
+
+- Gemini: a new composition with frame-2 as the reference for light, colour and film look —
+  `framing/frame-3.prompt.txt` → `framing/frame-3.jpg`
+- Midjourney: `cinematic wide shot, 35mm lens, standing eye level about thirty metres away, a single old wind-shaped tree with amber autumn leaves alone on the crest of a hillside of tall pampas grass, tree trunk on the right third line, crown near the upper right third intersection, branches leaning left in the wind, a few leaves drifting, the slope rising as a gentle diagonal from lower left to the tree, hazy valley and layered far hills behind, open calm sky in the upper left as negative space, late afternoon warm back light, rim light on the leaves and grass tips, no sun in frame, only the very bottom edge softly out of focus, no house, no path, no people, the hillside continues beyond the frame, restrained deliberate composition, muted natural colours, gentle film grain --ar 9:16 --style raw --s 100`
