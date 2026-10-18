@@ -159,3 +159,21 @@ Midjourney ignores distances in metres. It follows what fills the frame: a trunk
 detail, branches overhead.
 
 `Photorealistic cinematic film still, shot on ARRI Alexa, 24mm wide lens, everything sharp. Standing right next to an enormous old tree: its huge gnarled trunk fills the left half of the frame, rough bark in crisp detail, thick branches reaching over the camera, golden-brown autumn leaves overhead filling the top of the frame. A field of pure snow-white silver grass plumes on green stems around the base and stretching away to low green hills. Deep blue sky visible only in the upper right. --ar 9:16 --style raw --stylize 150 --no orange grass, yellow grass, blur, bokeh, distant tree, small tree, centered composition, house, people, text`
+
+## A real reference from Midjourney (found by the owner, 2026-10-18) — and our prompt built the same way
+
+`references/mj-miaol-red-tree.png` — by miaol: "Cold and vast loneliness, detached from the world. Shot on 12mm
+ultra-wide lens. Completely clear, open foreground with no obstructions. A small, sparse twisted red maple/plum tree
+stands far in the midground… A colossal smooth white wall cuts the frame diagonally in the far background. The ground
+is a misty sacred meadow covered in fallen crimson leaves and morning frost. A microscopically small immortal sage…
+glowing like a distant ember, stands as the only anchor… heavy autumn atmospheric perspective. Purely sacred realm."
+`--chaos 5 --ar 16:9 --style raw --stylize 250` + hd.
+
+Why it works, and what my earlier prompts got wrong: mood first (not metres and angles); emptiness said positively
+("completely clear, open foreground", "leaving the entire sky unobstructed") instead of "no X"; scale words (small,
+sparse, far, microscopically small, colossal) instead of numbers; one bold graphic shape (the diagonal wall); one tiny
+anchor for scale; heavy atmospheric perspective.
+
+Ours (the tiny ember is where his light will sit; the app replaces it with the living one):
+
+`Quiet, vast calm at the edge of the world, the hush just before someone speaks. Shot on 12mm ultra-wide lens, vertical frame. Completely clear, open foreground with no obstructions. A small, sparse twisted red maple tree stands far in the midground on the left, its fine branches extending naturally into the empty space, leaving the entire sky and the wide meadow unobstructed. A colossal smooth white cliff cuts the frame diagonally in the far background and rises into the clouds. The ground is a misty meadow of pale silver grass and fallen crimson leaves under morning frost. A tiny warm light, glowing like a distant ember just above the grass near the tree, stands as the only anchor. The far distance is swallowed by heavy autumn atmospheric perspective. A calm, sacred, timeless realm. --ar 9:16 --style raw --stylize 250 --chaos 5 --hd`
