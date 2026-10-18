@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Wind test</title>
+<!--
+  One wind for everything, on the owner's picture (ios/design/framing/mj-15-hd.jpg).
+
+  The picture is cut into layers by wind/make_layers.py: sky, tree, field. ONE wind
+  — a strength, a direction and gusts that travel downwind — moves each layer by
+  wind × how flexible it is: the trunk not at all, the branches a little and more
+  towards the top, the leaves on the crown trembling, the grass a lot, in waves.
+  Falling leaves start ON the crown, only when a gust reaches it; the stronger the
+  gust, the more of them and the faster. Touch the grass and it parts — that is
+  how he will move through it. Same maths later as SwiftUI Metal shaders.
+-->
+<style>
+:root{--bg:#ecebe8;--ink:#1d1c1a;--ink2:#6b6862;--chip:#fff;--line:rgba(0,0,0,.1)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#121212;--ink:#ecebe8;--ink2:#9a978f;--chip:#1f1f1f;--line:rgba(255,255,255,.12)}}
+:root[data-theme="dark"]{--bg:#121212;--ink:#ecebe8;--ink2:#9a978f;--chip:#1f1f1f;--line:rgba(255,255,255,.12)}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%}
+body{background:var(--bg);color:var(--ink);font:14px/1.4 -apple-system,BlinkMacSystemFont,system-ui,sans-serif;display:flex;flex-direction:column;align-items:center;padding:24px 16px}
+.phone{position:relative;width:393px;height:852px;border-radius:56px;overflow:hidden;background:#6a8fc0;box-shadow:0 0 0 12px #0b0b0c,0 30px 80px rgba(0,0,0,.3);touch-action:none}
+canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+.bar{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin-top:30px;max-width:520px}
+.bar button{border:.5px solid var(--line);background:var(--chip);color:var(--ink);border-radius:999px;padding:8px 13px;font:500 14px inherit;font-family:inherit;cursor:pointer}
+.bar button[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.hint{color:var(--ink2);font-size:13px;margin-top:10px;text-align:center}
+.err{position:absolute;inset:auto 20px 40%;color:#fff;text-align:center;font-weight:600}
+@media (max-width:760px){
+  body{padding:0;display:block}
+  .phone{position:fixed;inset:0;width:100vw;height:100dvh;border-radius:0;box-shadow:none}
+  .bar{position:fixed;left:0;right:0;bottom:0;margin:0;max-width:none;padding:10px 10px calc(10px + env(safe-area-inset-bottom));background:linear-gradient(transparent,rgba(0,0,0,.35));z-index:5}
+  .bar button{background:rgba(255,255,255,.22);color:#fff;border-color:rgba(255,255,255,.35);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
+  .bar button[aria-pressed="true"]{background:#fff;color:#111}
+  .hint{display:none}
+}
+</style>
+</head>
+<body>
+<div class="phone" id="phone"><canvas id="gl"></canvas><canvas id="leaves"></canvas></div>
+<div class="bar" id="bar">
+  <button data-wind="calm">Calm</button><button data-wind="breeze" aria-pressed="true">Breeze</button><button data-wind="gusty">Gusty</button><button data-wind="strong">Strong</button>
+  <button id="dir">Wind →</button><button id="layers">Show layers</button>
+</div>
+<p class="hint">Touch or drag on the grass: it parts around your finger, the way it will around him.</p>
+<script id="fs" type="x-shader/x-fragment">
+precision highp float;
+uniform sampler2D uImg, uSky, uMask;
+uniform vec2 uTex;          // the picture in pixels (1080 x 1935)
+uniform vec4 uMap;          // screen -> picture: x offset, y offset, width share, height share
+uniform float uT, uWind, uGust, uDir, uLayers, uFieldTop;
+uniform vec2 uFoot;         // where the trunk meets the ground (picture uv)
+uniform vec4 uTouch;        // finger: uv, strength, radius in px
+varying vec2 vS;
+
+float h1(float n){ return fract(sin(n * 12.9898) * 43758.5453); }
+float n1(float x){ float i = floor(x), f = fract(x); f = f*f*(3.-2.*f); return mix(h1(i), h1(i+1.), f); }
+float h2(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float n2(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.-2.*f);
+  return mix(mix(h2(i), h2(i+vec2(1.,0.)), f.x), mix(h2(i+vec2(0.,1.)), h2(i+vec2(1.,1.)), f.x), f.y); }
+
+// THE wind, at a place across the picture. Gusts travel downwind: the same gust
+// reaches the far side a moment later. (wind.html's JS has the identical function
+// for the falling leaves, so leaves and grass always agree.)
+float windAt(float x){
+  float along = uDir > 0. ? x : 1. - x;
+  float gust = smoothstep(.35, 1., n1(uT * .45 - along * 1.6));
+  return uWind * (.6 + .4 * n1(uT * .13 + 3.)) + uGust * gust;
+}
+
+void main(){
+  vec2 uv = uMap.xy + vS * uMap.zw;
+  vec2 px = 1. / uTex;
+
+  // ── the grass: the most flexible thing here. It leans downwind and waves
+  //    run through it; near grass moves more pixels because it is closer.
+  float near = smoothstep(uFieldTop, 1., uv.y);
+  float amp = mix(1.2, 15., near);
+  float w = windAt(uv.x);
+  float wave = sin(uv.x * 26. / (.35 + near) - uT * 3.3 + n2(uv * vec2(14., 30.)) * 3.);
+  float lean = w * .85 + w * .45 * wave + .2 * w * (n2(vec2(uv.x * 40. - uT * 2., uv.y * 60.)) - .5);
+  vec2 dF = vec2(uDir * lean * amp, -abs(lean) * amp * .18);
+  // a finger (later: him) pushes the grass aside
+  vec2 dv = (uv - uTouch.xy) * uTex;
+  float fall = exp(-dot(dv, dv) / (uTouch.w * uTouch.w)) * uTouch.z;
+  dF += normalize(dv + 1e-4) * fall * mix(8., 26., near);
+
+  // ── the tree: rooted. The trunk doesn't move; it bends more the higher up and
+  //    the further out a branch is; the leaves on it tremble.
+  float height = clamp((uFoot.y - uv.y) / uFoot.y, 0., 1.);
+  float out_ = clamp(abs(uv.x - uFoot.x) * uTex.x / 320., 0., 1.5);
+  float flex = pow(height, 1.8) * (.55 + .45 * out_);
+  float wt = windAt(uFoot.x + .18);
+  float swing = .72 + .28 * sin(uT * .9 + 1.3);
+  vec2 dT = vec2(uDir * wt * flex * 7. * swing, flex * wt * 1.2);
+  float tremble = n2(uv * 90. + uT * vec2(3.1, 2.3)) - .5;
+  dT += vec2(tremble, tremble * .6) * 2.4 * wt * smoothstep(.2, .6, height);
+
+  // ── put it together: sky behind, the moved tree over it, the moved field in front
+  vec3 sky = texture2D(uSky, uv).rgb;
+  vec2 uvT = uv - dT * px;
+  vec3 col = mix(sky, texture2D(uImg, uvT).rgb, texture2D(uMask, uvT).g);
+  vec2 uvF = uv - dF * px;
+  float fieldA = texture2D(uMask, uvF).b;
+  col = mix(col, texture2D(uImg, uvF).rgb, fieldA);
+
+  if (uLayers > .5){                       // show which pixel is which layer
+    vec3 tint = mix(vec3(.25, .45, 1.), vec3(1., .4, .1), texture2D(uMask, uvT).g);
+    tint = mix(tint, vec3(.2, .9, .3), fieldA);
+    col = mix(col, tint, .5);
+  }
+  gl_FragColor = vec4(col, 1.);
+}
+</script>
+<script id="vs" type="x-shader/x-vertex">
+attribute vec2 aP; varying vec2 vS;
+void main(){ vS = vec2(aP.x * .5 + .5, .5 - aP.y * .5); gl_Position = vec4(aP, 0., 1.); }
+</script>
+<script>
+const LAYOUT = {"W": 1080, "H": 1935, "top": [1213.0, 1217.0, 1233.0, 1234.0, 1234.0, 1235.0, 1236.0, 1236.0, 1237.0, 1237.0, 1236.0, 1234.0, 1234.0, 1232.0, 1231.0, 1231.0, 1230.0, 1229.0, 1229.0, 1230.0, 1231.0, 1231.0, 1233.0, 1236.0, 1251.0, 1251.0, 1251.0, 1251.0, 1248.0, 1161.0, 1148.7, 1148.7, 1148.7, 1148.7, 1152.5, 1157.5, 1162.6, 1167.7, 1172.7, 1177.8, 1182.8, 1187.9, 1192.9, 1198.0, 1203.0, 1208.1, 1213.2, 1218.2, 1242.0, 1246.0, 1253.0, 1256.0, 1256.0, 1256.0, 1256.0, 1256.0, 1256.0, 1253.0, 1253.0, 1253.0, 1252.0, 1252.0, 1251.0, 1250.0, 1232.0, 1229.0, 1226.0, 1224.0, 1224.0, 1224.0, 1226.0, 1226.0, 1229.0, 1229.0, 1229.0, 1230.0, 1232.0, 1232.0, 1232.0, 1233.0, 1236.0, 1242.0, 1243.0, 1244.0, 1249.0, 1249.0, 1251.0, 1252.0, 1253.0, 1254.0, 1254.0, 1254.0, 1255.0, 1257.0, 1259.0, 1259.0, 1260.0, 1260.0, 1260.0, 1260.0, 1260.0, 1260.0, 1260.0, 1261.0, 1266.0, 1267.0, 1267.0, 1267.0, 1267.0, 1267.0, 1267.0, 1279.0, 1280.0, 1290.0, 1293.0, 1293.0, 1293.0, 1293.0, 1293.0, 1290.0, 1287.0, 1286.0, 1286.0, 1286.0, 1286.0, 1286.0, 1287.0, 1288.0, 1290.0, 1293.0, 1298.0, 1300.0, 1305.0, 1305.0, 1305.0, 1305.0, 1305.0, 1306.0, 1305.0, 1305.0, 1305.0, 1305.0, 1306.0, 1307.0, 1307.0, 1310.0, 1311.0, 1312.0, 1312.0, 1313.0, 1316.0, 1316.0, 1317.0, 1317.0, 1319.0, 1319.0, 1321.0, 1321.0, 1320.0, 1319.0, 1318.0, 1318.0, 1316.0, 1315.0, 1313.0, 1313.0, 1313.0, 1312.0, 1312.0, 1312.0, 1313.0, 1313.0, 1314.0, 1314.0, 1315.0, 1315.0, 1315.0, 1315.0, 1315.0, 1316.0, 1316.0, 1319.0, 1321.0, 1322.0, 1324.0, 1326.0, 1327.0, 1328.0, 1328.0, 1329.0, 1330.0, 1330.0, 1330.0, 1330.0, 1330.0, 1328.0, 1329.0, 1328.0, 1328.0, 1328.0, 1327.0, 1322.0, 1318.0, 1317.0, 1316.0, 1316.0, 1316.0, 1316.0, 1316.0, 1318.0, 1318.0, 1319.0, 1322.0, 1323.0, 1323.0, 1324.0, 1325.0, 1325.0, 1323.0, 1323.0, 1322.0, 1322.0, 1324.0, 1323.0, 1323.0, 1324.0, 1324.0, 1325.0, 1325.0, 1324.0, 1323.0, 1324.0, 1324.0, 1324.0, 1324.0, 1324.0, 1324.0, 1325.0, 1324.0, 1324.0, 1324.0, 1324.0, 1315.0, 1315.0, 1315.0, 1315.0, 1314.0, 1314.0, 1314.0, 1315.0, 1316.0, 1317.0, 1317.0, 1319.0, 1321.0, 1322.0, 1323.0, 1324.0, 1325.0, 1325.0, 1325.0, 1325.0, 1325.0, 1324.0, 1324.0, 1323.0, 1322.0, 1318.0, 1316.0, 1316.0], "trunk": [140, 1157.5], "crownTop": 0};
+</script>
+<script>
+/* ═══ One wind. The same function as windAt() in the shader, so the falling
+   leaves, the grass and the tree always agree about where the gust is. ═══ */
+const fract = x => x - Math.floor(x);
+const h1 = n => fract(Math.sin(n * 12.9898) * 43758.5453);
+const n1 = x => { const i = Math.floor(x); let f = x - i; f = f*f*(3 - 2*f); return h1(i) + (h1(i + 1) - h1(i)) * f; };
+const smooth = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a)/(b - a))); return t*t*(3 - 2*t); };
+const PRESET = {calm:{wind:.12, gust:.10}, breeze:{wind:.30, gust:.25}, gusty:{wind:.32, gust:.70}, strong:{wind:.72, gust:.55}};
+const W = {wind:.30, gust:.25, dir:1, t:0, target:PRESET.breeze, layers:0};
+function windAt(x){ const along = W.dir > 0 ? x : 1 - x;
+  return W.wind*(.6 + .4*n1(W.t*.13 + 3)) + W.gust*smooth(.35, 1, n1(W.t*.45 - along*1.6)); }
+
+/* ═══ Drawing the picture with WebGL ═══ */
+const phone = document.getElementById('phone'), glc = document.getElementById('gl'), lc = document.getElementById('leaves');
+const gl = glc.getContext('webgl', {antialias:false, premultipliedAlpha:false});
+const lx = lc.getContext('2d');
+const TW = LAYOUT.W, TH = LAYOUT.H;
+function shader(type, id){ const s = gl.createShader(type); gl.shaderSource(s, document.getElementById(id).textContent); gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s)); return s; }
+const prog = gl.createProgram();
+gl.attachShader(prog, shader(gl.VERTEX_SHADER, 'vs')); gl.attachShader(prog, shader(gl.FRAGMENT_SHADER, 'fs')); gl.linkProgram(prog); gl.useProgram(prog);
+const buf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 3,-1, -1,3]), gl.STATIC_DRAW);
+const aP = gl.getAttribLocation(prog, 'aP'); gl.enableVertexAttribArray(aP); gl.vertexAttribPointer(aP, 2, gl.FLOAT, false, 0, 0);
+const U = {}; ['uImg','uSky','uMask','uTex','uMap','uT','uWind','uGust','uDir','uLayers','uFieldTop','uFoot','uTouch'].forEach(n => U[n] = gl.getUniformLocation(prog, n));
+function texture(unit, img){ const t = gl.createTexture(); gl.activeTexture(gl.TEXTURE0 + unit); gl.bindTexture(gl.TEXTURE_2D, t);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img); return t; }
+const load = src => new Promise((ok, no) => { const i = new Image(); i.onload = () => ok(i); i.onerror = no; i.src = src; });
+
+/* screen ↔ picture: cover the screen, keep the tree (crop more from the right) */
+let map = [0, 0, 1, 1], cw = 1, ch = 1, dpr = 1;
+function resize(){
+  const r = phone.getBoundingClientRect(); dpr = Math.min(2, devicePixelRatio || 1);
+  cw = r.width; ch = r.height;
+  for (const c of [glc, lc]){ c.width = Math.round(cw*dpr); c.height = Math.round(ch*dpr); }
+  gl.viewport(0, 0, glc.width, glc.height);
+  const ca = cw/ch, ta = TW/TH;
+  map = ca < ta ? [(1 - ca/ta)*.2, 0, ca/ta, 1] : [0, (1 - ta/ca)*.5, 1, ta/ca];
+}
+const toScreen = (x, y) => [((x/TW) - map[0])/map[2]*cw, ((y/TH) - map[1])/map[3]*ch];
+const toPicture = (sx, sy) => [map[0] + sx/cw*map[2], map[1] + sy/ch*map[3]];
+const topAt = x => { const i = Math.max(0, Math.min(LAYOUT.top.length - 1, Math.round(x/4))); return LAYOUT.top[i]; };
+</script>
+<script>
+/* ═══ Falling leaves: born ON the crown, only when a gust reaches it ═══ */
+let crown = [];                                          // [x, y, r, g, b] in picture pixels
+const leaves = [];
+function findCrown(base, mask){
+  const q = 4, w = Math.round(TW/q), h = Math.round(TH/q), c = document.createElement('canvas'); c.width = w; c.height = h;
+  const x = c.getContext('2d', {willReadFrequently:true});
+  x.drawImage(base, 0, 0, w, h); const B = x.getImageData(0, 0, w, h).data;
+  x.drawImage(mask, 0, 0, w, h); const M = x.getImageData(0, 0, w, h).data;
+  const footY = LAYOUT.trunk[1]*.8;
+  for (let i = 0; i < w*h; i++){ const r = B[i*4], g = B[i*4+1], b = B[i*4+2], yy = Math.floor(i/w)*q;
+    if (M[i*4+1] > 200 && r > 120 && r > g*1.12 && r > b*1.5 && yy < footY) crown.push([(i % w)*q, yy, r, g, b]); }
+}
+function spawnLeaves(dt){
+  if (!crown.length) return;
+  const w = windAt(LAYOUT.trunk[0]/TW + .18);
+  const rate = 26*Math.pow(Math.max(0, w - .3), 1.6);   // calm: none; a gust: a few; a gale: a steady stream, never a cloud
+  let n = rate*dt; while (n > 0 && leaves.length < 45){ if (Math.random() < n){
+    const p = crown[Math.floor(Math.random()*crown.length)];
+    leaves.push({x:p[0], y:p[1], vx:W.dir*20, vy:0, rot:Math.random()*6.3, vr:(Math.random() < .5 ? -1 : 1)*(3 + Math.random()*5),
+      size:9 + Math.random()*6, col:`rgb(${p[2]},${p[3]},${p[4]})`, ph:Math.random()*9, land:topAt(p[0]) + 20 + Math.random()*260, a:1}); } n -= 1; }
+}
+function moveLeaves(dt){
+  for (let i = leaves.length - 1; i >= 0; i--){ const L = leaves[i];
+    const w = windAt(Math.min(1, Math.max(0, L.x/TW)));
+    L.vx += (W.dir*(60 + 300*w) - L.vx)*1.2*dt;          // carried by the same wind
+    L.vy = Math.min(140, L.vy + 70*dt + Math.sin(W.t*4 + L.ph)*40*dt);
+    L.x += L.vx*dt; L.y += L.vy*dt; L.rot += L.vr*dt;
+    if (L.y > L.land) L.a -= dt*2.2;                     // settles into the grass
+    if (L.a <= 0 || L.x < -40 || L.x > TW + 40) leaves.splice(i, 1);
+  }
+}
+function drawLeaves(){
+  lx.setTransform(dpr, 0, 0, dpr, 0, 0); lx.clearRect(0, 0, cw, ch);
+  const k = cw/(TW*map[2]);
+  for (const L of leaves){ const [sx, sy] = toScreen(L.x, L.y);
+    lx.save(); lx.globalAlpha = Math.max(0, L.a)*.95; lx.translate(sx, sy); lx.rotate(L.rot);
+    lx.scale(1, .35 + .65*Math.abs(Math.cos(L.rot*1.3 + L.ph)));   // turning over as it falls
+    lx.fillStyle = L.col; lx.beginPath(); lx.ellipse(0, 0, L.size*k*.55, L.size*k*.3, 0, 0, 6.283); lx.fill(); lx.restore(); }
+}
+
+/* ═══ A finger in the grass ═══ */
+const touch = {x:0, y:0, on:false, s:0};
+function at(e){ const r = phone.getBoundingClientRect(); [touch.x, touch.y] = toPicture(e.clientX - r.left, e.clientY - r.top); }
+phone.addEventListener('pointerdown', e => { touch.on = true; at(e); phone.setPointerCapture(e.pointerId); });
+phone.addEventListener('pointermove', e => { if (touch.on) at(e); });
+['pointerup', 'pointercancel'].forEach(t => phone.addEventListener(t, () => touch.on = false));
+
+/* ═══ Controls ═══ */
+document.querySelectorAll('[data-wind]').forEach(b => b.addEventListener('click', () => {
+  W.target = PRESET[b.dataset.wind]; document.querySelectorAll('[data-wind]').forEach(q => q.setAttribute('aria-pressed', q===b)); }));
+document.getElementById('dir').addEventListener('click', e => { W.dir *= -1; e.target.textContent = W.dir > 0 ? 'Wind →' : 'Wind ←'; });
+document.getElementById('layers').addEventListener('click', e => { W.layers = 1 - W.layers; e.target.setAttribute('aria-pressed', !!W.layers); });
+
+/* ═══ Start ═══ */
+let prev = performance.now();
+function frame(now){
+  const dt = Math.min(.05, (now - prev)/1000); prev = now; W.t += dt;
+  const k = 1 - Math.exp(-dt*1.4); W.wind += (W.target.wind - W.wind)*k; W.gust += (W.target.gust - W.gust)*k;
+  touch.s += ((touch.on ? 1 : 0) - touch.s)*(1 - Math.exp(-dt*(touch.on ? 10 : 3)));
+  gl.uniform4f(U.uMap, ...map); gl.uniform1f(U.uT, W.t); gl.uniform1f(U.uWind, W.wind); gl.uniform1f(U.uGust, W.gust);
+  gl.uniform1f(U.uDir, W.dir); gl.uniform1f(U.uLayers, W.layers); gl.uniform4f(U.uTouch, touch.x, touch.y, touch.s, 90);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+  spawnLeaves(dt); moveLeaves(dt); drawLeaves();
+  requestAnimationFrame(frame);
+}
+Promise.all([load('wind/base.jpg'), load('wind/sky.jpg'), load('wind/mask.png')]).then(([base, sky, mask]) => {
+  texture(0, base); texture(1, sky); texture(2, mask);
+  gl.uniform1i(U.uImg, 0); gl.uniform1i(U.uSky, 1); gl.uniform1i(U.uMask, 2);
+  gl.uniform2f(U.uTex, TW, TH); gl.uniform1f(U.uFieldTop, Math.min(...LAYOUT.top)/TH);
+  gl.uniform2f(U.uFoot, LAYOUT.trunk[0]/TW, LAYOUT.trunk[1]/TH);
+  findCrown(base, mask); resize(); new ResizeObserver(resize).observe(phone); requestAnimationFrame(frame);
+}).catch(err => { phone.insertAdjacentHTML('beforeend', `<p class="err">Couldn't load the picture: ${err}</p>`); });
+</script>
+</body>
+</html>
