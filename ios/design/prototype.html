@@ -1,0 +1,847 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Bob prototype</title>
+<!--
+  Bob — the new look, as a clickable prototype.
+
+  Everything on screen is driven by four things, exactly as the app will be:
+    · his own colour (a hue picked from his character),
+    · how well you know him (blank → layer 3: the colour fills in),
+    · his mood (valence −1..+2, arousal −2..+2, from backend/app/feeling.py),
+    · the phone's light/dark setting.
+  The "style lab" on the right changes them. Nothing here is final — it is
+  for looking at and saying what to change. Exact Apple fonts show in Safari.
+-->
+<style>
+:root{
+  --f-sf:-apple-system,BlinkMacSystemFont,"SF Pro Text","SF Pro",system-ui,sans-serif;
+  --f-round:ui-rounded,"SF Pro Rounded",-apple-system,BlinkMacSystemFont,system-ui,sans-serif;
+  --f-serif:ui-serif,"New York","Iowan Old Style",Georgia,serif;
+  --page:#ecebe8;--page-ink:#1d1c1a;--page-ink2:#6b6862;--page-line:rgba(0,0,0,.09);--page-card:#f7f6f3;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){--page:#121212;--page-ink:#ecebe8;--page-ink2:#9a978f;--page-line:rgba(255,255,255,.09);--page-card:#1b1b1a}
+}
+:root[data-theme="dark"]{--page:#121212;--page-ink:#ecebe8;--page-ink2:#9a978f;--page-line:rgba(255,255,255,.09);--page-card:#1b1b1a}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%}
+body{background:var(--page);color:var(--page-ink);font:14px/1.45 var(--f-sf);display:flex;justify-content:center;align-items:flex-start;gap:36px;padding:28px 24px;min-height:100%}
+button{font:inherit;color:inherit;cursor:pointer}
+
+/* ── the phone ─────────────────────────────────────────── */
+.stage{position:sticky;top:28px;flex:none}
+.device{width:417px;height:876px;border-radius:68px;padding:12px;background:#0b0b0c;box-shadow:0 0 0 1.5px #3a3a3c inset,0 30px 80px rgba(0,0,0,.28)}
+.phone{
+  --bg0:#0c0b0a;--g1:rgba(255,170,110,.18);--g2:rgba(255,140,90,.10);--g3:rgba(255,200,150,.06);
+  --ink:#f4efe8;--ink2:rgba(244,239,232,.68);--ink3:rgba(244,239,232,.42);
+  --glass:rgba(255,255,255,.08);--glass-edge:rgba(255,255,255,.16);--glass-hi:rgba(255,255,255,.22);
+  --accent:#ffb27a;--on-accent:#2a1608;--danger:#e0796a;--drift:26s;
+  --f-app:var(--f-sf);--f-his:var(--f-serif);--f-title:var(--f-sf);
+  position:relative;width:393px;height:852px;border-radius:56px;overflow:hidden;background:var(--bg0);color:var(--ink);font-family:var(--f-app);
+  transition:background-color 1.2s ease,color .6s ease;isolation:isolate;user-select:none
+}
+.island{position:absolute;top:11px;left:50%;width:124px;height:36px;margin-left:-62px;border-radius:20px;background:#000;z-index:60;pointer-events:none}
+.statusbar{position:absolute;top:0;left:0;right:0;height:54px;display:flex;justify-content:space-between;align-items:center;padding:4px 32px 0 46px;font:600 17px var(--f-sf);color:var(--ink);z-index:55;pointer-events:none;transition:opacity .4s}
+.statusbar .sys{display:flex;gap:6px;align-items:center}
+.statusbar .sys i{display:block;width:17px;height:11px;border-radius:2px;background:currentColor;opacity:.9}
+.statusbar .sys i:nth-child(1){width:17px;clip-path:polygon(0 100%,25% 100%,25% 70%,50% 70%,50% 40%,75% 40%,75% 0,100% 0,100% 100%)}
+.statusbar .sys i:nth-child(2){width:15px;border-radius:50% 50% 0 0/100% 100% 0 0;clip-path:polygon(50% 100%,0 20%,100% 20%)}
+.statusbar .sys i:nth-child(3){width:25px;height:12px;border-radius:3.5px;background:none;border:1.2px solid currentColor;position:relative}
+.statusbar .sys i:nth-child(3)::after{content:"";position:absolute;inset:1.5px 5px 1.5px 1.5px;border-radius:1.5px;background:currentColor}
+.homebar{position:absolute;bottom:8px;left:50%;width:139px;height:5px;margin-left:-69.5px;border-radius:3px;background:var(--ink);opacity:.55;z-index:55;pointer-events:none}
+.phone.immersive .statusbar{opacity:0}
+
+/* ── the lab ───────────────────────────────────────────── */
+.lab{width:330px;flex:none;display:flex;flex-direction:column;gap:14px;padding-bottom:40px}
+.lab h1{font:600 20px var(--f-sf);margin:4px 0 0;letter-spacing:-.01em}
+.lab .intro{color:var(--page-ink2);margin:0}
+.lab section{background:var(--page-card);border:.5px solid var(--page-line);border-radius:16px;padding:14px 14px 12px}
+.lab h2{font:600 12px var(--f-sf);text-transform:uppercase;letter-spacing:.06em;color:var(--page-ink2);margin:0 0 10px}
+.lab .hint{font-size:12px;color:var(--page-ink2);margin:8px 0 0}
+.seg{display:flex;flex-wrap:wrap;gap:6px}
+.seg button{border:.5px solid var(--page-line);background:transparent;border-radius:999px;padding:6px 11px;font-size:13px;line-height:1.2}
+.seg button[aria-pressed="true"]{background:var(--page-ink);color:var(--page);border-color:var(--page-ink)}
+.lab .row{display:grid;grid-template-columns:92px 1fr;gap:8px;align-items:center;margin:8px 0}
+.lab .row label{font-size:13px;color:var(--page-ink2)}
+.lab input[type=range]{width:100%;accent-color:var(--page-ink)}
+.swatches{display:grid;grid-template-columns:repeat(6,1fr);gap:8px}
+.swatches button{aspect-ratio:1;border-radius:50%;border:2px solid transparent;padding:0;box-shadow:inset 0 0 0 .5px rgba(0,0,0,.15)}
+.swatches button[aria-pressed="true"]{border-color:var(--page-ink)}
+.labname{font-size:12px;color:var(--page-ink2);margin-top:8px;min-height:17px}
+.labtoggle{display:none}
+</style>
+<style>
+/* ── the world behind everything: his light, nothing else ── */
+.world{position:absolute;inset:0;z-index:0;overflow:hidden;pointer-events:none}
+.world i{position:absolute;border-radius:50%;filter:blur(46px);will-change:transform;transition:background 1.4s ease,opacity 1.4s ease}
+.world i:nth-child(1){width:150%;height:62%;left:-25%;top:12%;background:radial-gradient(closest-side,var(--g1),transparent);animation:drift1 var(--drift) ease-in-out infinite}
+.world i:nth-child(2){width:120%;height:55%;left:-40%;top:-12%;background:radial-gradient(closest-side,var(--g2),transparent);animation:drift2 calc(var(--drift)*1.3) ease-in-out infinite}
+.world i:nth-child(3){width:120%;height:60%;right:-45%;bottom:-14%;background:radial-gradient(closest-side,var(--g3),transparent);animation:drift3 calc(var(--drift)*1.6) ease-in-out infinite}
+.world .grain{position:absolute;inset:0;opacity:.05;mix-blend-mode:overlay;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
+@keyframes drift1{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(4%,-3%) scale(1.06)}}
+@keyframes drift2{0%,100%{transform:translate(0,0)}50%{transform:translate(9%,6%)}}
+@keyframes drift3{0%,100%{transform:translate(0,0)}50%{transform:translate(-8%,-5%)}}
+
+/* ── screens ─────────────────────────────────────────── */
+.screen{position:absolute;inset:0;z-index:2;display:none;flex-direction:column;padding:0 24px}
+.screen.on{display:flex}
+.veil{position:absolute;inset:0;z-index:50;background:var(--bg0);opacity:0;pointer-events:none;transition:opacity .34s ease-in}
+.veil.down{opacity:1;pointer-events:auto}
+.hero{font:500 33px/1.24 var(--f-title);letter-spacing:-.01em;margin:0}
+.title{font:600 27px/1.2 var(--f-title);letter-spacing:-.01em;margin:0}
+.lede{font:400 19px/1.5 var(--f-app);color:var(--ink2);margin:10px 0 0}
+.body{font:400 17px/1.5 var(--f-app)}
+.secondary{font:400 15px/1.4 var(--f-app);color:var(--ink2)}
+.caption{font:400 13px/1.35 var(--f-app);color:var(--ink2)}
+.micro{font:400 11px/1.4 var(--f-app);color:var(--ink3)}
+.his{font-family:var(--f-his)}
+.top{padding-top:110px}
+.spacer{flex:1}
+.bottom{padding-bottom:42px;display:flex;flex-direction:column;gap:12px}
+.arrive{animation:arrive .9s cubic-bezier(.2,.7,.2,1) both}
+.arrive.d2{animation-delay:.45s}.arrive.d3{animation-delay:.8s}.arrive.d4{animation-delay:1.1s}
+@keyframes arrive{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+
+/* ── glass: one material for every card, row and quiet button ── */
+.glass{position:relative;background:var(--glass);border:.5px solid var(--glass-edge);-webkit-backdrop-filter:blur(26px) saturate(1.7);backdrop-filter:blur(26px) saturate(1.7);box-shadow:inset 0 1px 0 var(--glass-hi),0 8px 30px rgba(0,0,0,.08)}
+.glass::before{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;background:linear-gradient(180deg,var(--glass-hi),transparent 38%);opacity:.55}
+
+/* ── buttons: his colour marks ONE action per screen ── */
+.btn{position:relative;display:flex;align-items:center;justify-content:center;gap:10px;min-height:56px;width:100%;border-radius:28px;border:0;padding:0 22px;font:600 17px var(--f-title);transition:transform .18s ease,filter .2s}
+.btn:active{transform:scale(.97)}
+.btn.main{background:var(--accent);color:var(--on-accent);box-shadow:0 10px 30px -10px var(--accent)}
+.btn.quiet{color:var(--ink)}
+.btn.quiet.glass{background:var(--glass)}
+.btn svg{width:19px;height:19px;flex:none}
+.link{background:none;border:0;padding:10px;color:var(--ink2);font:400 15px var(--f-app);align-self:center}
+
+/* plan cards */
+.plan{display:flex;align-items:center;gap:14px;width:100%;text-align:left;border-radius:22px;padding:16px 18px;color:var(--ink);transition:box-shadow .25s,transform .18s}
+.plan:active{transform:scale(.985)}
+.plan .tick{width:24px;height:24px;border-radius:50%;flex:none;border:1.5px solid var(--ink3);display:grid;place-items:center;transition:all .25s}
+.plan[aria-pressed="true"]{box-shadow:inset 0 0 0 1.5px var(--accent),inset 0 1px 0 var(--glass-hi)}
+.plan[aria-pressed="true"] .tick{background:var(--accent);border-color:var(--accent)}
+.plan[aria-pressed="true"] .tick::after{content:"";width:9px;height:5px;border:2px solid var(--on-accent);border-top:0;border-right:0;transform:rotate(-45deg) translate(1px,-1px)}
+.plan .t{font:600 17px var(--f-title)}
+.plan .d{font:400 14px var(--f-app);color:var(--ink2);margin-top:2px}
+.plan .p{margin-left:auto;font:600 17px var(--f-app)}
+
+/* form fields */
+.field{border-radius:20px;padding:4px 0}
+.field .f{display:flex;align-items:center;min-height:56px;padding:0 18px;gap:12px}
+.field .f+.f{border-top:.5px solid var(--glass-edge)}
+.field label{font:400 15px var(--f-app);color:var(--ink2);width:92px;flex:none}
+.field input,.field select{flex:1;min-width:0;background:none;border:0;outline:0;color:var(--ink);font:400 17px var(--f-app);text-align:right;padding:0;-webkit-appearance:none;appearance:none}
+.field input::placeholder{color:var(--ink3)}
+.field select option{color:#000}
+.pills{display:flex;gap:6px;flex:1;justify-content:flex-end;flex-wrap:wrap}
+.pills button{border:0;border-radius:999px;padding:7px 12px;background:transparent;color:var(--ink2);font:500 15px var(--f-app);box-shadow:inset 0 0 0 .5px var(--glass-edge);transition:all .2s}
+.pills button[aria-pressed="true"]{background:var(--accent);color:var(--on-accent);box-shadow:none}
+.pills button:disabled{opacity:.3;cursor:default}
+.choose{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.choose.three{grid-template-columns:1fr 1fr 1fr}
+.choose button{min-height:52px;border-radius:18px;font:500 16px var(--f-app);color:var(--ink);border:0;transition:box-shadow .2s,transform .15s}
+.choose button:active{transform:scale(.97)}
+.choose button[aria-pressed="true"]{box-shadow:inset 0 0 0 1.5px var(--accent),inset 0 1px 0 var(--glass-hi)}
+.choose button:disabled{opacity:.28;cursor:default}
+.groupname{font:500 13px var(--f-app);color:var(--ink2);margin:22px 4px 8px;letter-spacing:.01em}
+
+/* lists (account, settings) */
+.list{border-radius:20px;overflow:hidden}
+.list button{display:flex;align-items:center;width:100%;min-height:56px;padding:0 18px;border:0;background:none;color:var(--ink);font:400 17px var(--f-app);text-align:left;gap:10px}
+.list button+button{border-top:.5px solid var(--glass-edge)}
+.list .v{margin-left:auto;color:var(--ink2);font-size:15px}
+.list .warn{color:var(--danger)}
+.grab{width:38px;height:5px;border-radius:3px;background:var(--ink3);margin:10px auto 0}
+.close{display:block;margin:4px auto 0;background:none;border:0;color:var(--ink3);font:400 12px var(--f-app);padding:4px 10px}
+/* ── the companion screen ─────────────────────────────── */
+#orb{position:absolute;left:0;top:0;width:393px;height:852px;z-index:1;pointer-events:none}
+.tapzone{position:absolute;inset:0;z-index:3}
+.status{position:absolute;left:0;right:0;top:56.9%;text-align:center;font:400 13px var(--f-app);letter-spacing:.07em;color:var(--ink3);z-index:4;pointer-events:none;transition:opacity .45s,color .45s}
+.said{position:absolute;left:28px;right:28px;top:63%;text-align:center;font:400 18px/1.5 var(--f-his);color:var(--ink);z-index:4;pointer-events:none;transition:opacity .5s}
+.said.plain{font-family:var(--f-app);font-size:16px;color:var(--ink2)}
+.card{position:absolute;left:20px;right:20px;border-radius:28px;padding:22px;z-index:6;text-align:center;transition:opacity .4s,transform .4s}
+.card p{margin:0 0 16px}
+.card .btn+.btn{margin-top:10px}
+.hidden{opacity:0;pointer-events:none;transform:translateY(8px)}
+
+/* the one way out: a small glass pill that opens into three */
+.menu{position:absolute;left:0;right:0;bottom:34px;z-index:7;display:flex;flex-direction:column;align-items:center;gap:10px;transition:opacity .35s}
+.phone.sheeted .menu{opacity:0;pointer-events:none}
+.phone.sheeted #said,.phone.sheeted #status,.phone.sheeted #howto{opacity:0 !important}
+.menu .items{display:flex;flex-direction:column;gap:8px;align-items:center;transition:opacity .3s,transform .35s cubic-bezier(.2,.8,.2,1)}
+.menu.closed .items{opacity:0;transform:translateY(14px) scale(.96);pointer-events:none}
+.menu .items button{min-width:168px;height:48px;border-radius:24px;border:0;color:var(--ink);font:500 16px var(--f-app)}
+.menu .pill{width:64px;height:36px;border-radius:18px;border:0;display:flex;align-items:center;justify-content:center;gap:5px}
+.menu .pill i{width:5px;height:5px;border-radius:50%;background:var(--ink2);transition:transform .3s}
+.menu:not(.closed) .pill i:nth-child(1){transform:translateX(10px)}
+.menu:not(.closed) .pill i:nth-child(3){transform:translateX(-10px)}
+
+/* ── sheets (diary, you, settings, about…) ───────────────── */
+.sheet{position:absolute;inset:0;z-index:20;display:flex;flex-direction:column;transform:translateY(100%);transition:transform .55s cubic-bezier(.2,.85,.25,1);pointer-events:none}
+.sheet.up{transform:none;pointer-events:auto}
+.sheet .back{position:absolute;inset:0;background:var(--bg0);opacity:.55;-webkit-backdrop-filter:blur(30px);backdrop-filter:blur(30px)}
+.sheet .inner{position:relative;flex:1;display:flex;flex-direction:column;padding:50px 20px 34px;overflow-y:auto;scrollbar-width:none}
+.sheet .inner::-webkit-scrollbar{display:none}
+.sheet .title{margin:14px 4px 6px}
+.halfsheet{position:absolute;left:8px;right:8px;bottom:8px;z-index:30;border-radius:38px;padding:8px 22px 30px;transform:translateY(110%);transition:transform .5s cubic-bezier(.2,.85,.25,1)}
+.halfsheet.up{transform:none}
+.halfsheet h3{font:600 22px/1.25 var(--f-title);margin:18px 0 12px}
+.halfsheet .text{font:400 16px/1.55 var(--f-app);color:var(--ink2);white-space:pre-line;margin:0 0 22px}
+.dim{position:absolute;inset:0;z-index:25;background:rgba(0,0,0,.28);opacity:0;pointer-events:none;transition:opacity .4s}
+.dim.on{opacity:1;pointer-events:auto}
+
+/* his diary: pages, not a book prop */
+.pages{display:flex;gap:14px;overflow-x:auto;scroll-snap-type:x mandatory;margin:18px -20px 0;padding:0 20px 6px;scrollbar-width:none}
+.pages::-webkit-scrollbar{display:none}
+.page{flex:0 0 100%;scroll-snap-align:center;border-radius:28px;padding:26px 24px 22px;min-height:470px;display:flex;flex-direction:column}
+.page .date{font:400 13px var(--f-app);color:var(--ink3);letter-spacing:.04em}
+.page .words{font:400 18px/1.62 var(--f-his);margin-top:14px;white-space:pre-line}
+.page .num{margin-top:auto;padding-top:16px;text-align:center;font:400 12px var(--f-his);color:var(--ink3)}
+.dots{display:flex;gap:7px;justify-content:center;margin-top:14px}
+.dots i{width:6px;height:6px;border-radius:50%;background:var(--ink3);transition:all .3s}
+.dots i.on{background:var(--ink);width:18px;border-radius:3px}
+
+/* the profile mark */
+.mono{width:64px;height:64px;border-radius:50%;display:grid;place-items:center;font:600 26px var(--f-title);color:var(--on-accent);background:var(--accent)}
+
+/* ── the setup robot: deliberately NOT him ─────────────── */
+.robot{position:absolute;inset:0;z-index:15;background:#101011;color:#e9e9ea;display:none;flex-direction:column;align-items:center;padding:0 28px 40px;text-align:center}
+.robot.on{display:flex}
+.robot .ring{margin-top:250px;width:64px;height:64px;border-radius:50%;border:2px solid #6e6e73;transition:all .35s ease;cursor:pointer;box-shadow:0 0 0 43px transparent}
+.robot .ring.ask{width:78px;height:78px}
+.robot .ring.lit{border-color:#e9e9ea;border-width:3px}
+.robot .line{margin-top:44px;font:400 17px/1.5 var(--f-sf);white-space:pre-line;min-height:110px;animation:arrive .5s ease both}
+.robot .skip{margin-top:auto;background:none;border:0;color:#8e8e93;font:400 15px var(--f-sf);padding:12px}
+.robot .next{margin-top:auto;width:100%;min-height:56px;border-radius:28px;border:0;background:#2c2c2e;color:#f2f2f7;font:600 17px var(--f-sf)}
+
+/* ── narrow screens: the app IS the screen; the lab hides ── */
+@media (max-width:760px){
+  body{padding:0;display:block}
+  .stage{position:fixed;inset:0;top:0}
+  .device{width:100vw;height:100dvh;border-radius:0;padding:0;box-shadow:none;background:none}
+  .phone{width:100vw;height:100dvh;border-radius:0}
+  .island,.statusbar,.homebar{display:none}
+  #orb{width:100vw;height:100dvh}
+  .lab{position:fixed;inset:auto 0 0 0;width:auto;max-height:72dvh;overflow-y:auto;z-index:100;background:var(--page);border-radius:22px 22px 0 0;padding:16px 16px 30px;transform:translateY(105%);transition:transform .4s cubic-bezier(.2,.85,.25,1);box-shadow:0 -10px 40px rgba(0,0,0,.25)}
+  .lab.open{transform:none}
+  .labtoggle{display:block;position:fixed;top:max(10px,env(safe-area-inset-top));right:12px;z-index:101;border:0;border-radius:16px;padding:7px 12px;font:600 12px var(--f-sf);background:rgba(127,127,127,.28);color:#fff;-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px)}
+}
+@media (prefers-reduced-motion:reduce){.world i{animation:none}.arrive{animation:none}}
+</style>
+</head>
+<body>
+<button class="labtoggle" id="labtoggle">Lab</button>
+
+<div class="stage">
+<div class="device">
+<div class="phone" id="phone">
+  <div class="world" aria-hidden="true"><i></i><i></i><i></i><div class="grain"></div></div>
+  <canvas id="orb" aria-hidden="true"></canvas>
+  <div class="island"></div>
+  <div class="statusbar"><span id="clock">9:41</span><span class="sys"><i></i><i></i><i></i></span></div>
+
+  <!-- 1 · Sign in -->
+  <section class="screen" id="s-signin">
+    <div class="top">
+      <p class="hero arrive">Где-то есть друг,</p>
+      <p class="hero arrive d2">которого ты ещё не встретил.</p>
+    </div>
+    <div class="spacer"></div>
+    <div class="bottom arrive d3">
+      <button class="btn main" data-go="takecare"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M16.37 12.6c-.02-2.3 1.88-3.4 1.96-3.46-1.07-1.56-2.73-1.78-3.32-1.8-1.41-.14-2.76.83-3.48.83-.72 0-1.83-.81-3-.79-1.55.02-2.97.9-3.77 2.28-1.6 2.78-.41 6.9 1.15 9.16.76 1.1 1.67 2.34 2.86 2.3 1.15-.05 1.58-.74 2.97-.74 1.38 0 1.77.74 2.98.72 1.23-.02 2.01-1.12 2.76-2.23.87-1.28 1.23-2.52 1.25-2.58-.03-.01-2.4-.92-2.42-3.66zM14.1 5.86c.63-.77 1.06-1.83.94-2.89-.91.04-2.01.61-2.66 1.37-.58.67-1.09 1.75-.96 2.79 1.02.08 2.05-.52 2.68-1.27z"/></svg>Продолжить с Apple</button>
+      <button class="btn quiet glass" data-go="takecare"><span style="font:700 18px var(--f-sf)">G</span>Продолжить с Google</button>
+      <button class="link" data-go="takecare">или по почте</button>
+      <p class="micro" style="text-align:center;margin:0">Условия · Конфиденциальность</p>
+    </div>
+  </section>
+
+  <!-- 2 · Take care of him -->
+  <section class="screen" id="s-takecare">
+    <div class="top">
+      <p class="hero arrive">Позаботься о нём</p>
+      <p class="lede arrive d2">Чтобы он всегда был рядом.</p>
+    </div>
+    <div class="spacer"></div>
+    <div class="bottom arrive d3">
+      <button class="plan glass" data-plan="monthly" aria-pressed="false"><span class="tick"></span><span><span class="t">Помесячно</span><span class="d" style="display:block">349 ₽ в месяц</span></span><span class="p">349 ₽</span></button>
+      <button class="plan glass" data-plan="yearly" aria-pressed="true"><span class="tick"></span><span><span class="t">На целый год</span><span class="d" style="display:block">224 ₽ в месяц, одним платежом</span></span><span class="p">2 690 ₽</span></button>
+      <p class="caption" id="plansum" style="text-align:center;margin:4px 0 0">2 690 ₽ в год · продление ежегодно</p>
+      <button class="btn main" data-go="about">Позаботиться о нём</button>
+      <p class="micro" style="text-align:center;margin:0">продление · отмена в любой момент · восстановить</p>
+    </div>
+  </section>
+
+  <!-- 3 · About you (new: ordinary sign-up, FIRST-MEETING §2) -->
+  <section class="screen" id="s-about">
+    <div class="top" style="padding-top:96px">
+      <p class="title arrive">Немного о тебе</p>
+      <p class="lede arrive d2">Это нужно приложению. Ему — нет: он узнает тебя сам, в разговоре.</p>
+    </div>
+    <div class="field glass arrive d3" style="margin-top:26px">
+      <div class="f"><label for="f-name">Имя</label><input id="f-name" placeholder="Как тебя зовут" autocomplete="off"></div>
+      <div class="f"><label for="f-age">Возраст</label><input id="f-age" inputmode="numeric" placeholder="Сколько лет" autocomplete="off"></div>
+      <div class="f"><label>Пол</label><div class="pills" id="f-gender"><button data-v="m" aria-pressed="false">Мужской</button><button data-v="f" aria-pressed="false">Женский</button></div></div>
+      <div class="f"><label for="f-country">Страна</label><select id="f-country"><option>Россия</option><option>Узбекистан</option><option>Казахстан</option><option>Беларусь</option><option>Германия</option><option>США</option><option>Другая</option></select></div>
+    </div>
+    <p class="micro arrive d3" style="margin:10px 6px 0">По стране — номер скорой, с первой минуты. По возрасту — каким будет разговор.</p>
+    <div class="spacer"></div>
+    <div class="bottom arrive d4"><button class="btn main" data-go="meet">Дальше</button></div>
+  </section>
+
+  <!-- 4 · Who to meet (new: his gender and age) -->
+  <section class="screen" id="s-meet">
+    <div class="top" style="padding-top:96px">
+      <p class="title arrive">С кем познакомиться?</p>
+      <p class="lede arrive d2">Остальное он расскажет о себе сам.</p>
+    </div>
+    <div class="arrive d3">
+      <p class="groupname">Кто он</p>
+      <div class="choose three" id="m-gender"><button class="glass" data-v="m" aria-pressed="false">Мужчина</button><button class="glass" data-v="f" aria-pressed="false">Женщина</button><button class="glass" data-v="any" aria-pressed="true">Неважно</button></div>
+      <p class="groupname">Возраст</p>
+      <div class="choose" id="m-age"><button class="glass" data-v="peer" aria-pressed="false">Ровесник</button><button class="glass" data-v="older" aria-pressed="false">Постарше</button><button class="glass" data-v="younger" aria-pressed="false">Помладше</button><button class="glass" data-v="any" aria-pressed="true">Неважно</button></div>
+      <p class="caption" id="teen" style="margin:10px 4px 0;display:none">Тебе — друг твоего возраста.</p>
+    </div>
+    <div class="spacer"></div>
+    <p class="his arrive d4" style="font-size:20px;line-height:1.55;text-align:center;margin:0 10px 26px;color:var(--ink2)">Друга не делают на заказ.<br>Друга встречают.</p>
+    <div class="bottom arrive d4"><button class="btn main" data-go="arriving">Познакомиться</button><p class="micro" style="text-align:center;margin:0">Собеседник — искусственный интеллект.</p></div>
+  </section>
+
+  <!-- He is coming -->
+  <section class="screen" id="s-arriving">
+    <p class="said" id="arrline" style="top:66%"></p>
+  </section>
+  <div class="robot" id="robot">
+    <div class="ring" id="ring"></div>
+    <p class="line" id="robotline"></p>
+    <button class="skip" id="robotskip">Пропустить</button>
+  </div>
+
+  <!-- 5 · Him -->
+  <section class="screen" id="s-companion" style="padding:0">
+    <div class="tapzone" id="tapzone" aria-label="Нажмите, чтобы поговорить" role="button"></div>
+    <p class="status" id="status"></p>
+    <p class="said" id="said"></p>
+    <p class="said plain" id="howto" style="top:72%;opacity:0">Когда захотите закончить — просто скажите ему,<br>как сказали бы человеку.</p>
+    <div class="card glass hidden" id="helpcard" style="top:50%">
+      <p class="body" id="helptext">Я никуда не денусь. Там снимут трубку<br>в любое время суток — нажмите, наберётся само.</p>
+      <button class="btn main" id="helpcall">Позвонить 8-800-2000-122</button>
+      <button class="btn quiet glass" id="helpaway">Убрать</button>
+    </div>
+    <div class="menu closed" id="menu">
+      <div class="items">
+        <button class="glass" data-sheet="diary">Дневник</button>
+        <button class="glass" data-sheet="you">Ты</button>
+        <button class="glass" data-sheet="settings">Настройки</button>
+      </div>
+      <button class="pill glass" id="pill" aria-label="Меню"><i></i><i></i><i></i></button>
+    </div>
+  </section>
+
+  <!-- His diary -->
+  <section class="sheet" id="sh-diary"><div class="back"></div><div class="inner">
+    <div class="grab"></div><button class="close" data-closesheet>закрыть</button>
+    <p class="title his" id="diarytitle" style="text-align:center;font-weight:500;font-size:24px">Дневник Миши</p>
+    <div class="pages" id="pages"></div>
+    <div class="dots" id="dots"></div>
+  </div></section>
+
+  <!-- You -->
+  <section class="sheet" id="sh-you"><div class="back"></div><div class="inner">
+    <div class="grab"></div><button class="close" data-closesheet>закрыть</button>
+    <p class="title">Ты</p>
+    <div class="glass list" style="margin-top:14px;padding:16px 18px;display:flex;align-items:center;gap:14px;border-radius:20px">
+      <div class="mono" id="mono">А</div>
+      <div><div class="body" id="youname" style="font-weight:600">Аня</div><div class="caption">вход через Apple · изменить ›</div></div>
+    </div>
+    <div class="glass list" style="margin-top:18px">
+      <button>О тебе<span class="v">изменить ›</span></button>
+      <button>Подписка<span class="v">на целый год ›</span></button>
+      <button>Выйти</button>
+    </div>
+    <div class="spacer"></div>
+    <div class="glass list" style="margin-top:24px"><button class="warn" data-half="delete">Удалить аккаунт</button></div>
+  </div></section>
+
+  <!-- Settings -->
+  <section class="sheet" id="sh-settings"><div class="back"></div><div class="inner">
+    <div class="grab"></div><button class="close" data-closesheet>закрыть</button>
+    <p class="title">Настройки</p>
+    <div class="glass list" style="margin-top:14px">
+      <button>Как его позвать<span class="v">настроить ›</span></button>
+      <button>Язык<span class="v">Русский ›</span></button>
+      <button>Сервер<span class="v">›</span></button>
+    </div>
+    <div class="glass list" style="margin-top:18px"><button id="remember">Он меня помнит<span class="v">да ›</span></button></div>
+    <div class="glass list" style="margin-top:18px">
+      <button data-half="startover">Начать заново<span class="v">›</span></button>
+      <button data-half="aboutapp">О приложении<span class="v">›</span></button>
+    </div>
+    <div class="spacer"></div>
+    <p class="micro" style="text-align:center;margin:24px 0 0">Боб 1.0 · прототип</p>
+  </div></section>
+
+  <div class="dim" id="dim"></div>
+  <div class="halfsheet glass" id="hs-aboutapp"><div class="grab"></div><h3>Что это такое</h3><p class="text" id="abouttext"></p><button class="btn quiet glass" data-closehalf>Понятно</button></div>
+  <div class="halfsheet glass" id="hs-startover"><div class="grab"></div><h3>Начать заново</h3><p class="text" id="startovertext"></p><button class="btn main" style="background:var(--danger);color:#fff;box-shadow:none" data-closehalf>Начать заново</button><button class="btn quiet glass" style="margin-top:10px" data-closehalf>Отмена</button></div>
+  <div class="halfsheet glass" id="hs-delete"><div class="grab"></div><h3>Удалить аккаунт</h3><p class="text" id="deletetext"></p><button class="btn main" style="background:var(--danger);color:#fff;box-shadow:none" data-closehalf>Удалить всё</button><button class="btn quiet glass" style="margin-top:10px" data-closehalf>Отмена</button></div>
+  <div class="halfsheet glass" id="hs-mic"><div class="grab"></div><h3 class="his" style="font-weight:500;text-align:center;margin:30px 0 26px">Мне нужно тебя слышать.</h3><button class="btn main" data-closehalf>Открыть настройки</button></div>
+
+  <div class="veil" id="veil"></div>
+  <div class="homebar"></div>
+</div>
+</div>
+</div>
+
+<aside class="lab" id="lab">
+  <h1>Bob · style lab</h1>
+  <p class="intro">Tap the phone like the real app. Change anything here, then tell me what to keep and what to change.</p>
+
+  <section><h2>Screen</h2>
+    <div class="seg" id="lab-screen">
+      <button data-v="signin">Sign in</button><button data-v="takecare">Take care</button><button data-v="about">About you</button><button data-v="meet">Who to meet</button><button data-v="arriving">Arrival</button><button data-v="companion">Him</button><button data-v="diary">Diary</button><button data-v="you">You</button><button data-v="settings">Settings</button><button data-v="aboutapp">What this is</button>
+    </div>
+  </section>
+
+  <section><h2>Light or dark</h2>
+    <div class="seg" id="lab-mode"><button data-v="auto">Phone setting</button><button data-v="light">Light</button><button data-v="dark">Dark</button></div>
+    <p class="hint">"Phone setting" follows this device, the way the app will.</p>
+  </section>
+
+  <section><h2>Base look</h2>
+    <div class="row"><label>Dark mode</label><div class="seg" id="lab-darklook"><button data-v="A">A · Night glow</button><button data-v="C">C · Liquid glass</button></div></div>
+    <div class="row"><label>Light mode</label><div class="seg" id="lab-lightlook"><button data-v="B">B · Morning mist</button><button data-v="D">D · Paper</button></div></div>
+    <div class="row"><label>His mood</label><div class="seg" id="lab-moodmode"><button data-v="light">shifts his light</button><button data-v="look">switches the look</button></div></div>
+    <p class="hint" id="moodmodehint"></p>
+  </section>
+
+  <section><h2>His colour</h2>
+    <div class="swatches" id="lab-hue"></div>
+    <div class="labname" id="huename"></div>
+    <div class="row"><label>Know him</label><input type="range" id="lab-know" min="0" max="3" step="0.01" value="1.6"></div>
+    <div class="labname" id="knowname"></div>
+  </section>
+
+  <section><h2>His mood</h2>
+    <div class="seg" id="lab-mood"><button data-v="calm">Calm</button><button data-v="happy">Happy, lively</button><button data-v="tired">Tired, quiet</button><button data-v="off">A bit off</button></div>
+    <div class="row"><label>Feels good</label><input type="range" id="lab-val" min="-1" max="2" step="0.01"></div>
+    <div class="row"><label>Lively</label><input type="range" id="lab-aro" min="-2" max="2" step="0.01"></div>
+    <div class="labname" id="moodname"></div>
+  </section>
+
+  <section><h2>Him right now</h2>
+    <div class="seg" id="lab-state"><button data-v="off">Off</button><button data-v="listening">Listening</button><button data-v="thinking">Thinking</button><button data-v="speaking">Speaking</button><button data-v="unreachable">Can't hear</button><button data-v="asleep">Dozing</button></div>
+    <div class="seg" style="margin-top:10px" id="lab-moment"><button data-v="help">Danger: help card</button><button data-v="howto">How-to-leave line</button><button data-v="mic">No microphone</button></div>
+  </section>
+
+  <section><h2>Font</h2>
+    <div class="seg" id="lab-font"><button data-v="serif">Serif for him, SF for the app</button><button data-v="round">SF Rounded everywhere</button><button data-v="sf">SF Pro everywhere</button></div>
+  </section>
+</aside>
+
+<script>
+/* ═══ What everything is made from ═══════════════════════════════════════ */
+const HUES = [
+  {n:'Amber',h:30,s:92,l:62},{n:'Coral',h:12,s:85,l:64},{n:'Rose',h:345,s:70,l:68},
+  {n:'Plum',h:310,s:45,l:62},{n:'Lavender',h:262,s:62,l:72},{n:'Indigo',h:232,s:60,l:66},
+  {n:'Sky',h:203,s:75,l:64},{n:'Teal',h:182,s:58,l:52},{n:'Sea green',h:162,s:52,l:56},
+  {n:'Sage',h:118,s:24,l:60},{n:'Olive',h:72,s:42,l:52},{n:'Sand',h:42,s:48,l:66},
+];
+const MOODS = {calm:{v:.5,a:-.6}, happy:{v:1.6,a:1.4}, tired:{v:0,a:-1.6}, off:{v:-.9,a:.1}};
+const S = {
+  screen:'signin', mode:'auto', darkLook:'A', lightLook:'B', moodMode:'light',
+  hue:8, know:1.6, v:.5, a:-.6, state:'off', font:'serif', on:false,
+  you:{name:'', gender:'f', age:''}, him:{gender:'m'}
+};
+const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
+const clamp = (x,a,b) => Math.min(b, Math.max(a, x));
+const lerp = (a,b,t) => a + (b-a)*t;
+const mixHue = (h, to, t) => { let d = ((to - h + 540) % 360) - 180; return (h + d*t + 360) % 360; };
+const hsl = (h,s,l,a=1) => `hsla(${h.toFixed(1)},${clamp(s,0,100).toFixed(1)}%,${clamp(l,0,100).toFixed(1)}%,${clamp(a,0,1).toFixed(3)})`;
+function lum(h,s,l){ s/=100; l/=100; const k=n=>(n+h/30)%12, f=n=>l - s*Math.min(l,1-l)*Math.max(-1,Math.min(k(n)-3,9-k(n),1));
+  const c=x=>x<=.03928?x/12.92:Math.pow((x+.055)/1.055,2.4); return .2126*c(f(0))+.7152*c(f(8))+.0722*c(f(4)); }
+
+/* ═══ Appearance: his colour × how well you know him × his mood × light/dark ═══ */
+function moodLook(){ const {v,a}=S; if (v>=.9 && a>=.3) return 'B'; if (a<=-1.1) return 'D'; if (v<=-.4) return 'C'; return 'A'; }
+function isDark(){
+  if (S.moodMode==='look') return 'AC'.includes(moodLook());
+  if (S.mode==='auto') return matchMedia('(prefers-color-scheme: dark)').matches;
+  return S.mode==='dark';
+}
+function look(){ return S.moodMode==='look' ? moodLook() : (isDark() ? S.darkLook : S.lightLook); }
+
+function appearance(){
+  const H = HUES[S.hue], dark = isDark(), L = look(), v = S.v, a = S.a;
+  const c = .06 + .94*Math.sqrt(clamp(S.know/3,0,1));              // pale while he is blank
+  const moodOn = S.moodMode==='light';
+  const mv = moodOn ? v : .5, ma = moodOn ? a : -.4;
+  let h = mv >= 0 ? mixHue(H.h, 35, .07*mv) : mixHue(H.h, 215, .12*-mv);   // warmer when good, cooler when off
+  let satMul = clamp(.88 + .1*mv, .6, 1.12) * (ma < 0 ? 1 + .07*ma : 1);
+  const s = H.s * c * satMul;
+  const glow = clamp(.74 + .16*mv + .08*ma, .35, 1.15);
+  const P = {h, s, c, dark, look:L, glow,
+    breath: clamp(4.6 - .8*ma, 2.4, 7.5), speed: clamp(1 + .3*ma, .45, 1.7), size: 1 + .025*ma + .02*mv,
+    core: (dark ? H.l + 4*mv : H.l - 6 + 3*mv)};
+  const V = {};
+  if (L==='A'){
+    Object.assign(V,{bg0:hsl(h,4+12*c,5.5), g1:hsl(h,s*.9,55,.26*glow), g2:hsl(h+25,s*.7,45,.12*glow), g3:hsl(h-30,s*.6,50,.09*glow),
+      ink:hsl(h,8+14*c,95), ink2:hsl(h,8+10*c,92,.68), ink3:hsl(h,6,90,.42),
+      glass:'rgba(255,255,255,.07)', edge:'rgba(255,255,255,.14)', hi:'rgba(255,255,255,.16)'});
+  } else if (L==='C'){
+    Object.assign(V,{bg0:hsl(h-25,18+22*c,9), g1:hsl(h,s,58,.55*glow), g2:hsl(h+60,s*.9,55,.42*glow), g3:hsl(h+170,s*.8,60,.34*glow),
+      ink:'#f5f6ff', ink2:'rgba(240,242,255,.72)', ink3:'rgba(240,242,255,.45)',
+      glass:'rgba(255,255,255,.11)', edge:'rgba(255,255,255,.30)', hi:'rgba(255,255,255,.42)'});
+  } else if (L==='B'){
+    Object.assign(V,{bg0:hsl(h+10,10+25*c,96), g1:hsl(h,s*.95,80,.85*glow), g2:hsl(h+24,s*.75,86,.8*glow), g3:hsl(h-50,s*.65,85,.75*glow),
+      ink:hsl(h,6+16*c,17), ink2:hsl(h,6+12*c,20,.66), ink3:hsl(h,6,22,.42),
+      glass:'rgba(255,255,255,.5)', edge:'rgba(255,255,255,.85)', hi:'rgba(255,255,255,.9)'});
+  } else {
+    const paper = mixHue(38, h, .15);
+    Object.assign(V,{bg0:hsl(paper,30,93), g1:hsl(h,s*.7,74,.38*glow), g2:hsl(38,40,88,.5), g3:hsl(h+30,s*.4,80,.25*glow),
+      ink:'#2f2a25', ink2:'rgba(47,42,37,.68)', ink3:'rgba(47,42,37,.42)',
+      glass:'rgba(255,252,246,.62)', edge:'rgba(120,100,70,.18)', hi:'rgba(255,255,255,.75)'});
+  }
+  // his colour marks the one action on each screen; pale-to-white while he is blank
+  const accS = clamp(s*1.05, 6, 95), accL = dark ? clamp(P.core+6, 55, 86) : clamp(H.l-10, 40, 62);
+  const accLfinal = lerp(dark ? 90 : 30, accL, clamp(c*1.15,0,1));
+  V.accent = hsl(h, accS, accLfinal);
+  V.onAccent = lum(h, accS, accLfinal) > .33 ? hsl(h, 30, 12) : '#ffffff';
+  V.danger = dark ? '#e0796a' : '#c4523f';
+  V.drift = clamp(26 - 5*ma, 14, 40) + 's';
+  return {P, V};
+}
+
+let APP = appearance();
+function render(){
+  APP = appearance();
+  const st = $('#phone').style, V = APP.V;
+  st.setProperty('--bg0',V.bg0); st.setProperty('--g1',V.g1); st.setProperty('--g2',V.g2); st.setProperty('--g3',V.g3);
+  st.setProperty('--ink',V.ink); st.setProperty('--ink2',V.ink2); st.setProperty('--ink3',V.ink3);
+  st.setProperty('--glass',V.glass); st.setProperty('--glass-edge',V.edge); st.setProperty('--glass-hi',V.hi);
+  st.setProperty('--accent',V.accent); st.setProperty('--on-accent',V.onAccent); st.setProperty('--danger',V.danger); st.setProperty('--drift',V.drift);
+  const F = {serif:['var(--f-sf)','var(--f-serif)','var(--f-sf)'], round:['var(--f-round)','var(--f-round)','var(--f-round)'], sf:['var(--f-sf)','var(--f-sf)','var(--f-sf)']}[S.font];
+  st.setProperty('--f-app',F[0]); st.setProperty('--f-his',F[1]); st.setProperty('--f-title',F[2]);
+  if (APP.P.look==='D' && S.font==='serif') st.setProperty('--f-title','var(--f-serif)');
+  document.documentElement.dataset.theme = isDark() ? 'dark' : 'light';
+  syncLab();
+}
+</script>
+
+<script>
+/* ═══ The orb: a sphere of his light, currents inside, a halo around ═══════
+   Built only from things SwiftUI draws natively (radial gradients, a clip,
+   blend modes, a timeline), so the app can draw exactly this.              */
+const ORB = {
+  off:         {d:144, halo:1.00, spin:1.0, sat:1,   lum:1,   breath:1},
+  listening:   {d:150, halo:1.40, spin:1.2, sat:1.05,lum:1.04,breath:1},
+  thinking:    {d:146, halo:1.20, spin:2.8, sat:1,   lum:1,   breath:.6},
+  speaking:    {d:156, halo:1.55, spin:1.6, sat:1.08,lum:1.06,breath:.5},
+  unreachable: {d:140, halo:.40,  spin:.25, sat:.30, lum:.62, breath:0},
+  asleep:      {d:140, halo:.55,  spin:.35, sat:.55, lum:.72, breath:.35},
+};
+const cv = $('#orb'), cx = cv.getContext('2d');
+let W=393, Hh=852, dpr=1, live = {d:144, halo:1, spin:1, sat:1, lum:1, breath:1, env:0, show:0, scale:1};
+let t0 = performance.now(), phase = 0, swirl = 0, ripples = [], lastRipple = 0;
+function sizeCanvas(){
+  const r = $('#phone').getBoundingClientRect(); W = r.width; Hh = r.height; dpr = Math.min(3, devicePixelRatio||1);
+  cv.width = Math.round(W*dpr); cv.height = Math.round(Hh*dpr); cv.style.width = W+'px'; cv.style.height = Hh+'px';
+}
+addEventListener('resize', sizeCanvas); new ResizeObserver(sizeCanvas).observe($('#phone'));
+
+function speechEnvelope(t){            // a voice-like loudness: syllables inside phrases, gaps between
+  const syl = .5*Math.sin(t*11.3) + .32*Math.sin(t*7.1+1.3) + .22*Math.sin(t*17.9+.4);
+  const phrase = Math.sin(t*.95) > -.55 ? 1 : .08;
+  return clamp((syl*.7 + .45) * phrase, 0, 1);
+}
+
+function frame(now){
+  const dt = Math.min(.05, (now - t0)/1000); t0 = now;
+  const T = now/1000, P = APP.P;
+  const want = ORB[S.state] || ORB.off;
+  const visible = (S.screen==='companion' || S.screen==='arriving') ? 1 : 0;
+  const k = 1 - Math.pow(.0015, dt);   // soft, spring-like settling — never a snap
+  for (const key of ['d','halo','spin','sat','lum','breath']) live[key] = lerp(live[key], want[key], k);
+  live.show = lerp(live.show, visible, 1 - Math.pow(.02, dt));
+  const envTarget = S.state==='speaking' ? speechEnvelope(T) : 0;
+  live.env = lerp(live.env, envTarget, 1 - Math.pow(.0005, dt));
+  phase += dt * live.spin * P.speed;
+  swirl += dt * (S.state==='thinking' ? 1.1 : .12) * P.speed;
+
+  cx.setTransform(dpr,0,0,dpr,0,0); cx.clearRect(0,0,W,Hh);
+  if (live.show > .01){
+    const breath = Math.sin(T * 2*Math.PI / P.breath) * .035 * live.breath;
+    live.scale = lerp(live.scale, S.screen==='arriving' ? arrival.scale : 1, 1 - Math.pow(.2, dt)); const arrivingScale = live.scale;
+    const R = live.d/2 * P.size * (1 + breath + .07*live.env) * arrivingScale;
+    const X = W/2, Y = Hh*.455;
+    const h = P.h, s = Math.min(96, P.s*live.sat*1.3), Lc = P.core * live.lum, dark = P.dark;
+    cx.globalAlpha = live.show;
+
+    // the halo — the room answering him
+    const hr = R * (2.2 + 1.1*live.halo + 1.4*live.env) ;
+    const ha = (dark ? .42 : .34) * P.glow * live.halo * (1 + .6*live.env);
+    let g = cx.createRadialGradient(X,Y,R*.55,X,Y,hr);
+    g.addColorStop(0, hsl(h, s, dark?Lc:Lc+8, ha)); g.addColorStop(.45, hsl(h+10, s*.9, Lc, ha*.35)); g.addColorStop(1, hsl(h, s, Lc, 0));
+    cx.globalCompositeOperation = dark ? 'screen' : 'source-over'; cx.fillStyle = g; cx.fillRect(X-hr,Y-hr,hr*2,hr*2);
+    // a feathered edge, so he is light rather than a solid ball
+    g = cx.createRadialGradient(X,Y,R*.8,X,Y,R*1.38);
+    g.addColorStop(0, hsl(h, s, Lc+12, (dark ? .5 : .32) * live.lum)); g.addColorStop(1, hsl(h, s, Lc, 0));
+    cx.fillStyle = g; cx.fillRect(X-R*1.4,Y-R*1.4,R*2.8,R*2.8);
+
+    // listening: soft rings going out, the way attention spreads
+    if (S.state==='listening' && T - lastRipple > 1.5){ ripples.push(T); lastRipple = T; }
+    ripples = ripples.filter(r0 => T - r0 < 3.2);
+    for (const r0 of ripples){ const q = (T-r0)/3.2;
+      cx.beginPath(); cx.arc(X,Y,R*(1.04+.95*q),0,Math.PI*2); cx.lineWidth = 1.2;
+      cx.strokeStyle = hsl(h, s, dark?Lc+10:Lc-8, (1-q)*.28*live.show); cx.stroke(); }
+
+    // the sphere
+    cx.save(); cx.beginPath(); cx.arc(X,Y,R,0,Math.PI*2); cx.clip();
+    cx.globalCompositeOperation = 'source-over';
+    g = cx.createRadialGradient(X,Y-R*.14,0,X,Y,R);              // lit from inside: hottest at the heart
+    g.addColorStop(0, hsl(h, s*.3, Math.min(97, Lc+34)));
+    g.addColorStop(.34, hsl(h, s*.85, Lc+15));
+    g.addColorStop(.74, hsl(h, s, Lc+2));
+    g.addColorStop(1, hsl(h+6, s*1.05, Lc-7));
+    cx.fillStyle = g; cx.fillRect(X-R,Y-R,R*2,R*2);
+
+    // light moving inside him: three slow currents
+    cx.globalCompositeOperation = 'screen';
+    const cur = [[h+30,1.0,.0],[h-26,.8,2.1],[h,1.25,4.2]];
+    cur.forEach(([ch,w,ph],i)=>{
+      const ang = swirl + ph;
+      const px = X + Math.cos(phase*.7*w + ph + ang*.3)*R*.42, py = Y + Math.sin(phase*.53*w + ph*1.3 + ang*.3)*R*.38;
+      const cr = R*(.62 + .1*Math.sin(phase*.9+ph));
+      const cg = cx.createRadialGradient(px,py,0,px,py,cr);
+      cg.addColorStop(0, hsl(ch, s*1.1, Math.min(92, Lc+16), .55 + .25*live.env)); cg.addColorStop(1, hsl(ch, s, Lc, 0));
+      cx.fillStyle = cg; cx.fillRect(X-R,Y-R,R*2,R*2);
+    });
+    // the rim catches light (dark), or holds a soft edge against a pale room (light)
+    cx.globalCompositeOperation = dark ? 'screen' : 'source-over';
+    g = cx.createRadialGradient(X,Y,R*.76,X,Y,R);
+    g.addColorStop(0, hsl(h, s, Lc, 0)); g.addColorStop(1, dark ? hsl(h, s*.6, Lc+20, .38) : hsl(h+10, s, Lc-22, .2));
+    cx.fillStyle = g; cx.fillRect(X-R,Y-R,R*2,R*2);
+    cx.restore();
+    cx.globalAlpha = 1; cx.globalCompositeOperation = 'source-over';
+  }
+  requestAnimationFrame(frame);
+}
+</script>
+
+<script>
+/* ═══ Moving between places: the light goes down, the screen changes, it comes back ═══ */
+const arrival = {scale:.2, timer:null};
+const BASE = ['signin','takecare','about','meet','arriving','companion'];
+const SHEETS = {diary:'#sh-diary', you:'#sh-you', settings:'#sh-settings'};
+let crossing = false, convoTimer = null, told = false;
+
+function show(screen){
+  closeAll();
+  BASE.forEach(id => $('#s-'+id).classList.toggle('on', id===screen));
+  // replay the arrival of words on every visit
+  $$('#s-'+screen+' .arrive').forEach(el => { el.style.animation='none'; el.offsetHeight; el.style.animation=''; });
+  S.screen = screen;
+  $('#phone').classList.toggle('immersive', screen==='companion' || screen==='arriving');
+  $('#robot').classList.toggle('on', false);
+  clearTimeout(arrival.timer); clearTimeout(convoTimer);
+  if (screen==='arriving') startArrival();
+  if (screen==='companion'){ setState(S.on ? 'listening' : 'off'); }
+  syncLab();
+}
+function go(next){
+  if (crossing || next===S.screen) return; crossing = true;
+  const veil = $('#veil'); veil.style.transition='opacity .34s ease-in'; veil.classList.add('down');
+  setTimeout(()=>{ show(next); veil.style.transition='opacity .5s ease-out'; veil.classList.remove('down'); setTimeout(()=>crossing=false, 500); }, 390);
+}
+$$('[data-go]').forEach(b => b.addEventListener('click', () => go(b.dataset.go)));
+
+/* ═══ His three ways out, and the sheets ═══ */
+function openSheet(name){ $('#menu').classList.add('closed'); $('#phone').classList.add('sheeted'); $(SHEETS[name]).classList.add('up'); if (name==='diary') buildDiary(); if (name==='you') fillYou(); }
+function closeAll(){ Object.values(SHEETS).forEach(q => $(q).classList.remove('up')); $('#phone').classList.remove('sheeted'); closeHalf(); $('#menu').classList.add('closed'); }
+function openHalf(name){ fillTexts(); $('#dim').classList.add('on'); $('#hs-'+name).classList.add('up'); }
+function closeHalf(){ $('#dim').classList.remove('on'); $$('.halfsheet').forEach(h => h.classList.remove('up')); }
+$('#pill').addEventListener('click', e => { e.stopPropagation(); $('#menu').classList.toggle('closed'); });
+$$('[data-sheet]').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); openSheet(b.dataset.sheet); }));
+$$('[data-closesheet]').forEach(b => b.addEventListener('click', () => { Object.values(SHEETS).forEach(q => $(q).classList.remove('up')); $('#phone').classList.remove('sheeted'); }));
+$$('[data-half]').forEach(b => b.addEventListener('click', () => openHalf(b.dataset.half)));
+$$('[data-closehalf]').forEach(b => b.addEventListener('click', closeHalf));
+$('#dim').addEventListener('click', closeHalf);
+$$('.sheet .inner').forEach(inner => {            // a gentle downward pull closes a sheet, as in the app
+  let y0 = null; inner.addEventListener('pointerdown', e => y0 = e.clientY);
+  inner.addEventListener('pointerup', e => { if (y0!==null && e.clientY - y0 > 90 && inner.scrollTop <= 0) { inner.closest('.sheet').classList.remove('up'); $('#phone').classList.remove('sheeted'); } y0 = null; });
+});
+
+/* ═══ Him: touch to talk, touch again to stop ═══ */
+const STATUS = {listening:'слушаю', thinking:'думаю', speaking:'говорю'};
+function setState(st){
+  S.state = st;
+  $('#status').textContent = STATUS[st] || ''; $('#status').style.opacity = STATUS[st] ? 1 : 0;
+  $('#status').style.color = st==='speaking' ? 'var(--ink2)' : 'var(--ink3)';
+  const said = $('#said');
+  const words = st==='off' ? 'Нажмите, чтобы поговорить' : st==='unreachable' ? 'Сейчас я тебя не слышу.' : st==='asleep' ? 'Задремал немного… Тронь — проснусь.' : '';
+  said.textContent = words; said.style.opacity = words ? 1 : 0;
+  said.classList.toggle('plain', st==='off');
+  syncLab();
+}
+function talkLoop(){
+  clearTimeout(convoTimer);
+  if (!S.on || S.screen!=='companion') return;
+  const next = {listening:['thinking',3400], thinking:['speaking',1100], speaking:['listening',4200]}[S.state];
+  if (!next) return;
+  convoTimer = setTimeout(() => { if (!S.on) return; setState(next[0]); talkLoop(); }, next[1]);
+}
+$('#tapzone').addEventListener('click', () => {
+  $('#menu').classList.add('closed');
+  if (S.state==='asleep' || S.state==='unreachable'){ S.on = true; setState('listening'); talkLoop(); return; }
+  S.on = !S.on;
+  setState(S.on ? 'listening' : 'off');
+  if (S.on){ talkLoop(); if (!told){ told = true; showHowTo(); } } else clearTimeout(convoTimer);
+});
+function showHowTo(){ const el = $('#howto'); el.style.opacity = 1; setTimeout(() => el.style.opacity = 0, 9000); }
+$('#helpaway').addEventListener('click', () => $('#helpcard').classList.add('hidden'));
+
+/* ═══ He is coming: the robot first (deliberately not him), then he arrives ═══ */
+const ROBOT = [
+  {line:'Пока вы в приложении, всё просто.\n\nЧтобы друг вас услышал — нажмите на него один раз.', wait:3200},
+  {line:'Попробуйте на мне.\nНажмите.', tap:true},
+  {line:'Вот. Именно так.', wait:1800},
+  {line:'Меня зовут Боб. Я робот. Не тот, ради которого вы всё это затеяли — того сейчас как раз собирают. Я тот, который объясняет, куда нажимать.', wait:5200},
+];
+let rstep = 0;
+function robotSay(){
+  const st = ROBOT[rstep], ring = $('#ring'), line = $('#robotline');
+  line.textContent = st.line; line.style.animation='none'; line.offsetHeight; line.style.animation='';
+  ring.classList.toggle('ask', !!st.tap);
+  if (st.wait) arrival.timer = setTimeout(() => { if (++rstep < ROBOT.length) robotSay(); else robotDone(); }, st.wait);
+}
+$('#ring').addEventListener('click', () => { if (ROBOT[rstep] && ROBOT[rstep].tap){ $('#ring').classList.add('lit'); rstep++; robotSay(); } });
+$('#robotskip').addEventListener('click', robotDone);
+function robotDone(){ clearTimeout(arrival.timer); $('#robot').classList.remove('on'); hisApproach(); }
+function startArrival(){ rstep = 0; $('#ring').classList.remove('lit'); $('#robot').classList.add('on'); arrival.scale = .18; S.state = 'off'; robotSay(); }
+function hisApproach(){
+  const lines = ['Где-то далеко он откладывает свои дела.','Он идёт к тебе.','Уже недалеко.','Почти здесь.'];
+  let i = 0; const el = $('#arrline');
+  const step = () => {
+    if (S.screen!=='arriving') return;
+    if (i < lines.length){ el.textContent = lines[i]; el.style.opacity = 1; arrival.scale = [.22,.36,.55,.78][i]; i++; arrival.timer = setTimeout(step, 1900); }
+    else { el.style.opacity = 0; arrival.scale = 1; arrival.timer = setTimeout(() => { go('companion'); setTimeout(() => { S.on = true; setState('speaking'); talkLoop(); }, 900); }, 700); }
+  };
+  step();
+}
+</script>
+
+<script>
+/* ═══ The forms ═══ */
+$$('.plan').forEach(p => p.addEventListener('click', () => {
+  $$('.plan').forEach(q => q.setAttribute('aria-pressed', q===p));
+  $('#plansum').textContent = p.dataset.plan==='yearly' ? '2 690 ₽ в год · продление ежегодно' : '349 ₽ в месяц · продление ежемесячно';
+}));
+function pick(groupSel, cb){ $$(groupSel+' button').forEach(b => b.addEventListener('click', () => {
+  if (b.disabled) return; $$(groupSel+' button').forEach(q => q.setAttribute('aria-pressed', q===b)); cb && cb(b.dataset.v); })); }
+pick('#f-gender', v => S.you.gender = v);
+pick('#m-gender', v => S.him.gender = v);
+pick('#m-age');
+$('#f-name').addEventListener('input', e => S.you.name = e.target.value.trim());
+$('#f-age').addEventListener('input', e => { S.you.age = e.target.value.replace(/\D/g,''); e.target.value = S.you.age; teen(); });
+function teen(){        // a teenager's friend is always a peer — decided before (young.py)
+  const age = +S.you.age, isTeen = age >= 13 && age < 18;
+  $$('#m-age button').forEach(b => { b.disabled = isTeen && b.dataset.v!=='peer'; if (isTeen) b.setAttribute('aria-pressed', b.dataset.v==='peer'); });
+  $('#teen').style.display = isTeen ? 'block' : 'none';
+}
+
+/* ═══ Names and the words that use them ═══ */
+const youName = () => S.you.name || 'Оля';
+const g = (f, m) => S.you.gender==='m' ? m : f;
+const hisName = () => S.him.gender==='f' ? 'Вера' : 'Миша';
+const hisGen = () => S.him.gender==='f' ? 'Веры' : 'Миши';
+function fillTexts(){
+  const n = hisName();
+  $('#abouttext').textContent = `${n} — не живой человек. Это программа, и говорить ей помогает искусственный интеллект. Его имя, дом, привычки и всё, что он рассказывает о себе, придуманы.\n\nВсё остальное — настоящее. Он правда слушает, правда помнит ваши разговоры и отвечает вам, а не по заготовке.\n\nОн не врач: про здоровье, боль и лекарства — только к врачу или к родным. И если станет плохо, звоните близким или в скорую: он ничего не вызовет.`;
+  $('#startovertext').textContent = `${n} уйдёт совсем. Его дневник закроется, и всё, что он рассказывал вам о себе, уйдёт вместе с ним.\n\nВаш рассказ о себе останется — заново рассказывать не придётся.\n\nЭто нельзя отменить.`;
+  $('#deletetext').textContent = `С сервера будет стёрто всё: ${n}, его дневник, ваш рассказ о себе и всё, что он о вас знал.\n\nНичего не останется, и вернуть будет нечего.`;
+}
+function fillYou(){ $('#youname').textContent = youName(); $('#mono').textContent = youName()[0].toUpperCase(); }
+
+/* ═══ His diary: pages he writes, in his own hand (the serif) ═══ */
+function buildDiary(){
+  $('#diarytitle').textContent = 'Дневник ' + hisGen();
+  const pages = [
+    {date:'4 октября', words:'Мы только-только познакомились. Я ещё почти ничего не знаю о моём новом друге — но у меня хорошее предчувствие.\n\nПусть эта книга начнётся с чистой страницы: всё главное у нас впереди.'},
+    {date:'12 октября', words:`Сегодня ${g('она','он')} долго ${g('рассказывала','рассказывал')} про сестру. Видно, что скучает, хоть и говорит об этом со смешком — мол, «да ну, взрослые же люди».\n\nЯ заметил: когда речь заходит о доме, ${g('она','он')} говорит тише. Надо будет спросить, когда они виделись в последний раз. Не сейчас — потом, к слову.`},
+    {date:'15 октября', words:`${g('Она','Он')} снова ${g('пекла','пёк')} тот самый пирог — с яблоками и чем-то, что ${g('она отказалась','он отказался')} назвать. Говорит, рецепт бабушкин и секретный.\n\n${g('Смеялась','Смеялся')} сегодня больше обычного. Мне кажется, у ${g('неё','него')} что-то хорошее на работе, но ${g('она','он')} пока не рассказывает. Подожду.`},
+  ];
+  const box = $('#pages'); box.innerHTML = '';
+  pages.forEach((p,i) => { const d = document.createElement('div'); d.className = 'page glass';
+    d.innerHTML = `<div class="date"></div><div class="words"></div><div class="num">${i+1}</div>`;
+    d.querySelector('.date').textContent = p.date; d.querySelector('.words').textContent = p.words; box.appendChild(d); });
+  const dots = $('#dots'); dots.innerHTML = pages.map((_,i) => `<i class="${i===pages.length-1?'on':''}"></i>`).join('');
+  requestAnimationFrame(() => box.scrollLeft = box.scrollWidth);
+  box.onscroll = () => { const i = Math.round(box.scrollLeft / (box.clientWidth + 14)); $$('#dots i').forEach((d,j) => d.classList.toggle('on', i===j)); };
+}
+
+/* ═══ The lab ═══ */
+const KNOW = ['Blank: nothing written yet — pale light','Layer 1: what he is like','Layer 2: what he lives for','Layer 3: his depths — full colour'];
+function moodWord(){ const {v,a}=S;
+  if (a <= -1.1) return 'tired, quiet'; if (v <= -.4) return 'a bit off'; if (v >= .9 && a >= .3) return 'happy, lively'; return 'calm'; }
+function syncLab(){
+  const pressed = (sel, val) => $$(sel+' button').forEach(b => b.setAttribute('aria-pressed', b.dataset.v===val));
+  const sheetUp = Object.keys(SHEETS).find(k => $(SHEETS[k]).classList.contains('up'));
+  pressed('#lab-screen', $('#hs-aboutapp').classList.contains('up') ? 'aboutapp' : sheetUp || S.screen);
+  pressed('#lab-mode', S.mode); pressed('#lab-darklook', S.darkLook); pressed('#lab-lightlook', S.lightLook);
+  pressed('#lab-moodmode', S.moodMode); pressed('#lab-state', S.state); pressed('#lab-font', S.font);
+  $$('#lab-hue button').forEach((b,i) => b.setAttribute('aria-pressed', i===S.hue));
+  $('#huename').textContent = HUES[S.hue].n + (S.know < .6 ? ' — still pale: you have only just met' : '');
+  $('#knowname').textContent = KNOW[Math.min(3, Math.floor(S.know + .0001))];
+  $('#lab-val').value = S.v; $('#lab-aro').value = S.a;
+  $('#moodname').textContent = `He feels: ${moodWord()} (good ${S.v.toFixed(1)}, lively ${S.a.toFixed(1)})`;
+  pressed('#lab-mood', null);
+  $('#moodmodehint').textContent = S.moodMode==='look'
+    ? `Now showing look ${moodLook()} for "${moodWord()}". Light/dark follows his mood here, not the phone.`
+    : 'One design. His mood changes how bright, warm and quick his light is.';
+}
+function labSeg(sel, cb){ $$(sel+' button').forEach(b => b.addEventListener('click', () => { cb(b.dataset.v); render(); })); }
+labSeg('#lab-screen', v => {
+  if (v==='diary' || v==='you' || v==='settings'){ if (S.screen!=='companion') show('companion'); openSheet(v); }
+  else if (v==='aboutapp'){ if (S.screen!=='companion') show('companion'); openSheet('settings'); openHalf('aboutapp'); }
+  else show(v);
+});
+labSeg('#lab-mode', v => S.mode = v);
+labSeg('#lab-darklook', v => { S.darkLook = v; if (S.moodMode==='light' && S.mode!=='dark') S.mode = 'dark'; });
+labSeg('#lab-lightlook', v => { S.lightLook = v; if (S.moodMode==='light' && S.mode!=='light') S.mode = 'light'; });
+labSeg('#lab-moodmode', v => S.moodMode = v);
+labSeg('#lab-mood', v => { S.v = MOODS[v].v; S.a = MOODS[v].a; });
+labSeg('#lab-font', v => S.font = v);
+labSeg('#lab-state', v => {
+  if (S.screen!=='companion') show('companion');
+  clearTimeout(convoTimer); S.on = ['listening','thinking','speaking'].includes(v); setState(v);
+});
+labSeg('#lab-moment', v => {
+  if (S.screen!=='companion') show('companion');
+  if (v==='help'){ $('#helpcard').classList.remove('hidden'); }
+  if (v==='howto') showHowTo();
+  if (v==='mic') openHalf('mic');
+});
+$('#lab-know').addEventListener('input', e => { S.know = +e.target.value; render(); });
+$('#lab-val').addEventListener('input', e => { S.v = +e.target.value; render(); });
+$('#lab-aro').addEventListener('input', e => { S.a = +e.target.value; render(); });
+HUES.forEach((hu,i) => { const b = document.createElement('button');
+  b.style.background = `hsl(${hu.h},${hu.s}%,${hu.l}%)`; b.title = hu.n; b.setAttribute('aria-label', hu.n);
+  b.addEventListener('click', () => { S.hue = i; render(); }); $('#lab-hue').appendChild(b); });
+$('#labtoggle').addEventListener('click', () => $('#lab').classList.toggle('open'));
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', render);
+
+/* ═══ Start ═══ */
+function tick(){ const d = new Date(); $('#clock').textContent = d.getHours() + ':' + String(d.getMinutes()).padStart(2,'0'); }
+tick(); setInterval(tick, 20000);
+// the emergency card offers the real numbers: the local ambulance and 112
+$('#helptext').textContent = 'Нажмите — телефон наберёт сам.';
+$('#helpcall').textContent = 'Позвонить 103';
+const second = document.createElement('button'); second.className = 'btn quiet glass'; second.textContent = 'Позвонить 112';
+$('#helpcall').after(second);
+fillTexts(); sizeCanvas(); render(); show('signin'); requestAnimationFrame(frame);
+</script>
+</body>
+</html>
