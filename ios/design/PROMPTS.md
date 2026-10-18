@@ -110,3 +110,10 @@ prompt: Midjourney reads "no house" as "house".
 
 Settings: newest version · Raw · 9:16 · Stylization 100 · Variety 10 · Weirdness 0 · Personalize off · Fast.
 Optional: `framing/frame-4.jpg` as a Style reference. Then Upscale (Subtle).
+
+## Framing test — frame-6 (Midjourney): Ghost of Tsushima grass, rocks instead of the tree (owner: "the grass is super thin, like hair; I want it beautiful, like in Ghost of Tsushima; the tree is too big and fluffy, and alone again — maybe a rock, but not alone")
+
+Ghost of Tsushima's fields: mostly susuki (Japanese silver grass) — thick clumps, broad arching blades, feathery
+silver-gold plumes — and whole fields of flowers (red spider lilies, white and pink). Stylize raised 100 → 200.
+
+`cinematic wide shot, 35mm lens, standing eye level about forty metres away, landscape in the style of Ghost of Tsushima, a flat open field of lush Japanese silver grass in thick clumps with broad arching blades and soft feathery silver-gold plumes, drifts of red spider lilies and small white wildflowers in patches through the grass, long waves of wind moving across the field, a natural cluster of weathered granite boulders on the left third of the frame, one larger rock with smaller ones half sunk into the ground beside it, moss and lichen on the stone, grass and flowers growing between the rocks, more scattered rocks and a few low trees in the middle distance, an uneven tree line along the far edge of the field, low flat horizon a little below the middle, layered far hills fading into haze, open calm sky on the right, late afternoon warm back light, rim light on the plumes and petals, a few petals and seeds drifting in the wind, only the very bottom edge softly out of focus, natural and unstaged, rich but muted colours, gentle film grain --ar 9:16 --style raw --stylize 200 --chaos 10 --no house, path, fence, people, animals, sun, text, watermark, statue, shrine`
