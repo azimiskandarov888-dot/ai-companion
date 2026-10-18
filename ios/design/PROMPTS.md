@@ -121,3 +121,7 @@ silver-gold plumes — and whole fields of flowers (red spider lilies, white and
   `framing/frame-6.prompt.txt` → `framing/frame-6.jpg`. Came out rich (susuki, spider lilies, mossy rocks
   among more rocks and low trees), but the horizon is higher than asked and a blurred stone lies along the
   bottom edge.
+
+## Framing test — frame-9 (Midjourney only): low camera looking UP, the tree closer (owner: "the camera is still looking down, I want it to look upward; the tree looks way further than it needs to be; overall beautiful")
+
+`cinematic film still, low-angle shot, camera 30 cm above the ground tilted upward, looking up through tall Japanese silver grass with soft white glowing plumes, nearest plumes out of focus in the foreground rising into the frame, an old tree with an irregular amber-gold crown about 8 metres away on the left third, its branches reaching across the upper left against the sky, a few shrubs and small trees beside it, low horizon near the bottom third, wide open calm sky, late afternoon backlight, rim light on the plumes and leaves, a few leaves drifting, photorealistic, shot on ARRI Alexa, 35mm, natural colour, film grain --ar 9:16 --style raw --stylize 200 --chaos 10 --no house, people, animals, sun, text`
