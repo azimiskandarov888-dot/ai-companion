@@ -166,6 +166,27 @@ ceiling. Then real 3D is the honest answer.
 
 ---
 
+## First test (2026-10-19) — `wind-test.html`, https://claude.ai/artifact/9ohy6C44jhQnzwTKVJUHTH
+
+One 5-second gust over mj-15 from `scene.html`. It starts and ends exactly on the
+picture (`scene/wind-test/`).
+
+| Version | Look | Motion | Cost |
+|---|---|---|---|
+| Our draft | fake (pieces) | logical | free |
+| **Wan 2.7 repaint** (`rerender.py wan`) | the tree comes out crisp and real; **the white plumes turn into blurry golden wheat**; the first frame is already off the picture | a strong gale with motion blur | $0.50 |
+| **His picture + Wan's motion** (`still_motion.py`) | exactly his picture | Wan's gale stretches the plumes like rubber | free |
+| **The same at half strength** | exactly his picture, plumes stay crisp and only bend | gentler | free |
+| Runway Aleph 2 | — | refused **any portrait video** on Replicate ("Failed to parse video resolution"): with or without keyframes, uploaded or inline. Its working examples are all landscape. Refusals took under a second, so no charge | $0 |
+
+**What it says:** a repaint AI makes the tree real but doesn't keep the fine white
+plumes. It redraws them as a generic field. Keeping his exact picture and taking
+only the motion keeps the look, and how good it is depends on how good and how
+gentle that motion is. Still to try in this way: Luma Modify Video in its closest
+mode, "adhere" (≈ $2.10 at 720p); and a repaint of the tree only, keeping his grass.
+
+---
+
 **Sources:**
 - Motion from video / physics from a photo: [Image-Space Modal Bases (MIT, SIGGRAPH Asia 2015)](https://dspace.mit.edu/handle/1721.1/137568), [Interactive Dynamic Video (article)](https://www.provideocoalition.com/pokemon-go-interactive-dynamic-video/), [Generative Image Dynamics: live demo](https://generative-dynamics.github.io/), [paper](https://arxiv.org/abs/2309.07906), [unofficial code (256 px)](https://github.com/fltwr/generative-image-dynamics)
 - Re-render models on Replicate: [Runway Aleph 2](https://replicate.com/runwayml/aleph-2), [Wan 2.7 VideoEdit](https://replicate.com/wan-video/wan-2.7-videoedit), [Luma Modify Video](https://replicate.com/luma/modify-video), [Luma Modify Video guide](https://www.atlascloud.ai/blog/tips/luma-modify-video), [Aleph 2.0](https://runway.com/product/aleph-2)

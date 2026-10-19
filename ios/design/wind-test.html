@@ -1,0 +1,123 @@
+<title>Field Re-render</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="claude:viewport-fit-sides" content="cover">
+<!--
+  The first test of "real motion, his picture" (2D-WAYS-RESEARCH.md, way 1 and way 2).
+  One 5-second gust over mj-15, starting and ending exactly on the picture:
+    draft  — our own motion (scene.html): the logic is right, the look is fake
+    wan    — the draft repainted by Wan 2.7 VideoEdit, his picture as reference
+    still  — his exact picture, moved by the motion measured in Wan's repaint (no repainting)
+    half   — the same at half strength: Wan's wind is a gale, and halving it stops the stretching
+  Runway Aleph 2 refused portrait videos on Replicate ("Failed to parse video resolution"), so it isn't here.
+  Switching keeps the same moment of the gust, so the versions can be compared frame for frame.
+-->
+<style>
+/* Layout: one phone-sized screen showing one version at a time; on a phone the video is the page and the choices sit at the bottom. */
+:root{
+  --page:#e7e5e0; --ink:#22211f; --ink-2:#6a665e; --line:rgba(34,33,31,.14);
+  --veil:rgba(14,16,20,.38); --veil-line:rgba(255,255,255,.24); --veil-ink:#f6f4ee; --veil-soft:rgba(246,244,238,.74);
+  --veil-on:#f6f4ee; --veil-on-ink:#15161a; --screen:#0d0e10;
+  --sans:-apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+  --serif:"New York", ui-serif, "Iowan Old Style", Georgia, serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--page:#111214;--ink:#ebe9e3;--ink-2:#98948b;--line:rgba(235,233,227,.14);color-scheme:dark}}
+:root[data-theme="dark"]{--page:#111214;--ink:#ebe9e3;--ink-2:#98948b;--line:rgba(235,233,227,.14);color-scheme:dark}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{margin:0;background:var(--page);color:var(--ink);font:14px/1.45 var(--sans);
+  padding-left:max(16px, env(safe-area-inset-left, 0px));padding-right:max(16px, env(safe-area-inset-right, 0px));padding-block:28px}
+.stage{display:flex;gap:40px;justify-content:center;align-items:flex-start;flex-wrap:wrap}
+.screen{position:relative;flex:none;width:393px;height:852px;border-radius:55px;overflow:hidden;background:var(--screen);
+  box-shadow:0 0 0 11px #0c0c0d,0 28px 70px rgba(0,0,0,.28)}
+video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:20% 50%;opacity:0;transition:opacity .25s ease}
+video.on{opacity:1}
+.panel{width:300px;display:flex;flex-direction:column;gap:18px;padding-top:6px}
+.panel h1{font:600 24px/1.15 var(--serif);margin:0;text-wrap:balance}
+.panel p{margin:0;color:var(--ink-2);max-width:36ch}
+.choices{display:flex;flex-direction:column;gap:8px}
+.choice{display:flex;flex-direction:column;gap:2px;text-align:left;border:1px solid var(--line);background:transparent;color:var(--ink);
+  border-radius:16px;padding:10px 14px;font:inherit;cursor:pointer}
+.choice b{font-weight:600}
+.choice span{color:var(--ink-2);font-size:13px}
+.choice[aria-pressed="true"]{border-color:var(--ink);box-shadow:inset 0 0 0 1px var(--ink)}
+.choice:disabled{opacity:.45;cursor:default}
+.choice:focus-visible,.slow:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+.slow{align-self:flex-start;border:1px solid var(--line);background:transparent;color:var(--ink);border-radius:999px;padding:7px 13px;font:500 13px var(--sans);cursor:pointer}
+.slow[aria-pressed="true"]{background:var(--ink);color:var(--page)}
+.note{font-size:12px;color:var(--ink-2)}
+@media (max-width:760px){
+  .stage{display:block}
+  .screen{position:fixed;inset:0;width:100%;height:100%;border-radius:0;box-shadow:none}
+  .panel{position:fixed;left:0;right:0;bottom:0;width:auto;z-index:5;gap:10px;color:var(--veil-ink);
+    padding-top:40px;padding-bottom:calc(12px + env(safe-area-inset-bottom, 0px));
+    padding-left:max(12px, env(safe-area-inset-left, 0px));padding-right:max(12px, env(safe-area-inset-right, 0px));
+    background:linear-gradient(rgba(0,0,0,0), rgba(0,0,0,.55))}
+  .panel h1,.panel p,.note{display:none}
+  .choices{flex-direction:row;flex-wrap:wrap;gap:6px}
+  .choice{flex:1 1 40%;padding:8px 10px;border-radius:14px;background:var(--veil);border-color:var(--veil-line);color:var(--veil-ink);
+    -webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px)}
+  .choice span{color:var(--veil-soft);font-size:11px}
+  .choice[aria-pressed="true"]{background:var(--veil-on);color:var(--veil-on-ink);border-color:var(--veil-on);box-shadow:none}
+  .choice[aria-pressed="true"] span{color:var(--veil-on-ink)}
+  .slow{background:var(--veil);color:var(--veil-ink);border-color:var(--veil-line);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px)}
+  .slow[aria-pressed="true"]{background:var(--veil-on);color:var(--veil-on-ink)}
+  .choice:focus-visible,.slow:focus-visible{outline-color:var(--veil-ink)}
+}
+</style>
+
+<main class="stage">
+  <div class="screen" id="screen">
+    <video id="v-draft" src="scene/wind-test/web/draft.mp4" muted loop playsinline preload="auto"></video>
+    <video id="v-wan" src="scene/wind-test/web/wan.mp4" muted loop playsinline preload="auto"></video>
+    <video id="v-still" src="scene/wind-test/web/still.mp4" muted loop playsinline preload="auto"></video>
+    <video id="v-half" src="scene/wind-test/web/still-half.mp4" muted loop playsinline preload="auto"></video>
+  </div>
+  <aside class="panel">
+    <h1>Field Re-render</h1>
+    <p>One gust over your picture, five seconds. Switch between the versions: each one keeps the same moment of the gust. Runway Aleph refused portrait videos, so it isn't here (no charge).</p>
+    <div class="choices" id="choices">
+      <button class="choice" type="button" data-v="draft"><b>Our draft</b><span>our motion, fake look</span></button>
+      <button class="choice" type="button" data-v="wan"><b>Wan 2.7 repaint</b><span>looks real, but changes your grass · $0.50</span></button>
+      <button class="choice" type="button" data-v="still"><b>Your picture + Wan's motion</b><span>exactly your look, not repainted · free</span></button>
+      <button class="choice" type="button" data-v="half"><b>The same, half the wind</b><span>less stretching · free</span></button>
+    </div>
+    <button class="slow" type="button" id="slow" aria-pressed="false">Slow motion</button>
+    <p class="note">Tap the screen to pause.</p>
+  </aside>
+</main>
+
+<script>
+(function(){
+  const ids = ['draft', 'wan', 'still', 'half'];
+  const vids = Object.fromEntries(ids.map(id => [id, document.getElementById('v-' + id)]));
+  const buttons = [...document.querySelectorAll('.choice')];
+  let current = null, rate = 1, paused = false;
+  function show(id){
+    const next = vids[id]; if (!next || next.dataset.bad) return;
+    const t = current ? current.currentTime : 0;
+    if (current && current !== next){ current.pause(); current.classList.remove('on'); }
+    try { next.currentTime = t; } catch (e) {}
+    next.playbackRate = rate; next.classList.add('on');
+    if (!paused) next.play().catch(() => {});
+    current = next;
+    buttons.forEach(b => b.setAttribute('aria-pressed', b.dataset.v === id));
+  }
+  for (const id of ids){
+    vids[id].addEventListener('error', () => {
+      vids[id].dataset.bad = '1';
+      const b = buttons.find(b => b.dataset.v === id);
+      if (b){ b.disabled = true; b.querySelector('span').textContent = 'not available'; }
+    });
+  }
+  buttons.forEach(b => b.addEventListener('click', () => show(b.dataset.v)));
+  document.getElementById('slow').addEventListener('click', e => {
+    rate = rate === 1 ? .5 : 1; e.currentTarget.setAttribute('aria-pressed', rate !== 1);
+    if (current) current.playbackRate = rate;
+  });
+  document.getElementById('screen').addEventListener('click', () => {
+    if (!current) return; paused = !paused; paused ? current.pause() : current.play().catch(() => {});
+  });
+  show(location.hash === '#draft' ? 'draft' : 'wan');
+})();
+</script>
