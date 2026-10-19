@@ -1,0 +1,538 @@
+<title>Living Field</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="claude:viewport-fit-sides" content="cover">
+<!--
+  Bob's main screen as a game scene, built from separate pieces of the owner's picture
+  (framing/mj-15-hd.jpg → scene/make_pieces.py → scene/assets/): a sky that is complete
+  even behind the tree, the field, the tree, 69 near plume heads and 14 real leaves.
+
+  ONE wind — a strength plus gusts that travel downwind — moves every piece by how
+  flexible it is. The trunk stays put. The crown sways in masses (a gust reaches its
+  left side first) and its leaves tremble. Each near plume swings on its own stem.
+  The rest of the field leans and turns silver where a gust passes. Leaves come off
+  the crown in gusts and ride the same wind down into the grass.
+  The hour sets the light; his mood sets the wind. A finger parts the grass; a tap on
+  the crown shakes a few leaves loose. The same maths becomes Metal shaders in the app.
+-->
+<style>
+/* Layout: one phone window onto the scene with its controls beside it; on a phone the scene is the page and the controls fold into one bar. */
+:root{
+  --page:#e7e5e0; --ink:#22211f; --ink-2:#6a665e; --line:rgba(34,33,31,.14);
+  --chip:#f5f4f0; --chip-on:#22211f; --chip-on-ink:#f5f4f0;
+  --veil:rgba(14,16,20,.36); --veil-line:rgba(255,255,255,.24); --veil-ink:#f6f4ee; --veil-label:rgba(246,244,238,.72);
+  --veil-on:#f6f4ee; --veil-on-ink:#15161a; --scene:#5d7d9c;
+  --sans:-apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+  --serif:"New York", ui-serif, "Iowan Old Style", Georgia, serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--page:#111214;--ink:#ebe9e3;--ink-2:#98948b;--line:rgba(235,233,227,.14);--chip:#1c1d20;--chip-on:#ebe9e3;--chip-on-ink:#141518;color-scheme:dark}}
+:root[data-theme="dark"]{--page:#111214;--ink:#ebe9e3;--ink-2:#98948b;--line:rgba(235,233,227,.14);--chip:#1c1d20;--chip-on:#ebe9e3;--chip-on-ink:#141518;color-scheme:dark}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{margin:0;background:var(--page);color:var(--ink);font:14px/1.45 var(--sans);
+  padding-left:max(16px, env(safe-area-inset-left, 0px));padding-right:max(16px, env(safe-area-inset-right, 0px));padding-block:28px}
+.stage{display:flex;gap:40px;justify-content:center;align-items:flex-start;flex-wrap:wrap}
+.phone{position:relative;flex:none;width:393px;height:852px;border-radius:55px;overflow:hidden;background:var(--scene);
+  box-shadow:0 0 0 11px #0c0c0d,0 28px 70px rgba(0,0,0,.28);touch-action:none;user-select:none;-webkit-user-select:none;cursor:grab}
+canvas{position:absolute;inset:0;width:100%;height:100%;display:block;opacity:0;transition:opacity .9s ease}
+canvas.ready{opacity:1}
+.msg{position:absolute;left:24px;right:24px;top:42%;color:var(--veil-ink);text-align:center;font-weight:600}
+.panel{width:300px;display:flex;flex-direction:column;gap:24px;padding-top:6px}
+.intro{display:flex;flex-direction:column;gap:8px}
+.intro h1{font:600 24px/1.15 var(--serif);margin:0;text-wrap:balance}
+.intro p{margin:0;color:var(--ink-2);max-width:34ch}
+.group{display:flex;flex-direction:column;gap:9px}
+.label{font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-2)}
+.clock{font-variant-numeric:tabular-nums;letter-spacing:.02em}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{border:1px solid var(--line);background:var(--chip);color:var(--ink);border-radius:999px;padding:7px 12px;font:500 13px/1.2 var(--sans);cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--chip-on);color:var(--chip-on-ink);border-color:var(--chip-on)}
+.chip:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+.hour{width:100%;accent-color:var(--ink)}
+.bar{display:none}
+@media (max-width:760px){
+  .stage{display:block}
+  .phone{position:fixed;inset:0;width:100%;height:100%;border-radius:0;box-shadow:none}
+  .panel{position:fixed;left:0;right:0;bottom:0;width:auto;z-index:5;gap:14px;color:var(--veil-ink);
+    padding-top:28px;padding-bottom:calc(12px + env(safe-area-inset-bottom, 0px));
+    padding-left:max(16px, env(safe-area-inset-left, 0px));padding-right:max(16px, env(safe-area-inset-right, 0px));
+    background:linear-gradient(rgba(0,0,0,0), rgba(0,0,0,.45));pointer-events:none}
+  .panel > *{pointer-events:auto}
+  .intro{display:none}
+  .panel:not(.open) .group{display:none}
+  .label{color:var(--veil-label)}
+  .chip{background:var(--veil);color:var(--veil-ink);border-color:var(--veil-line);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px)}
+  .chip[aria-pressed="true"]{background:var(--veil-on);color:var(--veil-on-ink);border-color:var(--veil-on)}
+  .chip:focus-visible{outline-color:var(--veil-ink)}
+  .hour{accent-color:var(--veil-ink)}
+  .bar{display:flex;gap:6px;justify-content:space-between}
+}
+</style>
+
+<main class="stage">
+  <div class="phone" id="phone"><canvas id="gl"></canvas></div>
+  <aside class="panel" id="panel">
+    <header class="intro">
+      <h1>Living Field</h1>
+      <p>Your picture in separate pieces, moved by one wind. Drag through the grass and it parts. Tap the crown and a few leaves come loose.</p>
+    </header>
+    <section class="group" aria-labelledby="l-light">
+      <div class="label" id="l-light">Light &middot; <span class="clock" id="clock">15:00</span></div>
+      <div class="chips" id="times">
+        <button class="chip" type="button" data-hour="now">Now</button>
+        <button class="chip" type="button" data-hour="6.5">Dawn</button>
+        <button class="chip" type="button" data-hour="9">Morning</button>
+        <button class="chip" type="button" data-hour="15" aria-pressed="true">Afternoon</button>
+        <button class="chip" type="button" data-hour="19.1">Sunset</button>
+        <button class="chip" type="button" data-hour="20.4">Dusk</button>
+        <button class="chip" type="button" data-hour="23">Night</button>
+        <button class="chip" type="button" data-hour="cycle">Whole day in a minute</button>
+      </div>
+      <input class="hour" id="hour" type="range" min="0" max="24" step="0.05" value="15" aria-label="Hour of the day">
+    </section>
+    <section class="group" aria-labelledby="l-mood">
+      <div class="label" id="l-mood">His mood &middot; sets the wind</div>
+      <div class="chips" id="moods">
+        <button class="chip" type="button" data-mood="calm">Calm</button>
+        <button class="chip" type="button" data-mood="content" aria-pressed="true">Content</button>
+        <button class="chip" type="button" data-mood="joyful">Joyful</button>
+        <button class="chip" type="button" data-mood="restless">Restless</button>
+        <button class="chip" type="button" data-mood="sad">Sad</button>
+      </div>
+    </section>
+    <section class="group" aria-labelledby="l-look">
+      <div class="label" id="l-look">Look inside</div>
+      <div class="chips">
+        <button class="chip" type="button" id="pieces" aria-pressed="false">Show the pieces</button>
+        <button class="chip" type="button" id="dir">Wind from the left</button>
+      </div>
+    </section>
+    <div class="bar">
+      <button class="chip" type="button" id="more" aria-expanded="false">Afternoon · Content</button>
+      <button class="chip" type="button" id="pieces2" aria-pressed="false">Pieces</button>
+    </div>
+  </aside>
+</main>
+
+<script>
+(async function(){
+const $ = id => document.getElementById(id);
+const phone = $('phone'), canvas = $('gl');
+const fail = text => phone.insertAdjacentHTML('beforeend', `<p class="msg">${text}</p>`);
+const gl = canvas.getContext('webgl2', {alpha:false, antialias:false, premultipliedAlpha:true, powerPreference:'low-power'});
+if (!gl){ fail('This browser has no WebGL 2, which the scene needs.'); return; }
+
+/* ═══ One wind. Worked out here once per frame and handed to every piece, so the
+   field, the tree, the plumes and the leaves always agree where the gust is. ═══ */
+const fract = x => x - Math.floor(x);
+const h1 = n => fract(Math.sin(n*12.9898)*43758.5453);
+const n1 = x => { const i = Math.floor(x); let f = x - i; f = f*f*(3 - 2*f); return h1(i) + (h1(i + 1) - h1(i))*f; };
+const sstep = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a)/(b - a))); return t*t*(3 - 2*t); };
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+const MOODS = {
+  calm:     {name:'Calm',     wind:.14, gust:.10, v: .5},
+  content:  {name:'Content',  wind:.30, gust:.26, v:1.0},
+  joyful:   {name:'Joyful',   wind:.36, gust:.50, v:1.8},
+  restless: {name:'Restless', wind:.62, gust:.62, v:-.4},
+  sad:      {name:'Sad',      wind:.07, gust:.04, v:-.9},
+};
+const S = {t:0, dir:1, wind:.30, gust:.26, v:1, mood:'content', hour:15, hourTarget:15, mode:'fixed', pieces:0, shake:0,
+           motion: matchMedia('(prefers-reduced-motion: reduce)').matches ? .35 : 1};
+const gustAt = x => S.motion*S.gust*sstep(.35, 1, n1(S.t*.45 - (S.dir > 0 ? x : 1 - x)*1.6));
+const windAt = x => S.motion*S.wind*(.6 + .4*n1(S.t*.13 + 3)) + gustAt(x);
+const WIND = new Float32Array(17), GUST = new Float32Array(17);
+
+/* ═══ Light by the hour. "Afternoon" is the picture exactly as it was made. ═══ */
+const NIGHT = {gain:[.20,.24,.38], lift:[0,.004,.02], sat:.55, skyGain:[.16,.2,.34], skyTop:[.012,.02,.06], skyHor:[.05,.07,.15], skyMix:.84, mist:[.1,.13,.22,.16], stars:1, fire:1};
+const DAY = {gain:[1,1,1], lift:[0,0,0], sat:1, skyGain:[1,1,1], skyTop:[.273,.435,.603], skyHor:[.595,.647,.706], skyMix:0, mist:[.9,.92,.95,0], stars:0, fire:0};
+const LIGHT = [
+  {h:0, ...NIGHT}, {h:4.8, ...NIGHT},
+  {h:6.5,  gain:[.80,.74,.82], lift:[.03,.02,.05], sat:.72, skyGain:[.92,.86,.95], skyTop:[.34,.44,.66], skyHor:[1,.75,.65], skyMix:.55, mist:[.9,.83,.87,.42], stars:0, fire:0},
+  {h:9,    gain:[.98,.99,1.03], lift:[0,0,.01], sat:.92, skyGain:[1,1,1.02], skyTop:[.33,.54,.83], skyHor:[.8,.87,.95], skyMix:.18, mist:[.9,.93,.97,.16], stars:0, fire:0},
+  {h:13, ...DAY}, {h:16, ...DAY},
+  {h:17.6, gain:[1.08,.97,.82], lift:[.01,0,0], sat:1.08, skyGain:[1.02,.98,.92], skyTop:[.3,.44,.7], skyHor:[1,.74,.48], skyMix:.32, mist:[1,.82,.62,.1], stars:0, fire:0},
+  {h:19.1, gain:[.98,.80,.70], lift:[.02,.005,.015], sat:.96, skyGain:[.9,.72,.72], skyTop:[.2,.22,.44], skyHor:[1,.56,.38], skyMix:.68, mist:[.95,.62,.52,.16], stars:0, fire:0},   // the plumes stay pale, only warmed
+  {h:20.4, gain:[.42,.40,.56], lift:[.01,.01,.03], sat:.7, skyGain:[.5,.5,.7], skyTop:[.07,.09,.22], skyHor:[.52,.34,.44], skyMix:.86, mist:[.3,.28,.4,.2], stars:.35, fire:.5},
+  {h:21.6, ...NIGHT}, {h:24, ...NIGHT},
+];
+const TIME_NAMES = [[5.5,'Night'],[7.8,'Dawn'],[11.5,'Morning'],[17,'Afternoon'],[19.8,'Sunset'],[21,'Dusk'],[24,'Night']];
+const mixv = (a, b, t) => Array.isArray(a) ? a.map((x, i) => x + (b[i] - x)*t) : a + (b - a)*t;
+function lightAt(h){
+  h = ((h % 24) + 24) % 24;
+  let k = 0; while (k < LIGHT.length - 2 && LIGHT[k + 1].h <= h) k++;
+  const A = LIGHT[k], B = LIGHT[k + 1], t = sstep(0, 1, (h - A.h)/(B.h - A.h || 1));
+  const out = {}; for (const key in A) if (key !== 'h') out[key] = mixv(A[key], B[key], t);
+  // his mood tints the light a little: warmer and richer when he's glad, cooler and paler when he's low
+  const v = S.v;
+  out.gain = [out.gain[0]*(1 + .045*v), out.gain[1]*(1 + .012*v), out.gain[2]*(1 - .035*v)].map(x => x*(1 + .03*v));
+  out.sat = out.sat*(1 + .05*v);
+  return out;
+}
+
+/* ═══ Loading the pieces ═══ */
+const base = 'scene/assets/';
+const loadImg = src => new Promise((ok, no) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => no(new Error(src)); i.src = base + src; });
+let L, IM;
+try {
+  [L, ...IM] = await Promise.all([fetch(base + 'layout.json').then(r => { if (!r.ok) throw new Error('layout.json'); return r.json(); }),
+    loadImg('sky.jpg'), loadImg('field.webp'), loadImg('tree.webp'), loadImg('heads.webp'), loadImg('leaves.webp')]);
+} catch (e){ fail(`Couldn't load the scene (${e.message}).`); return; }
+const [imSky, imField, imTree, imHeads, imLeaves] = IM;
+const [PW, PH] = L.size;
+const SKY_MIN = Math.min(...L.skyline);
+const skylineAt = x => L.skyline[clamp(Math.round(x/32), 0, L.skyline.length - 1)];
+
+/* ═══ WebGL ═══ */
+function program(vs, fs){
+  const p = gl.createProgram();
+  for (const [type, src] of [[gl.VERTEX_SHADER, vs], [gl.FRAGMENT_SHADER, fs]]){
+    const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s);
+    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s));
+    gl.attachShader(p, s);
+  }
+  gl.linkProgram(p);
+  if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
+  const u = {}, n = gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS);
+  for (let i = 0; i < n; i++){ const name = gl.getActiveUniform(p, i).name.replace('[0]', ''); u[name] = gl.getUniformLocation(p, name); }
+  return {p, u};
+}
+const GLSL_LIGHT = `
+uniform vec3 uGain, uLift; uniform float uSat; uniform vec4 uMist; uniform float uPieces;
+vec3 land(vec3 c){ float l = dot(c, vec3(.299, .587, .114)); return max(mix(vec3(l), c, uSat)*uGain + uLift, 0.); }`;
+
+const bg = program(`#version 300 es
+in vec2 aP; out vec2 vS;
+void main(){ vS = vec2(aP.x*.5 + .5, .5 - aP.y*.5); gl_Position = vec4(aP, 0., 1.); }`,
+`#version 300 es
+precision highp float;
+in vec2 vS; out vec4 o;
+uniform sampler2D uSky, uField, uTree;
+uniform vec2 uPic, uTreeSize, uFoot;
+uniform vec4 uMap, uTouch;
+uniform float uFieldY, uSkyline, uT, uDir, uShake;
+uniform float uWind[17], uGust[17];
+uniform vec3 uSkyGain, uSkyTop, uSkyHor; uniform float uSkyMix, uStars;
+${GLSL_LIGHT}
+float h2(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7)))*43758.5453); }
+float n2(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3. - 2.*f);
+  return mix(mix(h2(i), h2(i + vec2(1, 0)), f.x), mix(h2(i + vec2(0, 1)), h2(i + vec2(1, 1)), f.x), f.y); }
+float windAt(float x){ float f = clamp(x, 0., 1.)*16.; int i = min(int(f), 15); return mix(uWind[i], uWind[i + 1], f - float(i)); }
+float gustAt(float x){ float f = clamp(x, 0., 1.)*16.; int i = min(int(f), 15); return mix(uGust[i], uGust[i + 1], f - float(i)); }
+void main(){
+  vec2 uv = uMap.xy + vS*uMap.zw, p = uv*uPic;
+
+  // sky: still; the hour colours it
+  vec3 col = texture(uSky, uv).rgb*uSkyGain;
+  col = mix(col, mix(uSkyTop, uSkyHor, smoothstep(0., .68, uv.y)), uSkyMix);
+  if (uStars > 0.){
+    vec2 c = floor(p/7.); float r = h2(c);
+    vec2 sp = (c + .5 + (vec2(h2(c + 3.1), h2(c + 7.7)) - .5)*.6)*7.;
+    float star = step(.994, r)*smoothstep(1.7, .3, length(p - sp))*(.55 + .45*sin(uT*(1.5 + r*4.) + r*60.));
+    col += star*uStars*(1. - smoothstep(.2, .6, uv.y))*vec3(.9, .93, 1.);
+  }
+  if (uPieces > .5) col = mix(col, vec3(.3, .5, 1.), .3);
+
+  // field: leans with the wind, ripples, turns silver where a gust passes, parts around a finger
+  float depth = clamp((p.y - uSkyline)/(uPic.y - uSkyline), 0., 1.);
+  float w = windAt(uv.x), g = gustAt(uv.x);
+  // one wave runs through the whole field in the wind's direction — the same wave the near plumes ride
+  float ripple = .5 + .5*sin(uT*2.2 - uDir*p.x*.007 + n2(p*vec2(.004, .009))*1.2);
+  float sway = w*(.55 + .45*ripple) + .2*w*(n2(vec2(p.x*.01 - uDir*uT*1.1, p.y*.016)) - .5);
+  vec2 dF = vec2(uDir*sway*mix(3., 22., depth), abs(sway)*mix(.5, 4., depth));
+  // a finger bends the grass sideways, away from it — nothing under the finger itself, so no lens bulge
+  vec2 dv = p - uTouch.xy;
+  float dd = length(dv);
+  float near = exp(-dd*dd/(uTouch.w*uTouch.w))*uTouch.z*smoothstep(0., 50., dd);
+  dF += vec2(dv.x, .25*abs(dv.x))/(dd + 1.)*near*mix(4., 14., depth);
+  vec2 q = p - dF;
+  vec4 f = texture(uField, vec2(q.x/uPic.x, (q.y - uFieldY)/(uPic.y - uFieldY)));
+  if (f.a > .002){
+    vec3 fc = f.rgb/f.a;
+    float white = smoothstep(.5, .85, dot(fc, vec3(.333)));
+    fc = land(fc);
+    fc += fc*white*g*(.6 + .4*ripple)*.26;
+    fc = mix(fc, uMist.rgb, uMist.a*pow(1. - depth, 1.7));
+    if (uPieces > .5) fc = mix(fc, vec3(.3, .85, .45), .45);
+    col = mix(col, fc, f.a);
+  }
+
+  // tree: the trunk stays; the crown sways in masses, a gust reaching its left side first; its leaves tremble
+  float hgt = clamp((uFoot.y - p.y)/uFoot.y, 0., 1.);
+  float flex = pow(hgt, 1.7)*(.55 + .45*clamp(abs(p.x - uFoot.x)/520., 0., 1.4));
+  float wt = windAt(uv.x), phase = -uDir*p.x*.002 + n2(p*.0035)*1.5;
+  float bend = wt*34. + sin(uT*1.25 + phase)*(.5 + wt)*20. + sin(uT*.7 + phase*1.7)*wt*6.
+             + sin(uT*8.5 + phase*3.)*uShake*14.;
+  vec2 dT = vec2(uDir*bend, abs(bend)*.12)*flex;
+  float leafy = smoothstep(.22, .5, hgt);
+  float fl = n2(p*.085 + uT*vec2(2.6, 1.8)) - .5 + (n2(p*.19 - uT*vec2(3.4, 2.2)) - .5)*.6;
+  dT += vec2(fl, fl*.5)*(2.6 + 4.*uShake)*(.25 + wt*1.3)*leafy;
+  vec2 tq = (p - dT)/uTreeSize;
+  // sampled outside any branch: inside one the GPU loses track of the texture's scale and draws a seam
+  vec4 t = texture(uTree, tq)*step(tq.x, 1.)*step(tq.y, 1.);
+  if (t.a > .002){
+    vec3 tc = t.rgb/t.a;
+    tc *= 1. + fl*.3*(.3 + wt + uShake)*leafy;     // turning leaves catch the light
+    tc = land(tc);
+    tc = mix(tc, uMist.rgb, uMist.a*.45);
+    if (uPieces > .5) tc = mix(tc, vec3(1., .55, .15), .45);
+    col = mix(col, tc, t.a);
+  }
+  o = vec4(col, 1.);
+}`);
+
+const sp = program(`#version 300 es
+in vec2 aPos, aUV; in vec3 aX;
+uniform vec4 uMap; uniform vec2 uPic;
+out vec2 vUV; out vec3 vX;
+void main(){ vec2 s = (aPos/uPic - uMap.xy)/uMap.zw; gl_Position = vec4(s.x*2. - 1., 1. - s.y*2., 0., 1.); vUV = aUV; vX = aX; }`,
+`#version 300 es
+precision highp float;
+uniform sampler2D uAtlas; uniform vec3 uTint; uniform float uGlow;
+${GLSL_LIGHT}
+in vec2 vUV; in vec3 vX; out vec4 o;      // vX: opacity, gust sheen, depth
+void main(){
+  if (uGlow > .5){ float a = smoothstep(1., 0., length(vUV*2. - 1.)); a = a*a*vX.x; o = vec4(vec3(1., .92, .55)*a, a); return; }
+  vec4 c = texture(uAtlas, vUV);
+  if (c.a < .002) discard;
+  vec3 rgb = c.rgb/c.a;
+  float white = smoothstep(.5, .85, dot(rgb, vec3(.333)));
+  rgb = land(rgb);
+  rgb += rgb*white*vX.y*.26;
+  rgb = mix(rgb, uMist.rgb, uMist.a*pow(1. - vX.z, 1.7));
+  if (uPieces > .5) rgb = mix(rgb, uTint, .5);
+  float a = c.a*vX.x;
+  o = vec4(rgb*a, a);
+}`);
+
+function texture(img, premultiply){
+  const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t);
+  gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, premultiply);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
+  gl.generateMipmap(gl.TEXTURE_2D);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  return t;
+}
+const T = {sky:texture(imSky, false), field:texture(imField, true), tree:texture(imTree, true),
+           heads:texture(imHeads, true), leaves:texture(imLeaves, true)};
+
+const bgVao = gl.createVertexArray(); gl.bindVertexArray(bgVao);
+gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+const aP = gl.getAttribLocation(bg.p, 'aP'); gl.enableVertexAttribArray(aP); gl.vertexAttribPointer(aP, 2, gl.FLOAT, false, 0, 0);
+
+const spVao = gl.createVertexArray(); gl.bindVertexArray(spVao);
+const spBuf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, spBuf);
+const STRIDE = 7;   // x, y, u, v, opacity, sheen, depth
+for (const [name, size, off] of [['aPos', 2, 0], ['aUV', 2, 2], ['aX', 3, 4]]){
+  const loc = gl.getAttribLocation(sp.p, name); gl.enableVertexAttribArray(loc);
+  gl.vertexAttribPointer(loc, size, gl.FLOAT, false, STRIDE*4, off*4);
+}
+gl.bindVertexArray(null);
+const verts = new Float32Array(60000);
+
+/* ═══ Screen ↔ picture: cover the screen, keep the tree (crop more from the right) ═══ */
+let map = [0, 0, 1, 1], cw = 1, ch = 1;
+function resize(){
+  const r = phone.getBoundingClientRect(), dpr = Math.min(2, devicePixelRatio || 1);
+  cw = r.width; ch = r.height;
+  canvas.width = Math.round(cw*dpr); canvas.height = Math.round(ch*dpr);
+  const ca = cw/ch, ta = PW/PH;
+  map = ca < ta ? [(1 - ca/ta)*.2, 0, ca/ta, 1] : [0, (1 - ta/ca)*.5, 1, ta/ca];
+}
+const toPicture = (sx, sy) => [(map[0] + sx/cw*map[2])*PW, (map[1] + sy/ch*map[3])*PH];
+
+/* ═══ The near plumes: each swings on its own stem, from a point below the head ═══ */
+const AW = imHeads.naturalWidth, AH = imHeads.naturalHeight;
+const heads = L.heads.map(h => ({...h, ph:(Math.random() - .5)*.8, om:2.2*(1 + (Math.random() - .5)*.1), depth:clamp((h.pivot[1] - SKY_MIN)/(PH - SKY_MIN))}))
+  .sort((a, b) => a.pivot[1] - b.pivot[1]);                      // the far ones first, the near ones over them
+const ROWS = 4;
+function headVerts(h, out, n){
+  const [px, py] = h.pivot, x = px/PW, w = windAt(x), g = gustAt(x);
+  // lean with the wind, ride the wave that runs through the field downwind, and tremble a little
+  const wave = Math.sin(S.t*h.om - S.dir*px*.007 + h.ph);
+  let th = S.dir*(w*.16 + wave*(.3 + w)*.06 + (n1(S.t*2.7 + h.ph*9) - .5)*.03*(.3 + w));
+  if (touch.s > .01){                                              // lean away from the finger
+    const dx = h.x + h.w/2 - touch.x, dy = h.y + h.h/2 - touch.y, d = Math.hypot(dx, dy), R = 280;
+    if (d < R) th += (dx < 0 ? -1 : 1)*Math.pow(1 - d/R, 1.4)*.45*touch.s;
+  }
+  const sheen = g*(.6 + .4*(.5 + .5*wave));
+  const [ax, ay, aw, ah] = h.atlas, P = [];
+  for (let r = 0; r <= ROWS; r++){
+    const v = r/ROWS, a = th*(.7 + .3*(1 - v)), c = Math.cos(a), s = Math.sin(a);   // the top bends more than the bottom
+    for (const u of [0, 1]){
+      const dx = h.x + u*h.w - px, dy = h.y + v*h.h - py;
+      P.push([px + dx*c - dy*s, py + dx*s + dy*c, (ax + u*aw)/AW, (ay + v*ah)/AH]);
+    }
+  }
+  for (let r = 0; r < ROWS; r++) for (const k of [0, 1, 2, 1, 3, 2]){
+    const q = P[r*2 + k]; out.set([q[0], q[1], q[2], q[3], 1, sheen, h.depth], n); n += STRIDE;
+  }
+  return n;
+}
+
+/* ═══ Falling leaves: real leaves from the picture, born on the crown when a gust reaches it ═══ */
+const LW = imLeaves.naturalWidth, LH = imLeaves.naturalHeight;
+const crown = [], treeAlpha = {};
+{
+  const q = 4, w = Math.ceil(imTree.naturalWidth/q), h = Math.ceil(imTree.naturalHeight/q);
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  const x = c.getContext('2d', {willReadFrequently:true}); x.drawImage(imTree, 0, 0, w, h);
+  const D = x.getImageData(0, 0, w, h).data;
+  treeAlpha.at = (px, py) => { const i = Math.floor(py/q)*w + Math.floor(px/q); return px < 0 || py < 0 || px >= w*q || py >= h*q ? 0 : D[i*4 + 3]; };
+  for (let i = 0; i < w*h; i++){
+    const r = D[i*4], g = D[i*4 + 1], b = D[i*4 + 2], a = D[i*4 + 3], yy = Math.floor(i/w)*q;
+    if (a > 200 && r > g*1.08 && r > b*1.35 && yy < 1450) crown.push([(i % w)*q, yy]);
+  }
+}
+const leaves = [];
+function spawnLeaf(x, y, burst){
+  if (leaves.length >= 22) return;
+  leaves.push({x, y, vx:S.dir*(20 + Math.random()*40), vy:burst ? -30 - Math.random()*50 : 0, rot:Math.random()*6.283,
+    vr:(Math.random() < .5 ? -1 : 1)*(1.5 + Math.random()*3.5), ph:Math.random()*9, age:0,
+    k:Math.floor(Math.random()*L.leaves.length), s:.8 + Math.random()*.6, land:skylineAt(x) + 40 + Math.random()*560});
+}
+function moveLeaves(dt){
+  const wt = windAt(.34);
+  let n = 8*Math.pow(Math.max(0, wt - .24), 1.3)*dt;                // still air: none; a gust: one or two; a gale: a stream, never a cloud
+  while (n > 0){ if (Math.random() < n && crown.length){ const c = crown[Math.floor(Math.random()*crown.length)]; spawnLeaf(c[0], c[1]); } n -= 1; }
+  for (let i = leaves.length - 1; i >= 0; i--){
+    const f = leaves[i], w = windAt(clamp(f.x/PW));
+    f.vx += (S.dir*(35 + 330*w) - f.vx)*Math.min(1, 1.3*dt);        // carried by the same wind
+    f.vy += (95 - f.vy)*Math.min(1, .9*dt) + Math.sin(S.t*3.1 + f.ph)*60*dt;
+    f.x += f.vx*dt; f.y += f.vy*dt; f.rot += f.vr*dt*(.5 + w); f.age += dt;
+    f.a = Math.min(1, f.age*5)*clamp(1 - (f.y - f.land)/70);         // settles into the grass
+    if (f.a <= 0 && f.age > .5 || f.x < -80 || f.x > PW + 80) leaves.splice(i, 1);
+  }
+}
+function leafVerts(f, out, n){
+  const [ax, ay, aw, ah] = L.leaves[f.k].atlas;
+  const hw = aw*f.s/2, hh = ah*f.s/2*(.25 + .75*Math.abs(Math.cos(S.t*3.6 + f.ph)));   // turning over as it falls
+  const c = Math.cos(f.rot), s = Math.sin(f.rot);
+  const P = [[-hw, -hh, 0, 0], [hw, -hh, 1, 0], [-hw, hh, 0, 1], [hw, hh, 1, 1]].map(([x, y, u, v]) =>
+    [f.x + x*c - y*s, f.y + x*s + y*c, (ax + u*aw)/LW, (ay + v*ah)/LH]);
+  for (const k of [0, 1, 2, 1, 3, 2]){ const q = P[k]; out.set([q[0], q[1], q[2], q[3], f.a, 0, .5], n); n += STRIDE; }
+  return n;
+}
+
+/* ═══ Fireflies over the field at night ═══ */
+const flies = Array.from({length:18}, () => ({x:Math.random()*PW, y:SKY_MIN + 80 + Math.random()*(PH - SKY_MIN - 200), ph:Math.random()*20, sp:.5 + Math.random()}));
+function flyVerts(f, glow, out, n){
+  const x = f.x + Math.sin(S.t*.21*f.sp + f.ph)*120 + n1(S.t*.3 + f.ph)*60, y = f.y + Math.sin(S.t*.17*f.sp + f.ph*2)*70;
+  const blink = sstep(.55, 1, Math.sin(S.t*f.sp*1.3 + f.ph)*.5 + .5)*glow, r = 26;
+  for (const [u, v] of [[0, 0], [1, 0], [0, 1], [1, 0], [1, 1], [0, 1]]){ out.set([x + (u*2 - 1)*r, y + (v*2 - 1)*r, u, v, blink, 0, 1], n); n += STRIDE; }
+  return n;
+}
+
+/* ═══ A finger: in the grass it parts it; on the crown it shakes a few leaves loose ═══ */
+const touch = {x:-9999, y:-9999, on:false, s:0};
+function pointAt(e){ const r = phone.getBoundingClientRect(); return toPicture(e.clientX - r.left, e.clientY - r.top); }
+phone.addEventListener('pointerdown', e => {
+  const [x, y] = pointAt(e);
+  if (y < 1500 && treeAlpha.at(x, y) > 120){
+    S.shake = 1;
+    const near = crown.filter(c => Math.hypot(c[0] - x, c[1] - y) < 220);
+    for (let i = 0; i < 4; i++){ const c = near.length ? near[Math.floor(Math.random()*near.length)] : [x, y]; spawnLeaf(c[0], c[1], true); }
+    return;
+  }
+  touch.on = true; [touch.x, touch.y] = [x, y]; phone.setPointerCapture(e.pointerId);
+});
+phone.addEventListener('pointermove', e => { if (touch.on) [touch.x, touch.y] = pointAt(e); });
+for (const t of ['pointerup', 'pointercancel']) phone.addEventListener(t, () => { touch.on = false; });
+
+/* ═══ Controls ═══ */
+const clock = $('clock'), hourInput = $('hour'), more = $('more'), panel = $('panel');
+const nameOfHour = h => TIME_NAMES.find(([end]) => ((h % 24) + 24) % 24 < end)[1];
+function press(group, btn){ group.querySelectorAll('.chip').forEach(b => b.setAttribute('aria-pressed', b === btn)); }
+function summary(){ more.textContent = `${S.mode === 'cycle' ? 'Whole day' : S.mode === 'now' ? 'Now' : nameOfHour(S.hourTarget)} \u00b7 ${MOODS[S.mood].name}`; }
+const nowHour = () => { const d = new Date(); return d.getHours() + d.getMinutes()/60; };
+$('times').addEventListener('click', e => {
+  const b = e.target.closest('[data-hour]'); if (!b) return;
+  press($('times'), b);
+  S.mode = b.dataset.hour === 'now' ? 'now' : b.dataset.hour === 'cycle' ? 'cycle' : 'fixed';
+  if (S.mode === 'fixed') S.hourTarget = +b.dataset.hour;
+  summary();
+});
+hourInput.addEventListener('input', () => { S.mode = 'fixed'; S.hour = S.hourTarget = +hourInput.value; press($('times'), null); summary(); });
+$('moods').addEventListener('click', e => {
+  const b = e.target.closest('[data-mood]'); if (!b) return;
+  press($('moods'), b); S.mood = b.dataset.mood; summary();
+});
+function togglePieces(){ S.pieces = 1 - S.pieces; for (const id of ['pieces', 'pieces2']) $(id).setAttribute('aria-pressed', !!S.pieces); }
+$('pieces').addEventListener('click', togglePieces); $('pieces2').addEventListener('click', togglePieces);
+$('dir').addEventListener('click', e => { S.dir *= -1; e.target.textContent = S.dir > 0 ? 'Wind from the left' : 'Wind from the right'; });
+more.addEventListener('click', () => { const open = panel.classList.toggle('open'); more.setAttribute('aria-expanded', open); });
+
+/* ═══ Each frame ═══ */
+function setLight(prog, Lt){
+  gl.uniform3fv(prog.u.uGain, Lt.gain); gl.uniform3fv(prog.u.uLift, Lt.lift); gl.uniform1f(prog.u.uSat, Lt.sat);
+  gl.uniform4fv(prog.u.uMist, Lt.mist); gl.uniform1f(prog.u.uPieces, S.pieces);
+}
+function draw(){
+  const Lt = lightAt(S.hour);
+  gl.viewport(0, 0, canvas.width, canvas.height);
+  for (let i = 0; i <= 16; i++){ WIND[i] = windAt(i/16); GUST[i] = gustAt(i/16); }
+
+  gl.disable(gl.BLEND);
+  gl.useProgram(bg.p); gl.bindVertexArray(bgVao);
+  [['uSky', T.sky], ['uField', T.field], ['uTree', T.tree]].forEach(([n, t], i) => { gl.activeTexture(gl.TEXTURE0 + i); gl.bindTexture(gl.TEXTURE_2D, t); gl.uniform1i(bg.u[n], i); });
+  gl.uniform2f(bg.u.uPic, PW, PH); gl.uniform4fv(bg.u.uMap, map);
+  gl.uniform2f(bg.u.uTreeSize, L.tree.w, L.tree.h); gl.uniform2fv(bg.u.uFoot, L.tree.trunkBase);
+  gl.uniform1f(bg.u.uFieldY, L.field.y); gl.uniform1f(bg.u.uSkyline, SKY_MIN);
+  gl.uniform1f(bg.u.uT, S.t); gl.uniform1f(bg.u.uDir, S.dir); gl.uniform1f(bg.u.uShake, S.shake);
+  gl.uniform1fv(bg.u.uWind, WIND); gl.uniform1fv(bg.u.uGust, GUST);
+  gl.uniform4f(bg.u.uTouch, touch.x, touch.y, touch.s, 170);
+  gl.uniform3fv(bg.u.uSkyGain, Lt.skyGain); gl.uniform3fv(bg.u.uSkyTop, Lt.skyTop); gl.uniform3fv(bg.u.uSkyHor, Lt.skyHor);
+  gl.uniform1f(bg.u.uSkyMix, Lt.skyMix); gl.uniform1f(bg.u.uStars, Lt.stars);
+  setLight(bg, Lt);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+  gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+  gl.useProgram(sp.p); gl.bindVertexArray(spVao); gl.bindBuffer(gl.ARRAY_BUFFER, spBuf);
+  gl.uniform4fv(sp.u.uMap, map); gl.uniform2f(sp.u.uPic, PW, PH); gl.uniform1i(sp.u.uAtlas, 0);
+  setLight(sp, Lt); gl.activeTexture(gl.TEXTURE0);
+  const batch = (tex, tint, glow, fill) => {
+    const n = fill(0); if (!n) return;
+    gl.bindTexture(gl.TEXTURE_2D, tex); gl.uniform3fv(sp.u.uTint, tint); gl.uniform1f(sp.u.uGlow, glow);
+    gl.bufferData(gl.ARRAY_BUFFER, verts.subarray(0, n), gl.STREAM_DRAW);
+    gl.drawArrays(gl.TRIANGLES, 0, n/STRIDE);
+  };
+  batch(T.heads, [.95, .3, .85], 0, n => { for (const h of heads) n = headVerts(h, verts, n); return n; });
+  batch(T.leaves, [1, .9, .2], 0, n => { for (const f of leaves) n = leafVerts(f, verts, n); return n; });
+  if (Lt.fire > .01){ gl.blendFunc(gl.ONE, gl.ONE); batch(T.leaves, [0, 0, 0], 1, n => { for (const f of flies) n = flyVerts(f, Lt.fire, verts, n); return n; }); }
+}
+
+let prev = performance.now(), running = false, lastClock = '';
+function tick(dt){
+  S.t += dt;
+  const m = MOODS[S.mood], k = 1 - Math.exp(-dt*1.2);
+  S.wind += (m.wind - S.wind)*k; S.gust += (m.gust - S.gust)*k; S.v += (m.v - S.v)*k;
+  if (S.mode === 'now') S.hourTarget = nowHour();
+  if (S.mode === 'cycle') S.hour = S.hourTarget = (S.hour + dt*.4) % 24;
+  else { const d = ((S.hourTarget - S.hour + 36) % 24) - 12; S.hour = (S.hour + d*(1 - Math.exp(-dt*2.2)) + 24) % 24; }
+  S.shake *= Math.exp(-dt*1.8);
+  touch.s += ((touch.on ? 1 : 0) - touch.s)*(1 - Math.exp(-dt*(touch.on ? 10 : 3)));
+  moveLeaves(dt);
+  draw();
+  if (!canvas.classList.contains('ready')) canvas.classList.add('ready');
+  const hh = Math.floor(S.hour), mm = Math.floor((S.hour - hh)*60), label = `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
+  if (label !== lastClock){ clock.textContent = lastClock = label; if (S.mode !== 'fixed' || document.activeElement !== hourInput) hourInput.value = S.hour.toFixed(2); }
+}
+function frame(now){
+  if (!running) return;
+  tick(Math.min(.05, (now - prev)/1000)); prev = now;
+  requestAnimationFrame(frame);
+}
+function run(on){ if (on === running) return; running = on; if (on){ prev = performance.now(); requestAnimationFrame(frame); } }
+document.addEventListener('visibilitychange', () => run(!document.hidden));
+resize(); new ResizeObserver(resize).observe(phone);
+summary(); run(!document.hidden);
+window.scene = {S, heads, leaves, touch, windAt, gustAt, map: () => map, size: () => [cw, ch],
+  step: (dt = 1/30, n = 1) => { for (let i = 0; i < n; i++) tick(dt); }};   // for checking from the console
+})().catch(e => {
+  document.getElementById('phone').insertAdjacentHTML('beforeend', `<p class="msg">The scene stopped: ${e.message}</p>`);
+  console.error(e);
+});
+</script>
