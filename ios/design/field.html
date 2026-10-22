@@ -53,7 +53,7 @@ body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.4 var(--sans);ov
 <div class="hud"><div class="fps" id="fps">— <small>кадров/с</small></div><div class="sub" id="sub">готовлю поле…</div></div>
 <div class="hint" id="hint">Проведи пальцем по траве — она расступится</div>
 <div class="bar">
-  <button class="chip" type="button" id="count">Метёлок: 3000</button>
+  <button class="chip" type="button" id="count">Метёлок: 6000</button>
   <button class="chip" type="button" id="windBtn">Ветер: средний</button>
   <button class="chip" type="button" id="gust">Порыв</button>
   <button class="chip" type="button" id="quality">Качество: высокое</button>
@@ -75,9 +75,9 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 /* ═══ The plume (the numbers from plume.html, v3) and the test settings ═══ */
 const PLUME = {racemes: 30, rLenCm: 17, spread: 0.38, droop: 0.6, lean: 0.35, fluff: 1.0, hairMM: 9, density: 1.5,
                height: 1.55, thickMM: 6, leaves: 10, leafLen: 0.55, seed: 7};
-const COUNTS = [1000, 3000, 6000, 10000];
+const COUNTS = [3000, 6000, 10000, 16000];
 const WINDS = [['слабый', 0.15, 0.2], ['средний', 0.35, 0.45], ['сильный', 0.7, 0.8]];
-const S = {count: 3000, wind: 0.35, gust: 0.45, windName: 'средний', quality: 'high', t: 0, impulse: 0, impulseT: 0,
+const S = {count: 6000, wind: 0.35, gust: 0.45, windName: 'средний', quality: 'high', t: 0, impulse: 0, impulseT: 0,
            dir: new THREE.Vector2(1, 0.12).normalize()};
 const NEAR = 6, MID = 22, FAR = 52, NEAR_COUNT = 320;   // the hill's crest is at ~46 m: nothing behind it is drawn
 
@@ -94,6 +94,9 @@ function bezD(p0, p1, p2, p3, t){ const u = 1 - t;
   return p1.clone().sub(p0).multiplyScalar(3*u*u).addScaledVector(p2.clone().sub(p1), 6*u*t).addScaledVector(p3.clone().sub(p2), 3*t*t); }
 const cardWidth = P => 2*P.hairMM/1000*(0.55 + 0.9*P.fluff) + 0.003;
 // the ground: rising away from us into a hill, like the field in his picture
+// from ~5 m on, the ground rises to the height of the plume bases and is drawn as the top of a dense field:
+// far away that is all the eye sees, so there are no gaps and the horizon is a soft, full line
+const lift = z => 1.22*sm(5, 16, z);
 // rises to a crest ~46 m away, higher on the left (where his tree will stand), like the hill in his picture
 // (looking along +z, the left of the screen is +x)
 const ground = (x, z) => 5.2*sm(0, 46, z)*(0.85 + 0.15*Math.sin(x*0.06 + 1.3)) + 0.11*x*sm(5, 40, z) - 4*sm(47, 75, z) + 0.12*Math.sin(x*0.35 + z*0.11);
@@ -163,7 +166,8 @@ class Strips {
   }
   get triangles(){ return this.index.length/3; }
 }
-const DETAIL = {near: {r: 1, rSeg: 10, l: 1, lSeg: 16, sSeg: 14, w: 1}, mid: {r: 0.45, rSeg: 4, l: 0.5, lSeg: 5, sSeg: 5, w: 1.15}};
+// middle plants: fewer, wider fingers and few leaves — their lower half sinks into the grass-top surface anyway
+const DETAIL = {near: {r: 1, rSeg: 10, l: 1, lSeg: 16, sSeg: 14, w: 1}, mid: {r: 0.3, rSeg: 3, l: 0.2, lSeg: 4, sSeg: 4, w: 1.2}};
 function buildTemplate(Q, seed, D){
   const R = rng(seed), heads = new Strips(), stalks = new Strips(), leaves = new Strips();
   const H = Q.height, up = V(0, 1, 0);
@@ -230,12 +234,12 @@ vec3 hairLight(vec3 base, vec3 T, vec3 V, float glow){
 vec3 haze(vec3 c, vec3 wp){ float d = length(wp - cameraPosition); return mix(c, uHaze, 1. - exp(-d*uHazeK)); }`;
 const uniforms = {
   uTime: {value: 0}, uWind: {value: S.wind}, uSun: {value: V()}, uSunCol: {value: new THREE.Color()}, uSky: {value: new THREE.Color()},
-  uHaze: {value: new THREE.Color()}, uHazeK: {value: 0.006}, uGlow: {value: 0.7}, uHair: {value: new THREE.Color(...lin([0.98, 0.965, 0.94]))},
+  uHaze: {value: new THREE.Color()}, uHazeK: {value: 0.0045}, uGlow: {value: 0.7}, uHair: {value: new THREE.Color(...lin([0.98, 0.965, 0.94]))},
   uAtlas: {value: null}, uVariants: {value: VARIANTS}, uNodes: {value: PLUME.height/0.14},
 };
 const STRIP_VS = `${COMMON}
   attribute vec3 aTan, aNrm; attribute float aSide, aV, aW, aVar, aPhase, aBend, aAO;
-  varying vec2 vUv; varying vec3 vT, vW; varying float vSide, vV, vAO, vTint, vB;
+  varying vec2 vUv; varying vec3 vT, vW; varying float vSide, vV, vAO, vTint, vB, vSheen;
   uniform float uVariants, uFlat;
   void main(){
     vec3 p = place(position) + sway(aBend, aPhase, aV);            // the bend is already in metres for this plant
@@ -243,21 +247,22 @@ const STRIP_VS = `${COMMON}
     vec3 wp = p;
     if (uFlat > .5) wp += normalize(cross(T, turn(aNrm)))*aSide*w; else wp = widen(wp, T, aSide, w);
     gl_Position = projectionMatrix*viewMatrix*vec4(wp, 1.);
-    vUv = vec2((aVar + 0.5 + 0.5*aSide)/uVariants, aV); vT = T; vW = wp; vSide = aSide; vV = aV; vAO = aAO; vTint = iB.y; vB = aBend;
+    vUv = vec2((aVar + 0.5 + 0.5*aSide)/uVariants, aV); vT = T; vW = wp; vSide = aSide; vV = aV; vAO = aAO; vTint = iB.y; vB = aBend; vSheen = length(iBend);
   }`;
 const headMat = new THREE.ShaderMaterial({uniforms: {...uniforms, uFlat: {value: 0}}, transparent: true, depthWrite: false, premultipliedAlpha: true,
   side: THREE.DoubleSide, vertexShader: STRIP_VS, fragmentShader: `${LIGHT}
-  uniform sampler2D uAtlas; uniform vec3 uHair; varying vec2 vUv; varying vec3 vT, vW; varying float vSide, vV, vAO, vTint, vB;
+  uniform sampler2D uAtlas; uniform vec3 uHair; varying vec2 vUv; varying vec3 vT, vW; varying float vSide, vV, vAO, vTint, vB, vSheen;
   void main(){
     vec4 tx = texture2D(uAtlas, vUv); float a = tx.a;
     vec3 raw = tx.rgb/max(a, 1e-3); float hair = smoothstep(0.62, 0.9, dot(raw, vec3(0.333)));
     vec3 base = mix(raw, raw*uHair, hair)*vTint*vAO;
     vec3 col = hairLight(base, normalize(vT), normalize(cameraPosition - vW), uGlow*(0.3 + 0.9*hair)*(1.25 - 0.45*a));
+    col *= 1. + 0.6*vSheen;                                              // bent by a gust, it catches more light
     gl_FragColor = vec4(haze(col, vW)*a, a);
   }`});
 const stalkMat = new THREE.ShaderMaterial({uniforms: {...uniforms, uFlat: {value: 0}, uColor: {value: new THREE.Color(...lin([0.83, 0.68, 0.45]))}},
   side: THREE.DoubleSide, vertexShader: STRIP_VS, fragmentShader: `${LIGHT}
-  uniform vec3 uColor; uniform float uNodes; varying vec2 vUv; varying vec3 vT, vW; varying float vSide, vV, vAO, vTint, vB;
+  uniform vec3 uColor; uniform float uNodes; varying vec2 vUv; varying vec3 vT, vW; varying float vSide, vV, vAO, vTint, vB, vSheen;
   void main(){
     float r = sqrt(max(0., 1. - vSide*vSide)), f = fract(vV*uNodes), joint = 1. - smoothstep(0., 0.03, min(f, 1. - f));
     float shade = mix(0.28, 1., smoothstep(0.05, 0.85, vB));        // low down, the plumes above shade the stalk
@@ -266,7 +271,7 @@ const stalkMat = new THREE.ShaderMaterial({uniforms: {...uniforms, uFlat: {value
   }`});
 const leafMat = new THREE.ShaderMaterial({uniforms: {...uniforms, uFlat: {value: 1}, uColor: {value: new THREE.Color(...lin([0.6, 0.6, 0.32]))},
   uColorTip: {value: new THREE.Color(...lin([0.82, 0.7, 0.45]))}}, side: THREE.DoubleSide, vertexShader: STRIP_VS, fragmentShader: `${LIGHT}
-  uniform vec3 uColor, uColorTip; varying vec2 vUv; varying vec3 vT, vW; varying float vSide, vV, vAO, vTint, vB;
+  uniform vec3 uColor, uColorTip; varying vec2 vUv; varying vec3 vT, vW; varying float vSide, vV, vAO, vTint, vB, vSheen;
   void main(){
     vec3 V = normalize(cameraPosition - vW), L = normalize(uSun);
     float rib = smoothstep(0.2, 0., abs(vSide));
@@ -274,20 +279,21 @@ const leafMat = new THREE.ShaderMaterial({uniforms: {...uniforms, uFlat: {value:
     float d = 0.5 + 0.5*abs(dot(normalize(cross(vT, V)), L));
     gl_FragColor = vec4(haze(c*(uSky*0.6 + uSunCol*0.5*d) + c*uSunCol*back(V)*uGlow*0.7, vW), 1.);
   }`});
-// far plants: a picture of our own plume on two triangles, turned to face the camera
-const farMat = new THREE.ShaderMaterial({uniforms: {...uniforms, uImp: {value: null}, uImpW: {value: 0.9}, uImpH: {value: 0.9}, uImpY: {value: 1.0}},
+// far: a picture of a whole clump of 5 of our own plumes on two triangles, turned to face the camera;
+// its lower edge sinks into the grass-top surface
+const farMat = new THREE.ShaderMaterial({uniforms: {...uniforms, uImp: {value: null}, uImpW: {value: 1.5}, uImpH: {value: 0.75}, uImpY: {value: 1.12}},
   transparent: true, depthWrite: false, premultipliedAlpha: true, vertexShader: `${COMMON}
-  attribute vec2 aCorner; uniform float uImpW, uImpH, uImpY; varying vec2 vUv; varying vec3 vW; varying float vTint, vKind;
+  attribute vec2 aCorner; uniform float uImpW, uImpH, uImpY; varying vec2 vUv; varying vec3 vW; varying float vTint, vSheen;
   void main(){
     vec3 base = iA.xyz + vec3(0., uImpY*iB.x, 0.);
     vec3 toCam = cameraPosition - base; toCam.y = 0.; vec3 right = normalize(vec3(toCam.z, 0., -toCam.x));
-    vec3 wp = base + right*aCorner.x*uImpW*iB.x + vec3(0., aCorner.y*uImpH*iB.x, 0.) + vec3(iBend.x, 0., iBend.y)*aCorner.y*1.2;
+    vec3 wp = base + right*aCorner.x*uImpW*iB.x + vec3(0., aCorner.y*uImpH*iB.x, 0.) + vec3(iBend.x, 0., iBend.y)*aCorner.y*1.6;
     gl_Position = projectionMatrix*viewMatrix*vec4(wp, 1.);
     float k = floor(mod(iB.z*3., 3.));
-    vUv = vec2((k + aCorner.x + 0.5)/3., aCorner.y); vW = wp; vTint = iB.y;
+    vUv = vec2((k + aCorner.x + 0.5)/3., aCorner.y); vW = wp; vTint = iB.y; vSheen = length(iBend);
   }`, fragmentShader: `${LIGHT}
-  uniform sampler2D uImp; varying vec2 vUv; varying vec3 vW; varying float vTint;
-  void main(){ vec4 c = texture2D(uImp, vUv); gl_FragColor = vec4(haze(c.rgb/max(c.a, 1e-3)*vTint, vW)*c.a, c.a); }`});
+  uniform sampler2D uImp; varying vec2 vUv; varying vec3 vW; varying float vTint, vSheen;
+  void main(){ vec4 c = texture2D(uImp, vUv); gl_FragColor = vec4(haze(c.rgb/max(c.a, 1e-3)*vTint*(1. + 0.6*vSheen), vW)*c.a, c.a); }`});
 
 /* ═══ Renderer, sky, ground ═══ */
 const canvas = document.getElementById('view');
@@ -313,17 +319,33 @@ const sky = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.ShaderMateri
 sky.frustumCulled = false; sky.renderOrder = -2; scene.add(sky);
 
 const groundGeo = new THREE.PlaneGeometry(90, 80, 60, 80); groundGeo.rotateX(-Math.PI/2); groundGeo.translate(0, 0, 38);
-{ const p = groundGeo.attributes.position; for (let i = 0; i < p.count; i++) p.setY(i, ground(p.getX(i), p.getZ(i))); groundGeo.computeVertexNormals(); }
+{ const p = groundGeo.attributes.position; for (let i = 0; i < p.count; i++) p.setY(i, ground(p.getX(i), p.getZ(i)) + lift(p.getZ(i))); groundGeo.computeVertexNormals(); }
+Object.assign(uniforms, {uWindLine: {value: new Float32Array(64)}, uDir: {value: S.dir}});
 const groundMesh = new THREE.Mesh(groundGeo, new THREE.ShaderMaterial({uniforms, vertexShader: `varying vec3 vW;
     void main(){ vec4 w = modelMatrix*vec4(position, 1.); vW = w.xyz; gl_Position = projectionMatrix*viewMatrix*w; }`,
   fragmentShader: `${LIGHT} varying vec3 vW;
+    uniform float uWindLine[64]; uniform vec2 uDir;
     float h2(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7)))*43758.5453); }
+    float n2(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3. - 2.*f);
+      return mix(mix(h2(i), h2(i + vec2(1, 0)), f.x), mix(h2(i + vec2(0, 1)), h2(i + vec2(1, 1)), f.x), f.y); }
+    float windAt(vec2 xz){                     // the plants' own wind: the script samples it every 2 m along its direction, each frame
+      float u = clamp(dot(xz, uDir)*0.5 + 32., 0., 62.99); int i = int(u);
+      return mix(uWindLine[i], uWindLine[i + 1], fract(u));
+    }
     void main(){
-      // under dense grass: dark golden stems and shade, lighter far away where plume tops blend together
+      float lifted = smoothstep(4., 16., vW.z);                       // near: bare soil under the plants; far: the top of the field
       float n = h2(floor(vW.xz*7.))*0.35 + h2(floor(vW.xz*1.3))*0.25;
-      float far = smoothstep(8., 60., length(vW - cameraPosition));
-      vec3 c = mix(vec3(0.1, 0.07, 0.04), vec3(0.5, 0.41, 0.3), far)*(0.8 + n);
-      gl_FragColor = vec4(haze(c*(uSky*0.7 + uSunCol*0.25), vW), 1.);
+      vec3 soil = vec3(0.1, 0.07, 0.04)*(0.8 + n);
+      // a dense susuki field seen from afar: cream plume tops, golden shade between them, in streaks and clumps;
+      // a gust leans the tops (the pattern slides) and they catch the light, so waves run across the field
+      float w = windAt(vW.xz); vec2 q = vW.xz - uDir*w*0.3;
+      float f = n2(q*vec2(2.2, 5.))*0.55 + n2(q*vec2(0.55, 1.3) + 7.)*0.3 + n2(vW.xz*12.)*0.15;
+      float far = smoothstep(14., 45., length(vW - cameraPosition));    // farther away, the heads hide more of what is under them
+      float heads = smoothstep(0.62 - 0.22*far, 0.72 - 0.17*far, f);
+      vec3 top = mix(vec3(0.3, 0.14, 0.04), vec3(0.92, 0.82, 0.68), heads)*(0.78 + 0.45*w);
+      vec3 V = normalize(cameraPosition - vW);
+      vec3 c = mix(soil*(uSky*0.7 + uSunCol*0.25), top*(uSky*0.8 + uSunCol*(0.3 + back(V)*uGlow*0.35)), lifted);
+      gl_FragColor = vec4(haze(c, vW), 1.);
     }`}));
 groundMesh.renderOrder = -1; scene.add(groundMesh);
 const plantsGroup = new THREE.Group(); scene.add(plantsGroup);
@@ -346,8 +368,15 @@ function scatter(total){
       made += k;
     }
   };
-  const near = Math.min(NEAR_COUNT, Math.round(total*0.2)), rest = total - near;
-  zone(near, 0.8, NEAR, 'near'); zone(Math.round(rest*0.45), NEAR, MID, 'mid'); zone(rest - Math.round(rest*0.45), MID, FAR, 'far');
+  const near = Math.min(NEAR_COUNT, Math.round(total*0.2)), rest = total - near, mid = Math.round(rest*0.5);
+  zone(near, 0.8, NEAR, 'near'); zone(mid, NEAR, MID, 'mid');
+  // far: each record is a clump of 5 plumes drawn as one picture
+  const clumps = Math.round((rest - mid)/5);
+  for (let i = 0; i < clumps; i++){
+    const z = Math.sqrt(MID*MID + R()*(FAR*FAR - MID*MID)), x = (R()*2 - 1)*z*tanH();
+    out.push({x, z, y: ground(x, z), rot: 0, scale: 0.85 + 0.3*R(), tint: 0.9 + 0.13*R(), phase: R()*6.283, flex: 0.8 + 0.4*R(),
+              tier: 'far', k: 0, bx: 0, bz: 0, vx: 0, vz: 0});
+  }
   return out;
 }
 
@@ -359,25 +388,29 @@ function prepare(){
   headMat.uniforms.uAtlas.value = atlasRT.texture;
   templates = {near: [0, 1, 2].map(k => buildTemplate(PLUME, PLUME.seed + k*101, DETAIL.near)),
                mid: [0, 1, 2].map(k => buildTemplate(PLUME, PLUME.seed + k*101, DETAIL.mid))};
-  // a picture of each near template's head, for the far plants — drawn from our own plume, so it changes with it
-  impostorRT = new THREE.WebGLRenderTarget(768, 256, {samples: 4});
+  // pictures of clumps of five near plants for the far field — drawn from our own plume, so they change with it
+  impostorRT = new THREE.WebGLRenderTarget(1536, 256, {samples: 4});
   impostorRT.texture.generateMipmaps = true; impostorRT.texture.minFilter = THREE.LinearMipmapLinearFilter;
-  const bs = new THREE.Scene(), H = PLUME.height, bottom = H - 0.55, top = bottom + 0.9;
-  const cam = new THREE.OrthographicCamera(-0.45, 0.45, 0.45, -0.45, 0.1, 10);
-  cam.position.set(0, (top + bottom)/2, 3); cam.lookAt(0, (top + bottom)/2, 0); cam.updateProjectionMatrix();
+  const bs = new THREE.Scene(), W = farMat.uniforms.uImpW.value, Hh = farMat.uniforms.uImpH.value, y0 = farMat.uniforms.uImpY.value;
+  const cam = new THREE.OrthographicCamera(-W/2, W/2, Hh/2, -Hh/2, 0.1, 10);
+  cam.position.set(0, y0 + Hh/2, -4); cam.lookAt(0, y0 + Hh/2, 0); cam.updateProjectionMatrix();   // facing the sun, like the field camera
   renderer.setRenderTarget(impostorRT); renderer.setClearColor(0x000000, 0); renderer.clear();
-  templates.near.forEach((tp, k) => {
-    const one = [{x: 0, y: 0, z: 0, rot: 0, scale: 1, tint: 1, phase: 0}];
-    const meshes = [[tp.stalks, stalkMat, 0], [tp.leaves, leafMat, 0], [tp.heads, headMat, 2]].map(([st, mat, order]) => {
-      const m = new THREE.Mesh(instanced(st, one).geo, mat); m.frustumCulled = false; m.renderOrder = order; return m; });
-    meshes.forEach(m => bs.add(m));
-    impostorRT.viewport.set(k*256, 0, 256, 256); impostorRT.scissor.set(k*256, 0, 256, 256); impostorRT.scissorTest = true;
+  for (let k = 0; k < 3; k++){
+    const R = rng(900 + k), five = Array.from({length: 5}, (_, i) => ({x: (i - 2)*0.24 + (R() - 0.5)*0.12, y: 0, z: (R() - 0.5)*0.5,
+      rot: R()*6.283, scale: 0.85 + 0.25*R(), tint: 0.92 + 0.1*R(), phase: 0, k: (i + k) % 3})).sort((a, b) => b.z - a.z);   // farthest first
+    templates.near.forEach((tp, j) => {
+      const some = five.filter(p => p.k === j);
+      for (const [st, mat, order] of [[tp.stalks, stalkMat, 0], [tp.leaves, leafMat, 0], [tp.heads, headMat, 2]]){
+        const m = new THREE.Mesh(instanced(st, some).geo, mat); m.frustumCulled = false; m.renderOrder = order; bs.add(m);
+      }
+    });
+    impostorRT.viewport.set(k*512, 0, 512, 256); impostorRT.scissor.set(k*512, 0, 512, 256); impostorRT.scissorTest = true;
     renderer.setRenderTarget(impostorRT);                         // a render target keeps its own viewport: set it, then select again
     renderer.render(bs, cam);
-    meshes.forEach(m => { bs.remove(m); m.geometry.dispose(); });
-  });
-  impostorRT.scissorTest = false; impostorRT.viewport.set(0, 0, 768, 256); renderer.setRenderTarget(null);
-  farMat.uniforms.uImp.value = impostorRT.texture; farMat.uniforms.uImpY.value = bottom;
+    for (const m of [...bs.children]){ bs.remove(m); m.geometry.dispose(); }
+  }
+  impostorRT.scissorTest = false; impostorRT.viewport.set(0, 0, 1536, 256); renderer.setRenderTarget(null);
+  farMat.uniforms.uImp.value = impostorRT.texture;
 }
 
 function instanced(strips, list, bend){
@@ -483,8 +516,8 @@ function showFps(dt){
   if (acc >= 0.5){
     const fps = Math.round(frames/acc), ms = (acc/frames*1000).toFixed(1);
     fpsEl.innerHTML = `${fps} <small>кадров/с</small>`; fpsEl.className = 'fps ' + (fps >= 50 ? 'good' : fps >= 30 ? 'mid' : 'bad');
-    const near = plants.filter(p => p.tier === 'near').length, mid = plants.filter(p => p.tier === 'mid').length;
-    subEl.innerHTML = `кадр ${ms} мс · худший ${(worst*1000).toFixed(0)} мс<br>метёлок: ${plants.length} (близко ${near}, средне ${mid}, далеко ${plants.length - near - mid})<br>` +
+    const near = plants.filter(p => p.tier === 'near').length, mid = plants.filter(p => p.tier === 'mid').length, far = 5*plants.filter(p => p.tier === 'far').length;
+    subEl.innerHTML = `кадр ${ms} мс · худший ${(worst*1000).toFixed(0)} мс<br>метёлок: ${near + mid + far} (близко ${near}, средне ${mid}, далеко ${far} — кустами)<br>` +
       `треугольников: ${Math.round(lastInfo.tri/1000)} тыс · шагов рисования: ${lastInfo.calls}`;
     frames = 0; acc = 0; worst = 0;
   }
@@ -520,6 +553,8 @@ addEventListener('resize', () => { resize(); });
 const sunTmp = V(), fwd = V();
 function step(dt){
   S.t += dt; uniforms.uTime.value = S.t; S.impulse *= Math.exp(-dt*0.35);
+  const line = uniforms.uWindLine.value;
+  for (let i = 0; i < 64; i++){ const a = 2*i - 64; line[i] = windAt(a*S.dir.x, a*S.dir.y, S.t); }
   touch.s += ((touch.on ? 1 : 0) - touch.s)*(1 - Math.exp(-dt*(touch.on ? 10 : 3)));
   simulate(Math.min(dt, 1/30));
   camera.getWorldDirection(fwd); sunTmp.copy(uniforms.uSun.value).multiplyScalar(100).add(camera.position).project(camera);
