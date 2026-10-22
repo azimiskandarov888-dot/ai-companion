@@ -113,6 +113,49 @@
 
 ---
 
+## Шаг 1, вторая версия: как метёлка должна выглядеть и не тормозить (22.10.2026)
+
+**Настоящая сусуки** (Miscanthus sinensis):
+- стебель 4–8 мм, высота 1–2,5 м;
+- метёлка 12–26 см длиной и 8–10 см шириной, в ней 10–36 веточек по 10–20 см;
+- колоски 5–6 мм, парами; шёлковые волоски у них **4–7 мм**.
+
+В первой версии волоски были ~15 см, а головка вдвое больше нужного. Поэтому
+стебель казался тонким, хотя был правильным.
+
+**Глаз на телефоне** не видит отдельных волосков даже у ближней метёлки — только
+пушок. Поэтому:
+- **стебель и листья — сплошная тонкая геометрия.** Это дёшево для видеокарты
+  iPhone: она умеет не рисовать то, что закрыто;
+- **веточки — тонкие изогнутые полоски,** они поворачиваются к камере, как
+  травинки в Ghost of Tsushima. **Пушок на них — картинка, которую рисует код из
+  чисел:** колоски и пучки коротких волосков, причёсанных к кончику. Двинул
+  ползунок пушистости или длины волосков — картинка перерисовалась, всё по-прежнему
+  меняется;
+- прозрачные только головки: прозрачные пиксели на iPhone — самое дорогое.
+
+Итог: **≈ 760 треугольников на метёлку** вместо ≈ 30 000. Выбор владельца — «между»
+(настоящее строение, но пушистая зрелая осенняя метёлка) и «камера не подходит
+близко».
+
+**Дальше, для поля:**
+- **ближние метёлки** — так, как сейчас;
+- **средние** — 6–8 полосок или одна-две картинки;
+- **дальняя полоса** — одна заранее нарисованная картинка с лёгким движением в шейдере;
+- **порядок рисования** считается один раз (камера стоит на месте);
+- **экономия:** рисуем меньше и увеличиваем через MetalFX, 30 кадров в покое,
+  детали по модели iPhone.
+
+Источники: [описания сортов Miscanthus (патенты США)](https://image-ppubs.uspto.gov/dirsearch-public/print/downloadPdf/PP23681),
+[фото: куст сусуки](https://commons.wikimedia.org/wiki/File:Japanese_pampas_grass_%E3%82%B9%E3%82%B9%E3%82%AD%E3%81%AE%E7%A9%82%E6%B3%A2PB080105.jpg),
+[фото: веточка вблизи](https://commons.wikimedia.org/wiki/File:Miscanthus_sinensis_sl16.jpg),
+[трава Ghost of Tsushima](https://gdcvault.com/play/1027214/Advanced-Graphics-Summit-Procedural-Grass),
+[как движки снижают перерисовку листвы](https://app.cinevva.com/blog/2026-05-11-foliage-overdraw),
+[прозрачность на тайловых GPU](https://docs.imgtec.com/starter-guides/powervr-architecture/html/topics/rules/do-not-use-discard.html),
+[Apple GPU (WWDC20)](https://developer.apple.com/videos/play/wwdc2020/10632).
+
+---
+
 **Источники:**
 - Трава Ghost of Tsushima: [Procedural Grass (GDC 2021)](https://gdcvault.com/play/1027214/Advanced-Graphics-Summit-Procedural-Grass), [Blowing from the West (ветер)](https://gdcvault.com/play/1027350/Blowing-from-the-West-Simulating), [GodotGrass (повтор техники)](https://github.com/2Retr0/GodotGrass)
 - Ветер в деревьях: [Physically Guided Animation of Trees (Habel 2009)](https://www.cg.tuwien.ac.at/research/publications/2009/Habel_09_PGT/), [GPU Gems 3, гл. 6](https://developer.nvidia.com/gpugems/GPUGems3/gpugems3_ch06.html)

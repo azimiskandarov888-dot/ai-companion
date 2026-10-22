@@ -3,15 +3,20 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="claude:viewport-fit-sides" content="cover">
 <!--
-  Step 1 of the living world (LIVING-WORLD-RESEARCH.md): ONE susuki plume made only of numbers.
-  Every number below (DEFAULTS) is a slider; the plume is rebuilt from them at once.
-    stalk   — a curved tube with a few arching leaves
-    head    — a fan of racemes; each raceme is a spine with hundreds of silky hairs combed along it
-              and fanned to both sides, like a feather
-    light   — the sun from behind shines through the hairs (Kajiya–Kay hair light + forward scattering),
-              which is what makes the plumes in mj-15 glow
-    wind    — a preview only; the real spring simulation comes with the field (step 2)
-  Behind it: his picture, softly out of focus, so the plume is judged in his light.
+  Step 1 of the living world (LIVING-WORLD-RESEARCH.md): ONE susuki plume made only of numbers — v2,
+  built the way it can live in a field of thousands on a phone.
+
+  Real sizes (Miscanthus sinensis): culm 4–8 mm thick, 1–2.5 m tall; panicle 12–26 cm long, 8–10 cm
+  wide, 10–36 racemes of 10–20 cm; spikelets 5–6 mm in pairs with silky hairs 4–7 mm long.
+
+    stalk, leaves — solid thin geometry (cheap on the iPhone's tile-based GPU: no see-through pixels)
+    racemes       — thin curved 3D strips that turn to face the camera (like Ghost of Tsushima's grass
+                    blades); the fuzz on them is a picture
+    fuzz picture  — DRAWN BY CODE from the hair numbers (hair length, fluffiness, density): real
+                    spikelets with tufts of short hairs combed toward the tip. Moving a slider redraws
+                    it in a moment, so everything stays editable
+    light         — hair light along each raceme (Kajiya–Kay) + the sun shining through
+  About 500 triangles per plume instead of ~30 000 with one thread per hair.
 -->
 <style>
 /* Layout: the plume fills the screen; the numbers sit in a side panel on a computer and in a sheet at the bottom on a phone. */
@@ -29,11 +34,11 @@ body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.4 var(--sans);ov
 #view{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none}
 .msg{position:fixed;left:24px;right:24px;top:40%;text-align:center;font-weight:600}
 .ref{position:fixed;z-index:4;top:calc(14px + env(safe-area-inset-top, 0px));left:calc(14px + env(safe-area-inset-left, 0px));
-  width:112px;border-radius:14px;overflow:hidden;border:1px solid var(--line);background:var(--glass);cursor:pointer;
-  transition:width .3s ease}
+  width:112px;border-radius:14px;overflow:hidden;border:1px solid var(--line);background:var(--glass);cursor:pointer;color:var(--ink);
+  padding:0;transition:width .3s ease}
 .ref.big{width:min(78vw, 360px)}
 .ref img{display:block;width:100%;height:auto}
-.ref span{display:block;padding:5px 8px;font-size:11px;color:var(--ink-2)}
+.ref span{display:block;padding:5px 8px;font-size:11px;color:var(--ink-2);text-align:left}
 .hint{position:fixed;z-index:4;top:calc(16px + env(safe-area-inset-top, 0px));right:calc(16px + env(safe-area-inset-right, 0px));
   font-size:12px;color:var(--ink-2);background:var(--glass);border:1px solid var(--line);border-radius:999px;padding:6px 11px;
   transition:opacity 1s ease}
@@ -44,6 +49,8 @@ body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.4 var(--sans);ov
   display:flex;flex-direction:column;gap:16px}
 .panel h1{font:600 22px/1.15 var(--serif);margin:0;text-wrap:balance}
 .panel p{margin:0;color:var(--ink-2);font-size:13px}
+.stats{font-size:12px;color:var(--ink-2);font-variant-numeric:tabular-nums}
+.stats b{color:var(--accent);font-weight:600}
 .group{display:flex;flex-direction:column;gap:8px}
 .group h2{margin:0;font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-2)}
 .row{display:grid;grid-template-columns:1fr auto;gap:2px 10px;align-items:center}
@@ -68,20 +75,25 @@ pre{margin:0;max-height:220px;overflow:auto;font:11px/1.45 ui-monospace, SFMono-
 
 <canvas id="view"></canvas>
 <button class="ref" id="ref" type="button" aria-label="Метёлки с твоей картинки, нажми чтобы увеличить">
-  <img src="plume/ref.jpg" alt="Настоящие метёлки с картинки mj-15">
+  <img src="plume/ref.jpg" alt="Метёлки с картинки mj-15">
   <span>Твоя картинка</span>
 </button>
 <div class="hint" id="hint">Тяни пальцем — облети метёлку</div>
 <aside class="panel" id="panel">
   <div class="intro">
     <h1>Метёлка сусуки</h1>
-    <p>Одна метёлка, сделанная только из чисел. Двигаешь ползунок — она тут же пересобирается.</p>
+    <p>Настоящие размеры: стебель 6 мм, веточки 17 см, волоски 9 мм — зрелая пушистая осенняя сусуки. Пушок на веточках нарисован кодом из чисел: двигаешь ползунок — он перерисовывается.</p>
   </div>
+  <div class="stats" id="stats"></div>
   <div class="bar">
     <button class="chip" type="button" id="more" aria-expanded="false">Настроить</button>
+    <button class="chip" type="button" data-act="view">Куст</button>
     <button class="chip" type="button" data-act="gust">Порыв</button>
     <button class="chip" type="button" data-act="seed">Другая</button>
-    <button class="chip" type="button" data-act="reset">Как на картинке</button>
+  </div>
+  <div class="group">
+    <h2>Вид</h2>
+    <div class="chips" id="views"></div>
   </div>
   <div id="groups"></div>
   <div class="group">
@@ -92,11 +104,11 @@ pre{margin:0;max-height:220px;overflow:auto;font:11px/1.45 ui-monospace, SFMono-
     <h2>Фон</h2>
     <div class="chips" id="bgs"></div>
   </div>
-  <div class="group intro-actions">
+  <div class="group">
     <div class="chips">
       <button class="chip" type="button" data-act="gust">Порыв ветра</button>
       <button class="chip" type="button" data-act="seed">Другая метёлка</button>
-      <button class="chip" type="button" data-act="reset">Как на картинке</button>
+      <button class="chip" type="button" data-act="reset">Как было</button>
       <button class="chip" type="button" data-act="numbers" aria-pressed="false">Числа</button>
     </div>
   </div>
@@ -121,43 +133,100 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 
-/* ═══ The plume is these numbers. "Как на картинке" is tuned to the near plumes of mj-15. ═══ */
+/* ═══ The plume is these numbers (sizes in real units). ═══ */
 const DEFAULTS = {
-  racemes: 13, rLen: 0.34, spread: 0.36, droop: 0.64, lean: 0.55, fluff: 0.55, density: 1.15, hairLen: 0.44,
-  height: 1.45, arch: 0.35, leaves: 3,
-  color: 'silver', bright: 1.0, sunAz: 22, sunEl: 14, glow: 1.05, bg: 'picture',
-  wind: 0.22, seed: 7,
+  racemes: 30, rLenCm: 17, spread: 0.38, droop: 0.6, lean: 0.35, fluff: 1.0, hairMM: 9, density: 1.5,
+  height: 1.55, thickMM: 6, leaves: 4, leafLen: 0.6,
+  color: 'silver', bright: 1.0, sunAz: 22, sunEl: 14, glow: 1.0, bg: 'picture',
+  wind: 0.22, seed: 7, view: 'one',
 };
 const COLORS = { silver: ['Серебристая', [0.98, 0.965, 0.94]], cream: ['Кремовая', [0.98, 0.91, 0.8]],
                  young: ['Молодая', [0.9, 0.72, 0.76]], gold: ['Золотая', [0.98, 0.84, 0.6]] };
 const BGS = { picture: 'Твоя картинка', dark: 'Тёмный' };
+const VIEWS = { one: 'Одна метёлка', bush: 'Куст из 7' };
 const P = loadParams();
-
 function loadParams(){
-  try { const s = JSON.parse(localStorage.getItem('plume') || 'null'); if (s) return {...DEFAULTS, ...s}; } catch (e) {}
+  try { const s = JSON.parse(localStorage.getItem('plume2') || 'null'); if (s) return {...DEFAULTS, ...s}; } catch (e) {}
   return {...DEFAULTS};
 }
-function saveParams(){ try { localStorage.setItem('plume', JSON.stringify(P)); } catch (e) {} }
+function saveParams(){ try { localStorage.setItem('plume2', JSON.stringify(P)); } catch (e) {} }
 
-/* ═══ Small helpers ═══ */
+/* ═══ Helpers ═══ */
 const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
 const lin = c => c.map(v => Math.pow(v, 2.2));
+const sm = (a, b, x) => { const q = Math.min(1, Math.max(0, (x - a)/(b - a))); return q*q*(3 - 2*q); };
 function rng(seed){ let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = Math.imul(a ^ (a >>> 15), 1 | a);
   t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
 function bez(p0, p1, p2, p3, t){ const u = 1 - t; return p0.clone().multiplyScalar(u*u*u).addScaledVector(p1, 3*u*u*t).addScaledVector(p2, 3*u*t*t).addScaledVector(p3, t*t*t); }
 function bezD(p0, p1, p2, p3, t){ const u = 1 - t;
   return p1.clone().sub(p0).multiplyScalar(3*u*u).addScaledVector(p2.clone().sub(p1), 6*u*t).addScaledVector(p3.clone().sub(p2), 3*t*t); }
+const cardWidth = P => 2*P.hairMM/1000*(0.55 + 0.9*P.fluff) + 0.003;   // a raceme with its hairs spread, in metres
 
-/* Thin strands (hairs, spines) as ribbons that the vertex shader turns to face the camera. */
-class Strands {
-  constructor(){ Object.assign(this, {pos: [], tan: [], side: [], u: [], shade: [], bend: [], phase: [], kind: [], index: [], n: 0}); }
+/* ═══ The fuzz picture, drawn by code: 4 kinds of raceme side by side ═══
+   Each: a thin rachis with spikelets in pairs; every spikelet carries a tuft of short silky hairs
+   combed toward the tip and spread by "fluffiness". Drawn once into a texture; redrawn when the hair
+   numbers change. Colour is applied later, so changing colour costs nothing. */
+const VARIANTS = 4, ATLAS = new THREE.WebGLRenderTarget(512, 1024, {samples: 4});
+ATLAS.texture.generateMipmaps = true; ATLAS.texture.minFilter = THREE.LinearMipmapLinearFilter; ATLAS.texture.anisotropy = 4;
+const bakeScene = new THREE.Scene(), bakeCam = new THREE.OrthographicCamera(0, 1, 1, 0, -1, 1);
+const bakeMat = new THREE.LineBasicMaterial({vertexColors: true, transparent: true, depthTest: false, depthWrite: false});
+const bakeLines = new THREE.LineSegments(new THREE.BufferGeometry(), bakeMat);
+bakeLines.frustumCulled = false; bakeScene.add(bakeLines);
+let hairsDrawn = 0;
+function bakeFuzz(renderer){
+  const pos = [], col = [], W = cardWidth(P), L = 0.15;      // the picture stands for 15 cm of raceme
+  const seg = (x0, y0, x1, y1, c, a, v) => { pos.push((v + x0)/VARIANTS, y0, 0, (v + x1)/VARIANTS, y1, 0); col.push(...c, a, ...c, a); };
+  hairsDrawn = 0;
+  for (let v = 0; v < VARIANTS; v++){
+    const R = rng(P.seed*31 + v*7 + 1);
+    // the rachis: a few close parallel lines, slightly wavy
+    for (const dx of [-0.006, 0, 0.006]){
+      let px = 0.5 + dx, py = 0.0;
+      for (let k = 1; k <= 24; k++){ const y = k/24, x = 0.5 + dx + Math.sin(y*9 + v)*0.006; seg(px, py, x, y, [0.7, 0.63, 0.55], 0.85, v); px = x; py = y; }
+    }
+    const nodes = Math.round(L/0.0045), spread = (0.2 + 0.75*P.fluff);
+    for (let n = 0; n < nodes; n++){
+      for (const side of [-1, 1]){
+        const y0 = 0.03 + 0.94*(n + 0.5 + (R() - 0.5)*0.6)/nodes, x0 = 0.5 + side*(0.0008 + 0.0012*R())/W;
+        // the spikelet: a slim seed 5 mm long
+        const sl = 0.005*(0.85 + 0.3*R());
+        for (const off of [-0.0004, 0, 0.0004]) seg(x0 + off/W, y0, x0 + (off + side*0.0006)/W, y0 + sl/L, [0.78, 0.7, 0.6], 0.8, v);
+        // its tuft of silky hairs
+        const tuft = Math.round(14*P.density*(0.8 + 0.4*R()));
+        for (let h = 0; h < tuft; h++){
+          const th = side*Math.abs((R() + R() + R() - 1.5)/1.5)*spread*1.1 + (R() - 0.5)*0.15;   // mostly up, fanned outward
+          const len = P.hairMM/1000*(0.65 + 0.7*R()), bend = side*0.35*P.fluff*R();
+          const bx = x0 + (R() - 0.5)*0.001/W, by = y0 + R()*sl*0.5/L;
+          const mx = bx + Math.sin(th)*len*0.5/W, my = by + Math.cos(th)*len*0.5/L;
+          const ex = mx + Math.sin(th + bend)*len*0.5/W, ey = my + Math.cos(th + bend)*len*0.5/L;
+          const c = 0.86 + 0.14*R();
+          seg(bx, by, mx, my, [c, c, c*0.985], 0.5, v); seg(mx, my, ex, ey, [c, c, c*0.985], 0.42, v);
+          hairsDrawn++;
+        }
+      }
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('color', new THREE.Float32BufferAttribute(col, 4));
+  bakeLines.geometry.dispose(); bakeLines.geometry = g;
+  const prevTarget = renderer.getRenderTarget(), prevClear = renderer.getClearColor(new THREE.Color()), prevAlpha = renderer.getClearAlpha();
+  renderer.setRenderTarget(ATLAS); renderer.setClearColor(0x000000, 0); renderer.clear(); renderer.render(bakeScene, bakeCam);
+  renderer.setRenderTarget(prevTarget); renderer.setClearColor(prevClear, prevAlpha);
+}
+
+/* ═══ Building plumes from the numbers ═══ */
+class Strips {   // ribbons along a curve; the shader widens them sideways
+  constructor(){ Object.assign(this, {pos: [], tan: [], side: [], v: [], w: [], vari: [], phase: [], bend: [], nrm: [], index: [], n: 0}); }
   add(pts, o){
     const m = pts.length, base = this.n;
     for (let j = 0; j < m; j++){
-      const t = pts[Math.min(m - 1, j + 1)].clone().sub(pts[Math.max(0, j - 1)]).normalize(), u = j/(m - 1);
+      const t = pts[Math.min(m - 1, j + 1)].clone().sub(pts[Math.max(0, j - 1)]).normalize(), v = j/(m - 1);
       for (const s of [-1, 1]){
-        this.pos.push(pts[j].x, pts[j].y, pts[j].z); this.tan.push(t.x, t.y, t.z); this.side.push(s); this.u.push(u);
-        this.shade.push(o.shade); this.bend.push(o.bend0 + (o.bend1 - o.bend0)*u); this.phase.push(o.phase); this.kind.push(o.kind);
+        this.pos.push(pts[j].x, pts[j].y, pts[j].z); this.tan.push(t.x, t.y, t.z); this.side.push(s); this.v.push(v);
+        this.w.push(o.width(v)); this.vari.push(o.variant || 0); this.phase.push(o.phase || 0);
+        this.bend.push(o.bend0 + (o.bend1 - o.bend0)*v);
+        const n = o.normal ? o.normal(v) : t; this.nrm.push(n.x, n.y, n.z);
       }
     }
     for (let j = 0; j < m - 1; j++){ const a = base + 2*j; this.index.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); }
@@ -166,170 +235,153 @@ class Strands {
   geometry(){
     const g = new THREE.BufferGeometry(), f = (a, k) => new THREE.Float32BufferAttribute(a, k);
     g.setAttribute('position', f(this.pos, 3)); g.setAttribute('aTan', f(this.tan, 3)); g.setAttribute('aSide', f(this.side, 1));
-    g.setAttribute('aU', f(this.u, 1)); g.setAttribute('aShade', f(this.shade, 1)); g.setAttribute('aBend', f(this.bend, 1));
-    g.setAttribute('aPhase', f(this.phase, 1)); g.setAttribute('aKind', f(this.kind, 1)); g.setIndex(this.index);
+    g.setAttribute('aV', f(this.v, 1)); g.setAttribute('aW', f(this.w, 1)); g.setAttribute('aVar', f(this.vari, 1));
+    g.setAttribute('aPhase', f(this.phase, 1)); g.setAttribute('aBend', f(this.bend, 1)); g.setAttribute('aNrm', f(this.nrm, 3));
+    g.setIndex(this.index);
     return g;
+  }
+  get triangles(){ return this.index.length/3; }
+}
+
+function addPlume(Q, at, R, heads, stalks, leaves, box){
+  const H = Q.height, up = V(0, 1, 0);
+  const archDir = V(Math.cos(Q.archPhi), 0, Math.sin(Q.archPhi));
+  const s0 = at.clone(), s1 = at.clone().add(V(0, H*0.45, 0));
+  const s2 = at.clone().add(V(0, H*0.8, 0)).addScaledVector(archDir, H*0.04*Q.arch);
+  const s3 = at.clone().add(V(0, H, 0)).addScaledVector(archDir, H*0.11*Q.arch);
+  const topT = bezD(s0, s1, s2, s3, 1).normalize();
+  // the stalk: solid, a little thinner toward the top, running up into the panicle axis
+  const axisLen = Q.rLenCm/100*0.45, stalkPts = [];
+  for (let k = 0; k <= 14; k++) stalkPts.push(bez(s0, s1, s2, s3, k/14));
+  stalkPts.push(s3.clone().addScaledVector(topT, axisLen));
+  stalks.add(stalkPts, {width: v => Q.thickMM/2000*(1 - 0.35*v), bend0: 0, bend1: 1 + axisLen/H});
+  // the racemes: fingers from along the top of the axis; rise, arc outward, droop
+  const leanDir = V(Math.cos(Q.leanPhi), 0, Math.sin(Q.leanPhi)), N = Math.round(Q.racemes), W = cardWidth(Q);
+  for (let i = 0; i < N; i++){
+    const s = N > 1 ? i/(N - 1) : 0;
+    const p0 = s3.clone().addScaledVector(topT, axisLen*(1 - s)*0.95);       // lower racemes attach lower and are longer
+    const phi = i*2.39996 + R()*0.6;
+    const out = V(Math.cos(phi), 0, Math.sin(phi)).multiplyScalar(1 - Q.lean*0.6).addScaledVector(leanDir, Q.lean).normalize();
+    const L = Q.rLenCm/100*(0.8 + 0.4*R())*(0.75 + 0.35*(1 - s));
+    const theta = Q.spread*(0.25 + 0.75*R())*1.0 + 0.05;
+    const d0 = topT.clone().multiplyScalar(Math.cos(theta)).addScaledVector(out, Math.sin(theta)).normalize();
+    const dr = Q.droop*(0.6 + 0.4*R())*(0.6 + theta);
+    const p1 = p0.clone().addScaledVector(d0, L*0.42);
+    const p2 = p0.clone().addScaledVector(d0, L*0.6).addScaledVector(out, L*(0.15 + 0.25*dr));
+    const p3 = p0.clone().addScaledVector(d0, L*(0.62 - 0.2*dr)).addScaledVector(out, L*(0.3 + 0.35*dr)).addScaledVector(up, -L*0.6*dr);
+    const pts = []; for (let k = 0; k <= 10; k++) pts.push(bez(p0, p1, p2, p3, k/10));
+    heads.add(pts, {width: v => W/2*(0.5 + 0.5*sm(0, 0.18, v))*(1 - 0.45*sm(0.65, 1, v)), variant: Math.floor(R()*VARIANTS),
+                    phase: i*1.7 + R()*2, bend0: 1, bend1: 1 + L/H*2});
+    for (const p of pts){ box.expandByPoint(p.clone().addScalar(W/2)); box.expandByPoint(p.clone().addScalar(-W/2)); }
+  }
+  // long leaves from the lower stalk: flat, arching out and drooping
+  for (let i = 0; i < Math.round(Q.leaves); i++){
+    const a = bez(s0, s1, s2, s3, 0.06 + 0.11*i), phi = Q.archPhi + 0.9 + i*2.3 + R()*0.6;
+    const out = V(Math.cos(phi), 0, Math.sin(phi)), Ll = Q.leafLen*(0.7 + 0.5*R());
+    const q1 = a.clone().addScaledVector(up, Ll*0.4).addScaledVector(out, Ll*0.1);
+    const q2 = a.clone().addScaledVector(up, Ll*0.55).addScaledVector(out, Ll*0.45);
+    const q3 = a.clone().addScaledVector(up, Ll*(0.25 - 0.3*R())).addScaledVector(out, Ll*0.85);
+    const pts = []; for (let k = 0; k <= 16; k++) pts.push(bez(a, q1, q2, q3, k/16));
+    leaves.add(pts, {width: v => 0.008*Math.min(1, v*6)*Math.pow(1 - v, 0.7), bend0: 0.06 + 0.11*i, bend1: 0.5 + 0.11*i,
+      normal: v => { const T = bezD(a, q1, q2, q3, v).normalize(), sv = T.clone().cross(out).normalize(); return sv.cross(T).normalize(); }});
   }
 }
 
-/* ═══ Building the plume from the numbers ═══ */
-function buildPlume(P){
-  const R = rng(P.seed), H = P.height, up = V(0, 1, 0);
-  // the stalk: rises, then arches a little to one side
-  const archDir = V(-1, 0, 0.25).normalize();
-  const s0 = V(0, 0, 0), s1 = V(0, H*0.45, 0);
-  const s2 = V(0, H*0.78, 0).addScaledVector(archDir, P.arch*H*0.1), s3 = V(0, H, 0).addScaledVector(archDir, P.arch*H*0.28);
-  const topT = bezD(s0, s1, s2, s3, 1).normalize();
-
-  // the head: a fan of racemes, each a spine with silky hairs combed along it
-  const hairs = new Strands(), leanDir = V(-0.85, 0, 0.5).normalize(), N = Math.round(P.racemes);
-  const head = V(), box = new THREE.Box3(); let roots = 0;
-  for (let i = 0; i < N; i++){
-    const s = N > 1 ? i/(N - 1) : 0;
-    const p0 = s3.clone().addScaledVector(topT, P.rLen*0.2*s);
-    const phi = i*2.39996 + R()*0.5;
-    const out = V(Math.cos(phi), 0, Math.sin(phi)).multiplyScalar(1 - P.lean*0.65).addScaledVector(leanDir, P.lean).normalize();
-    const L = P.rLen*(0.78 + 0.45*R())*(1 - 0.28*s);
-    const theta = P.spread*(0.2 + 0.8*R())*0.9 + 0.06;
-    const d0 = topT.clone().multiplyScalar(Math.cos(theta)).addScaledVector(out, Math.sin(theta)).normalize();
-    const dr = P.droop*(0.65 + 0.35*R());
-    // each raceme rises, then arcs outward and droops, like water from a fountain
-    const p1 = p0.clone().addScaledVector(d0, L*0.42);
-    const p2 = p0.clone().addScaledVector(d0, L*0.55).addScaledVector(out, L*(0.25 + 0.3*dr));
-    const p3 = p0.clone().addScaledVector(d0, L*(0.5 - 0.15*dr)).addScaledVector(out, L*(0.5 + 0.35*dr)).addScaledVector(up, -L*0.85*dr);
-    const phase = i*1.7 + R()*2;
-    const spine = []; for (let k = 0; k <= 12; k++) spine.push(bez(p0, p1, p2, p3, k/12));
-    hairs.add(spine, {shade: 0.95, bend0: 1, bend1: 1.35, phase, kind: 1});
-    // its silky hairs lie almost along it, fanned a little to both sides — a soft feather
-    const K = Math.round(P.density*420*(L/P.rLen));
-    const sm = (a, b, x) => { const q = Math.min(1, Math.max(0, (x - a)/(b - a))); return q*q*(3 - 2*q); };
-    for (let k = 0; k < K; k++){
-      const t = 0.06 + 0.94*((k + R())/K);
-      const b = bez(p0, p1, p2, p3, t), T = bezD(p0, p1, p2, p3, t).normalize();
-      const Ta = bezD(p0, p1, p2, p3, Math.min(1, t + 0.18)).normalize();      // where the raceme is heading: hairs follow its curve
-      let n1 = T.clone().cross(out); if (n1.lengthSq() < 1e-6) n1 = T.clone().cross(V(0, 0, 1)); n1.normalize();
-      const side = n1.clone().cross(T).normalize(), sgn = (k & 1) ? 1 : -1;
-      const a = (0.06 + 0.32*P.fluff)*(0.5 + R());
-      const dir = T.clone().multiplyScalar(Math.cos(a)).addScaledVector(side, Math.sin(a)*sgn)
-        .addScaledVector(n1, (R() - 0.5)*0.5*P.fluff).normalize();
-      const dirEnd = dir.clone().lerp(Ta.clone().multiplyScalar(Math.cos(a)).addScaledVector(side, Math.sin(a)*sgn), 0.6).normalize();
-      const prof = 0.25 + sm(0.04, 0.4, t)*(1 - 0.6*sm(0.6, 1, t));
-      const l = P.hairLen*L*prof*(0.75 + 0.5*R());
-      const h1 = b.clone().addScaledVector(dir, l*0.34);
-      const h2 = h1.clone().addScaledVector(dir.clone().lerp(dirEnd, 0.5).normalize(), l*0.34);
-      const h3 = h2.clone().addScaledVector(dirEnd, l*0.32);
-      hairs.add([b, h1, h2, h3], {shade: 0.88 + 0.22*R(), bend0: 1 + 0.35*t, bend1: 1.1 + 0.35*t, phase: phase + R()*0.6, kind: 0});
-      head.add(b); roots++; box.expandByPoint(b); box.expandByPoint(h3);
+function buildScene(P){
+  const heads = new Strips(), stalks = new Strips(), leaves = new Strips(), box = new THREE.Box3(), R = rng(P.seed);
+  const base = {...P, rLenCm: P.rLenCm, archPhi: Math.PI*0.92, leanPhi: Math.PI*0.85, arch: 0.6};
+  if (P.view === 'bush'){
+    for (let i = 0; i < 7; i++){
+      const r = i === 0 ? 0 : 0.06 + 0.12*R(), a = i*2.4 + R();
+      const Q = {...base, height: P.height*(0.82 + 0.3*R()), racemes: Math.max(6, P.racemes + Math.round((R() - 0.5)*6)),
+                 rLenCm: P.rLenCm*(0.85 + 0.3*R()), lean: Math.min(1, P.lean*(0.7 + 0.6*R())), archPhi: Math.PI*(0.75 + 0.4*R()),
+                 leanPhi: Math.PI*(0.7 + 0.5*R()), arch: 0.4 + 0.8*R()};
+      addPlume(Q, V(Math.cos(a)*r, 0, Math.sin(a)*r), R, heads, stalks, leaves, box);
     }
-  }
-  head.multiplyScalar(1/Math.max(1, roots));
-
-  // the stalk as a tube
-  const path = new THREE.CatmullRomCurve3(Array.from({length: 13}, (_, k) => bez(s0, s1, s2, s3, k/12)));
-  const stalk = new THREE.TubeGeometry(path, 64, 0.0042, 7, false);
-
-  // a few long leaves that arch out and droop
-  const leafPos = [], leafNrm = [], leafU = [], leafIdx = []; let ln = 0;
-  for (let i = 0; i < Math.round(P.leaves); i++){
-    const a = bez(s0, s1, s2, s3, 0.16 + 0.13*i), phi = 0.7 + i*2.3;
-    const out = V(Math.cos(phi), 0, Math.sin(phi)), Ll = H*(0.36 + 0.14*R());
-    const q0 = a, q1 = a.clone().addScaledVector(up, Ll*0.35).addScaledVector(out, Ll*0.1);
-    const q2 = a.clone().addScaledVector(up, Ll*0.45).addScaledVector(out, Ll*0.45);
-    const q3 = a.clone().addScaledVector(up, Ll*0.05).addScaledVector(out, Ll*0.85);
-    const M = 24, base = ln;
-    for (let k = 0; k <= M; k++){
-      const u = k/M, c = bez(q0, q1, q2, q3, u), T = bezD(q0, q1, q2, q3, u).normalize();
-      const w = 0.016*Math.min(1, u*7)*Math.pow(1 - u, 0.6);
-      let sv = T.clone().cross(out); if (sv.lengthSq() < 1e-6) sv = V(0, 0, 1); sv.normalize();
-      const nrm = sv.clone().cross(T).normalize();
-      for (const s of [-1, 1]){ const p = c.clone().addScaledVector(sv, w*s); leafPos.push(p.x, p.y, p.z); leafNrm.push(nrm.x, nrm.y, nrm.z); leafU.push(u); }
-      ln += 2;
-    }
-    for (let k = 0; k < M; k++){ const q = base + 2*k; leafIdx.push(q, q + 1, q + 2, q + 1, q + 3, q + 2); }
-  }
-  const leaves = new THREE.BufferGeometry();
-  leaves.setAttribute('position', new THREE.Float32BufferAttribute(leafPos, 3));
-  leaves.setAttribute('normal', new THREE.Float32BufferAttribute(leafNrm, 3));
-  leaves.setAttribute('aU', new THREE.Float32BufferAttribute(leafU, 1));
-  leaves.setIndex(leafIdx);
-  return {hair: hairs.geometry(), stalk, leaves, head, box, hairCount: Math.round(hairs.n/8)};
+  } else addPlume(base, V(), R, heads, stalks, leaves, box);
+  return {heads, stalks, leaves, box};
 }
 
 /* ═══ Light and wind, shared by every part ═══ */
 const WIND = `
 uniform float uTime, uWind, uGust, uH;
-vec3 windAt(vec3 p, float b, float phase, float u){
+vec3 windAt(vec3 p, float b, float phase, float v){
   float w = uWind*(0.7 + 0.3*sin(uTime*0.55)) + uGust;
-  float lean = w*0.22*b*b;                                          // the whole plant leans with the wind
-  float bob = (0.03 + 0.05*w)*sin(uTime*1.9 + phase*0.3)*b*b;        // and bobs a little
-  float flick = 0.01*(0.3 + w)*sin(uTime*6.7 + phase*4. + p.y*13.)*u*step(1., b);   // hairs flutter
+  float lean = w*0.2*b*b;                                           // the plant leans with the wind
+  float bob = (0.025 + 0.045*w)*sin(uTime*1.9 + phase*0.3 + p.x*3.)*b*b;   // and bobs
+  float flick = 0.006*(0.3 + w)*sin(uTime*6.7 + phase*4.)*v*step(1., b);    // racemes flutter
   float x = lean + bob + flick;
-  return vec3(x, -0.18*x*x/max(b, 0.2), 0.012*(0.3 + w)*sin(uTime*1.3 + phase)*b*b);
+  return vec3(x, -0.18*x*x/max(b, 0.2), 0.01*(0.3 + w)*sin(uTime*1.3 + phase)*b*b);
+}
+vec3 widen(vec3 wp, vec3 T, float side, float w){                   // turn a strip to face the camera
+  vec3 toCam = normalize(cameraPosition - wp);
+  return wp + normalize(cross(T, toCam))*side*w;
 }`;
 const LIGHT = `
-uniform vec3 uSun, uSunCol, uSky;
-float back(vec3 V){ return pow(max(0., dot(-V, normalize(uSun))), 4.); }   // looking into the sun: light comes through`;
-
+uniform vec3 uSun, uSunCol, uSky; uniform float uGlow, uBright;
+float back(vec3 V){ return pow(max(0., dot(-V, normalize(uSun))), 4.); }   // looking into the sun: light comes through
+vec3 hairLight(vec3 base, vec3 T, vec3 V, float glow){                     // light along a hair-like thing (Kajiya–Kay)
+  vec3 L = normalize(uSun);
+  float tl = dot(T, L), kd = sqrt(max(0., 1. - tl*tl));
+  vec3 H = normalize(L + V); float th = dot(T, H), ks = pow(sqrt(max(0., 1. - th*th)), 60.);
+  return base*(uSky*0.75 + uSunCol*0.42*kd) + base*uSunCol*(ks*0.28 + back(V)*glow*(0.55 + 0.45*kd));
+}`;
 const uniforms = {
   uTime: {value: 0}, uWind: {value: P.wind}, uGust: {value: 0}, uH: {value: P.height},
   uSun: {value: V()}, uSunCol: {value: new THREE.Color()}, uSky: {value: new THREE.Color()},
   uHair: {value: new THREE.Color()}, uGlow: {value: P.glow}, uBright: {value: P.bright},
-  uPx: {value: 0.6}, uRes: {value: new THREE.Vector2(1, 1)},
+  uAtlas: {value: ATLAS.texture}, uVariants: {value: VARIANTS},
 };
+const STRIP_VS = `${WIND}
+  attribute vec3 aTan, aNrm; attribute float aSide, aV, aW, aVar, aPhase, aBend;
+  varying vec2 vUv; varying vec3 vT, vW; varying float vSide, vV;
+  uniform float uVariants; uniform float uFlat;
+  void main(){
+    vec3 p = position + windAt(position, aBend, aPhase, aV);
+    vec4 wp = modelMatrix*vec4(p, 1.);
+    vec3 T = normalize(mat3(modelMatrix)*aTan);
+    if (uFlat > .5) wp.xyz += normalize(cross(T, aNrm))*aSide*aW;     // leaves: a real flat blade
+    else wp.xyz = widen(wp.xyz, T, aSide, aW);                         // stalk, racemes: always face the camera
+    gl_Position = projectionMatrix*viewMatrix*wp;
+    vUv = vec2((aVar + 0.5 + 0.5*aSide)/uVariants, aV); vT = T; vW = wp.xyz; vSide = aSide; vV = aV;
+  }`;
 
-const hairMat = new THREE.ShaderMaterial({
-  uniforms, transparent: true, depthWrite: false, side: THREE.DoubleSide,
-  vertexShader: `${WIND}
-    attribute vec3 aTan; attribute float aSide, aU, aShade, aBend, aPhase, aKind;
-    uniform float uPx; uniform vec2 uRes;
-    varying float vU, vSide, vShade, vKind; varying vec3 vT, vW;
-    void main(){
-      vec3 p = position + windAt(position, aBend, aPhase, aU);
-      vec4 wp = modelMatrix*vec4(p, 1.);
-      vec4 c0 = projectionMatrix*viewMatrix*wp;
-      vec4 c1 = projectionMatrix*viewMatrix*(wp + vec4(normalize(aTan)*0.01, 0.));
-      vec2 d = normalize((c1.xy/c1.w - c0.xy/c0.w)*uRes);
-      float w = uPx*(aKind > .5 ? 1.7 : 1.)*(1. - .5*aU);           // thinner toward the tip
-      c0.xy += vec2(-d.y, d.x)*aSide*w/uRes*c0.w*2.;
-      gl_Position = c0;
-      vU = aU; vSide = aSide; vShade = aShade; vKind = aKind; vT = normalize(mat3(modelMatrix)*aTan); vW = wp.xyz;
-    }`,
+const headMat = new THREE.ShaderMaterial({
+  uniforms: {...uniforms, uFlat: {value: 0}}, transparent: true, depthWrite: false, premultipliedAlpha: true, side: THREE.DoubleSide,
+  vertexShader: STRIP_VS,
   fragmentShader: `${LIGHT}
-    uniform vec3 uHair; uniform float uGlow, uBright;
-    varying float vU, vSide, vShade, vKind; varying vec3 vT, vW;
+    uniform sampler2D uAtlas; uniform vec3 uHair;
+    varying vec2 vUv; varying vec3 vT, vW; varying float vSide, vV;
     void main(){
-      vec3 T = normalize(vT), V = normalize(cameraPosition - vW), L = normalize(uSun);
-      float tl = dot(T, L), kd = sqrt(max(0., 1. - tl*tl));          // a hair is lit from the side (Kajiya–Kay)
-      vec3 H = normalize(L + V); float th = dot(T, H);
-      float ks = pow(sqrt(max(0., 1. - th*th)), 80.);                 // its silky sheen
-      vec3 base = uHair*vShade*uBright;
-      vec3 col = base*(uSky*0.8 + uSunCol*0.4*kd) + base*uSunCol*(ks*0.3 + back(V)*uGlow*(0.6 + 0.4*kd));
-      // clamped: with anti-aliasing the edges of a thin hair can read slightly outside it, and a negative alpha would draw a dark speck
-      float a = (vKind > .5 ? 0.35 : 0.26)*clamp(1. - vSide*vSide, 0., 1.)*(1. - smoothstep(0.7, 1., clamp(vU, 0., 1.)));
-      gl_FragColor = vec4(col, a);
+      vec4 tx = texture2D(uAtlas, vUv);                                // premultiplied fuzz
+      float a = tx.a;
+      vec3 base = (tx.rgb/max(a, 1e-3))*uHair*uBright;
+      vec3 col = hairLight(base, normalize(vT), normalize(cameraPosition - vW), uGlow);
+      gl_FragColor = vec4(col*a, a);
     }`,
 });
-
-const plantMat = (color, translucent) => new THREE.ShaderMaterial({
-  uniforms: {...uniforms, uColor: {value: new THREE.Color(...lin(color))}, uTrans: {value: translucent}},
-  side: THREE.DoubleSide,
-  vertexShader: `${WIND}
-    attribute float aU; varying vec3 vN, vW;
-    void main(){
-      float b = clamp(position.y/uH, 0., 1.);
-      vec3 p = position + windAt(position, b, 0., 0.);
-      vec4 wp = modelMatrix*vec4(p, 1.);
-      vN = normalize(mat3(modelMatrix)*normal); vW = wp.xyz;
-      gl_Position = projectionMatrix*viewMatrix*wp;
-    }`,
+const stalkMat = new THREE.ShaderMaterial({
+  uniforms: {...uniforms, uFlat: {value: 0}, uColor: {value: new THREE.Color(...lin([0.83, 0.68, 0.45]))}}, side: THREE.DoubleSide,
+  vertexShader: STRIP_VS,
   fragmentShader: `${LIGHT}
-    uniform vec3 uColor; uniform float uTrans, uGlow;
-    varying vec3 vN, vW;
+    uniform vec3 uColor; varying vec2 vUv; varying vec3 vT, vW; varying float vSide, vV;
     void main(){
-      vec3 N = normalize(vN), V = normalize(cameraPosition - vW), L = normalize(uSun);
-      if (dot(N, V) < 0.) N = -N;
-      float d = max(0., dot(N, L));
-      vec3 col = uColor*(uSky*0.5 + uSunCol*0.6*d) + uColor*uSunCol*back(V)*uTrans*uGlow;
+      float round_ = sqrt(max(0., 1. - vSide*vSide));                  // a thin cylinder: lighter in the middle
+      vec3 col = hairLight(uColor*(0.55 + 0.45*round_), normalize(vT), normalize(cameraPosition - vW), uGlow*0.5);
+      gl_FragColor = vec4(col, 1.);
+    }`,
+});
+const leafMat = new THREE.ShaderMaterial({
+  uniforms: {...uniforms, uFlat: {value: 1}, uColor: {value: new THREE.Color(...lin([0.72, 0.6, 0.36]))}}, side: THREE.DoubleSide,
+  vertexShader: STRIP_VS,
+  fragmentShader: `${LIGHT}
+    uniform vec3 uColor; varying vec2 vUv; varying vec3 vT, vW; varying float vSide, vV;
+    void main(){
+      vec3 V = normalize(cameraPosition - vW), L = normalize(uSun);
+      float rib = smoothstep(0.18, 0., abs(vSide));                     // the pale midrib of a susuki leaf
+      vec3 c = mix(uColor, uColor*1.35 + 0.05, rib);
+      float d = 0.5 + 0.5*abs(dot(normalize(cross(vT, V)), L));
+      vec3 col = c*(uSky*0.6 + uSunCol*0.5*d) + c*uSunCol*back(V)*uGlow*0.7;
       gl_FragColor = vec4(col, 1.);
     }`,
 });
@@ -341,10 +393,8 @@ try { renderer = new THREE.WebGLRenderer({canvas, antialias: true, powerPreferen
 catch (e) { document.body.insertAdjacentHTML('beforeend', '<p class="msg">Этот браузер не умеет рисовать 3D (WebGL 2).</p>'); throw e; }
 renderer.setPixelRatio(Math.min(2, devicePixelRatio || 1));
 renderer.toneMapping = THREE.AgXToneMapping; renderer.toneMappingExposure = 1.05;
-const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(34, 1, 0.01, 50);
+const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(34, 1, 0.01, 60);
 
-// his picture behind, softly out of focus, with the sun's glow where the sun is
 const backdropTex = new THREE.TextureLoader().load('plume/backdrop.jpg', t => { uniforms.uImgAspect.value = t.image.width/t.image.height; });
 backdropTex.colorSpace = THREE.SRGBColorSpace;
 Object.assign(uniforms, {uTex: {value: backdropTex}, uAspect: {value: 1}, uImgAspect: {value: 768/1376}, uDark: {value: 0}, uSunScreen: {value: new THREE.Vector3()}});
@@ -361,31 +411,30 @@ const backdrop = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.ShaderM
       gl_FragColor = vec4(c, 1.);
     }`,
 }));
-backdrop.frustumCulled = false; backdrop.renderOrder = -1;
-scene.add(backdrop);
+backdrop.frustumCulled = false; backdrop.renderOrder = -1; scene.add(backdrop);
 
-const hairMesh = new THREE.Mesh(new THREE.BufferGeometry(), hairMat);
-const stalkMesh = new THREE.Mesh(new THREE.BufferGeometry(), plantMat([0.84, 0.68, 0.44], 0.45));
-const leafMesh = new THREE.Mesh(new THREE.BufferGeometry(), plantMat([0.74, 0.58, 0.33], 0.8));
-for (const m of [stalkMesh, leafMesh, hairMesh]){ m.frustumCulled = false; scene.add(m); }
-hairMesh.renderOrder = 2;
+const leafMesh = new THREE.Mesh(new THREE.BufferGeometry(), leafMat);
+const stalkMesh = new THREE.Mesh(new THREE.BufferGeometry(), stalkMat);
+const headMesh = new THREE.Mesh(new THREE.BufferGeometry(), headMat);
+for (const m of [leafMesh, stalkMesh, headMesh]){ m.frustumCulled = false; scene.add(m); }
+headMesh.renderOrder = 2;
 
 const controls = new OrbitControls(camera, canvas);
-controls.enableDamping = true; controls.enablePan = false; controls.minDistance = 0.45; controls.maxDistance = 4;
+controls.enableDamping = true; controls.enablePan = false; controls.minDistance = 0.12; controls.maxDistance = 5;
 controls.minPolarAngle = 0.35; controls.maxPolarAngle = 2.1;
 controls.addEventListener('start', () => document.getElementById('hint').classList.add('gone'));
 
 const rt = new THREE.WebGLRenderTarget(1, 1, {type: THREE.HalfFloatType, samples: 4});
 const composer = new EffectComposer(renderer, rt);
 composer.addPass(new RenderPass(scene, camera));
-const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.32, 0.55, 0.85);
-composer.addPass(bloom);
+composer.addPass(new UnrealBloomPass(new THREE.Vector2(1, 1), 0.3, 0.5, 0.86));
 composer.addPass(new OutputPass());
 
-let built = null;
+let built = null, needBake = true;
 function rebuild(keepView){
-  const g = buildPlume(P);
-  for (const [mesh, geo] of [[hairMesh, g.hair], [stalkMesh, g.stalk], [leafMesh, g.leaves]]){ mesh.geometry.dispose(); mesh.geometry = geo; }
+  if (needBake){ bakeFuzz(renderer); needBake = false; }
+  const g = buildScene(P);
+  for (const [mesh, strips] of [[headMesh, g.heads], [stalkMesh, g.stalks], [leafMesh, g.leaves]]){ mesh.geometry.dispose(); mesh.geometry = strips.geometry(); }
   uniforms.uH.value = P.height;
   const center = g.box.getCenter(V()), size = g.box.getSize(V());
   if (!keepView || !built){
@@ -393,16 +442,15 @@ function rebuild(keepView){
     camera.position.copy(center).add(V(0.08, -0.22, 1).normalize().multiplyScalar(fitDistance(size)));
   } else controls.target.copy(center);
   built = g;
+  const plumes = P.view === 'bush' ? 7 : 1, tris = Math.round((g.heads.triangles + g.stalks.triangles + g.leaves.triangles)/plumes);
+  document.getElementById('stats').innerHTML = `Одна метёлка — <b>≈ ${tris} треугольников</b> (раньше ≈ 30 000). Пушок нарисован ${hairsDrawn.toLocaleString('ru')} волосками.`;
   document.getElementById('json').textContent = JSON.stringify(P, null, 1);
 }
-
-// how far the camera must stand for the whole head to fit, on a tall phone or a wide screen
 function fitDistance(size){
   const v = THREE.MathUtils.degToRad(camera.fov)/2, h = Math.atan(Math.tan(v)*camera.aspect);
   const halfW = Math.max(size.x, size.z)*0.5, halfH = size.y*0.5;
-  return Math.max(halfW*1.06/Math.tan(h), halfH*1.3/Math.tan(v)) + Math.max(size.x, size.z)*0.12;
+  return Math.max(halfW*1.08/Math.tan(h), halfH*1.25/Math.tan(v)) + Math.max(size.x, size.z)*0.12;
 }
-
 function applyLight(){
   const az = P.sunAz*Math.PI/180, el = P.sunEl*Math.PI/180;
   uniforms.uSun.value.set(Math.sin(az)*Math.cos(el), Math.sin(el), -Math.cos(az)*Math.cos(el));
@@ -412,37 +460,34 @@ function applyLight(){
   uniforms.uGlow.value = P.glow; uniforms.uBright.value = P.bright; uniforms.uWind.value = P.wind;
   uniforms.uDark.value = P.bg === 'dark' ? 1 : 0;
 }
-
 function resize(){
   const w = innerWidth, h = innerHeight, dpr = Math.min(2, devicePixelRatio || 1);
   renderer.setSize(w, h, false); composer.setPixelRatio(dpr); composer.setSize(w, h);
-  camera.aspect = w/h; camera.updateProjectionMatrix();
-  uniforms.uRes.value.set(w*dpr, h*dpr); uniforms.uPx.value = 0.55*dpr; uniforms.uAspect.value = w/h;
+  camera.aspect = w/h; camera.updateProjectionMatrix(); uniforms.uAspect.value = w/h;
 }
-
 const sunTmp = V(), fwd = V();
 function render(dt){
-  uniforms.uTime.value += dt;
-  uniforms.uGust.value *= Math.exp(-dt*1.3);
+  uniforms.uTime.value += dt; uniforms.uGust.value *= Math.exp(-dt*1.3);
   controls.update();
   camera.getWorldDirection(fwd);
-  const inFront = fwd.dot(uniforms.uSun.value) > 0.05;             // the sun's glow only when we look toward it
   sunTmp.copy(uniforms.uSun.value).multiplyScalar(30).add(camera.position).project(camera);
-  uniforms.uSunScreen.value.set(sunTmp.x*0.5 + 0.5, sunTmp.y*0.5 + 0.5, inFront ? 1 : 0);
+  uniforms.uSunScreen.value.set(sunTmp.x*0.5 + 0.5, sunTmp.y*0.5 + 0.5, fwd.dot(uniforms.uSun.value) > 0.05 ? 1 : 0);
   composer.render();
 }
 
 /* ═══ Controls: every number is a slider ═══ */
 const SLIDERS = [
-  ['Головка', [['racemes', 'Веточек', 5, 24, 1], ['rLen', 'Длина веточек', 0.2, 0.75, 0.01], ['spread', 'Раскрытие', 0, 1, 0.01],
-               ['droop', 'Свисание', 0, 1, 0.01], ['lean', 'Наклон в сторону', 0, 1, 0.01], ['fluff', 'Пушистость', 0, 1, 0.01],
-               ['density', 'Густота волосков', 0.3, 1.6, 0.01], ['hairLen', 'Длина волосков', 0.1, 0.6, 0.01]]],
-  ['Стебель', [['height', 'Высота', 0.8, 2.2, 0.01], ['arch', 'Изгиб', 0, 1, 0.01], ['leaves', 'Листья', 0, 5, 1]]],
+  ['Головка', [['racemes', 'Веточек', 6, 30, 1], ['rLenCm', 'Длина веточек, см', 8, 25, 0.5], ['spread', 'Раскрытие', 0, 1, 0.01],
+               ['droop', 'Свисание', 0, 1, 0.01], ['lean', 'Наклон в сторону', 0, 1, 0.01]]],
+  ['Пушок', [['fluff', 'Пушистость', 0, 1, 0.01], ['hairMM', 'Длина волосков, мм', 3, 10, 0.1], ['density', 'Густота волосков', 0.4, 1.6, 0.01]]],
+  ['Стебель и листья', [['height', 'Высота, м', 0.9, 2.4, 0.01], ['thickMM', 'Толщина стебля, мм', 3, 9, 0.1],
+                       ['leaves', 'Листья', 0, 6, 1], ['leafLen', 'Длина листьев, м', 0.3, 0.9, 0.01]]],
   ['Свет', [['sunAz', 'Солнце: вокруг', -180, 180, 1], ['sunEl', 'Солнце: высота', 2, 70, 1],
             ['glow', 'Свечение насквозь', 0, 2.5, 0.01], ['bright', 'Яркость', 0.5, 1.5, 0.01]]],
   ['Ветер', [['wind', 'Сила ветра', 0, 1, 0.01]]],
 ];
-const SHAPE = new Set(['racemes', 'rLen', 'spread', 'droop', 'lean', 'fluff', 'density', 'hairLen', 'height', 'arch', 'leaves']);
+const SHAPE = new Set(['racemes', 'rLenCm', 'spread', 'droop', 'lean', 'height', 'thickMM', 'leaves', 'leafLen']);
+const BAKE = new Set(['fluff', 'hairMM', 'density']);
 const groups = document.getElementById('groups');
 for (const [title, items] of SLIDERS){
   const g = document.createElement('div'); g.className = 'group';
@@ -451,30 +496,34 @@ for (const [title, items] of SLIDERS){
      <input type="range" id="s-${k}" min="${min}" max="${max}" step="${step}"></div>`).join('');
   groups.appendChild(g);
 }
+const fmt = v => Number.isInteger(v) ? String(v) : (Math.abs(v) >= 10 ? v.toFixed(1) : v.toFixed(2));
 let pendingShape = false;
 function syncUI(){
-  for (const [, items] of SLIDERS) for (const [k] of items){
-    const v = P[k]; document.getElementById('s-' + k).value = v;
-    document.getElementById('o-' + k).textContent = Number.isInteger(v) ? v : v.toFixed(2);
-  }
+  for (const [, items] of SLIDERS) for (const [k] of items){ document.getElementById('s-' + k).value = P[k]; document.getElementById('o-' + k).textContent = fmt(P[k]); }
   document.querySelectorAll('#colors .chip').forEach(b => b.setAttribute('aria-pressed', b.dataset.c === P.color));
   document.querySelectorAll('#bgs .chip').forEach(b => b.setAttribute('aria-pressed', b.dataset.b === P.bg));
+  document.querySelectorAll('#views .chip').forEach(b => b.setAttribute('aria-pressed', b.dataset.w === P.view));
+  document.querySelector('.bar [data-act="view"]').textContent = P.view === 'bush' ? 'Одна' : 'Куст';
 }
 groups.addEventListener('input', e => {
   const k = e.target.id.slice(2); if (!(k in P)) return;
-  P[k] = +e.target.value; document.getElementById('o-' + k).textContent = Number.isInteger(P[k]) ? P[k] : P[k].toFixed(2);
-  if (SHAPE.has(k)) pendingShape = true; else applyLight();
+  P[k] = +e.target.value; document.getElementById('o-' + k).textContent = fmt(P[k]);
+  if (BAKE.has(k)){ needBake = true; pendingShape = true; } else if (SHAPE.has(k)) pendingShape = true; else applyLight();
   saveParams(); document.getElementById('json').textContent = JSON.stringify(P, null, 1);
 });
-document.getElementById('colors').innerHTML = Object.entries(COLORS).map(([k, [name]]) => `<button class="chip" type="button" data-c="${k}">${name}</button>`).join('');
-document.getElementById('bgs').innerHTML = Object.entries(BGS).map(([k, name]) => `<button class="chip" type="button" data-b="${k}">${name}</button>`).join('');
-document.getElementById('colors').addEventListener('click', e => { const b = e.target.closest('[data-c]'); if (!b) return; P.color = b.dataset.c; applyLight(); syncUI(); saveParams(); });
-document.getElementById('bgs').addEventListener('click', e => { const b = e.target.closest('[data-b]'); if (!b) return; P.bg = b.dataset.b; applyLight(); syncUI(); saveParams(); });
+const chipRow = (id, entries, key, data) => {
+  const el = document.getElementById(id);
+  el.innerHTML = Object.entries(entries).map(([k, v]) => `<button class="chip" type="button" data-${data}="${k}">${Array.isArray(v) ? v[0] : v}</button>`).join('');
+  el.addEventListener('click', e => { const b = e.target.closest(`[data-${data}]`); if (!b) return; P[key] = b.dataset[data];
+    if (key === 'view') rebuild(); else applyLight(); syncUI(); saveParams(); });
+};
+chipRow('colors', COLORS, 'color', 'c'); chipRow('bgs', BGS, 'bg', 'b'); chipRow('views', VIEWS, 'view', 'w');
 document.querySelectorAll('[data-act]').forEach(b => b.addEventListener('click', () => {
   const act = b.dataset.act;
   if (act === 'gust') uniforms.uGust.value = 0.9;
-  if (act === 'seed'){ P.seed = (P.seed*7 + 13) % 9973; rebuild(true); saveParams(); }
-  if (act === 'reset'){ Object.assign(P, DEFAULTS); applyLight(); rebuild(); syncUI(); saveParams(); }
+  if (act === 'seed'){ P.seed = (P.seed*7 + 13) % 9973; needBake = true; rebuild(true); saveParams(); }
+  if (act === 'view'){ P.view = P.view === 'bush' ? 'one' : 'bush'; rebuild(); syncUI(); saveParams(); }
+  if (act === 'reset'){ Object.assign(P, DEFAULTS); needBake = true; applyLight(); rebuild(); syncUI(); saveParams(); }
   if (act === 'numbers'){ const box = document.getElementById('numbers'); box.hidden = !box.hidden;
     document.querySelectorAll('[data-act="numbers"]').forEach(x => x.setAttribute('aria-pressed', !box.hidden)); }
 }));
@@ -500,5 +549,5 @@ function frame(now){
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
-window.plume = {P, rebuild, applyLight, render, renderer, info: () => ({hairs: built.hairCount})};   // for checking from the console
+window.plume = {P, rebuild, applyLight, render, renderer, atlas: ATLAS, setBake: () => { needBake = true; }};   // for checking from the console
 </script>
