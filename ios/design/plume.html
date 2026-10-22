@@ -15,8 +15,13 @@
     fuzz picture  — DRAWN BY CODE from the hair numbers (hair length, fluffiness, density): real
                     spikelets with tufts of short hairs combed toward the tip. Moving a slider redraws
                     it in a moment, so everything stays editable
-    light         — hair light along each raceme (Kajiya–Kay) + the sun shining through
-  About 500 triangles per plume instead of ~30 000 with one thread per hair.
+    light         — hair light along each raceme (Kajiya–Kay) + the sun shining through the white hairs,
+                    while the golden-brown core (the raceme's own stem, seeds, bristles) stays darker,
+                    as in backlit photos of real susuki
+  v3: leaves all the way up the stalk (one per joint, alternate sides, a short flag leaf under the
+  plume), darker joints, racemes shaded where they crowd at the axis. Every plume on screen is one of
+  a few templates plus its own numbers (place, turn, size, tint, wind timing) — GPU instancing — so a
+  field of thousands is still a handful of draws. About 900 triangles per plume.
 -->
 <style>
 /* Layout: the plume fills the screen; the numbers sit in a side panel on a computer and in a sheet at the bottom on a phone. */
@@ -82,7 +87,7 @@ pre{margin:0;max-height:220px;overflow:auto;font:11px/1.45 ui-monospace, SFMono-
 <aside class="panel" id="panel">
   <div class="intro">
     <h1>Метёлка сусуки</h1>
-    <p>Настоящие размеры: стебель 6 мм, веточки 17 см, волоски 9 мм — зрелая пушистая осенняя сусуки. Пушок на веточках нарисован кодом из чисел: двигаешь ползунок — он перерисовывается.</p>
+    <p>Настоящие размеры: стебель 6 мм, веточки 17 см, волоски 9 мм, листья по всему стеблю. Пушок нарисован кодом из чисел: золотистая серединка, белые волоски, сквозь которые светит солнце.</p>
   </div>
   <div class="stats" id="stats"></div>
   <div class="bar">
@@ -136,7 +141,7 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 /* ═══ The plume is these numbers (sizes in real units). ═══ */
 const DEFAULTS = {
   racemes: 30, rLenCm: 17, spread: 0.38, droop: 0.6, lean: 0.35, fluff: 1.0, hairMM: 9, density: 1.5,
-  height: 1.55, thickMM: 6, leaves: 4, leafLen: 0.6,
+  height: 1.55, thickMM: 6, leaves: 10, leafLen: 0.55,
   color: 'silver', bright: 1.0, sunAz: 22, sunEl: 14, glow: 1.0, bg: 'picture',
   wind: 0.22, seed: 7, view: 'one',
 };
@@ -146,10 +151,10 @@ const BGS = { picture: 'Твоя картинка', dark: 'Тёмный' };
 const VIEWS = { one: 'Одна метёлка', bush: 'Куст из 7' };
 const P = loadParams();
 function loadParams(){
-  try { const s = JSON.parse(localStorage.getItem('plume2') || 'null'); if (s) return {...DEFAULTS, ...s}; } catch (e) {}
+  try { const s = JSON.parse(localStorage.getItem('plume3') || 'null'); if (s) return {...DEFAULTS, ...s}; } catch (e) {}
   return {...DEFAULTS};
 }
-function saveParams(){ try { localStorage.setItem('plume2', JSON.stringify(P)); } catch (e) {} }
+function saveParams(){ try { localStorage.setItem('plume3', JSON.stringify(P)); } catch (e) {} }
 
 /* ═══ Helpers ═══ */
 const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
@@ -163,44 +168,48 @@ function bezD(p0, p1, p2, p3, t){ const u = 1 - t;
 const cardWidth = P => 2*P.hairMM/1000*(0.55 + 0.9*P.fluff) + 0.003;   // a raceme with its hairs spread, in metres
 
 /* ═══ The fuzz picture, drawn by code: 4 kinds of raceme side by side ═══
-   Each: a thin rachis with spikelets in pairs; every spikelet carries a tuft of short silky hairs
-   combed toward the tip and spread by "fluffiness". Drawn once into a texture; redrawn when the hair
-   numbers change. Colour is applied later, so changing colour costs nothing. */
+   Like the real thing seen against the sun: a golden-brown core (the raceme's own thin stem and its
+   paired seeds, each with a fine bristle) inside a halo of white silky hairs, combed toward the tip.
+   Drawn once into a texture, redrawn when the hair numbers change; colour is applied later. */
 const VARIANTS = 4, ATLAS = new THREE.WebGLRenderTarget(512, 1024, {samples: 4});
 ATLAS.texture.generateMipmaps = true; ATLAS.texture.minFilter = THREE.LinearMipmapLinearFilter; ATLAS.texture.anisotropy = 4;
 const bakeScene = new THREE.Scene(), bakeCam = new THREE.OrthographicCamera(0, 1, 1, 0, -1, 1);
-const bakeMat = new THREE.LineBasicMaterial({vertexColors: true, transparent: true, depthTest: false, depthWrite: false});
-const bakeLines = new THREE.LineSegments(new THREE.BufferGeometry(), bakeMat);
+const bakeLines = new THREE.LineSegments(new THREE.BufferGeometry(),
+  new THREE.LineBasicMaterial({vertexColors: true, transparent: true, depthTest: false, depthWrite: false}));
 bakeLines.frustumCulled = false; bakeScene.add(bakeLines);
 let hairsDrawn = 0;
 function bakeFuzz(renderer){
-  const pos = [], col = [], W = cardWidth(P), L = 0.15;      // the picture stands for 15 cm of raceme
+  const pos = [], col = [], W = cardWidth(P), L = 0.15;              // the picture stands for 15 cm of raceme
   const seg = (x0, y0, x1, y1, c, a, v) => { pos.push((v + x0)/VARIANTS, y0, 0, (v + x1)/VARIANTS, y1, 0); col.push(...c, a, ...c, a); };
+  const CORE = [0.56, 0.42, 0.27], SEED = [0.7, 0.54, 0.35], AWN = [0.78, 0.66, 0.5];
   hairsDrawn = 0;
   for (let v = 0; v < VARIANTS; v++){
     const R = rng(P.seed*31 + v*7 + 1);
-    // the rachis: a few close parallel lines, slightly wavy
-    for (const dx of [-0.006, 0, 0.006]){
-      let px = 0.5 + dx, py = 0.0;
-      for (let k = 1; k <= 24; k++){ const y = k/24, x = 0.5 + dx + Math.sin(y*9 + v)*0.006; seg(px, py, x, y, [0.7, 0.63, 0.55], 0.85, v); px = x; py = y; }
+    // the raceme's own stem: golden-brown, about half a millimetre, slightly wavy
+    for (let d = -2; d <= 2; d++){
+      let px = 0.5 + d*0.00012/W, py = 0;
+      for (let k = 1; k <= 24; k++){ const y = k/24, x = 0.5 + d*0.00012/W + Math.sin(y*9 + v)*0.0004/W; seg(px, py, x, y, CORE, 1, v); px = x; py = y; }
     }
-    const nodes = Math.round(L/0.0045), spread = (0.2 + 0.75*P.fluff);
+    const nodes = Math.round(L/0.0045), spread = 0.2 + 0.75*P.fluff;
     for (let n = 0; n < nodes; n++){
       for (const side of [-1, 1]){
-        const y0 = 0.03 + 0.94*(n + 0.5 + (R() - 0.5)*0.6)/nodes, x0 = 0.5 + side*(0.0008 + 0.0012*R())/W;
-        // the spikelet: a slim seed 5 mm long
-        const sl = 0.005*(0.85 + 0.3*R());
-        for (const off of [-0.0004, 0, 0.0004]) seg(x0 + off/W, y0, x0 + (off + side*0.0006)/W, y0 + sl/L, [0.78, 0.7, 0.6], 0.8, v);
-        // its tuft of silky hairs
+        const y0 = 0.03 + 0.94*(n + 0.5 + (R() - 0.5)*0.6)/nodes, x0 = 0.5 + side*(0.0007 + 0.0009*R())/W;
+        // the seed: slim, 5–6 mm, golden
+        const sl = 0.0055*(0.85 + 0.3*R());
+        for (const off of [-0.0005, -0.00025, 0, 0.00025, 0.0005]) seg(x0 + off/W, y0, x0 + (off + side*0.0005)/W, y0 + sl/L, SEED, 0.95, v);
+        // its bristle (awn): a fine darker line, longer than the seed
+        const al = 0.009*(0.7 + 0.6*R()), aa = side*(0.08 + 0.25*R());
+        seg(x0, y0 + sl/L, x0 + Math.sin(aa)*al/W, y0 + (sl + Math.cos(aa)*al)/L, AWN, 0.55, v);
+        // its tuft of white silky hairs, fanned outward, thin enough to let light through
         const tuft = Math.round(14*P.density*(0.8 + 0.4*R()));
         for (let h = 0; h < tuft; h++){
-          const th = side*Math.abs((R() + R() + R() - 1.5)/1.5)*spread*1.1 + (R() - 0.5)*0.15;   // mostly up, fanned outward
+          const th = side*Math.abs((R() + R() + R() - 1.5)/1.5)*spread*1.1 + (R() - 0.5)*0.15;
           const len = P.hairMM/1000*(0.65 + 0.7*R()), bend = side*0.35*P.fluff*R();
           const bx = x0 + (R() - 0.5)*0.001/W, by = y0 + R()*sl*0.5/L;
           const mx = bx + Math.sin(th)*len*0.5/W, my = by + Math.cos(th)*len*0.5/L;
           const ex = mx + Math.sin(th + bend)*len*0.5/W, ey = my + Math.cos(th + bend)*len*0.5/L;
-          const c = 0.86 + 0.14*R();
-          seg(bx, by, mx, my, [c, c, c*0.985], 0.5, v); seg(mx, my, ex, ey, [c, c, c*0.985], 0.42, v);
+          const c = 0.9 + 0.1*R();
+          seg(bx, by, mx, my, [c, c, c*0.985], 0.34, v); seg(mx, my, ex, ey, [c, c, c*0.985], 0.27, v);
           hairsDrawn++;
         }
       }
@@ -215,9 +224,9 @@ function bakeFuzz(renderer){
   renderer.setRenderTarget(prevTarget); renderer.setClearColor(prevClear, prevAlpha);
 }
 
-/* ═══ Building plumes from the numbers ═══ */
+/* ═══ One plume, built once from the numbers (a "template") ═══ */
 class Strips {   // ribbons along a curve; the shader widens them sideways
-  constructor(){ Object.assign(this, {pos: [], tan: [], side: [], v: [], w: [], vari: [], phase: [], bend: [], nrm: [], index: [], n: 0}); }
+  constructor(){ Object.assign(this, {pos: [], tan: [], side: [], v: [], w: [], vari: [], phase: [], bend: [], nrm: [], ao: [], index: [], n: 0}); }
   add(pts, o){
     const m = pts.length, base = this.n;
     for (let j = 0; j < m; j++){
@@ -225,7 +234,7 @@ class Strips {   // ribbons along a curve; the shader widens them sideways
       for (const s of [-1, 1]){
         this.pos.push(pts[j].x, pts[j].y, pts[j].z); this.tan.push(t.x, t.y, t.z); this.side.push(s); this.v.push(v);
         this.w.push(o.width(v)); this.vari.push(o.variant || 0); this.phase.push(o.phase || 0);
-        this.bend.push(o.bend0 + (o.bend1 - o.bend0)*v);
+        this.bend.push(o.bend0 + (o.bend1 - o.bend0)*v); this.ao.push(o.ao ? o.ao(v) : 1);
         const n = o.normal ? o.normal(v) : t; this.nrm.push(n.x, n.y, n.z);
       }
     }
@@ -237,81 +246,94 @@ class Strips {   // ribbons along a curve; the shader widens them sideways
     g.setAttribute('position', f(this.pos, 3)); g.setAttribute('aTan', f(this.tan, 3)); g.setAttribute('aSide', f(this.side, 1));
     g.setAttribute('aV', f(this.v, 1)); g.setAttribute('aW', f(this.w, 1)); g.setAttribute('aVar', f(this.vari, 1));
     g.setAttribute('aPhase', f(this.phase, 1)); g.setAttribute('aBend', f(this.bend, 1)); g.setAttribute('aNrm', f(this.nrm, 3));
-    g.setIndex(this.index);
+    g.setAttribute('aAO', f(this.ao, 1)); g.setIndex(this.index);
     return g;
   }
   get triangles(){ return this.index.length/3; }
 }
 
-function addPlume(Q, at, R, heads, stalks, leaves, box){
+function buildTemplate(Q, seed){
+  const R = rng(seed), heads = new Strips(), stalks = new Strips(), leaves = new Strips(), box = new THREE.Box3();
   const H = Q.height, up = V(0, 1, 0);
-  const archDir = V(Math.cos(Q.archPhi), 0, Math.sin(Q.archPhi));
-  const s0 = at.clone(), s1 = at.clone().add(V(0, H*0.45, 0));
-  const s2 = at.clone().add(V(0, H*0.8, 0)).addScaledVector(archDir, H*0.04*Q.arch);
-  const s3 = at.clone().add(V(0, H, 0)).addScaledVector(archDir, H*0.11*Q.arch);
+  const archPhi = Math.PI*(0.8 + 0.3*R()), leanPhi = archPhi - 0.2 + 0.4*R(), arch = 0.4 + 0.5*R();
+  const archDir = V(Math.cos(archPhi), 0, Math.sin(archPhi));
+  const s0 = V(), s1 = V(0, H*0.45, 0), s2 = V(0, H*0.8, 0).addScaledVector(archDir, H*0.04*arch), s3 = V(0, H, 0).addScaledVector(archDir, H*0.11*arch);
   const topT = bezD(s0, s1, s2, s3, 1).normalize();
-  // the stalk: solid, a little thinner toward the top, running up into the panicle axis
+  // the stalk (solid), running up into the panicle's axis; its joints are drawn by the shader
   const axisLen = Q.rLenCm/100*0.45, stalkPts = [];
   for (let k = 0; k <= 14; k++) stalkPts.push(bez(s0, s1, s2, s3, k/14));
   stalkPts.push(s3.clone().addScaledVector(topT, axisLen));
   stalks.add(stalkPts, {width: v => Q.thickMM/2000*(1 - 0.35*v), bend0: 0, bend1: 1 + axisLen/H});
-  // the racemes: fingers from along the top of the axis; rise, arc outward, droop
-  const leanDir = V(Math.cos(Q.leanPhi), 0, Math.sin(Q.leanPhi)), N = Math.round(Q.racemes), W = cardWidth(Q);
+  // the racemes: fingers from along the axis; they rise, arc outward and droop
+  const leanDir = V(Math.cos(leanPhi), 0, Math.sin(leanPhi)), N = Math.round(Q.racemes), W = cardWidth(Q);
   for (let i = 0; i < N; i++){
     const s = N > 1 ? i/(N - 1) : 0;
-    const p0 = s3.clone().addScaledVector(topT, axisLen*(1 - s)*0.95);       // lower racemes attach lower and are longer
+    const p0 = s3.clone().addScaledVector(topT, axisLen*(1 - s)*0.95);
     const phi = i*2.39996 + R()*0.6;
     const out = V(Math.cos(phi), 0, Math.sin(phi)).multiplyScalar(1 - Q.lean*0.6).addScaledVector(leanDir, Q.lean).normalize();
     const L = Q.rLenCm/100*(0.8 + 0.4*R())*(0.75 + 0.35*(1 - s));
-    const theta = Q.spread*(0.25 + 0.75*R())*1.0 + 0.05;
+    const theta = Q.spread*(0.25 + 0.75*R()) + 0.05;
     const d0 = topT.clone().multiplyScalar(Math.cos(theta)).addScaledVector(out, Math.sin(theta)).normalize();
     const dr = Q.droop*(0.6 + 0.4*R())*(0.6 + theta);
     const p1 = p0.clone().addScaledVector(d0, L*0.42);
     const p2 = p0.clone().addScaledVector(d0, L*0.6).addScaledVector(out, L*(0.15 + 0.25*dr));
     const p3 = p0.clone().addScaledVector(d0, L*(0.62 - 0.2*dr)).addScaledVector(out, L*(0.3 + 0.35*dr)).addScaledVector(up, -L*0.6*dr);
     const pts = []; for (let k = 0; k <= 10; k++) pts.push(bez(p0, p1, p2, p3, k/10));
+    const shade = 0.82 + 0.18*R();
     heads.add(pts, {width: v => W/2*(0.5 + 0.5*sm(0, 0.18, v))*(1 - 0.45*sm(0.65, 1, v)), variant: Math.floor(R()*VARIANTS),
-                    phase: i*1.7 + R()*2, bend0: 1, bend1: 1 + L/H*2});
+                    phase: i*1.7 + R()*2, bend0: 1, bend1: 1 + L/H*2,
+                    ao: v => shade*(0.68 + 0.32*sm(0, 0.4, v))});   // where the racemes crowd at the axis, less light gets in
     for (const p of pts){ box.expandByPoint(p.clone().addScalar(W/2)); box.expandByPoint(p.clone().addScalar(-W/2)); }
   }
-  // long leaves from the lower stalk: flat, arching out and drooping
-  for (let i = 0; i < Math.round(Q.leaves); i++){
-    const a = bez(s0, s1, s2, s3, 0.06 + 0.11*i), phi = Q.archPhi + 0.9 + i*2.3 + R()*0.6;
-    const out = V(Math.cos(phi), 0, Math.sin(phi)), Ll = Q.leafLen*(0.7 + 0.5*R());
-    const q1 = a.clone().addScaledVector(up, Ll*0.4).addScaledVector(out, Ll*0.1);
-    const q2 = a.clone().addScaledVector(up, Ll*0.55).addScaledVector(out, Ll*0.45);
-    const q3 = a.clone().addScaledVector(up, Ll*(0.25 - 0.3*R())).addScaledVector(out, Ll*0.85);
-    const pts = []; for (let k = 0; k <= 16; k++) pts.push(bez(a, q1, q2, q3, k/16));
-    leaves.add(pts, {width: v => 0.008*Math.min(1, v*6)*Math.pow(1 - v, 0.7), bend0: 0.06 + 0.11*i, bend1: 0.5 + 0.11*i,
-      normal: v => { const T = bezD(a, q1, q2, q3, v).normalize(), sv = T.clone().cross(out).normalize(); return sv.cross(T).normalize(); }});
+  // leaves all the way up the stalk, one per joint, on alternate sides; upper ones shorter;
+  // the last, short "flag" leaf just under the plume
+  const n = Math.round(Q.leaves);
+  for (let i = 0; i < n; i++){
+    const flag = n > 2 && i === n - 1;
+    const v0 = flag ? 0.86 : 0.05 + 0.72*(n > 2 ? i/(n - 2) : 0);
+    const a = bez(s0, s1, s2, s3, v0), aT = bezD(s0, s1, s2, s3, v0).normalize();
+    const phi = archPhi + Math.PI*i + (R() - 0.5)*0.9;
+    const out = V(Math.cos(phi), 0, Math.sin(phi));
+    const Ll = Q.leafLen*(flag ? 0.3 : (0.75 + 0.5*R())*(1 - 0.4*v0));
+    const sheath = a.clone().addScaledVector(aT, Ll*0.18);              // the sheath hugs the stalk first
+    const q1 = sheath.clone().addScaledVector(up, Ll*(flag ? 0.25 : 0.12)).addScaledVector(out, Ll*0.08);
+    const q2 = sheath.clone().addScaledVector(up, Ll*(flag ? 0.35 : 0.2)).addScaledVector(out, Ll*(flag ? 0.25 : 0.45));
+    const q3 = sheath.clone().addScaledVector(up, flag ? Ll*0.3 : -Ll*(0.1 + 0.35*R())).addScaledVector(out, Ll*(flag ? 0.45 : 0.75));
+    const pts = [a.clone()]; for (let k = 0; k <= 16; k++) pts.push(bez(sheath, q1, q2, q3, k/16));
+    const width = (flag ? 0.0055 : 0.005 + 0.0028*R());               // half-width: blades 10–16 mm wide
+    leaves.add(pts, {width: v => width*Math.min(1, 0.45 + v*4)*Math.pow(1 - v, 0.6), bend0: v0, bend1: v0 + Ll/H,
+      normal: v => { const T = bezD(sheath, q1, q2, q3, v).normalize(), sv = T.clone().cross(out); if (sv.lengthSq() < 1e-8) sv.set(0, 0, 1);
+                     return sv.normalize().cross(T).normalize(); }});
   }
+  return {heads, stalks, leaves, box};
 }
 
-function buildScene(P){
-  const heads = new Strips(), stalks = new Strips(), leaves = new Strips(), box = new THREE.Box3(), R = rng(P.seed);
-  const base = {...P, rLenCm: P.rLenCm, archPhi: Math.PI*0.92, leanPhi: Math.PI*0.85, arch: 0.6};
-  if (P.view === 'bush'){
-    for (let i = 0; i < 7; i++){
-      const r = i === 0 ? 0 : 0.06 + 0.12*R(), a = i*2.4 + R();
-      const Q = {...base, height: P.height*(0.82 + 0.3*R()), racemes: Math.max(6, P.racemes + Math.round((R() - 0.5)*6)),
-                 rLenCm: P.rLenCm*(0.85 + 0.3*R()), lean: Math.min(1, P.lean*(0.7 + 0.6*R())), archPhi: Math.PI*(0.75 + 0.4*R()),
-                 leanPhi: Math.PI*(0.7 + 0.5*R()), arch: 0.4 + 0.8*R()};
-      addPlume(Q, V(Math.cos(a)*r, 0, Math.sin(a)*r), R, heads, stalks, leaves, box);
-    }
-  } else addPlume(base, V(), R, heads, stalks, leaves, box);
-  return {heads, stalks, leaves, box};
+/* Every plume on screen is one of a few templates plus its own numbers: where, turned how, how big,
+   what tint, its own wind timing. A field of thousands is still a handful of draws. */
+function instanced(strips, list){
+  const base = strips.geometry(), g = new THREE.InstancedBufferGeometry();
+  g.index = base.index; for (const k in base.attributes) g.setAttribute(k, base.attributes[k]);
+  const off = new Float32Array(list.length*4), tint = new Float32Array(list.length*4);
+  list.forEach((it, i) => { off.set([it.x, it.z, it.rot, it.scale], i*4); tint.set([...it.tint, it.phase], i*4); });
+  g.setAttribute('iOff', new THREE.InstancedBufferAttribute(off, 4));
+  g.setAttribute('iTint', new THREE.InstancedBufferAttribute(tint, 4));
+  g.instanceCount = list.length;
+  return g;
 }
 
 /* ═══ Light and wind, shared by every part ═══ */
 const WIND = `
-uniform float uTime, uWind, uGust, uH;
+uniform float uTime, uWind, uGust;
+attribute vec4 iOff, iTint;                    // per plume: x, z, turn, size | tint, wind timing
+vec3 place(vec3 p){ float c = cos(iOff.z), s = sin(iOff.z); p *= iOff.w; return vec3(c*p.x - s*p.z + iOff.x, p.y, s*p.x + c*p.z + iOff.y); }
+vec3 turn(vec3 d){ float c = cos(iOff.z), s = sin(iOff.z); return vec3(c*d.x - s*d.z, d.y, s*d.x + c*d.z); }
 vec3 windAt(vec3 p, float b, float phase, float v){
-  float w = uWind*(0.7 + 0.3*sin(uTime*0.55)) + uGust;
-  float lean = w*0.2*b*b;                                           // the plant leans with the wind
-  float bob = (0.025 + 0.045*w)*sin(uTime*1.9 + phase*0.3 + p.x*3.)*b*b;   // and bobs
-  float flick = 0.006*(0.3 + w)*sin(uTime*6.7 + phase*4.)*v*step(1., b);    // racemes flutter
-  float x = lean + bob + flick;
-  return vec3(x, -0.18*x*x/max(b, 0.2), 0.01*(0.3 + w)*sin(uTime*1.3 + phase)*b*b);
+  float w = uWind*(0.7 + 0.3*sin(uTime*0.55 + iTint.w*0.3)) + uGust;
+  float lean = w*0.2*b*b;
+  float bob = (0.025 + 0.045*w)*sin(uTime*1.9 + phase*0.3 + iTint.w + p.x*3.)*b*b;
+  float flick = 0.006*(0.3 + w)*sin(uTime*6.7 + phase*4. + iTint.w)*v*step(1., b);
+  float x = (lean + bob + flick)*iOff.w;
+  return vec3(x, -0.18*x*x/max(b, 0.2), 0.01*(0.3 + w)*sin(uTime*1.3 + phase + iTint.w)*b*b*iOff.w);
 }
 vec3 widen(vec3 wp, vec3 T, float side, float w){                   // turn a strip to face the camera
   vec3 toCam = normalize(cameraPosition - wp);
@@ -327,64 +349,64 @@ vec3 hairLight(vec3 base, vec3 T, vec3 V, float glow){                     // li
   return base*(uSky*0.75 + uSunCol*0.42*kd) + base*uSunCol*(ks*0.28 + back(V)*glow*(0.55 + 0.45*kd));
 }`;
 const uniforms = {
-  uTime: {value: 0}, uWind: {value: P.wind}, uGust: {value: 0}, uH: {value: P.height},
+  uTime: {value: 0}, uWind: {value: P.wind}, uGust: {value: 0},
   uSun: {value: V()}, uSunCol: {value: new THREE.Color()}, uSky: {value: new THREE.Color()},
   uHair: {value: new THREE.Color()}, uGlow: {value: P.glow}, uBright: {value: P.bright},
-  uAtlas: {value: ATLAS.texture}, uVariants: {value: VARIANTS},
+  uAtlas: {value: ATLAS.texture}, uVariants: {value: VARIANTS}, uNodes: {value: 11},
 };
 const STRIP_VS = `${WIND}
-  attribute vec3 aTan, aNrm; attribute float aSide, aV, aW, aVar, aPhase, aBend;
-  varying vec2 vUv; varying vec3 vT, vW; varying float vSide, vV;
-  uniform float uVariants; uniform float uFlat;
+  attribute vec3 aTan, aNrm; attribute float aSide, aV, aW, aVar, aPhase, aBend, aAO;
+  varying vec2 vUv; varying vec3 vT, vW, vTint; varying float vSide, vV, vAO;
+  uniform float uVariants, uFlat;
   void main(){
-    vec3 p = position + windAt(position, aBend, aPhase, aV);
+    vec3 p0 = place(position);
+    vec3 p = p0 + windAt(p0, aBend, aPhase, aV);
     vec4 wp = modelMatrix*vec4(p, 1.);
-    vec3 T = normalize(mat3(modelMatrix)*aTan);
-    if (uFlat > .5) wp.xyz += normalize(cross(T, aNrm))*aSide*aW;     // leaves: a real flat blade
-    else wp.xyz = widen(wp.xyz, T, aSide, aW);                         // stalk, racemes: always face the camera
+    vec3 T = normalize(mat3(modelMatrix)*turn(aTan));
+    float w = aW*iOff.w;
+    if (uFlat > .5) wp.xyz += normalize(cross(T, turn(aNrm)))*aSide*w;   // leaves: real flat blades
+    else wp.xyz = widen(wp.xyz, T, aSide, w);                            // stalk, racemes: always face the camera
     gl_Position = projectionMatrix*viewMatrix*wp;
-    vUv = vec2((aVar + 0.5 + 0.5*aSide)/uVariants, aV); vT = T; vW = wp.xyz; vSide = aSide; vV = aV;
+    vUv = vec2((aVar + 0.5 + 0.5*aSide)/uVariants, aV); vT = T; vW = wp.xyz; vSide = aSide; vV = aV; vAO = aAO; vTint = iTint.rgb;
   }`;
-
-const headMat = new THREE.ShaderMaterial({
-  uniforms: {...uniforms, uFlat: {value: 0}}, transparent: true, depthWrite: false, premultipliedAlpha: true, side: THREE.DoubleSide,
-  vertexShader: STRIP_VS,
-  fragmentShader: `${LIGHT}
-    uniform sampler2D uAtlas; uniform vec3 uHair;
-    varying vec2 vUv; varying vec3 vT, vW; varying float vSide, vV;
-    void main(){
-      vec4 tx = texture2D(uAtlas, vUv);                                // premultiplied fuzz
-      float a = tx.a;
-      vec3 base = (tx.rgb/max(a, 1e-3))*uHair*uBright;
-      vec3 col = hairLight(base, normalize(vT), normalize(cameraPosition - vW), uGlow);
-      gl_FragColor = vec4(col*a, a);
-    }`,
-});
-const stalkMat = new THREE.ShaderMaterial({
-  uniforms: {...uniforms, uFlat: {value: 0}, uColor: {value: new THREE.Color(...lin([0.83, 0.68, 0.45]))}}, side: THREE.DoubleSide,
-  vertexShader: STRIP_VS,
-  fragmentShader: `${LIGHT}
-    uniform vec3 uColor; varying vec2 vUv; varying vec3 vT, vW; varying float vSide, vV;
-    void main(){
-      float round_ = sqrt(max(0., 1. - vSide*vSide));                  // a thin cylinder: lighter in the middle
-      vec3 col = hairLight(uColor*(0.55 + 0.45*round_), normalize(vT), normalize(cameraPosition - vW), uGlow*0.5);
-      gl_FragColor = vec4(col, 1.);
-    }`,
-});
-const leafMat = new THREE.ShaderMaterial({
-  uniforms: {...uniforms, uFlat: {value: 1}, uColor: {value: new THREE.Color(...lin([0.72, 0.6, 0.36]))}}, side: THREE.DoubleSide,
-  vertexShader: STRIP_VS,
-  fragmentShader: `${LIGHT}
-    uniform vec3 uColor; varying vec2 vUv; varying vec3 vT, vW; varying float vSide, vV;
-    void main(){
-      vec3 V = normalize(cameraPosition - vW), L = normalize(uSun);
-      float rib = smoothstep(0.18, 0., abs(vSide));                     // the pale midrib of a susuki leaf
-      vec3 c = mix(uColor, uColor*1.35 + 0.05, rib);
-      float d = 0.5 + 0.5*abs(dot(normalize(cross(vT, V)), L));
-      vec3 col = c*(uSky*0.6 + uSunCol*0.5*d) + c*uSunCol*back(V)*uGlow*0.7;
-      gl_FragColor = vec4(col, 1.);
-    }`,
-});
+const FRAG_HEAD = `${LIGHT}
+  uniform sampler2D uAtlas; uniform vec3 uHair;
+  varying vec2 vUv; varying vec3 vT, vW, vTint; varying float vSide, vV, vAO;
+  void main(){
+    vec4 tx = texture2D(uAtlas, vUv);                                  // premultiplied fuzz
+    float a = tx.a;
+    vec3 raw = tx.rgb/max(a, 1e-3);
+    float hair = smoothstep(0.62, 0.9, dot(raw, vec3(0.333)));         // white hair (lets light through) vs golden core
+    vec3 base = mix(raw, raw*uHair, hair)*vTint*uBright*vAO;
+    vec3 col = hairLight(base, normalize(vT), normalize(cameraPosition - vW), uGlow*(0.3 + 0.9*hair)*(1.25 - 0.45*a));
+    gl_FragColor = vec4(col*a, a);
+  }`;
+const FRAG_STALK = `${LIGHT}
+  uniform vec3 uColor; uniform float uNodes;
+  varying vec2 vUv; varying vec3 vT, vW, vTint; varying float vSide, vV, vAO;
+  void main(){
+    float round_ = sqrt(max(0., 1. - vSide*vSide));                    // a thin cylinder: lighter in the middle
+    float f = fract(vV*uNodes), joint = 1. - smoothstep(0., 0.03, min(f, 1. - f));   // its joints, a little darker
+    vec3 c = uColor*(0.55 + 0.45*round_)*(1. - 0.28*joint);
+    gl_FragColor = vec4(hairLight(c, normalize(vT), normalize(cameraPosition - vW), uGlow*0.5), 1.);
+  }`;
+const FRAG_LEAF = `${LIGHT}
+  uniform vec3 uColor, uColorTip;
+  varying vec2 vUv; varying vec3 vT, vW, vTint; varying float vSide, vV, vAO;
+  void main(){
+    vec3 V = normalize(cameraPosition - vW), L = normalize(uSun);
+    float rib = smoothstep(0.2, 0., abs(vSide));                       // the pale cream midrib of a susuki leaf
+    vec3 c = mix(uColor, uColorTip, smoothstep(0.1, 1., vV));          // greener at the base, straw at the tip
+    c = mix(c, vec3(0.86, 0.8, 0.62), rib*0.7);
+    float d = 0.5 + 0.5*abs(dot(normalize(cross(vT, V)), L));
+    gl_FragColor = vec4(c*(uSky*0.6 + uSunCol*0.5*d) + c*uSunCol*back(V)*uGlow*0.7, 1.);
+  }`;
+const headMat = new THREE.ShaderMaterial({uniforms: {...uniforms, uFlat: {value: 0}}, transparent: true, depthWrite: false,
+  premultipliedAlpha: true, side: THREE.DoubleSide, vertexShader: STRIP_VS, fragmentShader: FRAG_HEAD});
+const stalkMat = new THREE.ShaderMaterial({uniforms: {...uniforms, uFlat: {value: 0}, uColor: {value: new THREE.Color(...lin([0.83, 0.68, 0.45]))}},
+  side: THREE.DoubleSide, vertexShader: STRIP_VS, fragmentShader: FRAG_STALK});
+const leafMat = new THREE.ShaderMaterial({uniforms: {...uniforms, uFlat: {value: 1}, uColor: {value: new THREE.Color(...lin([0.6, 0.6, 0.32]))},
+  uColorTip: {value: new THREE.Color(...lin([0.82, 0.7, 0.45]))}}, side: THREE.DoubleSide, vertexShader: STRIP_VS, fragmentShader: FRAG_LEAF});
 
 /* ═══ Scene ═══ */
 const canvas = document.getElementById('view');
@@ -412,12 +434,7 @@ const backdrop = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.ShaderM
     }`,
 }));
 backdrop.frustumCulled = false; backdrop.renderOrder = -1; scene.add(backdrop);
-
-const leafMesh = new THREE.Mesh(new THREE.BufferGeometry(), leafMat);
-const stalkMesh = new THREE.Mesh(new THREE.BufferGeometry(), stalkMat);
-const headMesh = new THREE.Mesh(new THREE.BufferGeometry(), headMat);
-for (const m of [leafMesh, stalkMesh, headMesh]){ m.frustumCulled = false; scene.add(m); }
-headMesh.renderOrder = 2;
+const plants = new THREE.Group(); scene.add(plants);
 
 const controls = new OrbitControls(camera, canvas);
 controls.enableDamping = true; controls.enablePan = false; controls.minDistance = 0.12; controls.maxDistance = 5;
@@ -430,20 +447,40 @@ composer.addPass(new RenderPass(scene, camera));
 composer.addPass(new UnrealBloomPass(new THREE.Vector2(1, 1), 0.3, 0.5, 0.86));
 composer.addPass(new OutputPass());
 
-let built = null, needBake = true;
+let built = false, needBake = true;
 function rebuild(keepView){
   if (needBake){ bakeFuzz(renderer); needBake = false; }
-  const g = buildScene(P);
-  for (const [mesh, strips] of [[headMesh, g.heads], [stalkMesh, g.stalks], [leafMesh, g.leaves]]){ mesh.geometry.dispose(); mesh.geometry = strips.geometry(); }
-  uniforms.uH.value = P.height;
-  const center = g.box.getCenter(V()), size = g.box.getSize(V());
+  for (const m of [...plants.children]){ m.geometry.dispose(); plants.remove(m); }
+  const R = rng(P.seed*13 + 5), bush = P.view === 'bush';
+  const kinds = bush ? 3 : 1, templates = Array.from({length: kinds}, (_, k) => buildTemplate(P, P.seed + k*101));
+  // the plumes: one, or a bush of 7 made from 3 templates, each copy with its own numbers
+  const list = bush ? Array.from({length: 7}, (_, i) => {
+      const r = i === 0 ? 0 : 0.07 + 0.12*R(), a = i*2.4 + R(), t = 0.94 + 0.08*R();
+      return {k: i % kinds, x: Math.cos(a)*r, z: Math.sin(a)*r, rot: R()*Math.PI*2, scale: 0.85 + 0.3*R(), tint: [t, t, t*(0.97 + 0.04*R())], phase: R()*6};
+    }) : [{k: 0, x: 0, z: 0, rot: 0, scale: 1, tint: [1, 1, 1], phase: 0}];
+  let tris = 0, draws = 0;
+  templates.forEach((tp, k) => {
+    const mine = list.filter(it => it.k === k); if (!mine.length) return;
+    for (const [strips, mat, order] of [[tp.leaves, leafMat, 0], [tp.stalks, stalkMat, 0], [tp.heads, headMat, 2]]){
+      if (!strips.triangles) continue;
+      const mesh = new THREE.Mesh(instanced(strips, mine), mat);
+      mesh.frustumCulled = false; mesh.renderOrder = order; plants.add(mesh);
+      tris += strips.triangles*mine.length; draws++;
+    }
+  });
+  uniforms.uNodes.value = P.height/0.14;
+  const box = templates[0].box.clone();
+  if (bush) box.expandByScalar(0.2);
+  const center = box.getCenter(V()), size = box.getSize(V());
   if (!keepView || !built){
     controls.target.copy(center);
     camera.position.copy(center).add(V(0.08, -0.22, 1).normalize().multiplyScalar(fitDistance(size)));
   } else controls.target.copy(center);
-  built = g;
-  const plumes = P.view === 'bush' ? 7 : 1, tris = Math.round((g.heads.triangles + g.stalks.triangles + g.leaves.triangles)/plumes);
-  document.getElementById('stats').innerHTML = `Одна метёлка — <b>≈ ${tris} треугольников</b> (раньше ≈ 30 000). Пушок нарисован ${hairsDrawn.toLocaleString('ru')} волосками.`;
+  built = true;
+  const per = Math.round(tris/list.length);
+  document.getElementById('stats').innerHTML = `Одна метёлка — <b>≈ ${per} треугольников</b> (в первой версии ≈ 30 000). ` +
+    (bush ? `Куст из 7 рисуется за <b>${draws} вызовов</b> — и поле из тысяч будет рисоваться за столько же. ` : '') +
+    `Пушок нарисован ${hairsDrawn.toLocaleString('ru')} волосками один раз.`;
   document.getElementById('json').textContent = JSON.stringify(P, null, 1);
 }
 function fitDistance(size){
@@ -477,11 +514,11 @@ function render(dt){
 
 /* ═══ Controls: every number is a slider ═══ */
 const SLIDERS = [
-  ['Головка', [['racemes', 'Веточек', 6, 30, 1], ['rLenCm', 'Длина веточек, см', 8, 25, 0.5], ['spread', 'Раскрытие', 0, 1, 0.01],
+  ['Головка', [['racemes', 'Веточек', 6, 36, 1], ['rLenCm', 'Длина веточек, см', 8, 25, 0.5], ['spread', 'Раскрытие', 0, 1, 0.01],
                ['droop', 'Свисание', 0, 1, 0.01], ['lean', 'Наклон в сторону', 0, 1, 0.01]]],
   ['Пушок', [['fluff', 'Пушистость', 0, 1, 0.01], ['hairMM', 'Длина волосков, мм', 3, 10, 0.1], ['density', 'Густота волосков', 0.4, 1.6, 0.01]]],
   ['Стебель и листья', [['height', 'Высота, м', 0.9, 2.4, 0.01], ['thickMM', 'Толщина стебля, мм', 3, 9, 0.1],
-                       ['leaves', 'Листья', 0, 6, 1], ['leafLen', 'Длина листьев, м', 0.3, 0.9, 0.01]]],
+                       ['leaves', 'Листьев на стебле', 0, 16, 1], ['leafLen', 'Длина листьев, м', 0.3, 0.9, 0.01]]],
   ['Свет', [['sunAz', 'Солнце: вокруг', -180, 180, 1], ['sunEl', 'Солнце: высота', 2, 70, 1],
             ['glow', 'Свечение насквозь', 0, 2.5, 0.01], ['bright', 'Яркость', 0.5, 1.5, 0.01]]],
   ['Ветер', [['wind', 'Сила ветра', 0, 1, 0.01]]],
