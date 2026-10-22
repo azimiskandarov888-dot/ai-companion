@@ -93,7 +93,7 @@ const KINDS = [
 ];
 const KIND_SUM = KINDS.reduce((s, k) => s + k.w, 0);
 const pickKind = R => { let r = R()*KIND_SUM; for (let k = 0; k < KINDS.length; k++){ r -= KINDS[k].w; if (r < 0) return k; } return 0; };
-const DENSITY = {near: 9, mid: 8, far: 10}, LEVELS = [['реже', 0.6], ['обычная', 1], ['гуще', 1.4]], CLUMP = 7;
+const DENSITY = {near: 9, mid: 9, far: 16}, LEVELS = [['реже', 0.6], ['обычная', 1], ['гуще', 1.4]], CLUMP = 7;
 const WINDS = [['слабый', 0.12, 0.15], ['средний', 0.25, 0.3], ['сильный', 0.55, 0.6]];
 const S = {density: 1, densityName: 'обычная', wind: 0.25, gust: 0.3, windName: 'средний', quality: 'high', t: 0, impulse: 0, impulseT: 0,
            dir: new THREE.Vector2(1, 0.12).normalize()};
@@ -115,8 +115,8 @@ function bezD(p0, p1, p2, p3, t){ const u = 1 - t;
   return p1.clone().sub(p0).multiplyScalar(3*u*u).addScaledVector(p2.clone().sub(p1), 6*u*t).addScaledVector(p3.clone().sub(p2), 3*t*t); }
 // the ground rises away from us into a hill with its crest ~46 m out, higher on the left (where his tree will stand),
 // like the hill in his picture (looking along +z, the left of the screen is +x)
-const ground = (x, z) => 5.2*sm(0, 46, z)*(0.85 + 0.15*Math.sin(x*0.06 + 1.3)) + 0.11*x*sm(5, 40, z) - 4*sm(47, 75, z) + 0.12*Math.sin(x*0.35 + z*0.11)
-  + 0.1*Math.sin(x*1.7 + z*0.9)*Math.sin(z*1.3 - x*0.6);
+const ground = (x, z) => 5.2*sm(0, 46, z)*(0.85 + 0.15*Math.sin(x*0.06 + 1.3)) + 0.13*x*sm(0, 46, z) - 4*sm(47, 75, z)
+  + 0.35*sm(15, 46, z)*Math.sin(x*0.45 + 0.7) + 0.12*Math.sin(x*0.35 + z*0.11) + 0.1*Math.sin(x*1.7 + z*0.9)*Math.sin(z*1.3 - x*0.6);
 // the top of the dense layer of leaves: from this camera nothing lower shows, so the ground is drawn there, golden;
 // farther away the layer looks thicker (more stalks behind each other), so it reaches higher; on the crest, seen
 // against the sky, only the heads rise above it — bare stalks there read as sticks
@@ -192,7 +192,7 @@ function buildTemplate(Q, seed, D){
   const archDir = V(Math.cos(archPhi), 0, Math.sin(archPhi));
   const s0 = V(), s1 = V(0, H*0.45, 0), s2 = V(0, H*0.8, 0).addScaledVector(archDir, H*0.04*arch), s3 = V(0, H, 0).addScaledVector(archDir, H*0.06*arch);
   const topT = bezD(s0, s1, s2, s3, 1).normalize(), axisLen = 0.045, stalkPts = [];
-  const lit = y => 0.04 + 0.96*sm(0.6*H, 1.02*H, y);               // the sun reaches a part only near the heads
+  const lit = y => 0.12 + 0.88*sm(0.45*H, 1.02*H, y);              // less sun reaches a part the lower it is
   for (let k = 0; k <= D.sSeg; k++) stalkPts.push(bez(s0, s1, s2, s3, k/D.sSeg));
   stalkPts.push(s3.clone().addScaledVector(topT, axisLen));
   stalks.add(stalkPts, {width: v => Q.thickMM/2000*(1 - 0.3*v), bend0: 0, bend1: 1 + axisLen/H, ao: v => lit(v*H)});
@@ -289,24 +289,24 @@ vec3 sway(float b, float phase, float v){
 }
 vec3 widen(vec3 wp, vec3 T, float side, float w){ vec3 toCam = normalize(cameraPosition - wp); return wp + normalize(cross(T, toCam))*side*w; }`;
 const LIGHT = `
-uniform vec3 uSun, uSunCol, uAmb, uHaze; uniform float uGlow, uHazeK;
-float back(vec3 V){ return pow(max(0., dot(-V, normalize(uSun))), 4.); }
-vec3 hairLight(vec3 base, vec3 T, vec3 V, float glow){
-  vec3 L = normalize(uSun); float tl = dot(T, L), kd = 0.35 + 0.65*sqrt(max(0., 1. - tl*tl));   // fluff is never quite dark
-  vec3 H = normalize(L + V); float th = dot(T, H), ks = pow(sqrt(max(0., 1. - th*th)), 40.);
-  return base*(uAmb + uSunCol*0.42*kd) + base*uSunCol*(ks*0.55 + back(V)*glow*(0.55 + 0.45*kd));
-}
+uniform vec3 uSun, uSunCol, uSky, uGnd, uHaze; uniform float uGlow, uHazeK;
+// soft light for soft things (half-Lambert, first used for fur): no hard line between the lit side and the shade
+float wrapL(vec3 N, vec3 L){ float d = dot(N, L)*0.5 + 0.5; return d*d; }
+// the light all around: the sky's from above, the field's gold from below
+vec3 hemi(vec3 N){ return mix(uGnd, uSky, N.y*0.5 + 0.5); }
+// the sun shining through thin fluff and leaves that stand against it (Frostbite's fast translucency, GDC 2011)
+float through(vec3 N, vec3 L, vec3 V, float bend, float power){ return pow(clamp(dot(V, -normalize(L + N*bend)), 0., 1.), power); }
 vec3 haze(vec3 c, vec3 wp){ float d = length(wp - cameraPosition); return mix(c, uHaze, 1. - exp(-d*uHazeK)); }
 // deeper into the field, more plumes share each pixel: darker and more golden
 vec3 deep(vec3 c, vec3 wp){ return c*mix(vec3(1.), vec3(0.72, 0.63, 0.5), smoothstep(12., 55., length(wp - cameraPosition))); }`;
 const uniforms = {
-  uTime: {value: 0}, uWind: {value: S.wind}, uSun: {value: V()}, uSunCol: {value: new THREE.Color()}, uAmb: {value: new THREE.Color()},
+  uTime: {value: 0}, uWind: {value: S.wind}, uSun: {value: V()}, uSunCol: {value: new THREE.Color()}, uSky: {value: new THREE.Color()}, uGnd: {value: new THREE.Color()},
   uHaze: {value: new THREE.Color()}, uHazeK: {value: 0.0015}, uGlow: {value: 0.7}, uHair: {value: new THREE.Color(...lin([0.93, 0.96, 1]))},
   uAtlas: {value: null}, uVariants: {value: VARIANTS}, uNodes: {value: PLUME.height/0.14},
 };
 const STRIP_VS = `${COMMON}
   attribute vec3 aTan, aNrm, aCen; attribute float aSide, aV, aW, aVar, aPhase, aBend, aAO;
-  varying vec2 vUv; varying vec3 vT, vW, vN; varying float vSide, vV, vAO, vTint, vB, vSheen;
+  varying vec2 vUv; varying vec3 vT, vW, vN, vNr; varying float vSide, vV, vAO, vTint, vB, vSheen;
   uniform float uVariants, uFlat;
   void main(){
     vec3 p = place(position) + sway(aBend, aPhase, aV);            // the bend is already in metres for this plant
@@ -316,6 +316,7 @@ const STRIP_VS = `${COMMON}
     gl_Position = projectionMatrix*viewMatrix*vec4(wp, 1.);
     vUv = vec2((aVar + 0.5 + 0.5*aSide)/uVariants, aV); vT = T; vW = wp; vSide = aSide; vV = aV; vAO = aAO; vTint = iB.y; vB = aBend; vSheen = length(iBend);
     vN = wp - (place(aCen) + vec3(iBend.x, 0., iBend.y));            // out from the middle of its plume
+    vNr = turn(aNrm);                                                  // a leaf's own normal
   }`;
 const headMat = new THREE.ShaderMaterial({uniforms: {...uniforms, uFlat: {value: 0}}, transparent: true, depthWrite: false, premultipliedAlpha: true,
   side: THREE.DoubleSide, vertexShader: STRIP_VS, fragmentShader: `${LIGHT}
@@ -325,39 +326,38 @@ const headMat = new THREE.ShaderMaterial({uniforms: {...uniforms, uFlat: {value:
     vec3 raw = tx.rgb/max(a, 1e-3); float hair = smoothstep(0.7, 0.9, dot(raw, vec3(0.333)));
     vec3 V = normalize(cameraPosition - vW), L = normalize(uSun), T = normalize(vT);
     // a plume is a soft ball of fluff: the side toward the sun is lit, the far side is in the plume's own shade
-    float nl = dot(normalize(vN + vec3(0., 1e-4, 0.)), L), lit = smoothstep(-0.45, 0.65, nl);
-    lit *= 0.85 + 0.15*clamp(dot(normalize(cross(T, V)), L)*vSide*2., -1., 1.);   // and each feather is round: one edge brighter
+    // a plume is a soft ball of fluff, lit as one: the side toward the sun bright, the far side in its own soft shade,
+    // and where it stands against the sun its thin edge glows through. No shine: fluff is matte
+    vec3 N = normalize(vN + vec3(0., 1e-4, 0.));
     vec3 warm = mix(vec3(0.8, 0.6, 0.38), vec3(1.), smoothstep(0.5, 0.95, vAO));   // where the feathers start, a head is golden inside
     vec3 base = mix(raw, raw*uHair, hair)*vTint*vAO*warm;
-    // silk: a highlight along the fibres on the lit side; and looking toward the sun, the lit edge glows through
-    vec3 Hh = normalize(L + V); float th = dot(T, Hh), ks = pow(sqrt(max(0., 1. - th*th)), 40.);
-    float through = pow(max(0., dot(-V, L)), 3.)*smoothstep(-0.1, 0.8, nl)*(1.3 - 0.5*a);
-    vec3 shade = uAmb*vec3(0.98, 1., 1.06);                           // the shaded side: a little cooler, and deep enough to read
-    vec3 col = base*(shade + uSunCol*0.6*lit) + base*uSunCol*(ks*0.4*lit + through*uGlow*(0.25 + 0.6*hair));
+    float thin = (1. - 0.6*a)*(0.4 + 0.6*hair);                        // thin fluff lets the most light through
+    vec3 col = base*(hemi(N)*0.95 + uSunCol*(0.95*wrapL(N, L) + 0.9*uGlow*thin*through(N, L, V, 0.35, 4.)));
     col *= 1. + 0.6*vSheen;                                              // bent by a gust, it catches more light
     gl_FragColor = vec4(haze(deep(col, vW), vW)*a, a);   // deeper in the field, more plumes share a pixel: darker, more golden
   }`});
 // below the heads a plant stands in their shade, and the light reaching there is the gold bounced off the field
-const SHADE = `vec3 lowShade(float a){ return mix(vec3(0.1, 0.05, 0.02), vec3(1.), a); }`;   // a: how much sun reaches this part
+const SHADE = `vec3 lowShade(float a){ return mix(vec3(0.3, 0.17, 0.06), vec3(1.), a); }`;   // a: how much sun reaches this part
 const stalkMat = new THREE.ShaderMaterial({uniforms: {...uniforms, uFlat: {value: 0}, uColor: {value: new THREE.Color(...lin([0.74, 0.52, 0.28]))}},
   side: THREE.DoubleSide, vertexShader: STRIP_VS, fragmentShader: `${LIGHT} ${SHADE}
   uniform vec3 uColor; uniform float uNodes; varying vec2 vUv; varying vec3 vT, vW; varying float vSide, vV, vAO, vTint, vB, vSheen;
   void main(){
-    float r = sqrt(max(0., 1. - vSide*vSide)), f = fract(vV*uNodes), joint = 1. - smoothstep(0., 0.03, min(f, 1. - f));
-    vec3 V = normalize(cameraPosition - vW);
-    float sideLit = clamp(dot(normalize(cross(normalize(vT), V)), normalize(uSun))*vSide*1.5, -1., 1.);   // the edge toward the sun is lit
-    vec3 c = uColor*(0.6 + 0.4*r)*(0.72 + 0.4*sideLit)*(1. - 0.25*joint)*vTint*lowShade(vAO);
-    gl_FragColor = vec4(haze(deep(hairLight(c, normalize(vT), V, uGlow*0.5), vW), vW), 1.);
+    float f = fract(vV*uNodes), joint = 1. - smoothstep(0., 0.03, min(f, 1. - f));
+    vec3 V = normalize(cameraPosition - vW), L = normalize(uSun), T = normalize(vT);
+    vec3 across = normalize(cross(T, V)), toward = normalize(cross(across, T));
+    vec3 N = normalize(across*vSide + toward*sqrt(max(0., 1. - vSide*vSide)));   // a stalk is round
+    vec3 c = uColor*(1. - 0.25*joint)*vTint*lowShade(vAO);
+    gl_FragColor = vec4(haze(deep(c*(hemi(N) + uSunCol*(0.75*wrapL(N, L) + 0.3*uGlow*through(N, L, V, 0.2, 6.))), vW), vW), 1.);
   }`});
 const leafMat = new THREE.ShaderMaterial({uniforms: {...uniforms, uFlat: {value: 1}, uColor: {value: new THREE.Color(...lin([0.76, 0.58, 0.33]))},
   uColorTip: {value: new THREE.Color(...lin([0.88, 0.76, 0.55]))}}, side: THREE.DoubleSide, vertexShader: STRIP_VS, fragmentShader: `${LIGHT} ${SHADE}
-  uniform vec3 uColor, uColorTip; varying vec2 vUv; varying vec3 vT, vW; varying float vSide, vV, vAO, vTint, vB, vSheen;
+  uniform vec3 uColor, uColorTip; varying vec2 vUv; varying vec3 vT, vW, vNr; varying float vSide, vV, vAO, vTint, vB, vSheen;
   void main(){
-    vec3 V = normalize(cameraPosition - vW), L = normalize(uSun);
+    vec3 V = normalize(cameraPosition - vW), L = normalize(uSun), N = normalize(vNr);
+    N *= sign(dot(N, V) + 1e-4);                                        // the side we see
     float rib = smoothstep(0.2, 0., abs(vSide));
     vec3 c = mix(mix(uColor, uColorTip, smoothstep(0.1, 1., vV)), vec3(0.9, 0.8, 0.6), rib*0.5)*vTint*lowShade(vAO);
-    float d = 0.5 + 0.5*abs(dot(normalize(cross(vT, V)), L));
-    gl_FragColor = vec4(haze(deep(c*(uAmb + uSunCol*0.45*d) + c*uSunCol*back(V)*uGlow*0.7, vW), vW), 1.);
+    gl_FragColor = vec4(haze(deep(c*(hemi(N) + uSunCol*(0.7*wrapL(N, L) + 0.6*uGlow*through(N, L, V, 0.2, 3.))), vW), vW), 1.);
   }`});
 // far: a picture of a whole clump of our own plumes on two triangles, turned to face the camera;
 // its lower edge sinks into the leaf layer
@@ -419,12 +419,12 @@ const groundMesh = new THREE.Mesh(groundGeo, new THREE.ShaderMaterial({uniforms,
       // the leaf layer between the plumes: golden stalks and blades standing close, lit ones and dark gaps
       float sx = vW.x*34.;
       float st = mix(n1(sx)*0.65 + n1(sx*0.31 + 7.)*0.35, 0.5, smoothstep(16., 30., dist));
-      vec3 c = mix(vec3(0.02, 0.01, 0.004), vec3(0.14, 0.07, 0.025), smoothstep(0.3, 0.8, st));   // dark brown ground, dim stalks
+      vec3 c = mix(vec3(0.05, 0.026, 0.01), vec3(0.34, 0.19, 0.065), smoothstep(0.3, 0.8, st));   // golden stalks, dark ground between
       // far away, between the pictures, the eye meets the dense lower layer in shade: a deep gold in broad patches (fine
       // detail there would only ripple); a gust brightens it, so waves run across the field
       float far = smoothstep(26., 50., dist);
-      c = mix(c, vec3(0.08, 0.045, 0.018)*(0.75 + 0.5*n2(vW.xz*vec2(0.25, 0.5)))*(0.85 + 0.35*w), far);
-      c = c*(uAmb + uSunCol*0.35) + c*uSunCol*back(normalize(cameraPosition - vW))*uGlow*0.3;
+      c = mix(c, vec3(0.12, 0.07, 0.028)*(0.75 + 0.5*n2(vW.xz*vec2(0.25, 0.5)))*(0.85 + 0.35*w), far);
+      c = c*(mix(uGnd, uSky, 0.6) + uSunCol*0.3);
       gl_FragColor = vec4(haze(c, vW), 1.);
     }`}));
 groundMesh.renderOrder = -1; scene.add(groundMesh);
@@ -448,9 +448,11 @@ function scatter(){
   for (const [d0, d1, tier] of [[D0, D1, 'near'], [D1, D2, 'mid'], [D2, D3, 'far']]){
     const n = Math.round(DENSITY[tier]*S.density*area(d0, d1));
     if (tier === 'far'){                                          // each record is a clump of plumes drawn as one picture
-      for (const [x, z] of spots(d0, d1, Math.round(n/CLUMP)))
+      for (const [x, z] of spots(d0, d1, Math.round(n/CLUMP))){
+        if (R() < 0.6*sm(44, 54, z - camZ)) continue;            // the very back, by the crest, thinner
         out.push({x, z, y: ground(x, z), rot: 0, scale: 0.85 + 0.3*R(), tint: 0.9 + 0.13*R(), phase: R()*6.283, flex: 0.8 + 0.4*R(),
                   hs: R() < 0.2 ? 0.8 + 0.1*R() : 0.9 + 0.16*R(), tier, k: 0, bx: 0, bz: 0, vx: 0, vz: 0});
+      }
       continue;
     }
     for (const [x, z] of spots(d0, d1, Math.round(n/3.5))){
@@ -577,8 +579,9 @@ function simulate(dt){
 function applyLight(){
   const az = 32*Math.PI/180, el = 18*Math.PI/180;
   uniforms.uSun.value.set(Math.sin(az)*Math.cos(el), Math.sin(el), Math.cos(az)*Math.cos(el));
-  uniforms.uSunCol.value.setRGB(...lin([1, 0.93, 0.8])).multiplyScalar(2.2);
-  uniforms.uAmb.value.setRGB(...lin([0.8, 0.74, 0.66])).multiplyScalar(0.62);
+  uniforms.uSunCol.value.setRGB(...lin([1, 0.95, 0.86])).multiplyScalar(2.2);
+  uniforms.uSky.value.setRGB(...lin([0.75, 0.76, 0.78])).multiplyScalar(0.75);    // from above: the sky, a little cool
+  uniforms.uGnd.value.setRGB(...lin([0.78, 0.6, 0.38])).multiplyScalar(0.55);     // from below: the gold of the field
   uniforms.uHaze.value.setRGB(...lin([0.86, 0.8, 0.7]));
 }
 
