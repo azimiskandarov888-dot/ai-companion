@@ -80,6 +80,19 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 const PLUME = {racemes: 16, rLenCm: 22, spread: 0.32, curl: 0.8, droop: 0.4, lean: 0.15, featherMM: 9, fluff: 1, density: 1,
                height: 1.45, thickMM: 11, leaves: 8, leafLen: 0.5, twigs: 4, seed: 7};
 // plumes per m² at «обычная»: far away they are pictures, so there the field can be as thick as in his picture
+// kinds of head, as in a real field: most are ordinary; some are big or very big, some very small, some not opened yet
+// (closed), some thin and not fluffy. w: how common; q: how it differs from the plume's numbers
+const KINDS = [
+  {w: 3,   q: {}},                                                                       // ordinary
+  {w: 2.5, q: {racemes: 0.85, rLenCm: 0.9, spread: 1.2, droop: 1.2}},                    // ordinary, more open
+  {w: 1.2, q: {racemes: 1.35, rLenCm: 1.4, spread: 1.2, droop: 1.15, featherMM: 1.1}},   // big
+  {w: 0.6, q: {racemes: 1.7, rLenCm: 1.85, spread: 1.15, droop: 1.3, featherMM: 1.2}},   // very big
+  {w: 1,   q: {spread: 0.2, droop: 0.1, curl: 0.15, rLenCm: 1.1}},                      // closed: not opened yet
+  {w: 1,   q: {racemes: 0.6, rLenCm: 0.55}},                                            // very small
+  {w: 0.9, q: {racemes: 0.8, featherMM: 0.65, thin: 1}},                                // thin, not fluffy
+];
+const KIND_SUM = KINDS.reduce((s, k) => s + k.w, 0);
+const pickKind = R => { let r = R()*KIND_SUM; for (let k = 0; k < KINDS.length; k++){ r -= KINDS[k].w; if (r < 0) return k; } return 0; };
 const DENSITY = {near: 9, mid: 9, far: 16}, LEVELS = [['реже', 0.6], ['обычная', 1], ['гуще', 1.4]], CLUMP = 7;
 const WINDS = [['слабый', 0.12, 0.15], ['средний', 0.25, 0.3], ['сильный', 0.55, 0.6]];
 const S = {density: 1, densityName: 'обычная', wind: 0.25, gust: 0.3, windName: 'средний', quality: 'high', t: 0, impulse: 0, impulseT: 0,
@@ -110,7 +123,7 @@ const ground = (x, z) => 5.2*sm(0, 46, z)*(0.85 + 0.15*Math.sin(x*0.06 + 1.3)) +
 const leafTop = z => 0.75 + 0.3*sm(15, 38, z) + 0.4*sm(38, 46, z);
 
 /* ═══ The feather, drawn by code: a golden rib, and dense white fibres slanting toward the tip ═══ */
-const VARIANTS = 4, SHAPES = 5;
+const VARIANTS = 4, SHAPES = KINDS.length;
 const FEATHER_FS = `
   uniform float uWh, uLen, uFluff, uDensity; varying vec2 vUv;
   float h1(float n){ return fract(sin(n*12.9898)*43758.5453); }
@@ -120,16 +133,17 @@ const FEATHER_FS = `
     float r = abs(x)*uWh, along = v*uLen;                       // metres: out from the rib, and up from the base
     // a fibre leaves the rib slanting toward the tip, and bends a little more toward it as it goes
     float tn = mix(0.45, 0.35, v), s0 = along - r/tn - 0.6*r*r/uWh;
-    float sp = 0.0018/uDensity, fi = floor(s0/sp), ff = fract(s0/sp), id = fi + side*733. + k*1913.;
-    float len = uWh*prof(clamp(s0/uLen, 0., 1.))*(0.45 + 0.75*h1(id))*(1. + 0.2*uFluff*(h1(id + 5.) - 0.5));
+    float thin = step(${VARIANTS - 1}., k);                            // the last picture: a thin feather, not fluffy yet
+    float sp = 0.0018/uDensity*mix(1., 1.7, thin), fi = floor(s0/sp), ff = fract(s0/sp), id = fi + side*733. + k*1913.;
+    float len = uWh*prof(clamp(s0/uLen, 0., 1.))*(0.45 + 0.75*h1(id))*(1. + 0.2*uFluff*(h1(id + 5.) - 0.5))*mix(1., 0.45, thin);
     float rel = r/max(len, 1e-4);
     float edge = 1. - smoothstep(0.7 - 0.15*uFluff, 1., rel);     // each fibre ends on its own: a soft, ragged edge
     float fibre = 1. - smoothstep(0.12, 0.5, abs(ff - 0.5));        // the fibre itself, with a little air between neighbours
-    float a = edge*mix(0.5 + 0.3*(1. - rel), 1., fibre)*step(0., s0);
+    float a = edge*mix(mix(0.5 + 0.3*(1. - rel), 0.12, thin), 1., fibre)*step(0., s0);
     float rib = (1. - smoothstep(0.015, 0.035, abs(x)))*step(v, 0.95);
     vec3 white = vec3(0.97, 0.97, 0.96)*(0.86 + 0.14*h1(id + 9.))*(0.8 + 0.2*h1(floor(fi/7.) + side*91. + k*313.));   // fibres lie in locks
     vec3 col = mix(white, vec3(0.86, 0.74, 0.55), 0.35*(1. - smoothstep(0., 0.3, v)) + 0.12*(1. - rel));
-    col = mix(col, vec3(0.85, 0.72, 0.5), rib); a = max(a, rib);
+    col = mix(col, vec3(0.9, 0.8, 0.62), 0.3*thin); col = mix(col, vec3(0.85, 0.72, 0.5), rib); a = max(a, rib);
     gl_FragColor = vec4(col*a, a);                               // premultiplied, like everything see-through here
   }`;
 function bakeFeathers(renderer, target){
@@ -177,7 +191,7 @@ function buildTemplate(Q, seed, D){
   const archDir = V(Math.cos(archPhi), 0, Math.sin(archPhi));
   const s0 = V(), s1 = V(0, H*0.45, 0), s2 = V(0, H*0.8, 0).addScaledVector(archDir, H*0.04*arch), s3 = V(0, H, 0).addScaledVector(archDir, H*0.06*arch);
   const topT = bezD(s0, s1, s2, s3, 1).normalize(), axisLen = 0.045, stalkPts = [];
-  const lit = y => 0.1 + 0.9*sm(0.55*H, 1.02*H, y);                // the sun reaches a part only near the heads
+  const lit = y => 0.04 + 0.96*sm(0.6*H, 1.02*H, y);               // the sun reaches a part only near the heads
   for (let k = 0; k <= D.sSeg; k++) stalkPts.push(bez(s0, s1, s2, s3, k/D.sSeg));
   stalkPts.push(s3.clone().addScaledVector(topT, axisLen));
   stalks.add(stalkPts, {width: v => Q.thickMM/2000*(1 - 0.3*v), bend0: 0, bend1: 1 + axisLen/H, ao: v => lit(v*H)});
@@ -195,11 +209,11 @@ function buildTemplate(Q, seed, D){
     const p3 = p0.clone().addScaledVector(d0, L*(0.75 - 0.2*dr)).addScaledVector(out, L*(0.25*cu + 0.3*dr)).addScaledVector(up, -L*0.45*dr);
     const pts = []; for (let k = 0; k <= D.rSeg; k++) pts.push(bez(p0, p1, p2, p3, k/D.rSeg));
     const shade = 0.82 + 0.18*R();
-    heads.add(pts, {width: () => W/2, variant: Math.floor(R()*VARIANTS), phase: i*1.7 + R()*2, bend0: 1, bend1: 1 + L/H*1.2,
+    heads.add(pts, {width: () => W/2, variant: Q.thin ? VARIANTS - 1 : Math.floor(R()*(VARIANTS - 1)), phase: i*1.7 + R()*2, bend0: 1, bend1: 1 + L/H*1.2,
                     ao: v => shade*(0.62 + 0.38*sm(0, 0.5, v))});
   }
   // a few racemes have shed their fluff: bare golden twigs among the feathers
-  for (let i = 0; i < Math.round(N*0.25); i++){
+  for (let i = 0; i < Math.round(N*(Q.thin ? 0.5 : 0.25)); i++){
     const p0 = s3.clone().addScaledVector(topT, axisLen*R()), phi = R()*6.283, out = V(Math.cos(phi), 0, Math.sin(phi));
     const theta = 0.15 + Q.spread*(0.5 + 0.8*R()), L = Q.rLenCm/100*(0.6 + 0.5*R());
     const d0 = topT.clone().multiplyScalar(Math.cos(theta)).addScaledVector(out, Math.sin(theta)).normalize();
@@ -225,7 +239,7 @@ function buildTemplate(Q, seed, D){
     const phi = R()*6.283, out = V(Math.cos(phi), 0, Math.sin(phi)), L = H*(0.3 + 0.25*R()), ang = 0.35 + 0.45*R();
     const a = V((R() - 0.5)*0.06, H*0.05*R(), (R() - 0.5)*0.06);
     const e = a.clone().addScaledVector(up, L*Math.cos(ang)).addScaledVector(out, L*Math.sin(ang));
-    stalks.add([a, a.clone().lerp(e, 0.5).addScaledVector(up, L*0.08), e], {width: v => 0.0045*(1 - 0.5*v), bend0: 0, bend1: e.y/H, ao: v => 0.35 + 0.4*v});
+    stalks.add([a, a.clone().lerp(e, 0.5).addScaledVector(up, L*0.08), e], {width: v => 0.0045*(1 - 0.5*v), bend0: 0, bend1: e.y/H, ao: v => 0.25 + 0.5*v});
   }
   // now and then a small young plume lower down: fluff in the lower field too
   if (R() < 0.6*D.l + 0.1){
@@ -237,7 +251,7 @@ function buildTemplate(Q, seed, D){
       const L = 0.07 + 0.06*R(), th = 0.15 + 0.4*R(), d = up.clone().multiplyScalar(Math.cos(th)).addScaledVector(o2, Math.sin(th));
       const p3 = top.clone().addScaledVector(d, L).addScaledVector(o2, L*0.2).addScaledVector(up, -L*0.15), pts = [];
       for (let k = 0; k <= seg; k++){ const t = k/seg; pts.push(top.clone().lerp(p3, t).addScaledVector(d, L*0.15*Math.sin(t*Math.PI))); }
-      heads.add(pts, {width: () => W*0.35, variant: Math.floor(R()*VARIANTS), phase: R()*6, bend0: top.y/H, bend1: (top.y + L)/H, ao: v => 0.55 + 0.2*v});
+      heads.add(pts, {width: () => W*0.35, variant: Math.floor(R()*(VARIANTS - 1)), phase: R()*6, bend0: top.y/H, bend1: (top.y + L)/H, ao: v => 0.45 + 0.25*v});
     }
   }
   // golden blades up the stalk; the last one, the flag leaf, just under the head
@@ -317,7 +331,7 @@ const headMat = new THREE.ShaderMaterial({uniforms: {...uniforms, uFlat: {value:
     gl_FragColor = vec4(haze(deep(col, vW), vW)*a, a);   // deeper in the field, more plumes share a pixel: darker, more golden
   }`});
 // below the heads a plant stands in their shade, and the light reaching there is the gold bounced off the field
-const SHADE = `vec3 lowShade(float a){ return mix(vec3(0.22, 0.12, 0.05), vec3(1.), a); }`;   // a: how much sun reaches this part
+const SHADE = `vec3 lowShade(float a){ return mix(vec3(0.1, 0.05, 0.02), vec3(1.), a); }`;   // a: how much sun reaches this part
 const stalkMat = new THREE.ShaderMaterial({uniforms: {...uniforms, uFlat: {value: 0}, uColor: {value: new THREE.Color(...lin([0.74, 0.52, 0.28]))}},
   side: THREE.DoubleSide, vertexShader: STRIP_VS, fragmentShader: `${LIGHT} ${SHADE}
   uniform vec3 uColor; uniform float uNodes; varying vec2 vUv; varying vec3 vT, vW; varying float vSide, vV, vAO, vTint, vB, vSheen;
@@ -396,11 +410,11 @@ const groundMesh = new THREE.Mesh(groundGeo, new THREE.ShaderMaterial({uniforms,
       // the leaf layer between the plumes: golden stalks and blades standing close, lit ones and dark gaps
       float sx = vW.x*34.;
       float st = mix(n1(sx)*0.65 + n1(sx*0.31 + 7.)*0.35, 0.5, smoothstep(16., 30., dist));
-      vec3 c = mix(vec3(0.07, 0.033, 0.01), vec3(0.4, 0.22, 0.08), smoothstep(0.3, 0.8, st));
+      vec3 c = mix(vec3(0.02, 0.01, 0.004), vec3(0.14, 0.07, 0.025), smoothstep(0.3, 0.8, st));   // dark brown ground, dim stalks
       // far away, between the pictures, the eye meets the dense lower layer in shade: a deep gold in broad patches (fine
       // detail there would only ripple); a gust brightens it, so waves run across the field
       float far = smoothstep(26., 50., dist);
-      c = mix(c, vec3(0.2, 0.11, 0.04)*(0.75 + 0.5*n2(vW.xz*vec2(0.25, 0.5)))*(0.85 + 0.35*w), far);
+      c = mix(c, vec3(0.08, 0.045, 0.018)*(0.75 + 0.5*n2(vW.xz*vec2(0.25, 0.5)))*(0.85 + 0.35*w), far);
       c = c*(uAmb + uSunCol*0.35) + c*uSunCol*back(normalize(cameraPosition - vW))*uGlow*0.3;
       gl_FragColor = vec4(haze(c, vW), 1.);
     }`}));
@@ -436,7 +450,7 @@ function scatter(){
       for (let j = 0; j < k; j++){
         const px = x + (R() - 0.5)*0.4, pz = z + (R() - 0.5)*0.4;
         out.push({x: px, z: pz, y: ground(px, pz), rot: R()*6.283, scale: 0.8 + 0.4*R(), tint: 0.8 + 0.25*R(), phase: R()*6.283,
-                  hs: ch*(0.94 + 0.12*R()), flex: 0.75 + 0.5*R(), tier, k: Math.floor(R()*SHAPES), bx: 0, bz: 0, vx: 0, vz: 0});
+                  hs: ch*(0.94 + 0.12*R()), flex: 0.75 + 0.5*R(), tier, k: pickKind(R), bx: 0, bz: 0, vx: 0, vz: 0});
       }
     }
   }
@@ -449,10 +463,11 @@ function prepare(){
   atlasRT.texture.generateMipmaps = true; atlasRT.texture.minFilter = THREE.LinearMipmapLinearFilter; atlasRT.texture.anisotropy = 4;
   bakeFeathers(renderer, atlasRT);
   headMat.uniforms.uAtlas.value = atlasRT.texture;
-  // five shapes of plant around the plume's numbers — more or fewer feathers, longer, more open, more drooping — so
-  // neighbours are not clones
-  const shape = k => { const R = rng(500 + k); return {...PLUME, racemes: Math.round(PLUME.racemes*(0.75 + 0.5*R())), rLenCm: PLUME.rLenCm*(0.85 + 0.3*R()),
-    spread: PLUME.spread*(0.75 + 0.5*R()), droop: PLUME.droop*(0.5 + R()), curl: PLUME.curl*(0.7 + 0.6*R()), height: PLUME.height*(0.9 + 0.2*R())}; };
+  // one template per kind of head (KINDS), each with a little randomness of its own, so neighbours are not clones
+  const shape = k => { const R = rng(500 + k), q = KINDS[k].q, m = (key, j) => PLUME[key]*(q[key] ?? 1)*j;
+    return {...PLUME, thin: q.thin || 0, racemes: Math.round(m('racemes', 0.9 + 0.2*R())), rLenCm: m('rLenCm', 0.92 + 0.16*R()),
+      spread: m('spread', 0.85 + 0.3*R()), droop: m('droop', 0.7 + 0.6*R()), curl: m('curl', 0.8 + 0.4*R()), featherMM: m('featherMM', 1),
+      height: PLUME.height*(0.9 + 0.2*R())}; };
   templates = {near: [...Array(SHAPES).keys()].map(k => buildTemplate(shape(k), PLUME.seed + k*101, DETAIL.near)),
                mid: [...Array(SHAPES).keys()].map(k => buildTemplate(shape(k), PLUME.seed + k*101, DETAIL.mid))};
   // pictures of clumps of near plants for the far field — drawn from our own plume, so they change with it
@@ -464,7 +479,7 @@ function prepare(){
   renderer.setRenderTarget(impostorRT); renderer.setClearColor(0x000000, 0); renderer.clear();
   for (let k = 0; k < 3; k++){
     const R = rng(900 + k), clump = Array.from({length: CLUMP}, (_, i) => ({x: (i - (CLUMP - 1)/2)*0.19 + (R() - 0.5)*0.12, y: 0, z: (R() - 0.5)*0.6,
-      rot: R()*6.283, scale: 0.85 + 0.25*R(), tint: 0.82 + 0.2*R(), phase: 0, hs: 0.88 + 0.18*R(), k: (i + 2*k) % SHAPES})).sort((a, b) => b.z - a.z);   // farthest first
+      rot: R()*6.283, scale: 0.85 + 0.25*R(), tint: 0.82 + 0.2*R(), phase: 0, hs: 0.88 + 0.18*R(), k: pickKind(R)})).sort((a, b) => b.z - a.z);   // farthest first
     templates.near.forEach((tp, j) => {
       const some = clump.filter(p => p.k === j); if (!some.length) return;
       for (const [st, mat, order] of [[tp.stalks, stalkMat, 0], [tp.leaves, leafMat, 0], [tp.heads, headMat, 2]]){
