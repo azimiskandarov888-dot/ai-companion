@@ -93,7 +93,7 @@ const KINDS = [
 ];
 const KIND_SUM = KINDS.reduce((s, k) => s + k.w, 0);
 const pickKind = R => { let r = R()*KIND_SUM; for (let k = 0; k < KINDS.length; k++){ r -= KINDS[k].w; if (r < 0) return k; } return 0; };
-const DENSITY = {near: 9, mid: 9, far: 16}, LEVELS = [['реже', 0.6], ['обычная', 1], ['гуще', 1.4]], CLUMP = 7;
+const DENSITY = {near: 9, mid: 8, far: 10}, LEVELS = [['реже', 0.6], ['обычная', 1], ['гуще', 1.4]], CLUMP = 7;
 const WINDS = [['слабый', 0.12, 0.15], ['средний', 0.25, 0.3], ['сильный', 0.55, 0.6]];
 const S = {density: 1, densityName: 'обычная', wind: 0.25, gust: 0.3, windName: 'средний', quality: 'high', t: 0, impulse: 0, impulseT: 0,
            dir: new THREE.Vector2(1, 0.12).normalize()};
@@ -157,7 +157,7 @@ function bakeFeathers(renderer, target){
 
 /* ═══ One plant as a template, at a given level of detail ═══ */
 class Strips {
-  constructor(){ Object.assign(this, {pos: [], tan: [], side: [], v: [], w: [], vari: [], phase: [], bend: [], nrm: [], ao: [], index: [], n: 0}); }
+  constructor(){ Object.assign(this, {pos: [], tan: [], side: [], v: [], w: [], vari: [], phase: [], bend: [], nrm: [], ao: [], cen: [], index: [], n: 0}); }
   add(pts, o){
     const m = pts.length, base = this.n;
     for (let j = 0; j < m; j++){
@@ -167,6 +167,7 @@ class Strips {
         this.w.push(o.width(v)); this.vari.push(o.variant || 0); this.phase.push(o.phase || 0);
         this.bend.push(o.bend0 + (o.bend1 - o.bend0)*v); this.ao.push(o.ao ? o.ao(v) : 1);
         const n = o.normal ? o.normal(v) : t; this.nrm.push(n.x, n.y, n.z);
+        const c = o.center || pts[0]; this.cen.push(c.x, c.y, c.z);      // the middle of the plume it belongs to
       }
     }
     for (let j = 0; j < m - 1; j++){ const a = base + 2*j; this.index.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); }
@@ -177,7 +178,7 @@ class Strips {
     g.setAttribute('position', f(this.pos, 3)); g.setAttribute('aTan', f(this.tan, 3)); g.setAttribute('aSide', f(this.side, 1));
     g.setAttribute('aV', f(this.v, 1)); g.setAttribute('aW', f(this.w, 1)); g.setAttribute('aVar', f(this.vari, 1));
     g.setAttribute('aPhase', f(this.phase, 1)); g.setAttribute('aBend', f(this.bend, 1)); g.setAttribute('aNrm', f(this.nrm, 3));
-    g.setAttribute('aAO', f(this.ao, 1)); g.setIndex(this.index);
+    g.setAttribute('aAO', f(this.ao, 1)); g.setAttribute('aCen', f(this.cen, 3)); g.setIndex(this.index);
     return g;
   }
   get triangles(){ return this.index.length/3; }
@@ -198,6 +199,7 @@ function buildTemplate(Q, seed, D){
   // the head: feathers leave the top of the stalk and rise as a tall plume — the lower ones open a little more,
   // and the tips curl outward
   const leanDir = V(Math.cos(leanPhi), 0, Math.sin(leanPhi)), N = Math.max(4, Math.round(Q.racemes*D.r)), W = Q.featherMM/1000*2*D.w;
+  const hc = s3.clone().addScaledVector(topT, axisLen + Q.rLenCm/100*0.35);     // the middle of the plume
   for (let i = 0; i < N; i++){
     const s = N > 1 ? i/(N - 1) : 0, p0 = s3.clone().addScaledVector(topT, axisLen*s), phi = i*2.39996 + R()*0.5;
     const out = V(Math.cos(phi), 0, Math.sin(phi)).multiplyScalar(1 - Q.lean*0.5).addScaledVector(leanDir, Q.lean).normalize();
@@ -209,7 +211,7 @@ function buildTemplate(Q, seed, D){
     const p3 = p0.clone().addScaledVector(d0, L*(0.75 - 0.2*dr)).addScaledVector(out, L*(0.25*cu + 0.3*dr)).addScaledVector(up, -L*0.45*dr);
     const pts = []; for (let k = 0; k <= D.rSeg; k++) pts.push(bez(p0, p1, p2, p3, k/D.rSeg));
     const shade = 0.82 + 0.18*R();
-    heads.add(pts, {width: () => W/2, variant: Q.thin ? VARIANTS - 1 : Math.floor(R()*(VARIANTS - 1)), phase: i*1.7 + R()*2, bend0: 1, bend1: 1 + L/H*1.2,
+    heads.add(pts, {width: () => W/2, center: hc, variant: Q.thin ? VARIANTS - 1 : Math.floor(R()*(VARIANTS - 1)), phase: i*1.7 + R()*2, bend0: 1, bend1: 1 + L/H*1.2,
                     ao: v => shade*(0.62 + 0.38*sm(0, 0.5, v))});
   }
   // a few racemes have shed their fluff: bare golden twigs among the feathers
@@ -251,7 +253,7 @@ function buildTemplate(Q, seed, D){
       const L = 0.07 + 0.06*R(), th = 0.15 + 0.4*R(), d = up.clone().multiplyScalar(Math.cos(th)).addScaledVector(o2, Math.sin(th));
       const p3 = top.clone().addScaledVector(d, L).addScaledVector(o2, L*0.2).addScaledVector(up, -L*0.15), pts = [];
       for (let k = 0; k <= seg; k++){ const t = k/seg; pts.push(top.clone().lerp(p3, t).addScaledVector(d, L*0.15*Math.sin(t*Math.PI))); }
-      heads.add(pts, {width: () => W*0.35, variant: Math.floor(R()*(VARIANTS - 1)), phase: R()*6, bend0: top.y/H, bend1: (top.y + L)/H, ao: v => 0.45 + 0.25*v});
+      heads.add(pts, {width: () => W*0.35, center: top.clone().addScaledVector(up, 0.05), variant: Math.floor(R()*(VARIANTS - 1)), phase: R()*6, bend0: top.y/H, bend1: (top.y + L)/H, ao: v => 0.45 + 0.25*v});
     }
   }
   // golden blades up the stalk; the last one, the flag leaf, just under the head
@@ -303,8 +305,8 @@ const uniforms = {
   uAtlas: {value: null}, uVariants: {value: VARIANTS}, uNodes: {value: PLUME.height/0.14},
 };
 const STRIP_VS = `${COMMON}
-  attribute vec3 aTan, aNrm; attribute float aSide, aV, aW, aVar, aPhase, aBend, aAO;
-  varying vec2 vUv; varying vec3 vT, vW; varying float vSide, vV, vAO, vTint, vB, vSheen;
+  attribute vec3 aTan, aNrm, aCen; attribute float aSide, aV, aW, aVar, aPhase, aBend, aAO;
+  varying vec2 vUv; varying vec3 vT, vW, vN; varying float vSide, vV, vAO, vTint, vB, vSheen;
   uniform float uVariants, uFlat;
   void main(){
     vec3 p = place(position) + sway(aBend, aPhase, aV);            // the bend is already in metres for this plant
@@ -313,20 +315,25 @@ const STRIP_VS = `${COMMON}
     if (uFlat > .5) wp += normalize(cross(T, turn(aNrm)))*aSide*w; else wp = widen(wp, T, aSide, w);
     gl_Position = projectionMatrix*viewMatrix*vec4(wp, 1.);
     vUv = vec2((aVar + 0.5 + 0.5*aSide)/uVariants, aV); vT = T; vW = wp; vSide = aSide; vV = aV; vAO = aAO; vTint = iB.y; vB = aBend; vSheen = length(iBend);
+    vN = wp - (place(aCen) + vec3(iBend.x, 0., iBend.y));            // out from the middle of its plume
   }`;
 const headMat = new THREE.ShaderMaterial({uniforms: {...uniforms, uFlat: {value: 0}}, transparent: true, depthWrite: false, premultipliedAlpha: true,
   side: THREE.DoubleSide, vertexShader: STRIP_VS, fragmentShader: `${LIGHT}
-  uniform sampler2D uAtlas; uniform vec3 uHair; varying vec2 vUv; varying vec3 vT, vW; varying float vSide, vV, vAO, vTint, vB, vSheen;
+  uniform sampler2D uAtlas; uniform vec3 uHair; varying vec2 vUv; varying vec3 vT, vW, vN; varying float vSide, vV, vAO, vTint, vB, vSheen;
   void main(){
     vec4 tx = texture2D(uAtlas, vUv); float a = tx.a;
     vec3 raw = tx.rgb/max(a, 1e-3); float hair = smoothstep(0.7, 0.9, dot(raw, vec3(0.333)));
-    float sunny = 0.86 + 0.14*clamp(dot(vT.xz, normalize(uSun.xz))*2., -1., 1.);   // a fan has a sunny side and a side in its own shade
-    vec3 across = normalize(cross(normalize(vT), normalize(cameraPosition - vW)));
-    sunny *= 0.72 + 0.28*clamp(dot(across, normalize(uSun))*vSide*2., -1., 1.);      // and each feather is round: one edge lit
+    vec3 V = normalize(cameraPosition - vW), L = normalize(uSun), T = normalize(vT);
+    // a plume is a soft ball of fluff: the side toward the sun is lit, the far side is in the plume's own shade
+    float nl = dot(normalize(vN + vec3(0., 1e-4, 0.)), L), lit = smoothstep(-0.45, 0.65, nl);
+    lit *= 0.85 + 0.15*clamp(dot(normalize(cross(T, V)), L)*vSide*2., -1., 1.);   // and each feather is round: one edge brighter
     vec3 warm = mix(vec3(0.8, 0.6, 0.38), vec3(1.), smoothstep(0.5, 0.95, vAO));   // where the feathers start, a head is golden inside
-    vec3 base = mix(raw, raw*uHair, hair)*vTint*vAO*sunny*warm;
-    vec3 col = hairLight(base, normalize(vT), normalize(cameraPosition - vW), uGlow*(0.3 + 0.9*hair)*(1.25 - 0.45*a));
-    col *= mix(vec3(0.86, 0.9, 0.98), vec3(1.), smoothstep(0.5, 0.95, sunny*vAO));   // white fluff in shade turns silver-grey
+    vec3 base = mix(raw, raw*uHair, hair)*vTint*vAO*warm;
+    // silk: a highlight along the fibres on the lit side; and looking toward the sun, the lit edge glows through
+    vec3 Hh = normalize(L + V); float th = dot(T, Hh), ks = pow(sqrt(max(0., 1. - th*th)), 40.);
+    float through = pow(max(0., dot(-V, L)), 3.)*smoothstep(-0.1, 0.8, nl)*(1.3 - 0.5*a);
+    vec3 shade = uAmb*vec3(0.98, 1., 1.06);                           // the shaded side: a little cooler, and deep enough to read
+    vec3 col = base*(shade + uSunCol*0.6*lit) + base*uSunCol*(ks*0.4*lit + through*uGlow*(0.25 + 0.6*hair));
     col *= 1. + 0.6*vSheen;                                              // bent by a gust, it catches more light
     gl_FragColor = vec4(haze(deep(col, vW), vW)*a, a);   // deeper in the field, more plumes share a pixel: darker, more golden
   }`});
@@ -337,8 +344,10 @@ const stalkMat = new THREE.ShaderMaterial({uniforms: {...uniforms, uFlat: {value
   uniform vec3 uColor; uniform float uNodes; varying vec2 vUv; varying vec3 vT, vW; varying float vSide, vV, vAO, vTint, vB, vSheen;
   void main(){
     float r = sqrt(max(0., 1. - vSide*vSide)), f = fract(vV*uNodes), joint = 1. - smoothstep(0., 0.03, min(f, 1. - f));
-    vec3 c = uColor*(0.6 + 0.4*r)*(1. - 0.25*joint)*vTint*lowShade(vAO);
-    gl_FragColor = vec4(haze(deep(hairLight(c, normalize(vT), normalize(cameraPosition - vW), uGlow*0.5), vW), vW), 1.);
+    vec3 V = normalize(cameraPosition - vW);
+    float sideLit = clamp(dot(normalize(cross(normalize(vT), V)), normalize(uSun))*vSide*1.5, -1., 1.);   // the edge toward the sun is lit
+    vec3 c = uColor*(0.6 + 0.4*r)*(0.72 + 0.4*sideLit)*(1. - 0.25*joint)*vTint*lowShade(vAO);
+    gl_FragColor = vec4(haze(deep(hairLight(c, normalize(vT), V, uGlow*0.5), vW), vW), 1.);
   }`});
 const leafMat = new THREE.ShaderMaterial({uniforms: {...uniforms, uFlat: {value: 1}, uColor: {value: new THREE.Color(...lin([0.76, 0.58, 0.33]))},
   uColorTip: {value: new THREE.Color(...lin([0.88, 0.76, 0.55]))}}, side: THREE.DoubleSide, vertexShader: STRIP_VS, fragmentShader: `${LIGHT} ${SHADE}
