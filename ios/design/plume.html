@@ -1,0 +1,504 @@
+<title>Метёлка сусуки</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="claude:viewport-fit-sides" content="cover">
+<!--
+  Step 1 of the living world (LIVING-WORLD-RESEARCH.md): ONE susuki plume made only of numbers.
+  Every number below (DEFAULTS) is a slider; the plume is rebuilt from them at once.
+    stalk   — a curved tube with a few arching leaves
+    head    — a fan of racemes; each raceme is a spine with hundreds of silky hairs combed along it
+              and fanned to both sides, like a feather
+    light   — the sun from behind shines through the hairs (Kajiya–Kay hair light + forward scattering),
+              which is what makes the plumes in mj-15 glow
+    wind    — a preview only; the real spring simulation comes with the field (step 2)
+  Behind it: his picture, softly out of focus, so the plume is judged in his light.
+-->
+<style>
+/* Layout: the plume fills the screen; the numbers sit in a side panel on a computer and in a sheet at the bottom on a phone. */
+:root{
+  color-scheme:dark;
+  --bg:#0b0c0e; --ink:#f3f1ea; --ink-2:rgba(243,241,234,.62); --line:rgba(255,255,255,.14);
+  --glass:rgba(14,16,20,.66); --chip:rgba(255,255,255,.07); --chip-on:#f3f1ea; --chip-on-ink:#121316; --accent:#f0c98b;
+  --sans:-apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+  --serif:"New York", ui-serif, "Iowan Old Style", Georgia, serif;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.4 var(--sans);overflow:hidden;
+  padding-left:max(16px, env(safe-area-inset-left, 0px));padding-right:max(16px, env(safe-area-inset-right, 0px));padding-block:0}
+#view{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none}
+.msg{position:fixed;left:24px;right:24px;top:40%;text-align:center;font-weight:600}
+.ref{position:fixed;z-index:4;top:calc(14px + env(safe-area-inset-top, 0px));left:calc(14px + env(safe-area-inset-left, 0px));
+  width:112px;border-radius:14px;overflow:hidden;border:1px solid var(--line);background:var(--glass);cursor:pointer;
+  transition:width .3s ease}
+.ref.big{width:min(78vw, 360px)}
+.ref img{display:block;width:100%;height:auto}
+.ref span{display:block;padding:5px 8px;font-size:11px;color:var(--ink-2)}
+.hint{position:fixed;z-index:4;top:calc(16px + env(safe-area-inset-top, 0px));right:calc(16px + env(safe-area-inset-right, 0px));
+  font-size:12px;color:var(--ink-2);background:var(--glass);border:1px solid var(--line);border-radius:999px;padding:6px 11px;
+  transition:opacity 1s ease}
+.hint.gone{opacity:0}
+.panel{position:fixed;z-index:5;top:0;right:0;bottom:0;width:330px;overflow-y:auto;background:var(--glass);
+  -webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px);border-left:1px solid var(--line);
+  padding:calc(18px + env(safe-area-inset-top, 0px)) calc(18px + env(safe-area-inset-right, 0px)) calc(18px + env(safe-area-inset-bottom, 0px)) 18px;
+  display:flex;flex-direction:column;gap:16px}
+.panel h1{font:600 22px/1.15 var(--serif);margin:0;text-wrap:balance}
+.panel p{margin:0;color:var(--ink-2);font-size:13px}
+.group{display:flex;flex-direction:column;gap:8px}
+.group h2{margin:0;font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-2)}
+.row{display:grid;grid-template-columns:1fr auto;gap:2px 10px;align-items:center}
+.row label{font-size:13px}
+.row output{font-size:12px;color:var(--ink-2);font-variant-numeric:tabular-nums;min-width:3ch;text-align:right}
+.row input{grid-column:1 / -1;width:100%;accent-color:var(--accent)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{border:1px solid var(--line);background:var(--chip);color:var(--ink);border-radius:999px;padding:7px 12px;font:500 13px var(--sans);cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--chip-on);color:var(--chip-on-ink);border-color:var(--chip-on)}
+.chip:focus-visible,.ref:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+pre{margin:0;max-height:220px;overflow:auto;font:11px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace;color:var(--ink-2);
+  background:rgba(0,0,0,.3);border:1px solid var(--line);border-radius:10px;padding:10px}
+.bar{display:none}
+@media (max-width:899px){
+  .panel{top:auto;left:0;width:auto;max-height:56vh;border-left:0;border-top:1px solid var(--line);border-radius:18px 18px 0 0;
+    padding:12px max(14px, env(safe-area-inset-right, 0px)) calc(12px + env(safe-area-inset-bottom, 0px)) max(14px, env(safe-area-inset-left, 0px));gap:12px}
+  .panel .intro{display:none}
+  .panel:not(.open) .group,.panel:not(.open) .numbers{display:none}
+  .bar{display:flex;gap:6px;flex-wrap:wrap}
+}
+</style>
+
+<canvas id="view"></canvas>
+<button class="ref" id="ref" type="button" aria-label="Метёлки с твоей картинки, нажми чтобы увеличить">
+  <img src="plume/ref.jpg" alt="Настоящие метёлки с картинки mj-15">
+  <span>Твоя картинка</span>
+</button>
+<div class="hint" id="hint">Тяни пальцем — облети метёлку</div>
+<aside class="panel" id="panel">
+  <div class="intro">
+    <h1>Метёлка сусуки</h1>
+    <p>Одна метёлка, сделанная только из чисел. Двигаешь ползунок — она тут же пересобирается.</p>
+  </div>
+  <div class="bar">
+    <button class="chip" type="button" id="more" aria-expanded="false">Настроить</button>
+    <button class="chip" type="button" data-act="gust">Порыв</button>
+    <button class="chip" type="button" data-act="seed">Другая</button>
+    <button class="chip" type="button" data-act="reset">Как на картинке</button>
+  </div>
+  <div id="groups"></div>
+  <div class="group">
+    <h2>Цвет</h2>
+    <div class="chips" id="colors"></div>
+  </div>
+  <div class="group">
+    <h2>Фон</h2>
+    <div class="chips" id="bgs"></div>
+  </div>
+  <div class="group intro-actions">
+    <div class="chips">
+      <button class="chip" type="button" data-act="gust">Порыв ветра</button>
+      <button class="chip" type="button" data-act="seed">Другая метёлка</button>
+      <button class="chip" type="button" data-act="reset">Как на картинке</button>
+      <button class="chip" type="button" data-act="numbers" aria-pressed="false">Числа</button>
+    </div>
+  </div>
+  <div class="group numbers" id="numbers" hidden>
+    <h2>Эта метёлка — вот эти числа</h2>
+    <pre id="json"></pre>
+    <div class="chips"><button class="chip" type="button" id="copy">Скопировать</button></div>
+  </div>
+</aside>
+
+<script type="importmap">
+{"imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+}}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+
+/* ═══ The plume is these numbers. "Как на картинке" is tuned to the near plumes of mj-15. ═══ */
+const DEFAULTS = {
+  racemes: 13, rLen: 0.34, spread: 0.36, droop: 0.64, lean: 0.55, fluff: 0.55, density: 1.15, hairLen: 0.44,
+  height: 1.45, arch: 0.35, leaves: 3,
+  color: 'silver', bright: 1.0, sunAz: 22, sunEl: 14, glow: 1.05, bg: 'picture',
+  wind: 0.22, seed: 7,
+};
+const COLORS = { silver: ['Серебристая', [0.98, 0.965, 0.94]], cream: ['Кремовая', [0.98, 0.91, 0.8]],
+                 young: ['Молодая', [0.9, 0.72, 0.76]], gold: ['Золотая', [0.98, 0.84, 0.6]] };
+const BGS = { picture: 'Твоя картинка', dark: 'Тёмный' };
+const P = loadParams();
+
+function loadParams(){
+  try { const s = JSON.parse(localStorage.getItem('plume') || 'null'); if (s) return {...DEFAULTS, ...s}; } catch (e) {}
+  return {...DEFAULTS};
+}
+function saveParams(){ try { localStorage.setItem('plume', JSON.stringify(P)); } catch (e) {} }
+
+/* ═══ Small helpers ═══ */
+const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
+const lin = c => c.map(v => Math.pow(v, 2.2));
+function rng(seed){ let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = Math.imul(a ^ (a >>> 15), 1 | a);
+  t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+function bez(p0, p1, p2, p3, t){ const u = 1 - t; return p0.clone().multiplyScalar(u*u*u).addScaledVector(p1, 3*u*u*t).addScaledVector(p2, 3*u*t*t).addScaledVector(p3, t*t*t); }
+function bezD(p0, p1, p2, p3, t){ const u = 1 - t;
+  return p1.clone().sub(p0).multiplyScalar(3*u*u).addScaledVector(p2.clone().sub(p1), 6*u*t).addScaledVector(p3.clone().sub(p2), 3*t*t); }
+
+/* Thin strands (hairs, spines) as ribbons that the vertex shader turns to face the camera. */
+class Strands {
+  constructor(){ Object.assign(this, {pos: [], tan: [], side: [], u: [], shade: [], bend: [], phase: [], kind: [], index: [], n: 0}); }
+  add(pts, o){
+    const m = pts.length, base = this.n;
+    for (let j = 0; j < m; j++){
+      const t = pts[Math.min(m - 1, j + 1)].clone().sub(pts[Math.max(0, j - 1)]).normalize(), u = j/(m - 1);
+      for (const s of [-1, 1]){
+        this.pos.push(pts[j].x, pts[j].y, pts[j].z); this.tan.push(t.x, t.y, t.z); this.side.push(s); this.u.push(u);
+        this.shade.push(o.shade); this.bend.push(o.bend0 + (o.bend1 - o.bend0)*u); this.phase.push(o.phase); this.kind.push(o.kind);
+      }
+    }
+    for (let j = 0; j < m - 1; j++){ const a = base + 2*j; this.index.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); }
+    this.n += 2*m;
+  }
+  geometry(){
+    const g = new THREE.BufferGeometry(), f = (a, k) => new THREE.Float32BufferAttribute(a, k);
+    g.setAttribute('position', f(this.pos, 3)); g.setAttribute('aTan', f(this.tan, 3)); g.setAttribute('aSide', f(this.side, 1));
+    g.setAttribute('aU', f(this.u, 1)); g.setAttribute('aShade', f(this.shade, 1)); g.setAttribute('aBend', f(this.bend, 1));
+    g.setAttribute('aPhase', f(this.phase, 1)); g.setAttribute('aKind', f(this.kind, 1)); g.setIndex(this.index);
+    return g;
+  }
+}
+
+/* ═══ Building the plume from the numbers ═══ */
+function buildPlume(P){
+  const R = rng(P.seed), H = P.height, up = V(0, 1, 0);
+  // the stalk: rises, then arches a little to one side
+  const archDir = V(-1, 0, 0.25).normalize();
+  const s0 = V(0, 0, 0), s1 = V(0, H*0.45, 0);
+  const s2 = V(0, H*0.78, 0).addScaledVector(archDir, P.arch*H*0.1), s3 = V(0, H, 0).addScaledVector(archDir, P.arch*H*0.28);
+  const topT = bezD(s0, s1, s2, s3, 1).normalize();
+
+  // the head: a fan of racemes, each a spine with silky hairs combed along it
+  const hairs = new Strands(), leanDir = V(-0.85, 0, 0.5).normalize(), N = Math.round(P.racemes);
+  const head = V(), box = new THREE.Box3(); let roots = 0;
+  for (let i = 0; i < N; i++){
+    const s = N > 1 ? i/(N - 1) : 0;
+    const p0 = s3.clone().addScaledVector(topT, P.rLen*0.2*s);
+    const phi = i*2.39996 + R()*0.5;
+    const out = V(Math.cos(phi), 0, Math.sin(phi)).multiplyScalar(1 - P.lean*0.65).addScaledVector(leanDir, P.lean).normalize();
+    const L = P.rLen*(0.78 + 0.45*R())*(1 - 0.28*s);
+    const theta = P.spread*(0.2 + 0.8*R())*0.9 + 0.06;
+    const d0 = topT.clone().multiplyScalar(Math.cos(theta)).addScaledVector(out, Math.sin(theta)).normalize();
+    const dr = P.droop*(0.65 + 0.35*R());
+    // each raceme rises, then arcs outward and droops, like water from a fountain
+    const p1 = p0.clone().addScaledVector(d0, L*0.42);
+    const p2 = p0.clone().addScaledVector(d0, L*0.55).addScaledVector(out, L*(0.25 + 0.3*dr));
+    const p3 = p0.clone().addScaledVector(d0, L*(0.5 - 0.15*dr)).addScaledVector(out, L*(0.5 + 0.35*dr)).addScaledVector(up, -L*0.85*dr);
+    const phase = i*1.7 + R()*2;
+    const spine = []; for (let k = 0; k <= 12; k++) spine.push(bez(p0, p1, p2, p3, k/12));
+    hairs.add(spine, {shade: 0.95, bend0: 1, bend1: 1.35, phase, kind: 1});
+    // its silky hairs lie almost along it, fanned a little to both sides — a soft feather
+    const K = Math.round(P.density*420*(L/P.rLen));
+    const sm = (a, b, x) => { const q = Math.min(1, Math.max(0, (x - a)/(b - a))); return q*q*(3 - 2*q); };
+    for (let k = 0; k < K; k++){
+      const t = 0.06 + 0.94*((k + R())/K);
+      const b = bez(p0, p1, p2, p3, t), T = bezD(p0, p1, p2, p3, t).normalize();
+      const Ta = bezD(p0, p1, p2, p3, Math.min(1, t + 0.18)).normalize();      // where the raceme is heading: hairs follow its curve
+      let n1 = T.clone().cross(out); if (n1.lengthSq() < 1e-6) n1 = T.clone().cross(V(0, 0, 1)); n1.normalize();
+      const side = n1.clone().cross(T).normalize(), sgn = (k & 1) ? 1 : -1;
+      const a = (0.06 + 0.32*P.fluff)*(0.5 + R());
+      const dir = T.clone().multiplyScalar(Math.cos(a)).addScaledVector(side, Math.sin(a)*sgn)
+        .addScaledVector(n1, (R() - 0.5)*0.5*P.fluff).normalize();
+      const dirEnd = dir.clone().lerp(Ta.clone().multiplyScalar(Math.cos(a)).addScaledVector(side, Math.sin(a)*sgn), 0.6).normalize();
+      const prof = 0.25 + sm(0.04, 0.4, t)*(1 - 0.6*sm(0.6, 1, t));
+      const l = P.hairLen*L*prof*(0.75 + 0.5*R());
+      const h1 = b.clone().addScaledVector(dir, l*0.34);
+      const h2 = h1.clone().addScaledVector(dir.clone().lerp(dirEnd, 0.5).normalize(), l*0.34);
+      const h3 = h2.clone().addScaledVector(dirEnd, l*0.32);
+      hairs.add([b, h1, h2, h3], {shade: 0.88 + 0.22*R(), bend0: 1 + 0.35*t, bend1: 1.1 + 0.35*t, phase: phase + R()*0.6, kind: 0});
+      head.add(b); roots++; box.expandByPoint(b); box.expandByPoint(h3);
+    }
+  }
+  head.multiplyScalar(1/Math.max(1, roots));
+
+  // the stalk as a tube
+  const path = new THREE.CatmullRomCurve3(Array.from({length: 13}, (_, k) => bez(s0, s1, s2, s3, k/12)));
+  const stalk = new THREE.TubeGeometry(path, 64, 0.0042, 7, false);
+
+  // a few long leaves that arch out and droop
+  const leafPos = [], leafNrm = [], leafU = [], leafIdx = []; let ln = 0;
+  for (let i = 0; i < Math.round(P.leaves); i++){
+    const a = bez(s0, s1, s2, s3, 0.16 + 0.13*i), phi = 0.7 + i*2.3;
+    const out = V(Math.cos(phi), 0, Math.sin(phi)), Ll = H*(0.36 + 0.14*R());
+    const q0 = a, q1 = a.clone().addScaledVector(up, Ll*0.35).addScaledVector(out, Ll*0.1);
+    const q2 = a.clone().addScaledVector(up, Ll*0.45).addScaledVector(out, Ll*0.45);
+    const q3 = a.clone().addScaledVector(up, Ll*0.05).addScaledVector(out, Ll*0.85);
+    const M = 24, base = ln;
+    for (let k = 0; k <= M; k++){
+      const u = k/M, c = bez(q0, q1, q2, q3, u), T = bezD(q0, q1, q2, q3, u).normalize();
+      const w = 0.016*Math.min(1, u*7)*Math.pow(1 - u, 0.6);
+      let sv = T.clone().cross(out); if (sv.lengthSq() < 1e-6) sv = V(0, 0, 1); sv.normalize();
+      const nrm = sv.clone().cross(T).normalize();
+      for (const s of [-1, 1]){ const p = c.clone().addScaledVector(sv, w*s); leafPos.push(p.x, p.y, p.z); leafNrm.push(nrm.x, nrm.y, nrm.z); leafU.push(u); }
+      ln += 2;
+    }
+    for (let k = 0; k < M; k++){ const q = base + 2*k; leafIdx.push(q, q + 1, q + 2, q + 1, q + 3, q + 2); }
+  }
+  const leaves = new THREE.BufferGeometry();
+  leaves.setAttribute('position', new THREE.Float32BufferAttribute(leafPos, 3));
+  leaves.setAttribute('normal', new THREE.Float32BufferAttribute(leafNrm, 3));
+  leaves.setAttribute('aU', new THREE.Float32BufferAttribute(leafU, 1));
+  leaves.setIndex(leafIdx);
+  return {hair: hairs.geometry(), stalk, leaves, head, box, hairCount: Math.round(hairs.n/8)};
+}
+
+/* ═══ Light and wind, shared by every part ═══ */
+const WIND = `
+uniform float uTime, uWind, uGust, uH;
+vec3 windAt(vec3 p, float b, float phase, float u){
+  float w = uWind*(0.7 + 0.3*sin(uTime*0.55)) + uGust;
+  float lean = w*0.22*b*b;                                          // the whole plant leans with the wind
+  float bob = (0.03 + 0.05*w)*sin(uTime*1.9 + phase*0.3)*b*b;        // and bobs a little
+  float flick = 0.01*(0.3 + w)*sin(uTime*6.7 + phase*4. + p.y*13.)*u*step(1., b);   // hairs flutter
+  float x = lean + bob + flick;
+  return vec3(x, -0.18*x*x/max(b, 0.2), 0.012*(0.3 + w)*sin(uTime*1.3 + phase)*b*b);
+}`;
+const LIGHT = `
+uniform vec3 uSun, uSunCol, uSky;
+float back(vec3 V){ return pow(max(0., dot(-V, normalize(uSun))), 4.); }   // looking into the sun: light comes through`;
+
+const uniforms = {
+  uTime: {value: 0}, uWind: {value: P.wind}, uGust: {value: 0}, uH: {value: P.height},
+  uSun: {value: V()}, uSunCol: {value: new THREE.Color()}, uSky: {value: new THREE.Color()},
+  uHair: {value: new THREE.Color()}, uGlow: {value: P.glow}, uBright: {value: P.bright},
+  uPx: {value: 0.6}, uRes: {value: new THREE.Vector2(1, 1)},
+};
+
+const hairMat = new THREE.ShaderMaterial({
+  uniforms, transparent: true, depthWrite: false, side: THREE.DoubleSide,
+  vertexShader: `${WIND}
+    attribute vec3 aTan; attribute float aSide, aU, aShade, aBend, aPhase, aKind;
+    uniform float uPx; uniform vec2 uRes;
+    varying float vU, vSide, vShade, vKind; varying vec3 vT, vW;
+    void main(){
+      vec3 p = position + windAt(position, aBend, aPhase, aU);
+      vec4 wp = modelMatrix*vec4(p, 1.);
+      vec4 c0 = projectionMatrix*viewMatrix*wp;
+      vec4 c1 = projectionMatrix*viewMatrix*(wp + vec4(normalize(aTan)*0.01, 0.));
+      vec2 d = normalize((c1.xy/c1.w - c0.xy/c0.w)*uRes);
+      float w = uPx*(aKind > .5 ? 1.7 : 1.)*(1. - .5*aU);           // thinner toward the tip
+      c0.xy += vec2(-d.y, d.x)*aSide*w/uRes*c0.w*2.;
+      gl_Position = c0;
+      vU = aU; vSide = aSide; vShade = aShade; vKind = aKind; vT = normalize(mat3(modelMatrix)*aTan); vW = wp.xyz;
+    }`,
+  fragmentShader: `${LIGHT}
+    uniform vec3 uHair; uniform float uGlow, uBright;
+    varying float vU, vSide, vShade, vKind; varying vec3 vT, vW;
+    void main(){
+      vec3 T = normalize(vT), V = normalize(cameraPosition - vW), L = normalize(uSun);
+      float tl = dot(T, L), kd = sqrt(max(0., 1. - tl*tl));          // a hair is lit from the side (Kajiya–Kay)
+      vec3 H = normalize(L + V); float th = dot(T, H);
+      float ks = pow(sqrt(max(0., 1. - th*th)), 80.);                 // its silky sheen
+      vec3 base = uHair*vShade*uBright;
+      vec3 col = base*(uSky*0.8 + uSunCol*0.4*kd) + base*uSunCol*(ks*0.3 + back(V)*uGlow*(0.6 + 0.4*kd));
+      // clamped: with anti-aliasing the edges of a thin hair can read slightly outside it, and a negative alpha would draw a dark speck
+      float a = (vKind > .5 ? 0.35 : 0.26)*clamp(1. - vSide*vSide, 0., 1.)*(1. - smoothstep(0.7, 1., clamp(vU, 0., 1.)));
+      gl_FragColor = vec4(col, a);
+    }`,
+});
+
+const plantMat = (color, translucent) => new THREE.ShaderMaterial({
+  uniforms: {...uniforms, uColor: {value: new THREE.Color(...lin(color))}, uTrans: {value: translucent}},
+  side: THREE.DoubleSide,
+  vertexShader: `${WIND}
+    attribute float aU; varying vec3 vN, vW;
+    void main(){
+      float b = clamp(position.y/uH, 0., 1.);
+      vec3 p = position + windAt(position, b, 0., 0.);
+      vec4 wp = modelMatrix*vec4(p, 1.);
+      vN = normalize(mat3(modelMatrix)*normal); vW = wp.xyz;
+      gl_Position = projectionMatrix*viewMatrix*wp;
+    }`,
+  fragmentShader: `${LIGHT}
+    uniform vec3 uColor; uniform float uTrans, uGlow;
+    varying vec3 vN, vW;
+    void main(){
+      vec3 N = normalize(vN), V = normalize(cameraPosition - vW), L = normalize(uSun);
+      if (dot(N, V) < 0.) N = -N;
+      float d = max(0., dot(N, L));
+      vec3 col = uColor*(uSky*0.5 + uSunCol*0.6*d) + uColor*uSunCol*back(V)*uTrans*uGlow;
+      gl_FragColor = vec4(col, 1.);
+    }`,
+});
+
+/* ═══ Scene ═══ */
+const canvas = document.getElementById('view');
+let renderer;
+try { renderer = new THREE.WebGLRenderer({canvas, antialias: true, powerPreference: 'high-performance'}); }
+catch (e) { document.body.insertAdjacentHTML('beforeend', '<p class="msg">Этот браузер не умеет рисовать 3D (WebGL 2).</p>'); throw e; }
+renderer.setPixelRatio(Math.min(2, devicePixelRatio || 1));
+renderer.toneMapping = THREE.AgXToneMapping; renderer.toneMappingExposure = 1.05;
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(34, 1, 0.01, 50);
+
+// his picture behind, softly out of focus, with the sun's glow where the sun is
+const backdropTex = new THREE.TextureLoader().load('plume/backdrop.jpg', t => { uniforms.uImgAspect.value = t.image.width/t.image.height; });
+backdropTex.colorSpace = THREE.SRGBColorSpace;
+Object.assign(uniforms, {uTex: {value: backdropTex}, uAspect: {value: 1}, uImgAspect: {value: 768/1376}, uDark: {value: 0}, uSunScreen: {value: new THREE.Vector3()}});
+const backdrop = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.ShaderMaterial({
+  uniforms, depthTest: false, depthWrite: false,
+  vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.9999, 1.); }`,
+  fragmentShader: `uniform sampler2D uTex; uniform float uAspect, uImgAspect, uDark; uniform vec3 uSunScreen, uSunCol; varying vec2 vUv;
+    void main(){
+      vec2 uv = vUv;
+      if (uAspect > uImgAspect) uv.y = (uv.y - .5)*uImgAspect/uAspect + .5; else uv.x = (uv.x - .5)*uAspect/uImgAspect + .5;
+      vec3 c = mix(texture2D(uTex, uv).rgb, vec3(.012, .013, .018), uDark);
+      vec2 d = (vUv - uSunScreen.xy)*vec2(uAspect, 1.);
+      c += uSunCol*0.22*exp(-dot(d, d)*10.)*uSunScreen.z;
+      gl_FragColor = vec4(c, 1.);
+    }`,
+}));
+backdrop.frustumCulled = false; backdrop.renderOrder = -1;
+scene.add(backdrop);
+
+const hairMesh = new THREE.Mesh(new THREE.BufferGeometry(), hairMat);
+const stalkMesh = new THREE.Mesh(new THREE.BufferGeometry(), plantMat([0.84, 0.68, 0.44], 0.45));
+const leafMesh = new THREE.Mesh(new THREE.BufferGeometry(), plantMat([0.74, 0.58, 0.33], 0.8));
+for (const m of [stalkMesh, leafMesh, hairMesh]){ m.frustumCulled = false; scene.add(m); }
+hairMesh.renderOrder = 2;
+
+const controls = new OrbitControls(camera, canvas);
+controls.enableDamping = true; controls.enablePan = false; controls.minDistance = 0.45; controls.maxDistance = 4;
+controls.minPolarAngle = 0.35; controls.maxPolarAngle = 2.1;
+controls.addEventListener('start', () => document.getElementById('hint').classList.add('gone'));
+
+const rt = new THREE.WebGLRenderTarget(1, 1, {type: THREE.HalfFloatType, samples: 4});
+const composer = new EffectComposer(renderer, rt);
+composer.addPass(new RenderPass(scene, camera));
+const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.32, 0.55, 0.85);
+composer.addPass(bloom);
+composer.addPass(new OutputPass());
+
+let built = null;
+function rebuild(keepView){
+  const g = buildPlume(P);
+  for (const [mesh, geo] of [[hairMesh, g.hair], [stalkMesh, g.stalk], [leafMesh, g.leaves]]){ mesh.geometry.dispose(); mesh.geometry = geo; }
+  uniforms.uH.value = P.height;
+  const center = g.box.getCenter(V()), size = g.box.getSize(V());
+  if (!keepView || !built){
+    controls.target.copy(center);
+    camera.position.copy(center).add(V(0.08, -0.22, 1).normalize().multiplyScalar(fitDistance(size)));
+  } else controls.target.copy(center);
+  built = g;
+  document.getElementById('json').textContent = JSON.stringify(P, null, 1);
+}
+
+// how far the camera must stand for the whole head to fit, on a tall phone or a wide screen
+function fitDistance(size){
+  const v = THREE.MathUtils.degToRad(camera.fov)/2, h = Math.atan(Math.tan(v)*camera.aspect);
+  const halfW = Math.max(size.x, size.z)*0.5, halfH = size.y*0.5;
+  return Math.max(halfW*1.06/Math.tan(h), halfH*1.3/Math.tan(v)) + Math.max(size.x, size.z)*0.12;
+}
+
+function applyLight(){
+  const az = P.sunAz*Math.PI/180, el = P.sunEl*Math.PI/180;
+  uniforms.uSun.value.set(Math.sin(az)*Math.cos(el), Math.sin(el), -Math.cos(az)*Math.cos(el));
+  uniforms.uSunCol.value.setRGB(...lin([1, 0.84, 0.64])).multiplyScalar(2.6);
+  uniforms.uSky.value.setRGB(...lin([0.62, 0.72, 0.86]));
+  uniforms.uHair.value.setRGB(...lin(COLORS[P.color][1]));
+  uniforms.uGlow.value = P.glow; uniforms.uBright.value = P.bright; uniforms.uWind.value = P.wind;
+  uniforms.uDark.value = P.bg === 'dark' ? 1 : 0;
+}
+
+function resize(){
+  const w = innerWidth, h = innerHeight, dpr = Math.min(2, devicePixelRatio || 1);
+  renderer.setSize(w, h, false); composer.setPixelRatio(dpr); composer.setSize(w, h);
+  camera.aspect = w/h; camera.updateProjectionMatrix();
+  uniforms.uRes.value.set(w*dpr, h*dpr); uniforms.uPx.value = 0.55*dpr; uniforms.uAspect.value = w/h;
+}
+
+const sunTmp = V(), fwd = V();
+function render(dt){
+  uniforms.uTime.value += dt;
+  uniforms.uGust.value *= Math.exp(-dt*1.3);
+  controls.update();
+  camera.getWorldDirection(fwd);
+  const inFront = fwd.dot(uniforms.uSun.value) > 0.05;             // the sun's glow only when we look toward it
+  sunTmp.copy(uniforms.uSun.value).multiplyScalar(30).add(camera.position).project(camera);
+  uniforms.uSunScreen.value.set(sunTmp.x*0.5 + 0.5, sunTmp.y*0.5 + 0.5, inFront ? 1 : 0);
+  composer.render();
+}
+
+/* ═══ Controls: every number is a slider ═══ */
+const SLIDERS = [
+  ['Головка', [['racemes', 'Веточек', 5, 24, 1], ['rLen', 'Длина веточек', 0.2, 0.75, 0.01], ['spread', 'Раскрытие', 0, 1, 0.01],
+               ['droop', 'Свисание', 0, 1, 0.01], ['lean', 'Наклон в сторону', 0, 1, 0.01], ['fluff', 'Пушистость', 0, 1, 0.01],
+               ['density', 'Густота волосков', 0.3, 1.6, 0.01], ['hairLen', 'Длина волосков', 0.1, 0.6, 0.01]]],
+  ['Стебель', [['height', 'Высота', 0.8, 2.2, 0.01], ['arch', 'Изгиб', 0, 1, 0.01], ['leaves', 'Листья', 0, 5, 1]]],
+  ['Свет', [['sunAz', 'Солнце: вокруг', -180, 180, 1], ['sunEl', 'Солнце: высота', 2, 70, 1],
+            ['glow', 'Свечение насквозь', 0, 2.5, 0.01], ['bright', 'Яркость', 0.5, 1.5, 0.01]]],
+  ['Ветер', [['wind', 'Сила ветра', 0, 1, 0.01]]],
+];
+const SHAPE = new Set(['racemes', 'rLen', 'spread', 'droop', 'lean', 'fluff', 'density', 'hairLen', 'height', 'arch', 'leaves']);
+const groups = document.getElementById('groups');
+for (const [title, items] of SLIDERS){
+  const g = document.createElement('div'); g.className = 'group';
+  g.innerHTML = `<h2>${title}</h2>` + items.map(([k, label, min, max, step]) =>
+    `<div class="row"><label for="s-${k}">${label}</label><output id="o-${k}"></output>
+     <input type="range" id="s-${k}" min="${min}" max="${max}" step="${step}"></div>`).join('');
+  groups.appendChild(g);
+}
+let pendingShape = false;
+function syncUI(){
+  for (const [, items] of SLIDERS) for (const [k] of items){
+    const v = P[k]; document.getElementById('s-' + k).value = v;
+    document.getElementById('o-' + k).textContent = Number.isInteger(v) ? v : v.toFixed(2);
+  }
+  document.querySelectorAll('#colors .chip').forEach(b => b.setAttribute('aria-pressed', b.dataset.c === P.color));
+  document.querySelectorAll('#bgs .chip').forEach(b => b.setAttribute('aria-pressed', b.dataset.b === P.bg));
+}
+groups.addEventListener('input', e => {
+  const k = e.target.id.slice(2); if (!(k in P)) return;
+  P[k] = +e.target.value; document.getElementById('o-' + k).textContent = Number.isInteger(P[k]) ? P[k] : P[k].toFixed(2);
+  if (SHAPE.has(k)) pendingShape = true; else applyLight();
+  saveParams(); document.getElementById('json').textContent = JSON.stringify(P, null, 1);
+});
+document.getElementById('colors').innerHTML = Object.entries(COLORS).map(([k, [name]]) => `<button class="chip" type="button" data-c="${k}">${name}</button>`).join('');
+document.getElementById('bgs').innerHTML = Object.entries(BGS).map(([k, name]) => `<button class="chip" type="button" data-b="${k}">${name}</button>`).join('');
+document.getElementById('colors').addEventListener('click', e => { const b = e.target.closest('[data-c]'); if (!b) return; P.color = b.dataset.c; applyLight(); syncUI(); saveParams(); });
+document.getElementById('bgs').addEventListener('click', e => { const b = e.target.closest('[data-b]'); if (!b) return; P.bg = b.dataset.b; applyLight(); syncUI(); saveParams(); });
+document.querySelectorAll('[data-act]').forEach(b => b.addEventListener('click', () => {
+  const act = b.dataset.act;
+  if (act === 'gust') uniforms.uGust.value = 0.9;
+  if (act === 'seed'){ P.seed = (P.seed*7 + 13) % 9973; rebuild(true); saveParams(); }
+  if (act === 'reset'){ Object.assign(P, DEFAULTS); applyLight(); rebuild(); syncUI(); saveParams(); }
+  if (act === 'numbers'){ const box = document.getElementById('numbers'); box.hidden = !box.hidden;
+    document.querySelectorAll('[data-act="numbers"]').forEach(x => x.setAttribute('aria-pressed', !box.hidden)); }
+}));
+document.getElementById('copy').addEventListener('click', async e => {
+  const text = JSON.stringify(P, null, 1);
+  try { await navigator.clipboard.writeText(text); e.target.textContent = 'Скопировано'; }
+  catch (err) { const r = document.createRange(); r.selectNodeContents(document.getElementById('json')); getSelection().removeAllRanges(); getSelection().addRange(r); e.target.textContent = 'Выделено — скопируй'; }
+  setTimeout(() => e.target.textContent = 'Скопировать', 1800);
+});
+const panel = document.getElementById('panel'), more = document.getElementById('more');
+more.addEventListener('click', () => { const open = panel.classList.toggle('open'); more.setAttribute('aria-expanded', open); more.textContent = open ? 'Свернуть' : 'Настроить'; });
+document.getElementById('ref').addEventListener('click', e => e.currentTarget.classList.toggle('big'));
+setTimeout(() => document.getElementById('hint').classList.add('gone'), 5000);
+
+/* ═══ Start ═══ */
+resize(); addEventListener('resize', resize);
+applyLight(); rebuild(); syncUI();
+let prev = performance.now();
+function frame(now){
+  const dt = Math.min(0.05, (now - prev)/1000); prev = now;
+  if (pendingShape){ pendingShape = false; rebuild(true); }
+  render(dt);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+window.plume = {P, rebuild, applyLight, render, renderer, info: () => ({hairs: built.hairCount})};   // for checking from the console
+</script>
