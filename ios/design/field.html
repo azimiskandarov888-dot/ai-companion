@@ -102,14 +102,12 @@ const S = {density: 1, densityName: 'обычная', wind: 0.25, gust: 0.3, win
 // the camera of his picture: back from the field with a long lens, a little above the plumes, looking up the hill to
 // its crest ~53 m away — the heads are seen from the side, and the rising field behind them still shows
 const CAM = {pos: [0, 2.1, -7], look: [0, 11.4, 43], fov: 25};
-// the tree of his picture: a big broad tree in autumn gold on the crest, left; built from these numbers (step 3)
-const TREE = {x: 4.3, z: 44, seed: 11,
-  trunk: {length: 6.2, radius: 0.5, lean: [-0.06, 0.02]},            // to the main fork; it leans a little toward the crown
-  crown: {c: [-0.9, 13.6, 0.4], r: [7.6, 8.6, 6.2]},                 // the crown's rough shape around the trunk's foot, m
-  limbs: 4, lowLimbs: 2,                                              // big limbs from the fork, and low on the trunk
-  branchesPerM: 2, twigsPerM: 3, sprayPerTwig: 3,
-  leafSize: 1.2, leafColors: [[232, 160, 60], [246, 194, 92], [222, 132, 48], [192, 114, 50], [240, 176, 74]],
-  bark: [0.2, 0.18, 0.16]};                                       // how dark the bark photo is made (the trunk stands in its own shade)
+const PICTURE = [1536, 2752];                 // his picture mj-15, in pixels: its height is the screen's height
+// the tree of his picture (step 3): mj-15 cut into a paint and cards (scene/trace_tree.py → field-assets/tree-paint.webp,
+// tree-trace.json); these numbers set them up in 3D
+const TREE = {x: 4.3, z: 44, seed: 11,                               // x, z: where the trunk stands — set from the picture at start
+  depth: 2,                                                           // how far the crown reaches toward us and away, m
+  card: 2.8, fade: 0.7};                                              // a card's size, in grid steps; where its edge starts to fade
 const D0 = 8, D1 = 20, D2 = 36, D3 = 55;      // distance from the camera: near from D0, middle from D1, far (pictures) D2–D3 (the crest)
 
 /* ═══ Helpers ═══ */
@@ -470,19 +468,37 @@ const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(CAM.fov, 1
 camera.position.set(...CAM.pos); camera.lookAt(...CAM.look);
 
 Object.assign(uniforms, {uAspect: {value: 1}, uSunScreen: {value: new THREE.Vector3()}, uTexel: {value: new THREE.Vector2()},
-  uCamR: {value: V()}, uCamU: {value: V()}, uCamF: {value: V()}, uTanHV: {value: new THREE.Vector2()}});
-// the sky: the blue of his picture, greyer toward the crest, with the sun's glow
+  uCamR: {value: V()}, uCamU: {value: V()}, uCamF: {value: V()}, uTanHV: {value: new THREE.Vector2()},
+  uExpo: {value: renderer.toneMappingExposure}, uSkyC: {value: Array.from({length: 10}, () => V())}});
+// his picture's colours, turned back through what our post does after the scene (the veil of warm air, the grade, the
+// tone mapping), so that what is painted with them comes out on the screen as it is in his picture
+const VEIL = [0.006, 0.001];                                          // the veil: toward the sun, and everywhere
+const ASPAINTED = `
+  uniform float uExpo; uniform vec2 uTexel, uTanHV; uniform vec3 uSun, uSunCol, uCamR, uCamU, uCamF;
+  vec3 fromSRGB(vec3 c){ return mix(c/12.92, pow((c + 0.055)/1.055, vec3(2.4)), step(0.04045, c)); }
+  vec3 asPainted(vec3 t){
+    const float s = 0.76, d = 0.24, ds = 0.15;                        // three.js's NeutralToneMapping, undone
+    float n = max(t.r, max(t.g, t.b));
+    if (n > s){ n = min(n, 0.985); float p = d*d/(1. - n) - d + s, g = 1. - 1./(ds*(p - n) + 1.); t = (t - n*g)/(1. - g)*(p/n); }
+    float m = min(t.r, min(t.g, t.b));
+    t = (t + (m >= 0.04 ? 0.04 : sqrt(max(m, 0.))/2.5 - m))/uExpo;
+    vec2 uv = gl_FragCoord.xy*uTexel, sv = uv - 0.5; t /= 1. - 0.35*dot(sv, sv);   // and the grade: its vignette,
+    float l = dot(t, vec3(0.2126, 0.7152, 0.0722));
+    t /= mix(vec3(1.04, 0.98, 0.9), vec3(1.02, 1., 0.97), smoothstep(0.04, 0.7, l));   // its warm shade,
+    l = dot(t, vec3(0.2126, 0.7152, 0.0722));
+    t = l + (t - l)/1.14;                                             // its extra colour,
+    vec3 dir = normalize(uCamF + (uv.x*2. - 1.)*uTanHV.x*uCamR + (uv.y*2. - 1.)*uTanHV.y*uCamU);
+    return max(t - uSunCol*(${VEIL[0]}*pow(max(0., dot(dir, normalize(uSun))), 3.) + ${VEIL[1]}), 0.);   // and its veil
+  }`;
+// the sky: his sky, as it is in his picture (a smooth fit of its colour — scene/trace_tree.py → field-assets/sky.json)
 const sky = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.ShaderMaterial({uniforms, depthTest: false, depthWrite: false,
   vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.9999, 1.); }`,
-  fragmentShader: `uniform float uAspect; uniform vec3 uSunScreen, uSunCol, uSun, uCamR, uCamU, uCamF; uniform vec2 uTanHV; varying vec2 vUv;
+  fragmentShader: `${ASPAINTED} uniform float uAspect; uniform vec3 uSkyC[10]; varying vec2 vUv;
     void main(){
-      vec3 hor = pow(vec3(0.6, 0.66, 0.72), vec3(2.2)), mid = pow(vec3(0.43, 0.57, 0.69), vec3(2.2)), top = pow(vec3(0.31, 0.46, 0.62), vec3(2.2));
-      vec3 c = mix(mix(hor, mid, smoothstep(0.3, 0.62, vUv.y)), top, smoothstep(0.62, 1., vUv.y));
-      vec2 d = (vUv - uSunScreen.xy)*vec2(uAspect, 1.); c += uSunCol*0.16*exp(-dot(d, d)*7.)*uSunScreen.z;
-      vec3 dir = normalize(uCamF + (vUv.x*2. - 1.)*uTanHV.x*uCamR + (vUv.y*2. - 1.)*uTanHV.y*uCamU);
-      float sd = max(0., dot(dir, normalize(uSun)));
-      c += uSunCol*(0.035*sd*sd + 0.1*pow(sd, 12.));                  // the sky warms toward the sun
-      gl_FragColor = vec4(c, 1.);
+      float x = clamp(0.5 + (vUv.x - 0.5)*uAspect*${PICTURE[1]}./${PICTURE[0]}., 0., 1.), y = 1. - vUv.y;   // where this is in his picture
+      vec3 c = uSkyC[0] + uSkyC[1]*x + uSkyC[2]*y + uSkyC[3]*x*x + uSkyC[4]*x*y + uSkyC[5]*y*y
+             + uSkyC[6]*x*x*x + uSkyC[7]*x*x*y + uSkyC[8]*x*y*y + uSkyC[9]*y*y*y;
+      gl_FragColor = vec4(asPainted(fromSRGB(clamp(c, 0., 1.))), 1.);
     }`}));
 sky.frustumCulled = false; sky.renderOrder = -2; scene.add(sky);
 
@@ -547,11 +563,11 @@ const MOTES = 220;
 const moteGeo = new THREE.InstancedBufferGeometry();
 moteGeo.setAttribute('position', new THREE.Float32BufferAttribute([-0.5, -0.5, 0, 0.5, -0.5, 0, -0.5, 0.5, 0, 0.5, 0.5, 0], 3)); moteGeo.setIndex([0, 1, 2, 1, 3, 2]);
 { const R = rng(4242), a = new Float32Array(MOTES*4);
-  for (let i = 0; i < MOTES; i++) a.set([R(), R(), R(), i < MOTES*0.4 ? 1 : 0], i*4);   // where along, how far, how high; leaf or fluff
+  for (let i = 0; i < MOTES; i++) a.set([R(), R(), R(), i < MOTES*0.5 ? 1 : 0], i*4);   // where along, how far, how high; leaf or fluff
   moteGeo.setAttribute('aSeed', new THREE.InstancedBufferAttribute(a, 4)); moteGeo.instanceCount = MOTES; }
 const motes = new THREE.Mesh(moteGeo, new THREE.ShaderMaterial({uniforms, transparent: true, depthWrite: false, premultipliedAlpha: true,
   vertexShader: `uniform float uTime; uniform vec2 uDir; uniform float uWindLine[64]; uniform vec3 uCamR, uCamU, uSun, uCrownC, uCrownR;
-    attribute vec4 aSeed; varying vec2 vUv; varying float vLeaf, vLight, vFade;
+    attribute vec4 aSeed; varying vec2 vUv; varying float vLeaf, vLight, vFade, vSide, vCurl, vSeed;
     float windAt(vec2 xz){ float u = clamp(dot(xz, uDir)*0.5 + 32., 0., 62.99); int i = int(u); return mix(uWindLine[i], uWindLine[i + 1], fract(u)); }
     float hill(float x, float z){ float s = smoothstep(0., 46., z); return 5.2*s + 0.13*x*s; }   // the hill, roughly
     void main(){
@@ -570,241 +586,140 @@ const motes = new THREE.Mesh(moteGeo, new THREE.ShaderMaterial({uniforms, transp
           + vec3(sin(uTime*1.3 + ph)*0.6, sin(uTime*0.9 + ph*1.7)*0.5, 0.);
         vFade = smoothstep(0., 0.04, life)*(1. - smoothstep(0.8, 1., life));
       }
-      float spin = uTime*mix(2., 5., fract(ph)) + ph, size = leaf > .5 ? mix(0.18, 0.3, fract(ph*3.1)) : mix(0.025, 0.045, fract(ph*5.7));
-      vec2 corner = position.xy*vec2(leaf > .5 ? abs(cos(spin)) + 0.15 : 1., 1.);    // a leaf tumbles: now flat, now edge-on
+      float spin = uTime*mix(2., 5., fract(ph)) + ph, size = leaf > .5 ? mix(0.13, 0.25, fract(ph*3.1)) : mix(0.025, 0.045, fract(ph*5.7));
+      vec2 corner = position.xy*vec2(leaf > .5 ? (abs(cos(spin)) + 0.15)*0.7 : 1., 1.);   // a leaf tumbles: now flat, now edge-on,
+      float turn = leaf > .5 ? uTime*mix(-1.2, 1.2, fract(ph*2.9)) + ph*3. : 0.;
+      corner = mat2(cos(turn), sin(turn), -sin(turn), cos(turn))*corner;               // and turns as it falls
       vec3 wp = p + (uCamR*corner.x + uCamU*corner.y)*size;
       gl_Position = projectionMatrix*viewMatrix*vec4(wp, 1.);
       vUv = position.xy + 0.5; vLeaf = leaf; vLight = pow(max(0., dot(normalize(wp - cameraPosition), normalize(uSun))), 2.);
+      vSide = cos(spin); vCurl = fract(ph*4.7)*2. - 1.; vSeed = ph;
     }`,
-  fragmentShader: `uniform vec3 uSunCol, uSky; varying vec2 vUv; varying float vLeaf, vLight, vFade;
+  fragmentShader: `uniform vec3 uSunCol, uSky; uniform sampler2D uLeafSprites; varying vec2 vUv; varying float vLeaf, vLight, vFade, vSide, vCurl, vSeed;
     void main(){
       vec2 q = vUv*2. - 1.; float a; vec3 c;
-      if (vLeaf > .5){ float w = 0.42*(1. - q.y*q.y)*(1. - 0.25*q.y);           // a pointed leaf, along y
-        a = 1. - smoothstep(-0.06, 0.06, abs(q.x) - w); c = vec3(0.5, 0.24, 0.07)*(uSky*0.7 + uSunCol*(0.16 + 0.55*vLight)); }
+      if (vLeaf > .5){                                                  // a photographed leaf (field-assets/SOURCES.md), dry and curled
+        vec2 r = vUv; r.x += vCurl*0.18*(r.y - 0.5)*(r.y - 0.5)*4.;
+        vec2 cell = floor(fract(vSeed*vec2(7.3, 3.7))*vec2(6., 3.));
+        vec4 tx = texture2D(uLeafSprites, (cell + clamp(r, 0., 1.))*vec2(1./6., 1./3.) + vec2(0., 1. - (2.*cell.y + 1.)/3.));
+        a = tx.a;
+        vec3 alb = mix(vec3(0.3, 0.2, 0.14), vec3(0.62, 0.44, 0.3), smoothstep(-0.3, 0.3, vSide));   // pale in the sun, dark on its back — as his
+        alb *= clamp(dot(tx.rgb, vec3(0.2126, 0.7152, 0.0722))/0.53, 0.5, 1.5);
+        c = alb*(uSky*0.7 + uSunCol*(0.16 + 0.55*vLight)); }
       else { a = (1. - smoothstep(0.1, 1., length(q)))*0.8; c = vec3(0.9, 0.88, 0.84)*(uSky*0.9 + uSunCol*(0.4 + 1.1*vLight)); }
       a *= vFade;
       gl_FragColor = vec4(c*a, a);
     }`}));
 motes.frustumCulled = false; motes.renderOrder = 5; scene.add(motes);
 
-/* ═══ The tree (step 3), built from numbers like the plumes. The way games do trees: branches are tubes; leaves are
-   cards, each a spray of many small leaves drawn by code; the crown is lit as one soft volume (the normals of its shape),
-   glows where the sun shines through, and is darker deep inside; the wind bends the whole tree and lets every branch bob
-   and every leaf flutter (Crysis — GPU Gems 3, chapter 16) ═══ */
+/* ═══ The tree (step 3): his tree, rebuilt in 3D the way an artist builds a hero tree over a reference in SpeedTree. Here
+   the reference is his picture: cut into cards (scene/trace_tree.py), each set at its own depth and painted with the
+   picture cast onto it from the main screen's camera, the way film paints 3D sets from a matte painting. So at rest it is
+   exactly his tree; and it is a real 3D tree: it casts its shadow, and in the wind the whole tree sways, thick wood hardly
+   and the crown's edges most (Crysis — GPU Gems 3, chapter 16) ═══ */
 const treeGroup = new THREE.Group(); scene.add(treeGroup);
-const treeBase = V(TREE.x, ground(TREE.x, TREE.z) - 0.15, TREE.z);
-const crownC = V(...TREE.crown.c).add(treeBase), crownR = V(...TREE.crown.r);
-Object.assign(uniforms, {uTreeBase: {value: treeBase}, uTreeH: {value: TREE.crown.c[1] + TREE.crown.r[1]}, uTreeBend: {value: new THREE.Vector2()},
-  uTreeAmp: {value: 0.4}, uCrownC: {value: crownC}, uCrownR: {value: crownR}, uLeaves: {value: null}, uA2C: {value: 1}});
+const treeBase = V(TREE.x, ground(TREE.x, TREE.z), TREE.z), crownC = V(), crownR = V(6, 7, 5);   // set from the picture in buildTree
+Object.assign(uniforms, {uTreeBase: {value: treeBase}, uTreeH: {value: 18}, uTreeBend: {value: new THREE.Vector2()},
+  uTreeAmp: {value: 0.4}, uCrownC: {value: crownC}, uCrownR: {value: crownR}, uA2C: {value: 1},
+  uPaint: {value: null}, uCardFade: {value: TREE.fade}});
 const treeSway = {bx: 0, bz: 0, vx: 0, vz: 0};
-// the wind on the tree (Crysis): branches bob and leaves' edges flutter on smoothed triangle waves at four frequencies; the
-// whole tree bends with the simulated sway, more toward the top, keeping each point's distance from the foot
+// the wind on the tree (Crysis): the whole tree bends with the simulated sway, more toward the top, keeping each point's
+// distance from the foot; each branch bobs with its leaves, and the leaves flutter, on smoothed triangle waves around
+// where they stand in his picture
 const TREEWIND = `
 uniform float uTime, uTreeH, uTreeAmp; uniform vec3 uTreeBase; uniform vec2 uTreeBend;
 vec4 smoothTri(vec4 x){ x = abs(fract(x + 0.5)*2. - 1.); return x*x*(3. - 2.*x); }
 vec3 treeWind(vec3 p, vec4 br, vec3 n){
   vec3 q = p - uTreeBase;
-  float brPh = br.x + dot(uTreeBase, vec3(1.)), vtxPh = dot(q, vec3(0.37 + br.x*0.1));
+  float brPh = br.x, vtxPh = br.x*1.7 + dot(q, vec3(0.37));
   vec4 w = smoothTri(fract((uTime + vec2(vtxPh, brPh)).xxyy*vec4(1.975, 0.793, 0.375, 0.193))*2. - 1.);
-  vec2 ws = w.xz + w.yw;                                              // x: leaves' edges, y: branches
-  q += n*ws.x*br.w*0.05*uTreeAmp;                                     // leaves flutter
-  q.y += ws.y*br.y*0.16*uTreeAmp;                                     // branches bob, the thinner the more
-  q.xz += ws.y*br.y*0.06*uTreeAmp*vec2(0.8, 0.6);
+  vec2 ws = w.xz + w.yw - 1.;                                         // x: leaves' edges, y: branches
+  q += n*ws.x*br.w*0.025*uTreeAmp;                                    // leaves flutter
+  q.y += ws.y*br.y*0.06*uTreeAmp;                                     // branches bob, the thinner the more
+  q.xz += ws.y*br.y*0.03*uTreeAmp*vec2(0.8, 0.6);
   float len = length(q), h = max(q.y, 0.)/uTreeH;
   vec3 nq = q; nq.xz += uTreeBend*h*h;
   return normalize(nq)*len + uTreeBase;
 }`;
-function growTree(Q){
-  const R = rng(Q.seed), C = V(...Q.crown.c), Rr = V(...Q.crown.r), up = V(0, 1, 0), branches = [], sprays = [];
-  const inCrown = p => Math.hypot((p.x - C.x)/Rr.x, (p.y - C.y)/Rr.y, (p.z - C.z)/Rr.z);
-  const rnd3 = () => V(R()*2 - 1, R()*2 - 1, R()*2 - 1);
-  // a branch is a walk: it bends a little at random, lifts or droops, and turns back into the crown's shape near its edge
-  const walk = (p, dir, len, r0, r1, n, gnarl, lift, level, flex0, flexAmp, phase) => {
-    const pts = [p.clone()], rad = [r0]; const d = dir.clone().normalize(); let q = p.clone();
-    for (let i = 1; i <= n; i++){
-      d.addScaledVector(rnd3(), gnarl).addScaledVector(up, lift);
-      const m = inCrown(q); if (level > 0 && m > 0.82) d.addScaledVector(C.clone().sub(q).normalize(), (m - 0.82)*1.5);
-      d.normalize(); q = q.clone().addScaledVector(d, len/n); pts.push(q); rad.push(r0 + (r1 - r0)*i/n);
-      if (level > 0 && inCrown(q) > 1.1) break;
-    }
-    const b = {pts, rad, level, flex0, flexAmp, phase}; if (pts.length > 1) branches.push(b); return b;
-  };
-  const at = (b, t) => { const f = Math.min(t, 0.999)*(b.pts.length - 1), i = Math.floor(f), u = f - i;
-    return {p: b.pts[i].clone().lerp(b.pts[i + 1], u), d: b.pts[i + 1].clone().sub(b.pts[i]).normalize(), r: b.rad[i] + (b.rad[i + 1] - b.rad[i])*u,
-            flex: b.flex0 + b.flexAmp*t}; };
-  const turnFrom = (d, ang, phi) => {                                  // a direction at angle ang from d, turned phi around it
-    const a = Math.abs(d.y) < 0.9 ? up : V(1, 0, 0), u = a.clone().cross(d).normalize(), w = d.clone().cross(u);
-    return d.clone().multiplyScalar(Math.cos(ang)).addScaledVector(u.multiplyScalar(Math.cos(phi)).addScaledVector(w, Math.sin(phi)), Math.sin(ang)).normalize();
-  };
-  const T = Q.trunk, trunk = walk(V(), V(T.lean[0], 1, T.lean[1]), T.length, T.radius, T.radius*0.7, 10, 0.03, 0, 0, 0, 0.03, R()*6);
-  // limbs: a couple low on the trunk, the rest from the fork — each aimed at its own part of the crown
-  const limbs = [];
-  for (let i = 0; i < Q.lowLimbs + Q.limbs; i++){
-    const low = i < Q.lowLimbs, a = at(trunk, low ? 0.55 + 0.18*i : 1);
-    const phi = low ? [0.25, 2.9][i] + (R() - 0.5)*0.4 : (i - Q.lowLimbs)*2.39996*1.0 + 0.6 + R()*0.5;
-    const target = C.clone().add(V(Math.cos(phi)*Rr.x*0.78, (low ? -0.35 : 0.15 + 0.45*R())*Rr.y, Math.sin(phi)*Rr.z*0.78));
-    const dir = target.clone().sub(a.p).normalize().lerp(up, low ? 0.05 : 0.25).normalize();
-    limbs.push(walk(a.p, dir, a.p.distanceTo(target)*(0.95 + 0.2*R()), a.r*(low ? 0.5 : 0.64), 0.035, 10, 0.07, low ? 0.005 : 0.02, 1, a.flex, 0.16, R()*6));
-  }
-  // branches along the limbs, twigs along the branches, and on the twigs the sprays of leaves
-  for (const limb of limbs){
-    const L = limb.pts.length*0.9, nb = Math.max(3, Math.round(L*Q.branchesPerM));
-    for (let k = 0; k < nb; k++){
-      const t = 0.14 + 0.84*(k + R()*0.7)/nb, a = at(limb, t);
-      const out = a.p.clone().sub(C).normalize(), dir = turnFrom(a.d, 0.5 + 0.4*R(), k*2.39996 + R()).addScaledVector(out, 0.45).normalize();
-      const br = walk(a.p, dir, (2.2 + 2.6*R())*(1 - 0.45*t), Math.min(a.r*0.55, 0.06), 0.012, 6, 0.17, -0.025, 2, a.flex, 0.42, limb.phase + R()*1.5);
-      const BL = (br.pts.length - 1)/6*(2.2 + 2.6*0.5), nt = Math.max(2, Math.round(BL*Q.twigsPerM)), clump = sprays.length;
-      const tint = 0.85 + 0.3*R();                                     // each clump its own shade
-      for (let j = 0; j < nt; j++){
-        const u = 0.18 + 0.82*(j + R()*0.6)/nt, b = at(br, u), leafy = u > 0.38;   // leaves gather toward the branch's end
-        const o2 = b.p.clone().sub(C).normalize(), d2 = turnFrom(b.d, 0.6 + 0.45*R(), j*2.39996 + R()*1.3).addScaledVector(o2, 0.3).addScaledVector(up, -0.12).normalize();
-        const tw = walk(b.p, d2, 0.6 + 0.8*R(), Math.min(b.r*0.65, 0.012), 0.004, 3, 0.25, -0.03, 3, b.flex, 0.7, br.phase + R()*1.2);
-        if (leafy) for (let s = 0; s < Q.sprayPerTwig; s++){
-          const c = at(tw, s ? 0.98 : 0.45 + 0.2*R()); if (inCrown(c.p) < 0.4 && R() < 0.5) continue;    // leaves grow mostly on the outside of a crown
-          sprays.push({p: c.p, flex: c.flex + 0.15, phase: tw.phase + R()*2, size: Q.leafSize*(0.75 + 0.5*R()), variant: Math.floor(R()*4), tint});
-        }
-      }
-      const e = at(br, 0.99); sprays.push({p: e.p, flex: e.flex + 0.15, phase: br.phase + R()*2, size: Q.leafSize*(0.8 + 0.5*R()), variant: Math.floor(R()*4), tint});
-      // the clump: its middle, and how far each spray sits from it — for the light of a small soft ball
-      const cs = sprays.slice(clump); if (cs.length){
-        const mid = cs.reduce((m, q) => m.add(q.p), V()).multiplyScalar(1/cs.length).addScaledVector(up, -0.25);
-        const rad = Math.max(0.6, ...cs.map(q => q.p.distanceTo(mid)));
-        for (const q of cs){ q.clumpN = q.p.clone().sub(mid).normalize(); q.clumpDepth = q.p.distanceTo(mid)/rad; }
-      }
-    }
-  }
-  return {branches, sprays, inCrown, C, Rr, R};
+// from his picture to 3D: a picture pixel is a ray from the camera (his picture's height is the screen's height); the trunk
+// stands where the ray through its foot comes nearest our hill, and every card is placed along its own ray
+function traceTree(T){
+  const R = rng(TREE.seed), H = T.picture[1], cx = T.picture[0]/2, half = H/2, tv = Math.tan(THREE.MathUtils.degToRad(camera.fov)/2);
+  camera.updateMatrixWorld(); const e = camera.matrixWorld.elements, cam = camera.position.clone();
+  const Rv = V(e[0], e[1], e[2]), Uv = V(e[4], e[5], e[6]), Fv = V(-e[8], -e[9], -e[10]);
+  const ray = (px, py) => Fv.clone().addScaledVector(Rv, (px - cx)/half*tv).addScaledVector(Uv, (half - py)/half*tv).normalize();
+  // and back: where a point is in his picture, as a place in the paint (the tree's corner of the picture)
+  const pic = p => { const d = p.clone().sub(cam), z = d.dot(Fv)*tv; return [(cx + half*d.dot(Rv)/z)/T.paint[0], 1 - (half - half*d.dot(Uv)/z)/T.paint[1]]; };
+  let D = 50, gap = 1e9;
+  { const d = ray(...T.trunkBase);
+    for (let t = 20; t < 120; t += 0.05){ const q = cam.clone().addScaledVector(d, t), h = q.y - ground(q.x, q.z); if (h < gap){ gap = h; D = t; } if (h < 0.25) break; } }
+  const foot = cam.clone().addScaledVector(ray(...T.trunkBase), D), base = V(foot.x, ground(foot.x, foot.z) - 0.1, foot.z);
+  const mpp = d => d*2*tv/H;                                          // metres per picture pixel at a distance
+  const at = (px, py, dz) => cam.clone().addScaledVector(ray(px, py), D + dz).sub(base);   // relative to the trunk's foot
+  const size = dz => T.step*TREE.card*mpp(D + dz), phaseOf = p => p.x*0.31 + p.y*0.17 + p.z*0.23;
+  // the cards: the wood stands in the middle, the leaves make a crown that bulges toward us; in the wind thick wood hardly
+  // moves and the crown's edges most, in a wave that runs through the crown, so what is near moves together
+  const cards = T.cards.map(([px, py, edge, wood]) => {
+    const en = Math.min(1, edge/(T.edgeMax*0.55)), rm = wood*mpp(D);
+    const dz = (rm > 0.08 ? 0 : TREE.depth*(0.35 - Math.sqrt(en*(2 - en)))) + (R() - 0.5)*0.3, p = at(px, py, dz);
+    return {p, size: size(dz), ray: ray(px, py), phase: phaseOf(p), flex: Math.min(0.25 + 0.75*sm(0.2, 1, 1 - en), wood ? sm(0.22, 0.03, rm) : 1)};
+  });
+  // the trunk goes on down into our hill, below where his picture shows it (our field hides it)
+  for (let py = T.trunkBase[1] + T.step; py < T.trunkBase[1] + 600; py += T.step)
+    for (const dx of [-20, 0, 20]){ const p = at(T.trunkBase[0] + dx, py, 0); if (p.y > -0.4) cards.push({p, size: size(0), ray: ray(T.trunkBase[0] + dx, py), phase: phaseOf(p), flex: 0}); }
+  // the crown's rough shape, for the falling leaves
+  const C = cards.reduce((m, l) => m.add(l.p), V()).multiplyScalar(1/cards.length), Rr = V();
+  for (const l of cards){ const d = l.p.clone().sub(C); Rr.x += d.x*d.x; Rr.y += d.y*d.y; Rr.z += d.z*d.z; }
+  Rr.multiplyScalar(1/cards.length); Rr.set(Math.sqrt(Rr.x)*2, Math.sqrt(Rr.y)*2, Math.max(2.5, Math.sqrt(Rr.z)*2));
+  const top = Math.max(...cards.map(l => l.p.y));
+  return {cards, C, Rr, base, top, R, pic};
 }
-// the bark: tubes along the branches, carried along without twisting; the trunk flares into its roots
-function barkGeometry(g){
-  const radial = [10, 7, 5, 3], pos = [], nrm = [], br = [], uvb = [], ao = [], idx = []; let base = 0;
-  for (const b of g.branches){
-    const n = b.pts.length, m = radial[b.level]; let N = null, len = 0;
-    for (let i = 0; i < n; i++){
-      const T = b.pts[Math.min(n - 1, i + 1)].clone().sub(b.pts[Math.max(0, i - 1)]).normalize();
-      if (!N) N = (Math.abs(T.y) < 0.9 ? V(0, 1, 0) : V(1, 0, 0)).cross(T).normalize(); else N.addScaledVector(T, -N.dot(T)).normalize();
-      const B = T.clone().cross(N); if (i) len += b.pts[i].distanceTo(b.pts[i - 1]);
-      const v = i/(n - 1), flex = b.flex0 + b.flexAmp*v, q = b.pts[i];
-      const occl = b.level ? 0.4 + 0.6*sm(0.25, 1.05, g.inCrown(q)) : 0.55 + 0.45*sm(0, 6, q.y);
-      const r = b.rad[i]*(b.level === 0 ? 1 + 0.55*Math.exp(-q.y/0.4) : 1);
-      for (let j = 0; j <= m; j++){
-        const a = j/m*Math.PI*2, d = N.clone().multiplyScalar(Math.cos(a)).addScaledVector(B, Math.sin(a)), pp = q.clone().addScaledVector(d, r).add(treeBase);
-        pos.push(pp.x, pp.y, pp.z); nrm.push(d.x, d.y, d.z); br.push(b.phase, flex, b.level, 0); uvb.push(j/m, len); ao.push(occl);
-      }
-    }
-    for (let i = 0; i < n - 1; i++) for (let j = 0; j < m; j++){ const a = base + i*(m + 1) + j, c = a + m + 1; idx.push(a, a + 1, c, a + 1, c + 1, c); }
-    base += n*(m + 1);
-  }
-  const geo = new THREE.BufferGeometry(), f = (a, k) => new THREE.Float32BufferAttribute(a, k);
-  geo.setAttribute('position', f(pos, 3)); geo.setAttribute('normal', f(nrm, 3)); geo.setAttribute('aBr', f(br, 4)); geo.setAttribute('aUvB', f(uvb, 2));
-  geo.setAttribute('aAO', f(ao, 1)); geo.setIndex(idx); return geo;
-}
-// the leaves: a card per spray, hanging from its twig; facing out of the crown and a little toward us
-function sprayGeometry(g){
-  const R = g.R, pos = [], uv = [], nrm = [], shp = [], br = [], ao = [], idx = [];
-  const toCam = V(...CAM.pos).sub(treeBase).normalize(), up = V(0, 1, 0);
-  g.sprays.forEach((sp, k) => {
-    const q = sp.p, crownN = q.clone().sub(g.C).divide(g.Rr.clone().multiply(g.Rr)).normalize();   // the crown's shape normal here
-    const out = (sp.clumpN || crownN).clone().multiplyScalar(0.65).addScaledVector(crownN, 0.35).normalize();   // and its clump's: lit as small soft balls
-    const n = out.clone().multiplyScalar(0.6).addScaledVector(toCam, 0.55).add(V(R() - 0.5, R() - 0.5, R() - 0.5).multiplyScalar(0.9)).normalize();
-    let upv = up.clone().addScaledVector(n, -n.y); if (upv.lengthSq() < 1e-4) upv = V(1, 0, 0); upv.normalize();
-    upv.applyAxisAngle(n, (R() - 0.5)*1.4);                           // hanging, give or take
-    const rt = upv.clone().cross(n).normalize(), h = sp.size/2, m = g.inCrown(q);
-    const occl = (0.35 + 0.65*sm(0.35, 1.02, m))*(0.8 + 0.2*sm(-0.6, 0.8, (q.y - g.C.y)/g.Rr.y))*(0.6 + 0.4*sm(0, 0.9, sp.clumpDepth ?? 1));
-    const u0 = (sp.variant % 2)*0.5, v0 = 0.5*(1 - Math.floor(sp.variant/2));
+// a card per spot, turned to us (the camera never moves), a little tilted; it fades out at its edge into its neighbours,
+// and flutters across its face the same way as what is near it
+function treeCards(g){
+  const R = g.R, pos = [], uv = [], nrm = [], br = [], pic = [], idx = [], up = V(0, 1, 0);
+  g.cards.forEach((cd, k) => {
+    const q = cd.p, n = cd.ray.clone().negate().add(V(R() - 0.5, R() - 0.5, R() - 0.5).multiplyScalar(0.3)).normalize();
+    const upv = up.clone().addScaledVector(n, -n.y).normalize(), rt = upv.clone().cross(n).normalize(), h = cd.size/2;
+    const fl = rt.clone().multiplyScalar(Math.cos(cd.phase*2.3)).addScaledVector(upv, Math.sin(cd.phase*2.3));
     for (const [cx, cy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]){
-      const pp = q.clone().addScaledVector(rt, cx*h).addScaledVector(upv, cy*h - h*0.82).add(treeBase);
-      pos.push(pp.x, pp.y, pp.z); uv.push(u0 + (cx*0.5 + 0.5)*0.5, v0 + (cy*0.5 + 0.5)*0.5);
-      nrm.push(n.x, n.y, n.z); shp.push(out.x, out.y, out.z); br.push(sp.phase, sp.flex, sp.tint ?? 1, 0.4 + 0.6*(cy*0.5 + 0.5)); ao.push(occl);
+      const pp = q.clone().addScaledVector(rt, cx*h).addScaledVector(upv, cy*h).add(treeBase);
+      pos.push(pp.x, pp.y, pp.z); uv.push(cx*0.5 + 0.5, cy*0.5 + 0.5); nrm.push(fl.x, fl.y, fl.z);
+      br.push(cd.phase, cd.flex, 1, cd.flex*(0.5 + 0.25*(cy + 1))); pic.push(...g.pic(pp));
     }
     const b = k*4; idx.push(b, b + 1, b + 2, b + 1, b + 3, b + 2);
   });
   const geo = new THREE.BufferGeometry(), f = (a, k) => new THREE.Float32BufferAttribute(a, k);
-  geo.setAttribute('position', f(pos, 3)); geo.setAttribute('uv', f(uv, 2)); geo.setAttribute('normal', f(nrm, 3)); geo.setAttribute('aShape', f(shp, 3));
-  geo.setAttribute('aBr', f(br, 4)); geo.setAttribute('aAO', f(ao, 1)); geo.setIndex(idx); return geo;
+  geo.setAttribute('position', f(pos, 3)); geo.setAttribute('uv', f(uv, 2)); geo.setAttribute('normal', f(nrm, 3));
+  geo.setAttribute('aBr', f(br, 4)); geo.setAttribute('aPic', f(pic, 2)); geo.setIndex(idx); return geo;
 }
-// the sprays of leaves, composed the way artists make branch cards: photographed leaves (scans, CC0 — field-assets/SOURCES.md),
-// cut out and recoloured for autumn in six shades, set along thin twigs into four pictures
-function drawLeaves(Q, sprites){
-  const S = 1024, cv = document.createElement('canvas'); cv.width = cv.height = S; const g = cv.getContext('2d'), R = rng(Q.seed*7 + 3);
-  const CW = 112, CH = 160;                                          // one leaf in the sprite sheet: three shapes down, six shades across
-  const leaf = (x, y, ang, len) => {
-    const shape = Math.floor(R()*3), shade = Math.floor(R()*6), k = len/150;
-    g.save(); g.translate(x, y); g.rotate(ang + Math.PI/2); g.scale(k*(0.85 + 0.3*R()), k);   // its stalk at the twig, its tip along ang
-    g.drawImage(sprites, shade*CW, shape*CH, CW, CH, -CW/2, -CH*0.96, CW, CH);
-    g.restore();
-  };
-  for (let v = 0; v < 4; v++){
-    const ox = (v % 2)*512, oy = Math.floor(v/2)*512;
-    g.save(); g.translate(ox, oy);
-    const stems = 2 + Math.floor(R()*2);
-    for (let s = 0; s < stems; s++){
-      let x = 256 + (R() - 0.5)*30, y = 24, a = Math.PI/2 + (s - (stems - 1)/2)*0.5 + (R() - 0.5)*0.3;   // hanging down, fanning out
-      const steps = 9 + Math.floor(R()*4);
-      for (let i = 0; i < steps; i++){
-        const nx = x + Math.cos(a)*34, ny = y + Math.sin(a)*34;
-        g.strokeStyle = 'rgb(70, 48, 30)'; g.lineWidth = 3.2 - 2.2*i/steps; g.beginPath(); g.moveTo(x, y); g.lineTo(nx, ny); g.stroke();
-        for (const side of [1, -1]) if (R() < 0.85) leaf(nx, ny, a + side*(0.55 + 0.4*R()), 50 + 26*R());
-        x = nx; y = ny; a += (R() - 0.5)*0.35 + 0.03*(Math.PI/2 - a);
-        if (x < 40 || x > 472 || y > 470) break;
-      }
-      leaf(x, y, a, 56);
-    }
-    g.restore();
-  }
-  const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4; return tex;
-}
-const BARK_VS = `${CLOUD} ${TREEWIND}
-  attribute vec4 aBr; attribute vec2 aUvB; attribute float aAO; varying vec3 vW, vN; varying vec2 vUvB; varying float vAO, vCloud;
-  void main(){ vec3 p = treeWind(position, aBr, normal); vW = p; vN = normal; vUvB = aUvB; vAO = aAO; vCloud = cloudLight(p, uTime);
+// the tree's paint: his picture, as it is; a cloud drifting over still darkens it
+const PAINT = `${ASPAINTED} uniform sampler2D uPaint;`;
+const CARD_VS = `${CLOUD} ${TREEWIND}
+  attribute vec4 aBr; attribute vec2 aPic; varying vec2 vUv, vPic; varying float vCloud;
+  void main(){ vec3 p = treeWind(position, aBr, normal); vUv = uv; vPic = aPic; vCloud = cloudLight(p, uTime);
     gl_Position = projectionMatrix*viewMatrix*vec4(p, 1.); }`;
-const barkMat = new THREE.ShaderMaterial({uniforms, vertexShader: BARK_VS, fragmentShader: `${LIGHT}
-  uniform vec3 uBark; uniform sampler2D uBarkMap, uBarkNor; varying vec3 vW, vN; varying vec2 vUvB; varying float vAO, vCloud;
-  // the surface's own axes from the screen (no tangents needed): to lay the bark's relief onto the round branch
-  mat3 frame(vec3 N, vec3 p, vec2 uv){ vec3 dp1 = dFdx(p), dp2 = dFdy(p); vec2 du1 = dFdx(uv), du2 = dFdy(uv);
-    vec3 a = cross(dp2, N), b = cross(N, dp1), T = a*du1.x + b*du2.x, B = a*du1.y + b*du2.y;
-    float k = inversesqrt(max(max(dot(T, T), dot(B, B)), 1e-12)); return mat3(T*k, B*k, N); }
+const CARD = `uniform float uCardFade; float card(vec2 uv){ return 1. - smoothstep(uCardFade, 1., length(uv*2. - 1.)); }`;
+const cardMat = new THREE.ShaderMaterial({uniforms, side: THREE.DoubleSide, alphaToCoverage: true, vertexShader: CARD_VS, fragmentShader: `${PAINT} ${CARD}
+  uniform float uA2C; varying vec2 vUv, vPic; varying float vCloud;
   void main(){
-    vec3 V = normalize(cameraPosition - vW), L = normalize(uSun);
-    vec2 uv = vec2(vUvB.x*3., vUvB.y*0.8);                              // the photo, three times around the trunk
-    vec3 N = normalize(frame(normalize(vN), vW, uv)*(texture2D(uBarkNor, uv).xyz*2. - 1.));
-    vec3 c = texture2D(uBarkMap, uv).rgb*uBark*mix(0.5, 1., vAO);
-    vec3 col = c*(hemi(N)*0.8 + uSunCol*sunLit4(vW)*vCloud*1.1*wrapL(N, L));
-    gl_FragColor = vec4(haze(mix(col, deep(col, vW), 0.4), vW), 1.);
-  }`});
-const LEAF_VS = `${CLOUD} ${TREEWIND}
-  attribute vec3 aShape; attribute vec4 aBr; attribute float aAO; varying vec2 vUv; varying vec3 vW, vN, vS; varying float vAO, vCloud, vTint;
-  void main(){ vec3 p = treeWind(position, aBr, normal); vW = p; vUv = uv; vN = normal; vS = aShape; vAO = aAO; vCloud = cloudLight(p, uTime); vTint = aBr.z;
-    gl_Position = projectionMatrix*viewMatrix*vec4(p, 1.); }`;
-const leafCardMat = new THREE.ShaderMaterial({uniforms, side: THREE.DoubleSide, alphaToCoverage: true, vertexShader: LEAF_VS, fragmentShader: `${LIGHT}
-  uniform sampler2D uLeaves; uniform float uA2C; varying vec2 vUv; varying vec3 vW, vN, vS; varying float vAO, vCloud, vTint;
-  void main(){
-    vec4 tx = texture2D(uLeaves, vUv);
-    float a = clamp((tx.a - 0.5)/max(fwidth(tx.a), 1e-4) + 0.5, 0., 1.);   // a crisp yet smooth edge, at any distance
+    vec4 tx = texture2D(uPaint, vPic);
+    float a = tx.a*card(vUv);                                         // the leaves' own outline, as soft as in his picture
     if (a < mix(0.5, 0.02, uA2C)) discard;
-    vec3 V = normalize(cameraPosition - vW), L = normalize(uSun);
-    vec3 Nc = normalize(vN); Nc *= sign(dot(Nc, V) + 1e-4);              // the side we see
-    vec3 N = normalize(mix(Nc, normalize(vS), 0.7));                      // the crown lit as one soft volume
-    float sh = sunLit4(vW)*vCloud;
-    // the sun through the leaves (Crysis): toward the sun they glow; from behind, softly
-    float back = mix(clamp(-dot(Nc, L)*0.6 + 0.4, 0., 1.), pow(max(dot(-V, L), 0.), 4.), 0.6);
-    vec3 alb = tx.rgb*vTint;
-    vec3 col = alb*(hemi(N)*vec3(1.12, 0.86, 0.66)*mix(0.3, 0.95, vAO) + uSunCol*sh*(wrapL(N, L)*mix(0.35, 1.15, vAO) + back*mix(0.35, 1., vAO)*0.95*vec3(1., 0.78, 0.46)));
-    gl_FragColor = vec4(haze(mix(col, deep(col, vW), 0.4), vW), a);
+    gl_FragColor = vec4(asPainted(tx.rgb*mix(0.62, 1., vCloud)), a);
   }`});
-const barkShadowMat = new THREE.ShaderMaterial({uniforms, vertexShader: BARK_VS, fragmentShader: SOLID});
-const leafShadowMat = new THREE.ShaderMaterial({uniforms, side: THREE.DoubleSide, vertexShader: LEAF_VS,
-  fragmentShader: `uniform sampler2D uLeaves; varying vec2 vUv; void main(){ if (texture2D(uLeaves, vUv).a < 0.5) discard; gl_FragColor = vec4(1.); }`});
-Object.assign(uniforms, {uBark: {value: new THREE.Color(...TREE.bark)}, uBarkMap: {value: null}, uBarkNor: {value: null}});
-let treeInfo = {tris: 0, sprays: 0};
-function buildTree(sprites = leafSprites){
+const cardShadowMat = new THREE.ShaderMaterial({uniforms, side: THREE.DoubleSide, vertexShader: CARD_VS, fragmentShader: `${CARD}
+  uniform sampler2D uPaint; varying vec2 vUv, vPic; void main(){ if (texture2D(uPaint, vPic).a*card(vUv) < 0.5) discard; gl_FragColor = vec4(1.); }`});
+let treeInfo = {tris: 0, cards: 0};
+function buildTree(trace = treeTrace){
   for (const m of [...treeGroup.children]){ m.geometry.dispose(); treeGroup.remove(m); }
-  if (!uniforms.uLeaves.value) uniforms.uLeaves.value = drawLeaves(TREE, sprites);
-  const g = growTree(TREE), bark = barkGeometry(g), leaves = sprayGeometry(g);
-  const mb = new THREE.Mesh(bark, barkMat), ml = new THREE.Mesh(leaves, leafCardMat);
-  mb.userData = {mat: barkMat, shadow: barkShadowMat}; ml.userData = {mat: leafCardMat, shadow: leafShadowMat};
-  for (const m of [mb, ml]){ m.frustumCulled = false; treeGroup.add(m); }
-  treeInfo = {tris: bark.index.count/3 + leaves.index.count/3, sprays: g.sprays.length, branches: g.branches.length};
+  const g = traceTree(trace);
+  treeBase.copy(g.base); TREE.x = g.base.x; TREE.z = g.base.z;          // the field leaves room for the trunk here
+  crownC.copy(g.C).add(g.base); crownR.copy(g.Rr); uniforms.uTreeH.value = Math.max(8, g.top);
+  uniforms.uCardFade.value = TREE.fade;
+  const cards = treeCards(g), m = new THREE.Mesh(cards, cardMat);
+  m.userData = {mat: cardMat, shadow: cardShadowMat}; m.frustumCulled = false; treeGroup.add(m);
+  treeInfo = {tris: cards.index.count/3, cards: g.cards.length, base: g.base.toArray().map(v => +v.toFixed(2)), height: +g.top.toFixed(1)};
 }
 
 /* ═══ The grass below the plumes, made the way Ghost of Tsushima makes its grass: every blade built on the GPU by code — a
@@ -1019,8 +934,8 @@ function simulate(dt){
     p.bx += p.vx*dt; p.bz += p.vz*dt;
   }
   for (const g of groups){ const arr = g.bend.array; g.list.forEach((p, i) => { arr[i*2] = p.bx; arr[i*2 + 1] = p.bz; }); g.bend.needsUpdate = true; }
-  // the tree: a big, slow spring — it leans with the steady wind and sways in the gusts
-  const tw = windAt(TREE.x, TREE.z, t), T = treeSway, ttx = dx*(0.25 + tw*0.9), ttz = dz*(0.25 + tw*0.9);
+  // the tree: a big, slow spring — it sways in the gusts around the way it stands in his picture
+  const tw = windAt(TREE.x, TREE.z, t), T = treeSway, lean = (tw - 0.15)*0.45, ttx = dx*lean, ttz = dz*lean;
   T.vx += (2.4*(ttx - T.bx) - 1.0*T.vx)*dt; T.vz += (2.4*(ttz - T.bz) - 1.0*T.vz)*dt; T.bx += T.vx*dt; T.bz += T.vz*dt;
   uniforms.uTreeBend.value.set(T.bx, T.bz); uniforms.uTreeAmp.value = 0.3 + tw*1.1;
 }
@@ -1098,7 +1013,7 @@ const gradeMat = new THREE.ShaderMaterial({uniforms: {tDiffuse: {value: null}, u
     void main(){
       vec3 c = texture2D(tDiffuse, vUv).rgb;
       vec3 dir = normalize(uCamF + (vUv.x*2. - 1.)*uTanHV.x*uCamR + (vUv.y*2. - 1.)*uTanHV.y*uCamU);
-      c += uSunCol*(0.015*pow(max(0., dot(dir, normalize(uSun))), 3.) + 0.002);  // a faint veil of warm air toward the sun
+      c += uSunCol*(${VEIL[0]}*pow(max(0., dot(dir, normalize(uSun))), 3.) + ${VEIL[1]});  // a faint veil of warm air toward the sun
       float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
       c = max(mix(vec3(l), c, 1.14), 0.);                                   // more colour
       c *= mix(vec3(1.04, 0.98, 0.9), vec3(1.02, 1., 0.97), smoothstep(0.04, 0.7, l));   // warm amber shade, warm light
@@ -1174,14 +1089,15 @@ document.getElementById('quality').addEventListener('click', e => {
 setTimeout(() => document.getElementById('hint').classList.add('gone'), 6000);
 
 /* ═══ Start ═══ */
-// the photographed assets (CC0 scans — field-assets/SOURCES.md)
-const loadImage = src => new Promise((ok, fail) => { const im = new Image(); im.onload = () => ok(im); im.onerror = fail; im.src = src; });
+// his tree: its shape traced from his picture, and his picture to paint it with (scene/trace_tree.py)
 const texLoader = new THREE.TextureLoader();
-const [leafSprites, barkMap, barkNor] = await Promise.all([loadImage('field-assets/leaf-sprites.png'),
-  texLoader.loadAsync('field-assets/bark-zelkova-diff.jpg'), texLoader.loadAsync('field-assets/bark-zelkova-nor_gl.jpg')]);
-for (const t of [barkMap, barkNor]){ t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 4; }
-barkMap.colorSpace = THREE.SRGBColorSpace; uniforms.uBarkMap.value = barkMap; uniforms.uBarkNor.value = barkNor;
-applyLight(); setupComposer(); prepare(); buildTree(leafSprites); placePlants();
+const [treePaint, treeTrace, skyFit, leafSprites] = await Promise.all([texLoader.loadAsync('field-assets/tree-paint.webp'),
+  fetch('field-assets/tree-trace.json').then(r => r.json()), fetch('field-assets/sky.json').then(r => r.json()),
+  texLoader.loadAsync('field-assets/leaf-sprites.png')]);
+leafSprites.colorSpace = THREE.SRGBColorSpace; uniforms.uLeafSprites = {value: leafSprites};   // the falling leaves
+skyFit.rgb.forEach((c, i) => uniforms.uSkyC.value[i].set(...c));
+Object.assign(treePaint, {colorSpace: THREE.SRGBColorSpace, generateMipmaps: false, minFilter: THREE.LinearFilter}); uniforms.uPaint.value = treePaint;
+applyLight(); setupComposer(); prepare(); buildTree(treeTrace); placePlants();
 addEventListener('resize', () => { const was = camera.aspect; resize(); if (Math.abs(camera.aspect - was) > 0.04) placePlants(); });
 const sunTmp = V(), fwd = V();
 function step(dt){
