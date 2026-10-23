@@ -109,7 +109,7 @@ const TREE = {x: 4.3, z: 44, seed: 11,
   limbs: 4, lowLimbs: 2,                                              // big limbs from the fork, and low on the trunk
   branchesPerM: 2, twigsPerM: 3, sprayPerTwig: 3,
   leafSize: 1.2, leafColors: [[232, 160, 60], [246, 194, 92], [222, 132, 48], [192, 114, 50], [240, 176, 74]],
-  bark: [0.022, 0.017, 0.014]};
+  bark: [0.2, 0.18, 0.16]};                                       // how dark the bark photo is made (the trunk stands in its own shade)
 const D0 = 8, D1 = 20, D2 = 36, D3 = 55;      // distance from the camera: near from D0, middle from D1, far (pictures) D2–D3 (the crest)
 
 /* ═══ Helpers ═══ */
@@ -533,12 +533,12 @@ function aimSun(){                                                      // fit t
   uniforms.uSunMat.value.multiplyMatrices(sunCam.projectionMatrix, sunCam.matrixWorldInverse);
 }
 function renderShadow(){
-  sky.visible = groundMesh.visible = false;
+  sky.visible = groundMesh.visible = grassGroup.visible = false;
   const casters = [...plantsGroup.children, ...treeGroup.children];
   for (const m of casters){ if (m.userData.shadow) m.material = m.userData.shadow; else m.visible = false; }   // leaves of the plumes don't cast
   renderer.setRenderTarget(shadowRT); renderer.render(scene, sunCam); renderer.setRenderTarget(null);
   for (const m of casters){ m.material = m.userData.mat; m.visible = true; }
-  sky.visible = groundMesh.visible = true;
+  sky.visible = groundMesh.visible = grassGroup.visible = true;
 }
 const plantsGroup = new THREE.Group(); scene.add(plantsGroup);
 
@@ -723,18 +723,15 @@ function sprayGeometry(g){
   geo.setAttribute('position', f(pos, 3)); geo.setAttribute('uv', f(uv, 2)); geo.setAttribute('normal', f(nrm, 3)); geo.setAttribute('aShape', f(shp, 3));
   geo.setAttribute('aBr', f(br, 4)); geo.setAttribute('aAO', f(ao, 1)); geo.setIndex(idx); return geo;
 }
-// the sprays of leaves, drawn by code into four pictures: a thin twig with small pointed, toothed leaves (like zelkova),
-// each leaf its own shade of autumn
-function drawLeaves(Q){
+// the sprays of leaves, composed the way artists make branch cards: photographed leaves (scans, CC0 — field-assets/SOURCES.md),
+// cut out and recoloured for autumn in six shades, set along thin twigs into four pictures
+function drawLeaves(Q, sprites){
   const S = 1024, cv = document.createElement('canvas'); cv.width = cv.height = S; const g = cv.getContext('2d'), R = rng(Q.seed*7 + 3);
-  const leaf = (x, y, ang, len, wid, col) => {
-    g.save(); g.translate(x, y); g.rotate(ang); g.beginPath(); g.moveTo(0, 0);
-    for (const side of [1, -1]) for (let i = 0; i <= 14; i++){
-      const t = side > 0 ? i/14 : 1 - i/14, w = wid*Math.pow(Math.sin(Math.PI*Math.min(1, t*1.04)), 0.8)*(1 - 0.3*t)*(1 + (i % 2 ? 0.1 : 0));
-      g.lineTo(t*len, side*w);
-    }
-    g.closePath(); g.fillStyle = `rgb(${col.join(',')})`; g.fill();
-    g.strokeStyle = `rgba(255, 230, 170, 0.35)`; g.lineWidth = 1.2; g.beginPath(); g.moveTo(0, 0); g.lineTo(len*0.92, 0); g.stroke();
+  const CW = 112, CH = 160;                                          // one leaf in the sprite sheet: three shapes down, six shades across
+  const leaf = (x, y, ang, len) => {
+    const shape = Math.floor(R()*3), shade = Math.floor(R()*6), k = len/150;
+    g.save(); g.translate(x, y); g.rotate(ang + Math.PI/2); g.scale(k*(0.85 + 0.3*R()), k);   // its stalk at the twig, its tip along ang
+    g.drawImage(sprites, shade*CW, shape*CH, CW, CH, -CW/2, -CH*0.96, CW, CH);
     g.restore();
   };
   for (let v = 0; v < 4; v++){
@@ -747,14 +744,11 @@ function drawLeaves(Q){
       for (let i = 0; i < steps; i++){
         const nx = x + Math.cos(a)*34, ny = y + Math.sin(a)*34;
         g.strokeStyle = 'rgb(70, 48, 30)'; g.lineWidth = 3.2 - 2.2*i/steps; g.beginPath(); g.moveTo(x, y); g.lineTo(nx, ny); g.stroke();
-        for (const side of [1, -1]) if (R() < 0.85){
-          const c = Q.leafColors[Math.floor(R()*Q.leafColors.length)].map(k => Math.round(k*(0.88 + 0.24*R())));
-          leaf(nx, ny, a + side*(0.55 + 0.4*R()), 46 + 26*R(), 13 + 6*R(), c);
-        }
+        for (const side of [1, -1]) if (R() < 0.85) leaf(nx, ny, a + side*(0.55 + 0.4*R()), 50 + 26*R());
         x = nx; y = ny; a += (R() - 0.5)*0.35 + 0.03*(Math.PI/2 - a);
         if (x < 40 || x > 472 || y > 470) break;
       }
-      const c = Q.leafColors[Math.floor(R()*Q.leafColors.length)]; leaf(x, y, a, 52, 15, c);
+      leaf(x, y, a, 56);
     }
     g.restore();
   }
@@ -765,14 +759,16 @@ const BARK_VS = `${CLOUD} ${TREEWIND}
   void main(){ vec3 p = treeWind(position, aBr, normal); vW = p; vN = normal; vUvB = aUvB; vAO = aAO; vCloud = cloudLight(p, uTime);
     gl_Position = projectionMatrix*viewMatrix*vec4(p, 1.); }`;
 const barkMat = new THREE.ShaderMaterial({uniforms, vertexShader: BARK_VS, fragmentShader: `${LIGHT}
-  uniform vec3 uBark; varying vec3 vW, vN; varying vec2 vUvB; varying float vAO, vCloud;
-  float hb(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7)))*43758.5453); }
-  float nb(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3. - 2.*f);
-    return mix(mix(hb(i), hb(i + vec2(1, 0)), f.x), mix(hb(i + vec2(0, 1)), hb(i + vec2(1, 1)), f.x), f.y); }
+  uniform vec3 uBark; uniform sampler2D uBarkMap, uBarkNor; varying vec3 vW, vN; varying vec2 vUvB; varying float vAO, vCloud;
+  // the surface's own axes from the screen (no tangents needed): to lay the bark's relief onto the round branch
+  mat3 frame(vec3 N, vec3 p, vec2 uv){ vec3 dp1 = dFdx(p), dp2 = dFdy(p); vec2 du1 = dFdx(uv), du2 = dFdy(uv);
+    vec3 a = cross(dp2, N), b = cross(N, dp1), T = a*du1.x + b*du2.x, B = a*du1.y + b*du2.y;
+    float k = inversesqrt(max(max(dot(T, T), dot(B, B)), 1e-12)); return mat3(T*k, B*k, N); }
   void main(){
-    vec3 V = normalize(cameraPosition - vW), L = normalize(uSun), N = normalize(vN);
-    float furrow = nb(vec2(vUvB.x*14., vUvB.y*0.9))*0.7 + nb(vec2(vUvB.x*40., vUvB.y*3.))*0.3;   // the bark's ridges and furrows
-    vec3 c = uBark*mix(0.55, 1.6, smoothstep(0.3, 0.75, furrow))*mix(0.5, 1., vAO);
+    vec3 V = normalize(cameraPosition - vW), L = normalize(uSun);
+    vec2 uv = vec2(vUvB.x*3., vUvB.y*0.8);                              // the photo, three times around the trunk
+    vec3 N = normalize(frame(normalize(vN), vW, uv)*(texture2D(uBarkNor, uv).xyz*2. - 1.));
+    vec3 c = texture2D(uBarkMap, uv).rgb*uBark*mix(0.5, 1., vAO);
     vec3 col = c*(hemi(N)*0.8 + uSunCol*sunLit4(vW)*vCloud*1.1*wrapL(N, L));
     gl_FragColor = vec4(haze(mix(col, deep(col, vW), 0.4), vW), 1.);
   }`});
@@ -799,16 +795,79 @@ const leafCardMat = new THREE.ShaderMaterial({uniforms, side: THREE.DoubleSide, 
 const barkShadowMat = new THREE.ShaderMaterial({uniforms, vertexShader: BARK_VS, fragmentShader: SOLID});
 const leafShadowMat = new THREE.ShaderMaterial({uniforms, side: THREE.DoubleSide, vertexShader: LEAF_VS,
   fragmentShader: `uniform sampler2D uLeaves; varying vec2 vUv; void main(){ if (texture2D(uLeaves, vUv).a < 0.5) discard; gl_FragColor = vec4(1.); }`});
-Object.assign(uniforms, {uBark: {value: new THREE.Color(...TREE.bark)}});
+Object.assign(uniforms, {uBark: {value: new THREE.Color(...TREE.bark)}, uBarkMap: {value: null}, uBarkNor: {value: null}});
 let treeInfo = {tris: 0, sprays: 0};
-function buildTree(){
+function buildTree(sprites = leafSprites){
   for (const m of [...treeGroup.children]){ m.geometry.dispose(); treeGroup.remove(m); }
-  if (!uniforms.uLeaves.value) uniforms.uLeaves.value = drawLeaves(TREE);
+  if (!uniforms.uLeaves.value) uniforms.uLeaves.value = drawLeaves(TREE, sprites);
   const g = growTree(TREE), bark = barkGeometry(g), leaves = sprayGeometry(g);
   const mb = new THREE.Mesh(bark, barkMat), ml = new THREE.Mesh(leaves, leafCardMat);
   mb.userData = {mat: barkMat, shadow: barkShadowMat}; ml.userData = {mat: leafCardMat, shadow: leafShadowMat};
   for (const m of [mb, ml]){ m.frustumCulled = false; treeGroup.add(m); }
   treeInfo = {tris: bark.index.count/3 + leaves.index.count/3, sprays: g.sprays.length, branches: g.branches.length};
+}
+
+/* ═══ The grass below the plumes, made the way Ghost of Tsushima makes its grass: every blade built on the GPU by code — a
+   curved strip along a cubic Bézier; blades in clumps that share their lean, height and colour; widened a little when seen
+   edge-on, with rounded normals, dark at the root and golden toward the tip, bent by the same wind; fewer segments farther
+   away (Procedural Grass in Ghost of Tsushima, GDC 2021) ═══ */
+const GRASS = {bands: [[D0, 18, 150, 5], [18, 34, 100, 3]], height: [0.3, 0.72], width: 0.011, seed: 77};
+const grassGroup = new THREE.Group(); scene.add(grassGroup);
+const GRASS_VS = `${CLOUD}
+  uniform float uTime; uniform vec2 uDir; uniform float uWindLine[64];
+  attribute float aT, aSide; attribute vec4 iP, iS;                   // iP: x, y, z, facing | iS: height, lean, tint, timing
+  varying vec3 vW, vN; varying float vT, vTint, vCloud;
+  float windAt(vec2 xz){ float u = clamp(dot(xz, uDir)*0.5 + 32., 0., 62.99); int i = int(u); return mix(uWindLine[i], uWindLine[i + 1], fract(u)); }
+  vec3 bez(vec3 a, vec3 b, vec3 c, vec3 d, float t){ float u = 1. - t; return u*u*u*a + 3.*u*u*t*b + 3.*u*t*t*c + t*t*t*d; }
+  vec3 bezD(vec3 a, vec3 b, vec3 c, vec3 d, float t){ float u = 1. - t; return 3.*u*u*(b - a) + 6.*u*t*(c - b) + 3.*t*t*(d - c); }
+  void main(){
+    float h = iS.x, w = windAt(iP.xz);
+    vec2 face = vec2(cos(iP.w), sin(iP.w));                          // the way the blade's flat side looks
+    float sway = sin(uTime*(1.4 + 0.5*iS.w) + iS.w*7. + dot(iP.xz, uDir)*0.6)*(0.06 + 0.16*w);
+    vec2 tip = vec2(-face.y, face.x)*iS.y + uDir*(0.12 + 0.55*w + sway);   // its own lean, plus the wind
+    vec3 a = iP.xyz, d = a + vec3(tip.x*h, h*(1. - 0.3*min(length(tip), 1.)), tip.y*h);
+    vec3 b = a + vec3(0., h*0.5, 0.), c = mix(a, d, 0.72) + vec3(0., h*0.16, 0.);   // it rises, then bends over
+    vec3 p = bez(a, b, c, d, aT), T = normalize(bezD(a, b, c, d, aT)), side = normalize(vec3(face.x, 0., face.y));
+    vec3 V = normalize(cameraPosition - p), n = normalize(cross(T, side));
+    float edgeOn = abs(dot(n, V));
+    float width = ${GRASS.width}*(1. - aT*0.85)*(1. + 1.4*(1. - edgeOn));   // seen edge-on, a little wider (as in Tsushima)
+    vec3 wp = p + side*aSide*width;
+    vW = wp; vN = normalize(n + side*aSide*0.6); vT = aT; vTint = iS.z; vCloud = cloudLight(wp, uTime);   // a rounded blade
+    gl_Position = projectionMatrix*viewMatrix*vec4(wp, 1.);
+  }`;
+const grassMat = new THREE.ShaderMaterial({uniforms, side: THREE.DoubleSide, vertexShader: GRASS_VS, fragmentShader: `${LIGHT}
+  varying vec3 vW, vN; varying float vT, vTint, vCloud;
+  void main(){
+    vec3 V = normalize(cameraPosition - vW), L = normalize(uSun), N = normalize(vN); N *= sign(dot(N, V) + 1e-4);
+    vec3 base = mix(vec3(0.14, 0.07, 0.02), vec3(0.6, 0.37, 0.12), smoothstep(0., 0.9, vT))*vTint;   // dark at the root, golden at the tip
+    float ao = mix(0.3, 1., smoothstep(0., 0.85, vT)), sh = sunLit4(vW)*vCloud, back = pow(max(dot(-V, L), 0.), 3.);
+    vec3 col = base*(hemi(N)*ao + uSunCol*sh*(wrapL(N, L)*0.8*ao + back*0.6*vT));   // and lit through toward the sun
+    gl_FragColor = vec4(haze(deep(col, vW), vW), 1.);
+  }`});
+let grassInfo = {blades: 0, tris: 0};
+function buildGrass(){
+  for (const m of [...grassGroup.children]){ m.geometry.dispose(); grassGroup.remove(m); }
+  const R = rng(GRASS.seed), th = tanH(), camZ = CAM.pos[2]; grassInfo = {blades: 0, tris: 0};
+  for (const [d0, d1, dens, segs] of GRASS.bands){
+    const t = [], side = [], pos = [], idx = [];
+    for (let i = 0; i <= segs; i++) for (const sd of [-1, 1]){ t.push(i/segs); side.push(sd); pos.push(0, 0, 0); }
+    for (let i = 0; i < segs; i++){ const a = i*2; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); }
+    const n = Math.round(dens*S.density*th*(d1*d1 - d0*d0)), P = new Float32Array(n*4), Q = new Float32Array(n*4);
+    for (let k = 0; k < n;){                                          // clumps of 8–21 blades sharing lean, height and colour
+      const d = Math.sqrt(d0*d0 + R()*(d1*d1 - d0*d0)), cx = (R()*2 - 1)*d*th, cz = camZ + d;
+      const lean = (R() - 0.5)*0.8, hgt = GRASS.height[0] + (GRASS.height[1] - GRASS.height[0])*R(), tint = 0.75 + 0.45*R();
+      for (let j = 0, size = 8 + Math.floor(R()*14); j < size && k < n; j++, k++){
+        const x = cx + (R() - 0.5)*0.5, z = cz + (R() - 0.5)*0.5;
+        P.set([x, ground(x, z) + leafTop(z) - 0.08, z, R()*6.283], k*4);   // from the top of the leaf layer, where the ground is drawn
+        Q.set([hgt*(0.75 + 0.5*R()), lean + (R() - 0.5)*0.3, tint*(0.9 + 0.2*R()), R()*3], k*4);
+      }
+    }
+    const g = new THREE.InstancedBufferGeometry(), f = (a, k) => new THREE.Float32BufferAttribute(a, k);
+    g.setAttribute('position', f(pos, 3)); g.setAttribute('aT', f(t, 1)); g.setAttribute('aSide', f(side, 1)); g.setIndex(idx);
+    g.setAttribute('iP', new THREE.InstancedBufferAttribute(P, 4)); g.setAttribute('iS', new THREE.InstancedBufferAttribute(Q, 4)); g.instanceCount = n;
+    const m = new THREE.Mesh(g, grassMat); m.frustumCulled = false; grassGroup.add(m);
+    grassInfo.blades += n; grassInfo.tris += n*segs*2;
+  }
 }
 
 /* ═══ The plants: scattered in clumps, like real susuki; detail by distance from the camera ═══ */
@@ -904,7 +963,7 @@ function instanced(strips, list, bend){
 
 function placePlants(){
   for (const m of [...plantsGroup.children]){ m.geometry.dispose(); plantsGroup.remove(m); }
-  plants = scatter(); groups = []; tris = 0;
+  plants = scatter(); groups = []; tris = 0; buildGrass();
   // far to near, so see-through heads blend in the right order (the camera never moves, so once is enough)
   const camZ = CAM.pos[2], byDist = (a, b) => ((b.z - camZ)**2 + b.x*b.x) - ((a.z - camZ)**2 + a.x*a.x);
   for (const tier of ['mid', 'near']) for (let k = 0; k < SHAPES; k++){
@@ -1115,7 +1174,14 @@ document.getElementById('quality').addEventListener('click', e => {
 setTimeout(() => document.getElementById('hint').classList.add('gone'), 6000);
 
 /* ═══ Start ═══ */
-applyLight(); setupComposer(); prepare(); buildTree(); placePlants();
+// the photographed assets (CC0 scans — field-assets/SOURCES.md)
+const loadImage = src => new Promise((ok, fail) => { const im = new Image(); im.onload = () => ok(im); im.onerror = fail; im.src = src; });
+const texLoader = new THREE.TextureLoader();
+const [leafSprites, barkMap, barkNor] = await Promise.all([loadImage('field-assets/leaf-sprites.png'),
+  texLoader.loadAsync('field-assets/bark-zelkova-diff.jpg'), texLoader.loadAsync('field-assets/bark-zelkova-nor_gl.jpg')]);
+for (const t of [barkMap, barkNor]){ t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 4; }
+barkMap.colorSpace = THREE.SRGBColorSpace; uniforms.uBarkMap.value = barkMap; uniforms.uBarkNor.value = barkNor;
+applyLight(); setupComposer(); prepare(); buildTree(leafSprites); placePlants();
 addEventListener('resize', () => { const was = camera.aspect; resize(); if (Math.abs(camera.aspect - was) > 0.04) placePlants(); });
 const sunTmp = V(), fwd = V();
 function step(dt){
@@ -1141,5 +1207,5 @@ function frame(now){
 }
 document.addEventListener('visibilitychange', () => { running = !document.hidden; if (running){ prev = performance.now(); requestAnimationFrame(frame); } });
 requestAnimationFrame(frame);
-window.field = {S, step, renderer, plants: () => plants, placePlants, setup: setupComposer, camera, PLUME, uniforms, scene, groundMesh, TREE, buildTree, tree: () => treeInfo};   // for checking from the console
+window.field = {S, step, renderer, plants: () => plants, placePlants, setup: setupComposer, camera, PLUME, uniforms, scene, groundMesh, TREE, buildTree, tree: () => treeInfo, grass: () => grassInfo};   // for checking from the console
 </script>
