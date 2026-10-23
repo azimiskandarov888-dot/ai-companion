@@ -252,6 +252,38 @@
 
 Источники: [Ghost of Yōtei — технический разбор (блог PlayStation)](https://blog.playstation.com/2025/10/23/ghost-of-yotei-tech-deep-dive/), [Ghost of Tsushima: свет, атмосфера, тон-маппинг (SIGGRAPH 2021)](https://www.advances.realtimerendering.com/s2021/jpatry_advances2021/index.html), [Procedural Grass (GDC 2021)](https://gdcvault.com/play/1027214/Advanced-Graphics-Summit-Procedural-Grass), [GodotGrass](https://github.com/2Retr0/GodotGrass), [Kotaku о ветре в Yōtei](https://kotaku.com/ghost-yotei-graphics-ps5-open-world-wind-2000631510), [GamingBolt: разбор графики Yōtei](https://gamingbolt.com/ghost-of-yotei-graphics-analysis-sucker-punchs-next-gen-leap-on-ps5-is-magnificent).
 
+
+## Почему природа в Ghost of Yōtei красивая: подход художников (23.10.2026)
+
+Он сказал: «всё пресное, метёлки сливаются друг с другом».
+
+Главное о красоте Yōtei говорит арт-директор Джоанна Ван: секрет не в детализации, а в форме, цвете и движении.
+
+**Что они делают:**
+- **«Живая картина».** Опора на форму, цвет и движение, а не на мелкие детали.
+- **Силуэты читаются сразу.** Всё неважное убирают, от планировки до мелких текстур. Остаётся главное: путь, цель, чувство.
+- **Смелая палитра** с первой секунды задаёт настроение. Осенние равнины — «волны золота и тёмно-красного». Маленькие яркие акценты: красный клён на белом холме.
+- **Контраст ставят нарочно.** Яркое кладут на приглушённый фон, чтобы оно выделялось.
+- **Слои глубины.** Поле уходит в лес, лес в горы, горы в облака.
+- **Ветер виден всюду.** Трава, туман, снег движутся вместе. В Tsushima у ветра два слоя порывов: крупный узор едет по ветру, мелкий даёт детали травы. Крупный слой качает и деревья, поэтому всё движется согласованно.
+- **Поля мисканта в Tsushima** — это трава, которую считает видеокарта, плюс смоделированные стебли и пучки.
+- **Свет, погода и цвет передают чувство без слов.**
+
+**Что у нас было не так:**
+- Белые метёлки стоят на светлом золотом фоне, поэтому сливаются: мало контраста.
+- Цвет везде одинаковый, нет «волн» цвета.
+- Метёлок слишком много, у них нет просветов.
+- Локальный тон-маппинг ещё и съедал контраст.
+
+**Что делаю:**
+1. Тёмный низ под белыми метёлками: силуэт каждой метёлки читается.
+2. Свет немного сзади: край пуха светится, как «серебряная кайма» облаков в Tsushima.
+3. Крупные пятна цвета по полю: от золотого до тёмно-красно-оранжевого; у пуха от белого до тёплого кремового.
+4. Метёлок поменьше, чтобы каждая была отдельной формой.
+5. Убираю локальный тон-маппинг: он сглаживал контраст.
+
+Источники: [VFX Voice: мир Ghost of Yōtei](https://vfxvoice.com/video-games-ghost-of-yotei/), [GamesRadar: «живая картина»](https://www.gamesradar.com/games/open-world/ghost-of-yoteis-art-director-wanted-the-rpg-to-look-like-a-living-painting-but-the-detail-required-stresses-even-me-out-when-the-wind-blows-the-trees-know-how-strong-the-wind-is/), [Postmode: интервью арт-директора](https://postmode.substack.com/p/ghost-of-yotei-art-director-interview), [блог PlayStation: ветер и поля Tsushima](https://blog.playstation.com/?p=345372), [доклад GDC о траве Tsushima (видео)](https://www.youtube.com/watch?v=Ibe1JBF5i5Y).
+
 ---
 
 **Источники:**
