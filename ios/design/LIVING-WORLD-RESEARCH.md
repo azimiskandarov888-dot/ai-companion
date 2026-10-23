@@ -284,6 +284,38 @@
 
 Источники: [VFX Voice: мир Ghost of Yōtei](https://vfxvoice.com/video-games-ghost-of-yotei/), [GamesRadar: «живая картина»](https://www.gamesradar.com/games/open-world/ghost-of-yoteis-art-director-wanted-the-rpg-to-look-like-a-living-painting-but-the-detail-required-stresses-even-me-out-when-the-wind-blows-the-trees-know-how-strong-the-wind-is/), [Postmode: интервью арт-директора](https://postmode.substack.com/p/ghost-of-yotei-art-director-interview), [блог PlayStation: ветер и поля Tsushima](https://blog.playstation.com/?p=345372), [доклад GDC о траве Tsushima (видео)](https://www.youtube.com/watch?v=Ibe1JBF5i5Y).
 
+
+## Шейдеры как в Ghost of Tsushima / Yōtei: что именно применить (23.10.2026)
+
+Он сказал: «всё шикарно, но выглядит как одна сплошная каша — сделай шейдеры как в Ghost of Yōtei».
+
+**Почему каша.** Нет того, что в играх разделяет предметы:
+1. Нет тени в щелях между метёлками (ambient occlusion).
+2. Пух освещён как гладкая поверхность. У настоящего пуха светится край, а не середина.
+3. Мягкая картинка без резкости.
+4. Нет крупных пятен света и тени по полю.
+
+**Что делают в Ghost (из докладов Sucker Punch):**
+- **Пух по формуле «рассеяния на ворсинках»** (asperity scattering, Koenderink и Pont 2002). Так Ghost of Tsushima рисует мох, войлок, шерсть коня и часть ткани (доклад Patry на SIGGRAPH 2020). Пух — тонкий слой ворсинок над поверхностью. Если смотреть в лоб, он почти прозрачен. По краям луч идёт сквозь много ворсинок, и **край светится**. Против солнца свечение ещё сильнее. Это и есть «бархатный» вид: светлый контур, мягкая середина. Их упрощённые числа для окружения:
+  - плотность d = 0.5;
+  - разброс 0.9;
+  - ворсинки направлены по нормали;
+  - цвет ворсинок в 5 раз ярче основы;
+  - итог = смесь обычного света и пуха по «пушистости».
+- **Мягкая нормаль** для неточных нормалей: (1+n)/(2(1+w)) · (max(N·L + w, 0)/(1+w))^n, где n = 2, w = 0.2. Их формула.
+- **Тени в щелях (ambient occlusion).** У Tsushima она запечена от неба и есть экранная, в Yōtei есть трассировка лучей. На телефоне берём дешёвый экранный способ: «нерезкая маска буфера глубины» (Luft, Colditz, Deussen, SIGGRAPH 2006). Там, где предмет стоит перед дальним фоном, фон у его края мягко темнеет, и каждая метёлка отделяется от того, что за ней. Нужна только глубина кадра.
+- **Метёлки должны писать глубину.** Сначала рисуется плотная середина пуха (только глубина), потом сам пух поверх. Так делают волосы и листву в играх. Плюс: правильные перекрытия и меньше лишнего рисования.
+- **Тени облаков и лучи света.** В Yōtei тени облаков дают лучи в тумане. У нас: крупные плывущие тени облаков, контрастнее, чем было.
+- **Резкость.** Повышение резкости по контрасту (как AMD FidelityFX CAS) после тон-маппинга. Это стандарт для современных игр, он возвращает чёткость волокон.
+- **Тон-маппинг без сдвига оттенков** (у них: обесцветить → сжать → вернуть цвет). Наш Neutral уже такой.
+
+Источники:
+- [Patry: Samurai Shading in Ghost of Tsushima (SIGGRAPH 2020)](https://blog.selfshadow.com/publications/s2020-shading-course/patry/slides/);
+- [Patry: Lighting, Atmosphere, Tonemapping (SIGGRAPH 2021)](https://www.advances.realtimerendering.com/s2021/jpatry_advances2021/index.html);
+- [Luft et al.: Unsharp Masking the Depth Buffer (2006)](https://graphics.uni-konstanz.de/publikationen/Luft2006ImageEnhancementUnsharp/index.html);
+- [блог PlayStation: техника Ghost of Yōtei](https://blog.playstation.com/2025/10/23/ghost-of-yotei-tech-deep-dive/);
+- [Digital Foundry о Ghost of Yōtei](https://x.com/digitalfoundry/status/1971198705144561876).
+
 ---
 
 **Источники:**
