@@ -1,16 +1,17 @@
-"""Cut the tree of his picture (mj-15) into numbers for the main screen: the paint, and the cards to carry it; and his
-sky, as a smooth fit of its colour.
+"""Cut the tree of his picture (mj-15) into numbers for the main screen: where the tree is and where its wood is, and
+the cards to carry it; and his sky, as a smooth fit of its colour.
 
     python3 scene/trace_tree.py [check.jpg]
-        reads framing/mj-15-hd.jpg and the tree's outline in scene/assets/tree.webp; writes field-assets/tree-paint.webp,
-        field-assets/tree-trace.json and field-assets/sky.json (and, if asked, a picture to check the cut by eye)
+        reads framing/mj-15-hd.jpg and the tree's outline in scene/assets/tree.webp; writes scene/assets/tree-mask.png,
+        field-assets/tree-trace.json and field-assets/sky.json (and, if asked, a picture to check the cut by eye).
+        Then scene/delight_tree.py turns the tree into its own colour and shape, for the page to light.
 
-The paint is his tree as it is in his picture, freed from his sky: the colour of each pixel, and how much of it is tree —
-where the sky shows through the crown it is see-through, so our sky shows there. The cards are spots on a grid over the
-tree, each with how far it is from the crown's outline and how thick the wood is under it. The field page sets each card
-at its own depth along its ray from the camera and paints it with the picture cast from that camera (the way film paints
-3D sets from a matte painting): at rest the tree is exactly his tree, and it is a real 3D tree — it sways in the wind,
-thick wood hardly and the crown's edges most, and it casts its shadow.
+The mask says how much of each pixel is tree — where the sky shows through the crown it is see-through, so our sky shows
+there — and which of it is wood. The cards are spots on a grid over the tree, each with how far it is from the crown's
+outline and how thick the wood is under it. The field page sets each card at its own depth along its ray from the camera
+and gives it the tree's colour and shape cast from that camera (the way film paints 3D sets from a matte painting): seen
+from the main screen it is his tree, and it is a real 3D tree — lit by the page's sun, swaying in the wind (thick wood
+hardly, the crown's edges most), casting its shadow.
 """
 import json
 import pathlib
@@ -22,7 +23,7 @@ from PIL import Image
 
 HERE = pathlib.Path(__file__).resolve().parent
 SRC, PICTURE = HERE / 'assets' / 'tree.webp', HERE.parent / 'framing' / 'mj-15-hd.jpg'
-OUT, PAINT = HERE.parent / 'field-assets' / 'tree-trace.json', HERE.parent / 'field-assets' / 'tree-paint.webp'
+OUT, MASK = HERE.parent / 'field-assets' / 'tree-trace.json', HERE / 'assets' / 'tree-mask.png'
 SKY = HERE.parent / 'field-assets' / 'sky.json'
 PIC = (1536, 2752)                        # his picture; the tree's piece of it is its top-left corner
 TRUNK_BASE = (228, 1889)
@@ -96,8 +97,9 @@ def main():
     near = np.argwhere(solid == 1)[near - 1]                       # the labels count the solid pixels in reading order
     fg = np.where((tree < 0.5)[..., None], fg[near[..., 0], near[..., 1]], fg)
     paint = np.dstack([fg, tree]).clip(0, 1)
-    Image.fromarray((paint*255 + 0.5).astype(np.uint8), 'RGBA').save(PAINT, quality=92, alpha_quality=100, method=6)
-    print(f'paint {PAINT.stat().st_size//1024} KB → {PAINT}')
+    mask = np.dstack([tree, cv2.GaussianBlur(wood.astype(np.float32), (3, 3), 0)*inside, np.zeros_like(tree)]).clip(0, 1)
+    Image.fromarray((mask*255 + 0.5).astype(np.uint8), 'RGB').save(MASK)
+    print(f'mask (red: tree, green: wood) → {MASK}')
 
     # the cards: a grid where the tree is near, a little shaken; each knows how far it is from the crown's outline (deep
     # in the crown it moves less) and how thick the wood under it is (thick wood hardly moves)
@@ -117,7 +119,7 @@ def main():
     gap = cv2.distanceTransform(marks, cv2.DIST_L2, 5)[solid == 1]
     print(f'cards {len(cards)}; farthest bit of tree from a card {gap.max():.1f} px (must be ≤ {REACH})')
     data = {'picture': PIC, 'trunkBase': TRUNK_BASE, 'step': STEP, 'edgeMax': round(float(edge.max()), 1),
-            'paint': [int(alpha.shape[1]), int(alpha.shape[0])], 'cards': cards}
+            'texture': [int(alpha.shape[1]), int(alpha.shape[0])], 'cards': cards}
     OUT.write_text(json.dumps(data, separators=(',', ':')))
     print(f'{OUT.stat().st_size//1024} KB → {OUT}')
     if len(sys.argv) < 2:

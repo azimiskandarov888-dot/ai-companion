@@ -107,7 +107,9 @@ const PICTURE = [1536, 2752];                 // his picture mj-15, in pixels: i
 // tree-trace.json); these numbers set them up in 3D
 const TREE = {x: 4.3, z: 44, seed: 11,                               // x, z: where the trunk stands — set from the picture at start
   depth: 2,                                                           // how far the crown reaches toward us and away, m
-  card: 2.8, fade: 0.7};                                              // a card's size, in grid steps; where its edge starts to fade
+  card: 2.8, fade: 0.7,                                               // a card's size, in grid steps; where its edge starts to fade
+  aoDeep: 0.5, thick: 0.14,                                           // how much sky reaches deep in the crown; how much each metre of it dims the sun
+  sky: 0.4, sun: 1.2, through: 1.6, shine: 1.6, colour: 0.8};         // its light, set against his picture: from the sky, the sun, through the leaves, their shine; how colourful
 const D0 = 8, D1 = 20, D2 = 36, D3 = 55;      // distance from the camera: near from D0, middle from D1, far (pictures) D2–D3 (the crest)
 
 /* ═══ Helpers ═══ */
@@ -371,6 +373,8 @@ const STRIP_VS = `${COMMON}
     vNr = turn(aNrm);                                                  // a leaf's own normal
     vCloud = cloudLight(wp, uTime); vMacro = macroAt(iA.xz);
   }`;
+// how a plume takes the sun: little light from all around, much shining through the fluff toward us, the fuzz bright
+const PLUME_LIGHT = {around: 0.75, through: 1.8, tight: 2.5, fuzz: 1.15};
 const headMat = new THREE.ShaderMaterial({uniforms: {...uniforms, uFlat: {value: 0}}, transparent: true, depthWrite: false, premultipliedAlpha: true,
   side: THREE.DoubleSide, vertexShader: STRIP_VS, fragmentShader: `${LIGHT}
   uniform sampler2D uAtlas; uniform vec3 uHair; varying vec2 vUv; varying vec3 vT, vW, vN; varying float vSide, vV, vAO, vTint, vB, vSheen, vCloud, vMacro;
@@ -390,9 +394,10 @@ const headMat = new THREE.ShaderMaterial({uniforms: {...uniforms, uFlat: {value:
     float thin = (1. - 0.6*a)*(0.4 + 0.6*hair);                        // thin fluff lets the most light through
     float sh = mix(0.6, 1., sunLit1(vW))*mix(0.5, 1., vCloud);         // in a neighbour's or a cloud's shadow (fluff still lets light through)
     // as in Ghost: the plain soft light blended with the fuzz, its fibres five times as bright as the plain surface
-    vec3 plain = hemi(N)*1.35 + uSunCol*(0.14 + sh*0.85*wrapL(N, L));
-    vec3 fuzzy = hemi(N)*2.4*fuzzAmb(N, V, 0.5) + uSunCol*(0.1 + sh*15.7*fuzz(N, L, V, 0.5, 0.25));
-    vec3 col = base*(mix(plain, fuzzy, 0.65) + uSunCol*sh*0.9*uGlow*thin*through(N, L, V, 0.35, 4.));   // and the edge toward the sun glows
+    const float around = ${PLUME_LIGHT.around};
+    vec3 plain = hemi(N)*1.35*around + uSunCol*(0.14*around + sh*0.85*wrapL(N, L));
+    vec3 fuzzy = hemi(N)*2.4*around*fuzzAmb(N, V, 0.5) + uSunCol*(0.1*around + sh*15.7*${PLUME_LIGHT.fuzz}*fuzz(N, L, V, 0.5, 0.25));
+    vec3 col = base*(mix(plain, fuzzy, 0.65) + uSunCol*sh*${PLUME_LIGHT.through}*uGlow*thin*through(N, L, V, 0.35, ${PLUME_LIGHT.tight}));   // and the edge toward the sun glows
     col *= 1. + 0.6*vSheen;                                              // bent by a gust, it catches more light
     col = mix(col, deep(col, vW), 0.7);                                  // farther away, darker and more golden — only a little less than the stalks
     gl_FragColor = vec4(haze(col, vW)*a, a);
@@ -621,7 +626,7 @@ const treeGroup = new THREE.Group(); scene.add(treeGroup);
 const treeBase = V(TREE.x, ground(TREE.x, TREE.z), TREE.z), crownC = V(), crownR = V(6, 7, 5);   // set from the picture in buildTree
 Object.assign(uniforms, {uTreeBase: {value: treeBase}, uTreeH: {value: 18}, uTreeBend: {value: new THREE.Vector2()},
   uTreeAmp: {value: 0.4}, uCrownC: {value: crownC}, uCrownR: {value: crownR}, uA2C: {value: 1},
-  uPaint: {value: null}, uCardFade: {value: TREE.fade}});
+  uTreeAlb: {value: null}, uTreeNor: {value: null}, uCardFade: {value: TREE.fade}});
 const treeSway = {bx: 0, bz: 0, vx: 0, vz: 0};
 // the wind on the tree (Crysis): the whole tree bends with the simulated sway, more toward the top, keeping each point's
 // distance from the foot; each branch bobs with its leaves, and the leaves flutter, on smoothed triangle waves around
@@ -648,8 +653,8 @@ function traceTree(T){
   camera.updateMatrixWorld(); const e = camera.matrixWorld.elements, cam = camera.position.clone();
   const Rv = V(e[0], e[1], e[2]), Uv = V(e[4], e[5], e[6]), Fv = V(-e[8], -e[9], -e[10]);
   const ray = (px, py) => Fv.clone().addScaledVector(Rv, (px - cx)/half*tv).addScaledVector(Uv, (half - py)/half*tv).normalize();
-  // and back: where a point is in his picture, as a place in the paint (the tree's corner of the picture)
-  const pic = p => { const d = p.clone().sub(cam), z = d.dot(Fv)*tv; return [(cx + half*d.dot(Rv)/z)/T.paint[0], 1 - (half - half*d.dot(Uv)/z)/T.paint[1]]; };
+  // and back: where a point is in his picture, as a place in the tree's textures (the tree's corner of the picture)
+  const pic = p => { const d = p.clone().sub(cam), z = d.dot(Fv)*tv; return [(cx + half*d.dot(Rv)/z)/T.texture[0], 1 - (half - half*d.dot(Uv)/z)/T.texture[1]]; };
   let D = 50, gap = 1e9;
   { const d = ray(...T.trunkBase);
     for (let t = 20; t < 120; t += 0.05){ const q = cam.clone().addScaledVector(d, t), h = q.y - ground(q.x, q.z); if (h < gap){ gap = h; D = t; } if (h < 0.25) break; } }
@@ -662,7 +667,8 @@ function traceTree(T){
   const cards = T.cards.map(([px, py, edge, wood]) => {
     const en = Math.min(1, edge/(T.edgeMax*0.55)), rm = wood*mpp(D);
     const dz = (rm > 0.08 ? 0 : TREE.depth*(0.35 - Math.sqrt(en*(2 - en)))) + (R() - 0.5)*0.3, p = at(px, py, dz);
-    return {p, size: size(dz), ray: ray(px, py), phase: phaseOf(p), flex: Math.min(0.25 + 0.75*sm(0.2, 1, 1 - en), wood ? sm(0.22, 0.03, rm) : 1)};
+    return {p, size: size(dz), ray: ray(px, py), phase: phaseOf(p), flex: Math.min(0.25 + 0.75*sm(0.2, 1, 1 - en), wood ? sm(0.22, 0.03, rm) : 1),
+};
   });
   // the trunk goes on down into our hill, below where his picture shows it (our field hides it)
   for (let py = T.trunkBase[1] + T.step; py < T.trunkBase[1] + 600; py += T.step)
@@ -693,23 +699,58 @@ function treeCards(g){
   geo.setAttribute('position', f(pos, 3)); geo.setAttribute('uv', f(uv, 2)); geo.setAttribute('normal', f(nrm, 3));
   geo.setAttribute('aBr', f(br, 4)); geo.setAttribute('aPic', f(pic, 2)); geo.setIndex(idx); return geo;
 }
-// the tree's paint: his picture, as it is; a cloud drifting over still darkens it
-const PAINT = `${ASPAINTED} uniform sampler2D uPaint;`;
 const CARD_VS = `${CLOUD} ${TREEWIND}
-  attribute vec4 aBr; attribute vec2 aPic; varying vec2 vUv, vPic; varying float vCloud;
-  void main(){ vec3 p = treeWind(position, aBr, normal); vUv = uv; vPic = aPic; vCloud = cloudLight(p, uTime);
+  attribute vec4 aBr; attribute vec2 aPic; varying vec2 vUv, vPic; varying vec3 vW; varying float vCloud;
+  void main(){ vec3 p = treeWind(position, aBr, normal); vUv = uv; vPic = aPic; vW = p; vCloud = cloudLight(p, uTime);
     gl_Position = projectionMatrix*viewMatrix*vec4(p, 1.); }`;
 const CARD = `uniform float uCardFade; float card(vec2 uv){ return 1. - smoothstep(uCardFade, 1., length(uv*2. - 1.)); }`;
-const cardMat = new THREE.ShaderMaterial({uniforms, side: THREE.DoubleSide, alphaToCoverage: true, vertexShader: CARD_VS, fragmentShader: `${PAINT} ${CARD}
-  uniform float uA2C; varying vec2 vUv, vPic; varying float vCloud;
+// the tree lit by our sun and sky, the way games light trees: the tree's own colour, its light taken out (scene/
+// delight_tree.py), and which way each bit of it faces; the leaves lit partly as one soft crown (shape normals: the
+// usual trick for trees, so the crown reads as a volume and not as flat cards), the sun shining through them where they
+// stand against it, deeper in colour (Frostbite's fast translucency, GDC 2011), the crown and the wood shading
+// themselves (the sun's shadow map), less sky deep in the crown. Without the sun, no highlights
+const cardMat = new THREE.ShaderMaterial({uniforms, side: THREE.DoubleSide, alphaToCoverage: true, vertexShader: CARD_VS, fragmentShader: `${LIGHT} ${CARD}
+  uniform sampler2D uTreeAlb, uTreeNor; uniform float uA2C; uniform vec3 uCrownC, uCrownR, uCamR, uCamU, uCamF;
+  varying vec2 vUv, vPic; varying vec3 vW; varying float vCloud;
+  // how much sun gets through the crown to here: the way to the sun crosses the crown (an ellipsoid of leaves) and every
+  // metre of leaves lets less through — the sun side of the crown is bright, the far side dim
+  float crownSun(vec3 p, vec3 L){
+    vec3 o = (p - uCrownC)/uCrownR, d = L/uCrownR;
+    float a = dot(d, d), b = dot(o, d), c = dot(o, o) - 1., h = b*b - a*c;
+    if (h <= 0.) return 1.;
+    float t = max((-b + sqrt(h))/a, 0.);                              // where the way to the sun leaves the crown
+    return exp(-t*${TREE.thick});
+  }
+  // the leaves' shadows on one another, softly: eight looks around the point in the sun's map (its squares would show)
+  float leafShade(vec3 wp){
+    vec3 c = sunUV(wp);
+    if (uShadowOn < 0.5 || any(lessThan(c, vec3(0.))) || any(greaterThan(c, vec3(1.)))) return 1.;
+    float s = 0.;
+    for (int i = 0; i < 8; i++){ float a = float(i)*2.39996, r = sqrt((float(i) + 0.5)/8.)*3.5*uShadowTexel;
+      s += step(c.z, texture2D(uShadow, c.xy + r*vec2(cos(a), sin(a))).r); }
+    return s/8.;
+  }
   void main(){
-    vec4 tx = texture2D(uPaint, vPic);
-    float a = tx.a*card(vUv);                                         // the leaves' own outline, as soft as in his picture
+    vec4 tx = texture2D(uTreeAlb, vPic);
+    float a = tx.a*card(vUv);                                         // the tree's own outline, as soft as in his picture
     if (a < mix(0.5, 0.02, uA2C)) discard;
-    gl_FragColor = vec4(asPainted(tx.rgb*mix(0.62, 1., vCloud)), a);
+    vec4 nt = texture2D(uTreeNor, vPic); float leaf = clamp(nt.a*2. - 1., 0., 1.);   // its alpha: wood 0.5, leaf 1
+    vec3 n = nt.xyz*2. - 1., Np = normalize(uCamR*n.x + uCamU*n.y - uCamF*n.z);   // seen from our camera: right, up, toward us
+    vec3 N = normalize(mix(Np, normalize(vW - uCrownC), 0.4*leaf));
+    vec3 V = normalize(cameraPosition - vW), L = normalize(uSun);
+    // the wood takes only the crown's soft shade (the map's squares would show on its smooth bark); the leaves also the
+    // shadows of other leaves, taken off their own card so a card does not shade itself
+    float sh = crownSun(vW, L)*mix(1., leafShade(vW + L*0.45), leaf)*mix(0.45, 1., vCloud);
+    vec3 alb = tx.rgb; alb = mix(vec3(dot(alb, vec3(0.2126, 0.7152, 0.0722))), alb, ${TREE.colour});
+    float diff = mix(max(dot(N, L), 0.), wrapL(N, L), leaf);
+    float tr = leaf*through(N, L, V, 0.3, 3.);
+    float sheen = pow(max(dot(N, normalize(L + V)), 0.), 12.)*mix(0.04, 0.12, leaf);   // the waxy shine of leaves and wet bark
+    float ao = mix(${TREE.aoDeep}, 1., crownSun(vW, vec3(0., 1., 0.)));   // the sky above, seen through the crown
+    vec3 col = alb*(hemi(N)*ao*${TREE.sky} + uSunCol*sh*diff*${TREE.sun}) + alb*alb*uSunCol*sh*${TREE.through}*tr + uSunCol*sh*sheen*${TREE.shine};
+    gl_FragColor = vec4(haze(col, vW), a);
   }`});
 const cardShadowMat = new THREE.ShaderMaterial({uniforms, side: THREE.DoubleSide, vertexShader: CARD_VS, fragmentShader: `${CARD}
-  uniform sampler2D uPaint; varying vec2 vUv, vPic; void main(){ if (texture2D(uPaint, vPic).a*card(vUv) < 0.5) discard; gl_FragColor = vec4(1.); }`});
+  uniform sampler2D uTreeAlb; varying vec2 vUv, vPic; void main(){ if (texture2D(uTreeAlb, vPic).a*card(vUv) < 0.5) discard; gl_FragColor = vec4(1.); }`});
 let treeInfo = {tris: 0, cards: 0};
 function buildTree(trace = treeTrace){
   for (const m of [...treeGroup.children]){ m.geometry.dispose(); treeGroup.remove(m); }
@@ -941,10 +982,13 @@ function simulate(dt){
 }
 
 /* ═══ Light: low warm sun ahead and to the left; in the shade, the gold of the field itself ═══ */
+// the sun of his picture: low and to the right, a little ahead — his sky is brighter on the right, and the trunk, the
+// crown and the plumes are lit on their right sides (az: degrees from straight ahead, + to the left; el: above the horizon)
+const SUN = {az: -80, el: 20, color: [1, 0.94, 0.85], power: 2.5};
 function applyLight(){
-  const az = 40*Math.PI/180, el = 20*Math.PI/180;
+  const az = SUN.az*Math.PI/180, el = SUN.el*Math.PI/180;
   uniforms.uSun.value.set(Math.sin(az)*Math.cos(el), Math.sin(el), Math.cos(az)*Math.cos(el));
-  uniforms.uSunCol.value.setRGB(...lin([1, 0.94, 0.85])).multiplyScalar(2.5);
+  uniforms.uSunCol.value.setRGB(...lin(SUN.color)).multiplyScalar(SUN.power);
   uniforms.uSky.value.setRGB(...lin([0.72, 0.74, 0.78])).multiplyScalar(0.62);    // from above: the sky
   uniforms.uGnd.value.setRGB(...lin([0.86, 0.6, 0.28])).multiplyScalar(0.5);      // from below: the gold of the field
   aimSun();
@@ -960,10 +1004,12 @@ const FULL_VS = `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projecti
 // Where something stands in front, what is behind it darkens softly at its edge — so every plume stands out from the
 // plumes behind it instead of melting into them. Worked at a quarter of the screen, so it is cheap
 const LIN = `uniform float uNear, uFar; float linDepth(float z){ z = z*2. - 1.; return 2.*uNear*uFar/(uFar + uNear - z*(uFar - uNear)); }`;
+let frameDistance = null;                                             // this frame's distances (a quarter of the screen), for the passes after
 class DepthShade extends Pass {
   constructor(){
     super();
     const o = {type: THREE.HalfFloatType}; this.a = new THREE.WebGLRenderTarget(1, 1, o); this.b = new THREE.WebGLRenderTarget(1, 1, o);
+    this.lin = new THREE.WebGLRenderTarget(1, 1, o);                    // the distance itself, kept for the passes after
     this.quad = new FullScreenQuad();
     const nf = () => ({uNear: {value: camera.near}, uFar: {value: camera.far}});
     this.down = new THREE.ShaderMaterial({uniforms: {tDepth: {value: null}, ...nf()}, vertexShader: FULL_VS,
@@ -984,15 +1030,76 @@ class DepthShade extends Pass {
           gl_FragColor = vec4(c, 1.);
         }`});
   }
-  setSize(w, h){ this.w = Math.ceil(w/4); this.h = Math.ceil(h/4); this.a.setSize(this.w, this.h); this.b.setSize(this.w, this.h); }
+  setSize(w, h){ this.w = Math.ceil(w/4); this.h = Math.ceil(h/4); for (const t of [this.a, this.b, this.lin]) t.setSize(this.w, this.h); }
   render(renderer, writeBuffer, readBuffer){
-    const q = this.quad, depth = readBuffer.depthTexture;
-    q.material = this.down; this.down.uniforms.tDepth.value = depth; renderer.setRenderTarget(this.a); q.render(renderer);
-    q.material = this.blur; this.blur.uniforms.tDiffuse.value = this.a.texture; this.blur.uniforms.uStep.value.set(1.6/this.w, 0);
+    const q = this.quad, depth = readBuffer.depthTexture;               // the scene was just drawn here (which target it is alternates)
+    q.material = this.down; this.down.uniforms.tDepth.value = depth; renderer.setRenderTarget(this.lin); q.render(renderer);
+    frameDistance = this.lin.texture;
+    q.material = this.blur; this.blur.uniforms.tDiffuse.value = this.lin.texture; this.blur.uniforms.uStep.value.set(1.6/this.w, 0);
     renderer.setRenderTarget(this.b); q.render(renderer);
     this.blur.uniforms.tDiffuse.value = this.b.texture; this.blur.uniforms.uStep.value.set(0, 1.6/this.h); renderer.setRenderTarget(this.a); q.render(renderer);
     q.material = this.apply; this.apply.uniforms.tDiffuse.value = readBuffer.texture;
     this.apply.uniforms.tDepth.value = depth; this.apply.uniforms.tBlur.value = this.a.texture;
+    renderer.setRenderTarget(this.renderToScreen ? null : writeBuffer); q.render(renderer);
+  }
+}
+// Light in the air: the sun's rays, seen where the air between us and the field is lit, and cut into shafts where the
+// tree and the plumes stand in their way. Each pixel walks its view ray through the sun's shadow map and gathers the light
+// the air sends toward us (more of it close to the sun's direction — a Henyey–Greenstein lobe; more haze low down). This is
+// how games light their fog (Wronski, Assassin's Creed IV, 2014; Hillaire, Frostbite, 2015; Ghost of Tsushima lights its
+// haze with the sun's shadows the same way). Worked at a quarter of the screen with a few steps, then softened
+// a faint warmth: with the sun to the side, as in his picture, the shafts hardly show and a stronger haze only washes his
+// colours out; when the sun comes round ahead of us (evening) they show by themselves
+const AIR = {steps: 12, far: 95, height: 9, strength: 0.006, g: 0.55};
+class AirLight extends Pass {
+  constructor(dist){
+    super();
+    this.dist = dist;
+    const o = {type: THREE.HalfFloatType}; this.a = new THREE.WebGLRenderTarget(1, 1, o); this.b = new THREE.WebGLRenderTarget(1, 1, o);
+    this.quad = new FullScreenQuad();
+    const cam = () => ({uNear: {value: camera.near}, uFar: {value: camera.far}, uInvProj: {value: camera.projectionMatrixInverse},
+      uCamWorld: {value: camera.matrixWorld}, uCamPos: {value: camera.position}});   // (a full-screen pass has its own camera)
+    this.march = new THREE.ShaderMaterial({uniforms: {tDist: {value: null}, ...cam(), uShadow: uniforms.uShadow, uSunMat: uniforms.uSunMat,
+      uShadowOn: uniforms.uShadowOn, uTime: uniforms.uTime}, vertexShader: FULL_VS,
+      fragmentShader: `uniform sampler2D tDist, uShadow; uniform mat4 uInvProj, uCamWorld, uSunMat; uniform vec3 uCamPos; uniform float uShadowOn, uTime;
+        varying vec2 vUv;
+        void main(){
+          vec4 v = uInvProj*vec4(vUv*2. - 1., 1., 1.); vec3 dv = normalize(v.xyz/v.w);
+          float t1 = min(texture2D(tDist, vUv).r/max(-dv.z, 1e-3), ${AIR.far}.);   // how far this pixel's view goes
+          vec3 o = uCamPos, dir = normalize((uCamWorld*vec4(dv, 0.)).xyz);
+          float j = fract(52.9829189*fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))) + fract(uTime*7.31));   // a different start each pixel and frame
+          float dt = t1/${AIR.steps}., sum = 0.;
+          for (int i = 0; i < ${AIR.steps}; i++){
+            vec3 p = o + dir*dt*(float(i) + j);
+            vec4 s = uSunMat*vec4(p, 1.); vec3 c = s.xyz/s.w*0.5 + 0.5;
+            float lit = (uShadowOn < 0.5 || any(lessThan(c, vec3(0.))) || any(greaterThan(c, vec3(1.)))) ? 1. : step(c.z, texture2D(uShadow, c.xy).r);
+            sum += lit*exp(-max(p.y, 0.)/${AIR.height}.)*dt;              // more haze low down
+          }
+          gl_FragColor = vec4(sum, 0., 0., 1.);
+        }`});
+    this.blur = new THREE.ShaderMaterial({uniforms: {tDiffuse: {value: null}, uStep: {value: new THREE.Vector2()}}, vertexShader: FULL_VS,
+      fragmentShader: `uniform sampler2D tDiffuse; uniform vec2 uStep; varying vec2 vUv;
+        void main(){ float s = 0., w = 0.;
+          for (int i = -4; i <= 4; i++){ float k = exp(-float(i*i)/8.); s += texture2D(tDiffuse, vUv + uStep*float(i)).r*k; w += k; }
+          gl_FragColor = vec4(s/w, 0., 0., 1.); }`});
+    this.apply = new THREE.ShaderMaterial({uniforms: {tDiffuse: {value: null}, tAir: {value: null}, uSun: uniforms.uSun, uSunCol: uniforms.uSunCol,
+      uCamR: uniforms.uCamR, uCamU: uniforms.uCamU, uCamF: uniforms.uCamF, uTanHV: uniforms.uTanHV}, vertexShader: FULL_VS,
+      fragmentShader: `uniform sampler2D tDiffuse, tAir; uniform vec3 uSun, uSunCol, uCamR, uCamU, uCamF; uniform vec2 uTanHV; varying vec2 vUv;
+        void main(){
+          vec3 c = texture2D(tDiffuse, vUv).rgb;
+          vec3 dir = normalize(uCamF + (vUv.x*2. - 1.)*uTanHV.x*uCamR + (vUv.y*2. - 1.)*uTanHV.y*uCamU);
+          float g = ${AIR.g}, mu = dot(dir, normalize(uSun)), ph = (1. - g*g)/(12.566*pow(1. + g*g - 2.*g*mu, 1.5));
+          gl_FragColor = vec4(c + uSunCol*ph*${AIR.strength}*texture2D(tAir, vUv).r, 1.);
+        }`});
+  }
+  setSize(w, h){ this.w = Math.ceil(w/4); this.h = Math.ceil(h/4); this.a.setSize(this.w, this.h); this.b.setSize(this.w, this.h); }
+  render(renderer, writeBuffer, readBuffer){
+    const q = this.quad;
+    q.material = this.march; this.march.uniforms.tDist.value = this.dist(); renderer.setRenderTarget(this.a); q.render(renderer);
+    q.material = this.blur; this.blur.uniforms.tDiffuse.value = this.a.texture; this.blur.uniforms.uStep.value.set(1.4/this.w, 0);
+    renderer.setRenderTarget(this.b); q.render(renderer);
+    this.blur.uniforms.tDiffuse.value = this.b.texture; this.blur.uniforms.uStep.value.set(0, 1.4/this.h); renderer.setRenderTarget(this.a); q.render(renderer);
+    q.material = this.apply; this.apply.uniforms.tDiffuse.value = readBuffer.texture; this.apply.uniforms.tAir.value = this.a.texture;
     renderer.setRenderTarget(this.renderToScreen ? null : writeBuffer); q.render(renderer);
   }
 }
@@ -1030,8 +1137,9 @@ function setupComposer(){
   composer = new EffectComposer(renderer, rt);
   composer.addPass(new RenderPass(scene, camera));
   if (high) composer.addPass(new DepthShade());
+  if (high) composer.addPass(new AirLight(() => frameDistance));
   uniforms.uA2C.value = high ? 1 : 0;                                  // smooth leaf edges need MSAA
-  if (high){ bloomPass = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.2, 0.55, 0.95); composer.addPass(bloomPass); }
+  if (high){ bloomPass = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.28, 0.4, 0.88); composer.addPass(bloomPass); }   // the sunlit fluff glows
   composer.addPass(new ShaderPass(gradeMat));
   composer.addPass(new OutputPass());
   composer.addPass(new ShaderPass(casMat));
@@ -1089,14 +1197,15 @@ document.getElementById('quality').addEventListener('click', e => {
 setTimeout(() => document.getElementById('hint').classList.add('gone'), 6000);
 
 /* ═══ Start ═══ */
-// his tree: its shape traced from his picture, and his picture to paint it with (scene/trace_tree.py)
+// his tree: its cards (scene/trace_tree.py), its own colour and which way it faces (scene/delight_tree.py)
 const texLoader = new THREE.TextureLoader();
-const [treePaint, treeTrace, skyFit, leafSprites] = await Promise.all([texLoader.loadAsync('field-assets/tree-paint.webp'),
-  fetch('field-assets/tree-trace.json').then(r => r.json()), fetch('field-assets/sky.json').then(r => r.json()),
-  texLoader.loadAsync('field-assets/leaf-sprites.png')]);
+const [treeAlb, treeNor, treeTrace, skyFit, leafSprites] = await Promise.all([texLoader.loadAsync('field-assets/tree-albedo.webp'),
+  texLoader.loadAsync('field-assets/tree-normal.webp'), fetch('field-assets/tree-trace.json').then(r => r.json()),
+  fetch('field-assets/sky.json').then(r => r.json()), texLoader.loadAsync('field-assets/leaf-sprites.png')]);
 leafSprites.colorSpace = THREE.SRGBColorSpace; uniforms.uLeafSprites = {value: leafSprites};   // the falling leaves
 skyFit.rgb.forEach((c, i) => uniforms.uSkyC.value[i].set(...c));
-Object.assign(treePaint, {colorSpace: THREE.SRGBColorSpace, generateMipmaps: false, minFilter: THREE.LinearFilter}); uniforms.uPaint.value = treePaint;
+for (const t of [treeAlb, treeNor]) Object.assign(t, {generateMipmaps: false, minFilter: THREE.LinearFilter});
+treeAlb.colorSpace = THREE.SRGBColorSpace; uniforms.uTreeAlb.value = treeAlb; uniforms.uTreeNor.value = treeNor;
 applyLight(); setupComposer(); prepare(); buildTree(treeTrace); placePlants();
 addEventListener('resize', () => { const was = camera.aspect; resize(); if (Math.abs(camera.aspect - was) > 0.04) placePlants(); });
 const sunTmp = V(), fwd = V();
@@ -1123,5 +1232,5 @@ function frame(now){
 }
 document.addEventListener('visibilitychange', () => { running = !document.hidden; if (running){ prev = performance.now(); requestAnimationFrame(frame); } });
 requestAnimationFrame(frame);
-window.field = {S, step, renderer, plants: () => plants, placePlants, setup: setupComposer, camera, PLUME, uniforms, scene, groundMesh, TREE, buildTree, tree: () => treeInfo, grass: () => grassInfo};   // for checking from the console
+window.field = {S, step, renderer, plants: () => plants, placePlants, setup: setupComposer, camera, PLUME, uniforms, scene, groundMesh, TREE, buildTree, tree: () => treeInfo, grass: () => grassInfo, composer: () => composer};   // for checking from the console
 </script>
