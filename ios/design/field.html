@@ -79,7 +79,7 @@ import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { Pass, FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 
 /* ═══ The plume (a fan of feathers, like the plumes in his picture) and the test settings ═══ */
-const PLUME = {racemes: 16, rLenCm: 22, spread: 0.32, curl: 0.8, droop: 0.4, lean: 0.15, featherMM: 9, fluff: 1, density: 1,
+const PLUME = {racemes: 16, rLenCm: 22, spread: 0.32, curl: 0.8, droop: 0.4, lean: 0.15, featherMM: 12, fluff: 1, density: 1,
                height: 1.45, thickMM: 11, leaves: 8, leafLen: 0.5, twigs: 4, seed: 7};
 // plumes per m² at «обычная»: far away they are pictures, so there the field can be as thick as in his picture
 // kinds of head, as in a real field: most are ordinary; some are big or very big, some very small, some not opened yet
@@ -136,16 +136,15 @@ const FEATHER_FS = `
     // a fibre leaves the rib slanting toward the tip, and bends a little more toward it as it goes
     float tn = mix(0.45, 0.35, v), s0 = along - r/tn - 0.6*r*r/uWh;
     float thin = step(${VARIANTS - 1}., k);                            // the last picture: a thin feather, not fluffy yet
-    float sp = 0.0018/uDensity*mix(1., 1.7, thin), fi = floor(s0/sp), ff = fract(s0/sp), id = fi + side*733. + k*1913.;
-    float len = uWh*prof(clamp(s0/uLen, 0., 1.))*(0.45 + 0.75*h1(id))*(1. + 0.2*uFluff*(h1(id + 5.) - 0.5))*mix(1., 0.45, thin);
+    float sp = 0.0014/uDensity*mix(1., 1.7, thin), fi = floor(s0/sp), ff = fract(s0/sp), id = fi + side*733. + k*1913.;
+    // fibres of every length: a dense core, then fewer and fewer, out to a soft airy halo — fluff, not a ribbon
+    float len = uWh*prof(clamp(s0/uLen, 0., 1.))*(0.35 + 0.9*h1(id))*(1. + 0.2*uFluff*(h1(id + 5.) - 0.5))*mix(1., 0.45, thin);
     float rel = r/max(len, 1e-4);
-    float edge = 1. - smoothstep(0.7 - 0.15*uFluff, 1., rel);     // each fibre ends on its own: a soft, ragged edge
-    float fibre = 1. - smoothstep(0.12, 0.5, abs(ff - 0.5));        // the fibre itself, with a little air between neighbours
-    float a = edge*mix(mix(0.5 + 0.3*(1. - rel), 0.12, thin), 1., fibre)*step(0., s0);
-    float rib = (1. - smoothstep(0.015, 0.035, abs(x)))*step(v, 0.95);
-    vec3 white = vec3(0.97, 0.97, 0.96)*(0.8 + 0.2*h1(id + 9.))*(0.72 + 0.28*h1(floor(fi/5.) + side*91. + k*313.));   // fibres lie in locks
-    vec3 col = mix(white, vec3(0.86, 0.74, 0.55), 0.35*(1. - smoothstep(0., 0.3, v)) + 0.12*(1. - rel));
-    col = mix(col, vec3(0.9, 0.8, 0.62), 0.3*thin); col = mix(col, vec3(0.85, 0.72, 0.5), rib); a = max(a, rib);
+    float fibre = 1. - smoothstep(0.15, 0.5, abs(ff - 0.5));        // the fibre itself, with a little air between neighbours
+    float core = pow(clamp(1. - r/(uWh*prof(v)), 0., 1.), 1.2);      // how deep inside the fluff
+    float a = (1. - smoothstep(0.55, 1., rel))*mix(0.55, 1., fibre)*(0.16 + 0.5*core)*step(0., s0)*mix(1., 0.6, thin);
+    vec3 col = vec3(0.98, 0.975, 0.965)*(0.92 + 0.08*h1(id + 9.));   // white, a little uneven; no rib shows through fluff
+    col = mix(col, vec3(0.9, 0.8, 0.62), 0.25*(1. - smoothstep(0., 0.15, v)) + 0.3*thin);   // only right at the base a little golden
     gl_FragColor = vec4(col*a, a);                               // premultiplied, like everything see-through here
   }`;
 function bakeFeathers(renderer, target){
@@ -361,17 +360,18 @@ const headMat = new THREE.ShaderMaterial({uniforms: {...uniforms, uFlat: {value:
     vec4 tx = texture2D(uAtlas, vUv); float a = tx.a;
     vec3 raw = tx.rgb/max(a, 1e-3); float hair = smoothstep(0.7, 0.9, dot(raw, vec3(0.333)));
     vec3 V = normalize(cameraPosition - vW), L = normalize(uSun), T = normalize(vT);
-    // a plume is a soft ball of fluff: the side toward the sun is lit, the far side is in the plume's own shade
-    // a plume is a soft ball of fluff, lit as one: the side toward the sun bright, the far side in its own soft shade,
-    // and where it stands against the sun its thin edge glows through. No shine: fluff is matte
+    // a plume is a soft ball of white fluff, lit as one: the side toward the sun bright, the far side in a soft shade, and
+    // where it stands against the sun its thin edge glows through. Fluff scatters light all through itself, so even its
+    // shade stays bright; and it is matte — no shine
     vec3 N = normalize(vN + vec3(0., 1e-4, 0.));
-    vec3 warm = mix(vec3(0.8, 0.6, 0.38), vec3(1.), smoothstep(0.5, 0.95, vAO));   // where the feathers start, a head is golden inside
-    vec3 base = mix(raw, raw*uHair, hair)*vTint*vAO*warm;
+    vec3 warm = mix(vec3(0.9, 0.78, 0.6), vec3(1.), smoothstep(0.55, 0.9, vAO));   // right where the feathers start, a little golden
+    vec3 base = mix(raw, raw*uHair, hair)*mix(1., vTint, 0.35)*mix(1., vAO, 0.35)*warm;   // airy: little darkening inside
     float thin = (1. - 0.6*a)*(0.4 + 0.6*hair);                        // thin fluff lets the most light through
-    float sh = mix(0.45, 1., sunLit1(vW))*vCloud;                      // in a neighbour's or a cloud's shadow (fluff still lets some through)
-    vec3 col = base*(hemi(N)*0.95 + uSunCol*sh*(0.95*wrapL(N, L) + 0.9*uGlow*thin*through(N, L, V, 0.35, 4.)));
+    float sh = mix(0.6, 1., sunLit1(vW))*mix(0.75, 1., vCloud);        // in a neighbour's or a cloud's shadow (fluff still lets light through)
+    vec3 col = base*(hemi(N)*1.35 + uSunCol*(0.14 + sh*(0.85*wrapL(N, L) + 0.9*uGlow*thin*through(N, L, V, 0.35, 4.))));
     col *= 1. + 0.6*vSheen;                                              // bent by a gust, it catches more light
-    gl_FragColor = vec4(haze(deep(col, vW), vW)*a, a);   // deeper in the field, more plumes share a pixel: darker, more golden
+    col = mix(col, deep(col, vW), 0.35);                                 // the plumes keep their white farther than the stalks do
+    gl_FragColor = vec4(haze(col, vW)*a, a);
   }`});
 // below the heads a plant stands in their shade, and the light reaching there is the gold bounced off the field
 const SHADE = `vec3 lowShade(float a){ return mix(vec3(0.42, 0.24, 0.09), vec3(1.), a); }`;   // a: how much sun reaches this part
@@ -428,7 +428,7 @@ const canvas = document.getElementById('view');
 let renderer;
 try { renderer = new THREE.WebGLRenderer({canvas, antialias: false, powerPreference: 'high-performance'}); }
 catch (e) { document.body.insertAdjacentHTML('beforeend', '<p class="msg">Этот браузер не умеет рисовать 3D (WebGL 2).</p>'); throw e; }
-renderer.toneMapping = THREE.NeutralToneMapping; renderer.toneMappingExposure = 1.5;    // Neutral keeps the gold; AgX greyed it
+renderer.toneMapping = THREE.NeutralToneMapping; renderer.toneMappingExposure = 1.25;    // Neutral keeps the gold; AgX greyed it
 renderer.info.autoReset = false;
 const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(CAM.fov, 1, 0.5, 400);
 camera.position.set(...CAM.pos); camera.lookAt(...CAM.look);
@@ -754,7 +754,7 @@ function setupComposer(){
   if (composer) composer.dispose();
   composer = new EffectComposer(renderer, rt);
   composer.addPass(new RenderPass(scene, camera));
-  if (high){ bloomPass = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.3, 0.6, 0.85); composer.addPass(bloomPass); }
+  if (high){ bloomPass = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.3, 0.6, 0.95); composer.addPass(bloomPass); }
   composer.addPass(new LocalTone());
   composer.addPass(new ShaderPass(gradeMat));
   composer.addPass(new OutputPass());
