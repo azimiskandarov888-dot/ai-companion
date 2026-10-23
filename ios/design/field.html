@@ -142,7 +142,7 @@ const FEATHER_FS = `
     float fibre = 1. - smoothstep(0.12, 0.5, abs(ff - 0.5));        // the fibre itself, with a little air between neighbours
     float a = edge*mix(mix(0.5 + 0.3*(1. - rel), 0.12, thin), 1., fibre)*step(0., s0);
     float rib = (1. - smoothstep(0.015, 0.035, abs(x)))*step(v, 0.95);
-    vec3 white = vec3(0.97, 0.97, 0.96)*(0.8 + 0.2*h1(id + 9.))*(0.62 + 0.38*h1(floor(fi/5.) + side*91. + k*313.));   // fibres lie in locks
+    vec3 white = vec3(0.97, 0.97, 0.96)*(0.8 + 0.2*h1(id + 9.))*(0.72 + 0.28*h1(floor(fi/5.) + side*91. + k*313.));   // fibres lie in locks
     vec3 col = mix(white, vec3(0.86, 0.74, 0.55), 0.35*(1. - smoothstep(0., 0.3, v)) + 0.12*(1. - rel));
     col = mix(col, vec3(0.9, 0.8, 0.62), 0.3*thin); col = mix(col, vec3(0.85, 0.72, 0.5), rib); a = max(a, rib);
     gl_FragColor = vec4(col*a, a);                               // premultiplied, like everything see-through here
@@ -302,7 +302,7 @@ float sunLit1(vec3 wp){
 float sunLit4(vec3 wp){                                                 // four taps: a soft edge
   vec3 c = sunUV(wp);
   if (uShadowOn < 0.5 || any(lessThan(c, vec3(0.))) || any(greaterThan(c, vec3(1.)))) return 1.;
-  vec2 a = vec2(1.2, 0.4)*uShadowTexel, b = vec2(-0.4, 1.2)*uShadowTexel;
+  vec2 a = vec2(2.4, 0.8)*uShadowTexel, b = vec2(-0.8, 2.4)*uShadowTexel;
   return 0.25*(step(c.z, texture2D(uShadow, c.xy + a).r) + step(c.z, texture2D(uShadow, c.xy - a).r)
              + step(c.z, texture2D(uShadow, c.xy + b).r) + step(c.z, texture2D(uShadow, c.xy - b).r));
 }
@@ -349,7 +349,7 @@ const headMat = new THREE.ShaderMaterial({uniforms: {...uniforms, uFlat: {value:
     vec3 warm = mix(vec3(0.8, 0.6, 0.38), vec3(1.), smoothstep(0.5, 0.95, vAO));   // where the feathers start, a head is golden inside
     vec3 base = mix(raw, raw*uHair, hair)*vTint*vAO*warm;
     float thin = (1. - 0.6*a)*(0.4 + 0.6*hair);                        // thin fluff lets the most light through
-    float sh = mix(0.3, 1., sunLit1(vW));                              // in a neighbour's shadow (fluff still lets a little through)
+    float sh = mix(0.45, 1., sunLit1(vW));                             // in a neighbour's shadow (fluff still lets some through)
     vec3 col = base*(hemi(N)*0.95 + uSunCol*sh*(0.95*wrapL(N, L) + 0.9*uGlow*thin*through(N, L, V, 0.35, 4.)));
     col *= 1. + 0.6*vSheen;                                              // bent by a gust, it catches more light
     gl_FragColor = vec4(haze(deep(col, vW), vW)*a, a);   // deeper in the field, more plumes share a pixel: darker, more golden
@@ -365,7 +365,7 @@ const stalkMat = new THREE.ShaderMaterial({uniforms: {...uniforms, uFlat: {value
     vec3 across = normalize(cross(T, V)), toward = normalize(cross(across, T));
     vec3 N = normalize(across*vSide + toward*sqrt(max(0., 1. - vSide*vSide)));   // a stalk is round
     vec3 c = uColor*(1. - 0.25*joint)*vTint*lowShade(vAO);
-    gl_FragColor = vec4(haze(deep(c*(hemi(N) + uSunCol*sunLit4(vW)*(0.75*wrapL(N, L) + 0.3*uGlow*through(N, L, V, 0.2, 6.))), vW), vW), 1.);
+    gl_FragColor = vec4(haze(deep(c*(hemi(N) + uSunCol*(0.2 + 0.8*sunLit4(vW))*(0.75*wrapL(N, L) + 0.3*uGlow*through(N, L, V, 0.2, 6.))), vW), vW), 1.);
   }`});
 const leafMat = new THREE.ShaderMaterial({uniforms: {...uniforms, uFlat: {value: 1}, uColor: {value: new THREE.Color(...lin([0.82, 0.62, 0.34]))},
   uColorTip: {value: new THREE.Color(...lin([0.92, 0.8, 0.55]))}}, side: THREE.DoubleSide, vertexShader: STRIP_VS, fragmentShader: `${LIGHT} ${SHADE}
@@ -375,7 +375,7 @@ const leafMat = new THREE.ShaderMaterial({uniforms: {...uniforms, uFlat: {value:
     N *= sign(dot(N, V) + 1e-4);                                        // the side we see
     float rib = smoothstep(0.2, 0., abs(vSide));
     vec3 c = mix(mix(uColor, uColorTip, smoothstep(0.1, 1., vV)), vec3(0.9, 0.8, 0.6), rib*0.5)*vTint*lowShade(vAO);
-    gl_FragColor = vec4(haze(deep(c*(hemi(N) + uSunCol*sunLit4(vW)*(0.7*wrapL(N, L) + 0.6*uGlow*through(N, L, V, 0.2, 3.))), vW), vW), 1.);
+    gl_FragColor = vec4(haze(deep(c*(hemi(N) + uSunCol*(0.2 + 0.8*sunLit4(vW))*(0.7*wrapL(N, L) + 0.6*uGlow*through(N, L, V, 0.2, 3.))), vW), vW), 1.);
   }`});
 // far: a picture of a whole clump of our own plumes on two triangles, turned to face the camera;
 // its lower edge sinks into the leaf layer
@@ -414,7 +414,7 @@ renderer.info.autoReset = false;
 const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(CAM.fov, 1, 0.5, 400);
 camera.position.set(...CAM.pos); camera.lookAt(...CAM.look);
 
-Object.assign(uniforms, {uAspect: {value: 1}, uSunScreen: {value: new THREE.Vector3()},
+Object.assign(uniforms, {uAspect: {value: 1}, uSunScreen: {value: new THREE.Vector3()}, uTexel: {value: new THREE.Vector2()},
   uCamR: {value: V()}, uCamU: {value: V()}, uCamF: {value: V()}, uTanHV: {value: new THREE.Vector2()}});
 // the sky: the blue of his picture, greyer toward the crest, with the sun's glow
 const sky = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.ShaderMaterial({uniforms, depthTest: false, depthWrite: false,
@@ -643,24 +643,57 @@ function applyLight(){
 
 /* ═══ Quality and the frame counter ═══ */
 let composer = null, bloomPass = null;
+// Soft like a photograph, the way games do it: render a little below the screen's resolution, then a long lens's
+// depth of field (the nearest plumes and the far crest soft, the middle sharp), a glow on the bright fluff, a warm veil
+// of air toward the sun, and a fine film grain. In Breath of the Wild's words: every plant in sharp detail looks messy.
+const FULL_VS = `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix*modelViewMatrix*vec4(position, 1.); }`;
+const dofDepth = {tex: null};
+class DofPass extends ShaderPass {                                        // a blur whose size follows the distance
+  constructor(dir){
+    super(new THREE.ShaderMaterial({uniforms: {tDiffuse: {value: null}, tDepth: {value: null}, uDir: {value: new THREE.Vector2(...dir)},
+      uTexel: uniforms.uTexel, uNear: {value: camera.near}, uFar: {value: camera.far}}, vertexShader: FULL_VS,
+      fragmentShader: `uniform sampler2D tDiffuse, tDepth; uniform vec2 uDir, uTexel; uniform float uNear, uFar; varying vec2 vUv;
+        float dist(vec2 uv){ float z = texture2D(tDepth, uv).r*2. - 1.; return 2.*uNear*uFar/(uFar + uNear - z*(uFar - uNear)); }
+        // focused on the middle of the field: the nearest plumes and the crest go soft; the sky is left alone
+        float coc(float d){ return 0.55*(1. - smoothstep(8., 10.5, d)) + 0.4*smoothstep(38., 52., d)*(1. - step(150., d)); }
+        void main(){
+          float c = coc(dist(vUv)); vec4 sum = vec4(0.); float ws = 0.;
+          for (int i = -4; i <= 4; i++){ float w = exp(-float(i*i)/8.); sum += texture2D(tDiffuse, vUv + uDir*uTexel*float(i)*c*1.4)*w; ws += w; }
+          gl_FragColor = sum/ws;
+        }`}));
+    this.first = dir[0] > 0;
+  }
+  render(renderer, writeBuffer, readBuffer, dt, mask){
+    if (this.first) dofDepth.tex = readBuffer.depthTexture;               // the depth of the scene just drawn
+    this.uniforms.tDepth.value = dofDepth.tex;
+    super.render(renderer, writeBuffer, readBuffer, dt, mask);
+  }
+}
+const gradeMat = new THREE.ShaderMaterial({uniforms: {tDiffuse: {value: null}, uSun: uniforms.uSun, uSunCol: uniforms.uSunCol, uCamR: uniforms.uCamR,
+  uCamU: uniforms.uCamU, uCamF: uniforms.uCamF, uTanHV: uniforms.uTanHV, uTime: uniforms.uTime}, vertexShader: FULL_VS,
+  fragmentShader: `uniform sampler2D tDiffuse; uniform vec3 uSun, uSunCol, uCamR, uCamU, uCamF; uniform vec2 uTanHV; uniform float uTime; varying vec2 vUv;
+    void main(){
+      vec3 c = texture2D(tDiffuse, vUv).rgb;
+      vec3 dir = normalize(uCamF + (vUv.x*2. - 1.)*uTanHV.x*uCamR + (vUv.y*2. - 1.)*uTanHV.y*uCamU);
+      c += uSunCol*(0.05*pow(max(0., dot(dir, normalize(uSun))), 3.) + 0.006);   // a veil of warm air toward the sun, and a little everywhere
+      float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
+      c = max(mix(vec3(l), c, 1.06), 0.);                                   // a little more colour
+      c *= mix(vec3(0.96, 0.98, 1.03), vec3(1.03, 1., 0.97), smoothstep(0.04, 0.7, l));   // cool shade, warm light
+      vec2 d = vUv - 0.5; c *= 1. - 0.35*dot(d, d);                         // a soft vignette
+      float g = fract(sin(dot(gl_FragCoord.xy + fract(uTime*7.)*97., vec2(12.9898, 78.233)))*43758.5453);
+      c *= 1. + (g - 0.5)*0.04;                                             // a fine film grain
+      gl_FragColor = vec4(c, 1.);
+    }`});
 function setupComposer(){
-  const high = S.quality === 'high', dpr = high ? Math.min(2, devicePixelRatio || 1) : 1;
+  const high = S.quality === 'high', dpr = high ? Math.min(1.75, devicePixelRatio || 1) : 1;   // a touch under the screen: softer, and cheaper
   renderer.setPixelRatio(dpr);
-  const rt = new THREE.WebGLRenderTarget(1, 1, {type: THREE.HalfFloatType, samples: high ? 4 : 0});
+  const rt = new THREE.WebGLRenderTarget(1, 1, {type: THREE.HalfFloatType, samples: high ? 4 : 0, depthTexture: new THREE.DepthTexture(1, 1)});
   if (composer) composer.dispose();
   composer = new EffectComposer(renderer, rt);
   composer.addPass(new RenderPass(scene, camera));
-  if (high){ bloomPass = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.2, 0.4, 1.0); composer.addPass(bloomPass); }
-  composer.addPass(new ShaderPass({uniforms: {tDiffuse: {value: null}},
-    vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix*modelViewMatrix*vec4(position, 1.); }`,
-    fragmentShader: `uniform sampler2D tDiffuse; varying vec2 vUv;
-      void main(){
-        vec3 c = texture2D(tDiffuse, vUv).rgb; float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
-        c = max(mix(vec3(l), c, 1.08), 0.);                                   // a little more colour
-        c *= mix(vec3(0.95, 0.98, 1.04), vec3(1.03, 1., 0.97), smoothstep(0.04, 0.7, l));   // cool shade, warm light
-        vec2 d = vUv - 0.5; c *= 1. - 0.35*dot(d, d);                         // a soft vignette
-        gl_FragColor = vec4(c, 1.);
-      }`}));
+  composer.addPass(new DofPass([1, 0])); composer.addPass(new DofPass([0, 1]));
+  if (high){ bloomPass = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.3, 0.6, 0.85); composer.addPass(bloomPass); }
+  composer.addPass(new ShaderPass(gradeMat));
   composer.addPass(new OutputPass());
   resize();
 }
@@ -669,6 +702,7 @@ function resize(){
   const h = innerHeight, w = Math.min(innerWidth, Math.round(h*0.62));
   canvas.style.width = w + 'px';
   renderer.setSize(w, h, false); composer.setPixelRatio(renderer.getPixelRatio()); composer.setSize(w, h);
+  uniforms.uTexel.value.set(1/(w*renderer.getPixelRatio()), 1/(h*renderer.getPixelRatio()));
   camera.aspect = w/h; camera.updateProjectionMatrix(); uniforms.uAspect.value = w/h;
   camera.updateMatrixWorld(); const e = camera.matrixWorld.elements, tv = Math.tan(THREE.MathUtils.degToRad(camera.fov)/2);
   uniforms.uCamR.value.set(e[0], e[1], e[2]); uniforms.uCamU.value.set(e[4], e[5], e[6]); uniforms.uCamF.value.set(-e[8], -e[9], -e[10]);
