@@ -2,7 +2,7 @@
 the cards to carry it; and his sky, as a smooth fit of its colour.
 
     python3 scene/trace_tree.py [check.jpg]
-        reads framing/mj-15-hd.jpg and the tree's outline in scene/assets/tree.webp; writes scene/assets/tree-mask.png,
+        reads framing/mj-15-hd.jpg and the tree's outline in scene/assets/tree.webp; writes scene/assets/tree-mask.png (tree, wood, depth inside),
         field-assets/tree-trace.json and field-assets/sky.json (and, if asked, a picture to check the cut by eye).
         Then scene/delight_tree.py turns the tree into its own colour and shape, for the page to light.
 
@@ -97,9 +97,10 @@ def main():
     near = np.argwhere(solid == 1)[near - 1]                       # the labels count the solid pixels in reading order
     fg = np.where((tree < 0.5)[..., None], fg[near[..., 0], near[..., 1]], fg)
     paint = np.dstack([fg, tree]).clip(0, 1)
-    mask = np.dstack([tree, cv2.GaussianBlur(wood.astype(np.float32), (3, 3), 0)*inside, np.zeros_like(tree)]).clip(0, 1)
+    edge = cv2.distanceTransform(inside.astype(np.uint8), cv2.DIST_L2, 5)
+    mask = np.dstack([tree, cv2.GaussianBlur(wood.astype(np.float32), (3, 3), 0)*inside, edge/edge.max()]).clip(0, 1)
     Image.fromarray((mask*255 + 0.5).astype(np.uint8), 'RGB').save(MASK)
-    print(f'mask (red: tree, green: wood) → {MASK}')
+    print(f'mask (red: tree, green: wood, blue: how deep inside the outline) → {MASK}')
 
     # the cards: a grid where the tree is near, a little shaken; each knows how far it is from the crown's outline (deep
     # in the crown it moves less) and how thick the wood under it is (thick wood hardly moves)
