@@ -11,3 +11,6 @@
 - `sky.json` — a fit of his sky's colour, by `scene/trace_tree.py`.
 - `leaf-sprites.png` — CC0: the three single leaves of "Leaf Set 015", ambientCG: https://ambientcg.com/view?id=LeafSet015,
   recoloured to autumn. Used for the falling leaves.
+- `ph/jacaranda.gltf.json` and `ph/jacaranda_*.jpg` — CC0: "Jacaranda Tree", Poly Haven: https://polyhaven.com/a/jacaranda_tree
+  (1k maps). Prepared by `scene/import_tree.py` (thinned to ~650k triangles, Draco, wind and shade data in its
+  vertices); its leaves turned to autumn by `scene/autumn_leaves.py`. This is the tree on the main screen now.
