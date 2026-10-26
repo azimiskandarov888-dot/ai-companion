@@ -65,7 +65,7 @@ import * as THREE from 'three/webgpu';
 import { pass, context, texture, vec2, vec3, vec4, float, saturation, attribute, uniform, time, mx_noise_float, cameraPosition,
   normalize, cross, dot, uv, Fn, cameraViewMatrix, cos, sin, select, mix, abs, exp, sqrt, fract, smoothstep, length, Loop, rtt,
   positionGeometry, positionWorld, normalWorld, normalView, positionViewDirection, diffuseColor, BRDF_Lambert, getViewPosition,
-  screenCoordinate, interleavedGradientNoise, mrt, output, positionView, luminance, nodeObject, passTexture } from 'three/tsl';
+  screenCoordinate, screenUV, interleavedGradientNoise, mrt, output, positionView, luminance, nodeObject, passTexture } from 'three/tsl';
 import { gaussianBlur } from 'three/addons/tsl/display/GaussianBlurNode.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
@@ -114,7 +114,7 @@ const FLUFF = {fuzz: 0.6, through: 2.5, inside: 0.1, shine: 0.6, sharp: 40, slan
 // edge is blended softly (sorted far to near) or cut into the pixel's samples (coverage), how solid its core is, and
 // the plume's own shape (racemes, their length, how far they open, curl and droop, how one-sided, how wide)
 const LOOKS = {
-  A: {name: 'сейчас: веер волокон', atlas: 'fibre', blend: false, cover: 1.7, plume: {}},
+  A: {name: 'веер волокон', atlas: 'fibre', blend: false, cover: 1.7, plume: {}},
   B: {name: 'пушистые шары', atlas: 'soft', blend: true, cover: 1.4,
       plume: {racemes: 22, rLenCm: 16, spread: 0.55, curl: 0.5, droop: 0.3, featherMM: 17}},
   C: {name: 'склонённые хвосты', atlas: 'silk', blend: true, cover: 1.3,
@@ -123,7 +123,7 @@ const LOOKS = {
 };
 // smoothing over time (as Ghost's TAA): on or off, how much of the frames before each new frame keeps, how far they may
 // stray from the colours around each pixel now (in spreads), and how much crispness is given back after
-const SETTLE = {on: false, keep: 0.88, clip: 1.0, sharpen: 0.35};   // off until he chooses
+const SETTLE = {on: true, keep: 0.88, clip: 1.0, sharpen: 0.35};
 // light bounced off the open field (Ghost adds the sun's bounce off the ground to its ambient): the field's albedo — white
 // plumes and gold — and how much of it fluff takes from all around (the plumes light each other)
 const BOUNCE = {field: 0.25, fluff: 0.06};
@@ -131,13 +131,13 @@ const BOUNCE = {field: 0.25, fluff: 0.06};
 // the ground (per m), how fast it thins with height (m), Mie's pull toward the sun (Henyey–Greenstein g) and how much
 // of its light takes that pull, the steps along each ray, how far the march goes (and over the sky: the haze lies over
 // our field, the air beyond is clear), and its share of the screen
-const HAZE = {density: 0.0015, height: 6, g: 0.7, forward: 0.6, steps: 20, far: 160, skyFar: 70, scale: 0.5};
+const HAZE = {density: 0.0015, height: 6, g: 0.7, forward: 0.6, steps: 16, far: 160, skyFar: 70, scale: 0.5};
 const WIND = {dir: [-0.95, 0.3], strength: 0.55};                    // one wind for the whole world: where it blows, how hard
 const THROUGH = 3;                                                   // how strongly sunlight comes through the tree's leaves
 // for trying values from the address: ?az=…&el=…&exp=…&through=…&haze=…
 { const q = new URLSearchParams(location.search), n = k => q.has(k) ? +q.get(k) : undefined;
   SUN.az = n('az') ?? SUN.az; SUN.el = n('el') ?? SUN.el; HAZE.density = n('haze') ?? HAZE.density;
-  globalThis.TRY = {exp: n('exp'), through: n('through')}; }
+  globalThis.TRY = {exp: n('exp'), through: n('through'), msaa: n('msaa'), steps: n('steps')}; }
 
 const hud = document.getElementById('hud'), canvas = document.getElementById('view');
 const V3 = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
@@ -580,7 +580,7 @@ try {
       fieldInfo.blades += list.length*GRASS.perClump; fieldInfo.grassTris += strips.triangles*list.length; fieldInfo.grassDraws++;
     });
   }
-  setLook((location.hash.match(/look=([A-D])/) || [])[1] || 'A');
+  setLook((location.hash.match(/look=([A-D])/) || [])[1] || 'D');   // his pick: big brushes
   scene.add(field);
 
   // the hill, drawn at the top of the dense leaf layer: golden stalks standing close, lit ones and dark gaps; seen from
@@ -658,14 +658,14 @@ try {
       const at = uv(), d = distTex.sample(at).r;
       const dir = normalize(eye.world.mul(vec4(getViewPosition(at, float(1), eye.unproject), 0)).xyz);
       const dist = select(d.greaterThan(500).or(d.lessThan(0.1)), float(HAZE.skyFar), d.min(HAZE.far));
-      const ds = dist.div(HAZE.steps), cosT = dot(dir, sunDir), g = HAZE.g;
+      const ds = dist.div(TRY.steps ?? HAZE.steps), cosT = dot(dir, sunDir), g = HAZE.g;
       const hg = float((1 - g*g)/(4*Math.PI)).div(float(1 + g*g).sub(cosT.mul(2*g)).pow(1.5));
       const lux = getSplitScalarIlluminance(atmosphere.cameraPositionUnit.add(atmosphere.altitudeCorrectionUnit), atmosphere.sunDirectionECEF);
       // the sun's light turned toward us; the sky's from above and the field's bounce from below, each from half the sphere
       const sunL = lux.get('direct').mul(mix(float(1/(4*Math.PI)), hg, HAZE.forward));
       const skyL = lux.get('indirect').add(lux.get('direct').mul(sunUp).add(lux.get('indirect')).mul(BOUNCE.field)).div(2*Math.PI);
       const T = float(1).toVar(), L = vec3(0).toVar(), t = interleavedGradientNoise(screenCoordinate).mul(ds).toVar();
-      Loop(HAZE.steps, () => {
+      Loop(TRY.steps ?? HAZE.steps, () => {
         const p = eye.pos.add(dir.mul(t));
         const sigma = exp(p.y.sub(hillAt(p.x, p.z)).max(0).div(-HAZE.height)).mul(hazeDensity);
         const s = sunView.mul(vec4(p, 1)).xyz, su = vec2(s.x.mul(0.5).add(0.5), s.y.mul(-0.5).add(0.5));
@@ -680,12 +680,22 @@ try {
   }
 
   // after the scene: the sky where nothing stands, darker than the light it throws (as Ghost's local tone mapping keeps
-  // it); the air; then the grade and the film curve. Four samples per pixel: the fluff's soft edge becomes how much of
-  // each pixel it covers
-  scene.backgroundNode = vec4(saturation(skyBackground().rgb.mul(SKY.exposure), SKY.saturation), 1);
+  // it); the air; the smoothing over time; then the grade and the film curve
+  // the sky is drawn once into a picture of its own, and again only when the sun moves or the screen changes size: the
+  // camera holds still, and drawing the physical sky afresh for every pixel of every frame cost more than all the rest
+  const skyScene = new THREE.Scene(), skyTarget = new THREE.RenderTarget(1, 1, {type: THREE.HalfFloatType, depthBuffer: false});
+  skyScene.backgroundNode = vec4(saturation(skyBackground().rgb.mul(SKY.exposure), SKY.saturation), 1);
+  scene.backgroundNode = texture(skyTarget.texture, screenUV);
+  // (a shader is built in the background the first time it is used, so after a change the sky is drawn again for a
+  // while, until it surely has been)
+  let skyFrames = 0;
+  const drawSky = () => { skyFrames = 90; };
+  function skyNow(){ const was = renderer.getRenderTarget(); renderer.setRenderTarget(skyTarget); renderer.render(skyScene, camera); renderer.setRenderTarget(was); }
   const pipeline = new (THREE.RenderPipeline || THREE.PostProcessing)(renderer);   // renamed in r185
-  // the frame, and how far each pixel's surface is (a sampled depth buffer cannot be read back, a colour can)
-  const frame = pass(scene, camera, {samples: 4});
+  // the frame, and how far each pixel's surface is (a sampled depth buffer cannot be read back, a colour can). With the
+  // smoothing over time its edges need no extra samples per pixel (MSAA): a third of the frame's time and ~130 MB of the
+  // GPU's memory saved; without it, four samples (0 or 4 only: one sample breaks the pass)
+  const frame = pass(scene, camera, {samples: TRY.msaa === 4 || (TRY.msaa === undefined && !SETTLE.on) ? 4 : 0});
   frame.setMRT(mrt({output, distance: vec4(length(positionView), 0, 0, 1)}));
   const airTex = rtt(airNode(frame.getTextureNode('distance')), 1, 1);
   const air = gaussianBlur(airTex, null, 1.5);
@@ -745,17 +755,19 @@ try {
   pipeline.outputNode = saturation(sharpened.mul(vec3(...GRADE.white)), GRADE.saturation);
   let jitter = 0;
   function draw(){                                                     // one frame, shifted by a fraction of a pixel while smoothing
+    if (skyFrames > 0){ skyFrames--; skyNow(); }
     if (SETTLE.on){ const w = canvas.width, h = canvas.height; jitter = jitter % 16 + 1;
       camera.setViewOffset(w, h, halton(jitter, 2) - 0.5, halton(jitter, 3) - 0.5, w, h); }
     pipeline.render();
     if (SETTLE.on) camera.clearViewOffset();
   }
-  onSun = drawSunMap; drawSunMap();
+  onSun = () => { drawSunMap(); drawSky(); }; drawSunMap();
 
   function resize(){
     const box = document.documentElement, h = box.clientHeight, w = Math.min(box.clientWidth, Math.round(h*0.62)), dpr = renderer.getPixelRatio();
     canvas.style.width = w + 'px'; renderer.setSize(w, h, false); camera.aspect = w/h; camera.updateProjectionMatrix();
     airTex.setSize(Math.round(w*dpr*HAZE.scale), Math.round(h*dpr*HAZE.scale));
+    skyTarget.setSize(Math.round(w*dpr), Math.round(h*dpr)); drawSky();
   }
   addEventListener('resize', resize); resize();
 
@@ -784,7 +796,7 @@ try {
       frames = 0; t0 = now;
     }
   });
-  window.world = {renderer, scene, camera, atmosphere, sun, cascades, pipeline, tree, field, fieldInfo, setSun, windStrength, windDir, parts, hazeDensity, airParts, sunMap, sunCam, sunView, frame, air, airTex, setLook, draw, SETTLE, settleKeep, crisp, settle, settled, sharpened,
+  window.world = {renderer, scene, camera, atmosphere, sun, cascades, pipeline, tree, field, fieldInfo, setSun, windStrength, windDir, parts, hazeDensity, airParts, sunMap, sunCam, sunView, frame, air, airTex, setLook, draw, SETTLE, settleKeep, crisp, settle, settled, sharpened, skyTarget, skyScene, drawSky,
     setExposure: e => { renderer.toneMappingExposure = e; }};   // for checking from the console
 } catch (err) {
   hud.textContent = 'Не запустилось: ' + err.message;
