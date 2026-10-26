@@ -22,6 +22,8 @@ body { background: var(--bg); color: var(--fg); margin: 0; font: 12px/1.4 ui-mon
 #panel label { display: grid; gap: 4px; color: var(--fg); }
 #panel span { color: var(--muted); font-variant-numeric: tabular-nums; }
 #panel input { width: 100%; accent-color: var(--accent); }
+#panel label.check { display: flex; gap: 8px; align-items: center; }
+#panel label.check input { width: auto; }
 #panel select { font: inherit; color: var(--fg); background: rgba(255, 255, 255, 0.08); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; }
 #panel select option { color: #111; }
 </style>
@@ -35,6 +37,7 @@ body { background: var(--bg); color: var(--fg); margin: 0; font: 12px/1.4 ui-mon
   <label>Дымка <span id="hazeOut"></span><input id="haze" type="range" min="0" max="30" step="1"></label>
   <label>Ветер <span id="windOut"></span><input id="wind" type="range" min="0" max="100" step="1"></label>
   <label>Метёлки<select id="look"></select></label>
+  <label class="check"><input id="settle" type="checkbox"> Сглаживание (как TAA в Ghost)</label>
 </div>
 
 <script type="importmap">
@@ -62,7 +65,7 @@ import * as THREE from 'three/webgpu';
 import { pass, context, texture, vec2, vec3, vec4, float, saturation, attribute, uniform, time, mx_noise_float, cameraPosition,
   normalize, cross, dot, uv, Fn, cameraViewMatrix, cos, sin, select, mix, abs, exp, sqrt, fract, smoothstep, length, Loop, rtt,
   positionGeometry, positionWorld, normalWorld, normalView, positionViewDirection, diffuseColor, BRDF_Lambert, getViewPosition,
-  screenCoordinate, interleavedGradientNoise, mrt, output, positionView } from 'three/tsl';
+  screenCoordinate, interleavedGradientNoise, mrt, output, positionView, luminance, nodeObject, passTexture } from 'three/tsl';
 import { gaussianBlur } from 'three/addons/tsl/display/GaussianBlurNode.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
@@ -107,15 +110,20 @@ const GRASS = {bands: [[6, 18, 120, 4], [18, 34, 80, 3]], height: [0.3, 0.72], w
 // it, and the silky sheen along its fibres (Kajiya–Kay, as hair): how bright, how sharp, and how far the fibres slant
 // out from a raceme's rib (radians)
 const FLUFF = {fuzz: 0.6, through: 2.5, inside: 0.1, shine: 0.6, sharp: 40, slant: 0.5};
-// looks for the fluff, to choose by eye before anything changes: how its texture is drawn (featherAtlas), whether its
+// looks for the plumes, to choose by eye before anything changes: how the fluff is drawn (featherAtlas), whether its
 // edge is blended softly (sorted far to near) or cut into the pixel's samples (coverage), how solid its core is, and
-// any plume numbers of its own
+// the plume's own shape (racemes, their length, how far they open, curl and droop, how one-sided, how wide)
 const LOOKS = {
-  A: {name: 'сейчас: тонкие волокна', atlas: 'fibre', blend: false, cover: 1.7, plume: {}},
-  B: {name: 'мягкий пух', atlas: 'soft', blend: true, cover: 1.2, plume: {}},
-  C: {name: 'шёлковые пряди', atlas: 'silk', blend: true, cover: 1.3, plume: {}},
-  D: {name: 'кисти', atlas: 'brush', blend: true, cover: 1.15, plume: {racemes: 7, featherMM: 24}},
+  A: {name: 'сейчас: веер волокон', atlas: 'fibre', blend: false, cover: 1.7, plume: {}},
+  B: {name: 'пушистые шары', atlas: 'soft', blend: true, cover: 1.4,
+      plume: {racemes: 22, rLenCm: 16, spread: 0.55, curl: 0.5, droop: 0.3, featherMM: 17}},
+  C: {name: 'склонённые хвосты', atlas: 'silk', blend: true, cover: 1.3,
+      plume: {racemes: 10, rLenCm: 32, spread: 0.1, curl: 0.25, droop: 1.3, lean: 0.7, featherMM: 11}},
+  D: {name: 'большие кисти', atlas: 'brush', blend: true, cover: 1.15, plume: {racemes: 7, rLenCm: 30, featherMM: 28, spread: 0.32}},
 };
+// smoothing over time (as Ghost's TAA): on or off, how much of the frames before each new frame keeps, how far they may
+// stray from the colours around each pixel now (in spreads), and how much crispness is given back after
+const SETTLE = {on: false, keep: 0.88, clip: 1.0, sharpen: 0.35};   // off until he chooses
 // light bounced off the open field (Ghost adds the sun's bounce off the ground to its ambient): the field's albedo — white
 // plumes and gold — and how much of it fluff takes from all around (the plumes light each other)
 const BOUNCE = {field: 0.25, fluff: 0.06};
@@ -385,7 +393,7 @@ try {
     Object.assign(t, {colorSpace: THREE.SRGBColorSpace, generateMipmaps: true, minFilter: THREE.LinearMipmapLinearFilter, magFilter: THREE.LinearFilter, anisotropy: 4, needsUpdate: true});
     return t;
   }
-  const atlases = {}, atlasOf = (style, P) => atlases[style + P.featherMM] ||= featherAtlas(style, P.featherMM/1000, P.rLenCm/100);
+  const atlases = {}, atlasOf = (style, P) => atlases[`${style} ${P.featherMM} ${P.rLenCm}`] ||= featherAtlas(style, P.featherMM/1000, P.rLenCm/100);
 
   // ── one law of light for the whole field (Ghost: one physical light; materials differ only in how they answer it):
   // the sun from the atmosphere with its cascaded shadows, and the sky's light on each normal. Fluff answers as Ghost's
@@ -681,7 +689,67 @@ try {
   frame.setMRT(mrt({output, distance: vec4(length(positionView), 0, 0, 1)}));
   const airTex = rtt(airNode(frame.getTextureNode('distance')), 1, 1);
   const air = gaussianBlur(airTex, null, 1.5);
-  pipeline.outputNode = saturation(frame.rgb.mul(air.a).add(air.rgb).mul(vec3(...GRADE.white)), GRADE.saturation);
+
+  // ══ Smoothing over time, as Ghost's TAA (temporal anti-aliasing). Each frame the camera shifts by a fraction of a
+  // pixel (a Halton sequence) and the new frame is blended into the frames before it, so thin stalks, fibres and their
+  // glints settle into soft edges instead of crawling. The frames before are first held to the colours around each
+  // pixel now — within one spread of their mean (variance clipping, Salvi 2016), tighter than their whole range — so
+  // what moves leaves no trail and stays crisp; bright pixels weigh less (Karis), so one glint cannot flash
+  const halton = (i, b) => { let f = 1, r = 0; for (; i > 0; i = Math.floor(i/b)){ f /= b; r += f*(i % b); } return r; };
+  let rendererState;
+  const settleKeep = uniform(SETTLE.keep);
+  class SettleNode extends THREE.TempNode {
+    constructor(input){                                                 // input: the frame, drawn into a texture of its own
+      super('vec4');
+      const target = () => new THREE.RenderTarget(1, 1, {depthBuffer: false, type: THREE.HalfFloatType});
+      Object.assign(this, {input, history: target(), resolve: target(), quad: new THREE.QuadMesh(), texel: uniform(new THREE.Vector2(1, 1)),
+        fresh: uniform(1), updateBeforeType: THREE.NodeUpdateType.FRAME});
+    }
+    updateBefore({renderer}){
+      const size = renderer.getDrawingBufferSize(new THREE.Vector2());
+      rendererState = THREE.RendererUtils.resetRendererState(renderer, rendererState);
+      if (this.history.width !== size.x || this.history.height !== size.y){   // a new size: start again from this frame
+        this.history.setSize(size.x, size.y); this.resolve.setSize(size.x, size.y); this.texel.value.set(1/size.x, 1/size.y);
+        renderer.initRenderTarget(this.history); renderer.initRenderTarget(this.resolve); this.fresh.value = 1;
+      }
+      renderer.setRenderTarget(this.resolve); this.quad.render(renderer);
+      renderer.copyTextureToTexture(this.resolve.texture, this.history.texture);
+      THREE.RendererUtils.restoreRendererState(renderer, rendererState);
+      this.fresh.value = SETTLE.on ? 0 : 1;                            // off: every frame stands alone
+    }
+    setup(builder){
+      const now = this.input, at = uv(), texel = this.texel, past = texture(this.history.texture);
+      const resolve = Fn(() => {
+        const c = now.sample(at).rgb, m1 = c.toVar(), m2 = c.mul(c).toVar();
+        for (const [dx, dy] of [[-1, -1], [0, -1], [1, -1], [-1, 0], [1, 0], [-1, 1], [0, 1], [1, 1]]){
+          const n = now.sample(at.add(vec2(dx, dy).mul(texel))).rgb; m1.addAssign(n); m2.addAssign(n.mul(n));
+        }
+        const mean = m1.div(9), spread = m2.div(9).sub(mean.mul(mean)).max(0).sqrt().mul(SETTLE.clip);
+        const prev = past.sample(at).rgb.max(mean.sub(spread)).min(mean.add(spread)), keep = mix(settleKeep, float(0), this.fresh);
+        const wc = float(1).sub(keep).div(luminance(c).add(1)), wp = keep.div(luminance(prev).add(1));
+        return vec4(c.mul(wc).add(prev.mul(wp)).div(wc.add(wp)), 1);
+      });
+      const m = new THREE.NodeMaterial(); m.fragmentNode = resolve().context(builder.getSharedContext()); m.name = 'Settle';
+      this.quad.material = m;
+      return passTexture(this, this.resolve.texture);
+    }
+  }
+  const settle = new SettleNode(rtt(frame.rgb.mul(air.a).add(air.rgb))), settled = passTexture(settle, settle.resolve.texture);   // the frame seen through the air, settled
+  // then a little crispness back (the shifts over time soften by about a pixel; games sharpen after TAA too)
+  const crisp = uniform(SETTLE.on ? SETTLE.sharpen : 0), sharpened = Fn(() => {
+    const at = uv(), e = settle.texel, c = nodeObject(settle).rgb;    // the node itself, so its pass runs each frame
+    const around = settled.sample(at.add(vec2(e.x, 0))).rgb.add(settled.sample(at.sub(vec2(e.x, 0))).rgb)
+      .add(settled.sample(at.add(vec2(0, e.y))).rgb).add(settled.sample(at.sub(vec2(0, e.y))).rgb).mul(0.25);
+    return c.add(c.sub(around).mul(crisp)).max(0);
+  })();
+  pipeline.outputNode = saturation(sharpened.mul(vec3(...GRADE.white)), GRADE.saturation);
+  let jitter = 0;
+  function draw(){                                                     // one frame, shifted by a fraction of a pixel while smoothing
+    if (SETTLE.on){ const w = canvas.width, h = canvas.height; jitter = jitter % 16 + 1;
+      camera.setViewOffset(w, h, halton(jitter, 2) - 0.5, halton(jitter, 3) - 0.5, w, h); }
+    pipeline.render();
+    if (SETTLE.on) camera.clearViewOffset();
+  }
   onSun = drawSunMap; drawSunMap();
 
   function resize(){
@@ -704,17 +772,19 @@ try {
     $('wind').addEventListener('input', e => { windStrength.value = e.target.value/100; show(); });
     for (const [k, L] of Object.entries(LOOKS)) $('look').append(new Option(`${k} — ${L.name}`, k));
     $('look').value = fieldInfo.look; $('look').addEventListener('change', e => setLook(e.target.value));
+    $('settle').checked = SETTLE.on;
+    $('settle').addEventListener('change', e => { SETTLE.on = e.target.checked; crisp.value = SETTLE.on ? SETTLE.sharpen : 0; });
     show(); }
 
   let frames = 0, t0 = performance.now();
   renderer.setAnimationLoop(now => {
-    pipeline.render(); frames++;
+    draw(); frames++;
     if (now - t0 > 1000){
       hud.textContent = `${Math.round(frames*1000/(now - t0))} кадров/с · ${renderer.backend.isWebGPUBackend ? 'WebGPU' : 'WebGL2'} · солнце ${SUN.az}°/${SUN.el}° · метёлки ${fieldInfo.look}`;
       frames = 0; t0 = now;
     }
   });
-  window.world = {renderer, scene, camera, atmosphere, sun, cascades, pipeline, tree, field, fieldInfo, setSun, windStrength, windDir, parts, hazeDensity, airParts, sunMap, sunCam, sunView, frame, air, airTex, setLook,
+  window.world = {renderer, scene, camera, atmosphere, sun, cascades, pipeline, tree, field, fieldInfo, setSun, windStrength, windDir, parts, hazeDensity, airParts, sunMap, sunCam, sunView, frame, air, airTex, setLook, draw, SETTLE, settleKeep, crisp, settle, settled, sharpened,
     setExposure: e => { renderer.toneMappingExposure = e; }};   // for checking from the console
 } catch (err) {
   hud.textContent = 'Не запустилось: ' + err.message;
