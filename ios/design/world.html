@@ -70,8 +70,8 @@ import { AtmosphereContext, AtmosphereLight, AtmosphereLightNode, skyBackground,
 // the numbers of the world
 const CAM = {pos: [0, 2.1, -7], look: [0, 11.4, 43], fov: 25};      // his picture's telephoto view up the hill
 const PLACE = {lon: 140.81, lat: 42.83, height: 300};                // a meadow below Mount Yōtei, Hokkaido
-const SUN = {az: -50, el: 15};                                       // degrees from straight ahead (+ to the left), above the horizon:
-                                                                     // ahead and to the right — his sky's deep blue, the tree lit through
+const SUN = {az: 8, el: 12};                                         // degrees from straight ahead (+ to the left), above the horizon:
+                                                                     // low behind the tree: crown and fluff glow through the haze (his pick)
 const EXPOSURE = 7;                                                  // the camera's exposure, for light in physical units
 // the grade, where Ghost puts its art (after the light, never in it): white balance toward his warm evening, more colour
 const GRADE = {white: [1, 1, 1], saturation: 1.3};
@@ -111,7 +111,7 @@ const BOUNCE = {field: 0.25, fluff: 0.06};
 // the ground (per m), how fast it thins with height (m), Mie's pull toward the sun (Henyey–Greenstein g) and how much
 // of its light takes that pull, the steps along each ray, how far the march goes (and over the sky: the haze lies over
 // our field, the air beyond is clear), and its share of the screen
-const HAZE = {density: 0.0004, height: 6, g: 0.7, forward: 0.6, steps: 20, far: 160, skyFar: 70, scale: 0.5};
+const HAZE = {density: 0.0015, height: 6, g: 0.7, forward: 0.6, steps: 20, far: 160, skyFar: 70, scale: 0.5};
 const WIND = {dir: [-0.95, 0.3], strength: 0.55};                    // one wind for the whole world: where it blows, how hard
 const THROUGH = 3;                                                   // how strongly sunlight comes through the tree's leaves
 // for trying values from the address: ?az=…&el=…&exp=…&through=…&haze=…
