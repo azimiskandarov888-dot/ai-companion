@@ -1,0 +1,176 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Мир Боба</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* one phone-shaped picture in the middle of the screen; a small line of numbers under it for checking */
+:root { --bg: #0b0d0c; --fg: #d9d4c7; --muted: #8b8778; }
+html, body { height: 100%; }
+body { background: var(--bg); color: var(--fg); margin: 0; font: 12px/1.4 ui-monospace, "SF Mono", Menlo, monospace; overflow: hidden; }
+#view { display: block; margin: 0 auto; height: 100%; }
+#hud { position: fixed; left: max(12px, env(safe-area-inset-left, 0px)); bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+  color: var(--muted); pointer-events: none; white-space: pre; font-variant-numeric: tabular-nums; }
+</style>
+
+<canvas id="view" aria-label="Холм с белой травой и осенним деревом на закате"></canvas>
+<div id="hud">запускаю…</div>
+
+<script type="importmap">
+{"imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.184.0/build/three.module.js",
+  "three/webgpu": "https://cdn.jsdelivr.net/npm/three@0.184.0/build/three.webgpu.js",
+  "three/tsl": "https://cdn.jsdelivr.net/npm/three@0.184.0/build/three.tsl.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.184.0/examples/jsm/",
+  "three/examples/jsm/": "https://cdn.jsdelivr.net/npm/three@0.184.0/examples/jsm/",
+  "three/src/nodes/core/NodeUtils.js": "https://cdn.jsdelivr.net/npm/three@0.184.0/src/nodes/core/NodeUtils.js",
+  "@takram/three-geospatial": "https://cdn.jsdelivr.net/npm/@takram/three-geospatial@0.9.1/build/index.js",
+  "@takram/three-geospatial/webgpu": "https://cdn.jsdelivr.net/npm/@takram/three-geospatial@0.9.1/build/webgpu.js",
+  "@takram/three-atmosphere/webgpu": "https://cdn.jsdelivr.net/npm/@takram/three-atmosphere@0.19.1/build/webgpu.js"
+}}
+</script>
+<script type="module">
+/* ═══ Bob's world, rebuilt the way Ghost of Tsushima builds its frame (ios/design/GHOST-PIPELINE-PLAN.md).
+   Step 2 — the frame's skeleton: one physical sky that gives the sky's colour, the sun's colour and the light the sky
+   throws on everything (Bruneton's precomputed scattering with Hillaire's multiple scattering —
+   @takram/three-atmosphere); light in physical units; the sun's shadows in cascades; the air between us and every
+   object; light shafts where the air is in shadow; the film curve (AgX). No light is painted: change the sun and the
+   whole frame follows ═══ */
+import * as THREE from 'three/webgpu';
+import { pass, context, texture, vec3, float, saturation } from 'three/tsl';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
+import { CSMShadowNode } from 'three/addons/csm/CSMShadowNode.js';
+import { Ellipsoid, Geodetic, radians } from '@takram/three-geospatial';
+import { AtmosphereContext, AtmosphereLight, AtmosphereLightNode, skyBackground } from '@takram/three-atmosphere/webgpu';
+
+// the numbers of the world
+const CAM = {pos: [0, 2.1, -7], look: [0, 11.4, 43], fov: 25};      // his picture's telephoto view up the hill
+const PLACE = {lon: 140.81, lat: 42.83, height: 300};                // a meadow below Mount Yōtei, Hokkaido
+const SUN = {az: -30, el: 12};                                       // degrees from straight ahead (+ to the left), above the horizon
+const EXPOSURE = 12;                                                 // the camera's exposure, for light in physical units
+// the grade, where Ghost puts its art (after the light, never in it): white balance toward his warm evening, more colour
+const GRADE = {white: [1.08, 1.0, 0.9], saturation: 1.3};
+const TREE = {file: 'field-assets/ph/jacaranda.gltf.json', at: [6.6, 39.43], turn: 90};
+const FIELD = {blades: 30000, area: [[-16, 16], [9, 50]]};           // stand-in for the grass until it is rebuilt (step 5)
+const THROUGH = 3;                                                   // how strongly sunlight comes through leaves and blades
+// for trying values from the address: ?az=…&el=…&exp=…&through=…
+{ const q = new URLSearchParams(location.search), n = k => q.has(k) ? +q.get(k) : undefined;
+  SUN.az = n('az') ?? SUN.az; SUN.el = n('el') ?? SUN.el; globalThis.TRY = {exp: n('exp'), through: n('through')}; }
+
+const hud = document.getElementById('hud'), canvas = document.getElementById('view');
+const sm = (a, b, x) => { const q = Math.min(1, Math.max(0, (x - a)/(b - a))); return q*q*(3 - 2*q); };
+// the hill: it rises away from us to a crest ~46 m out, higher on the left, where the tree stands
+const ground = (x, z) => 5.2*sm(0, 46, z)*(0.85 + 0.15*Math.sin(x*0.06 + 1.3)) + 0.13*x*sm(0, 46, z) - 4*sm(47, 75, z)
+  + 0.35*sm(15, 46, z)*Math.sin(x*0.45 + 0.7) + 0.12*Math.sin(x*0.35 + z*0.11) + 0.1*Math.sin(x*1.7 + z*0.9)*Math.sin(z*1.3 - x*0.6);
+
+try {
+  const renderer = new THREE.WebGPURenderer({canvas, antialias: false});
+  renderer.setPixelRatio(Math.min(2, devicePixelRatio || 1, 1900/document.documentElement.clientHeight));   // no more than a phone's pixels
+  await renderer.init();
+  renderer.shadowMap.enabled = true;
+  renderer.toneMapping = THREE.AgXToneMapping;
+  renderer.toneMappingExposure = TRY.exp ?? EXPOSURE;
+
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(CAM.fov, 1, 0.5, 600);
+  camera.position.set(...CAM.pos); camera.lookAt(...CAM.look);
+
+  // the one sky: where on Earth we stand, and where the sun is
+  const atmosphere = new AtmosphereContext();
+  atmosphere.camera = camera;
+  renderer.contextNode = context({...renderer.contextNode.value, getAtmosphere: () => atmosphere});
+  const here = new Geodetic(radians(PLACE.lon), radians(PLACE.lat), PLACE.height).toECEF();
+  Ellipsoid.WGS84.getNorthUpEastFrame(here, atmosphere.matrixWorldToECEF.value);   // our x: north, y: up, z: east
+  function setSun(az = SUN.az, el = SUN.el){
+    SUN.az = az; SUN.el = el;
+    const a = THREE.MathUtils.degToRad(az), e = THREE.MathUtils.degToRad(el);
+    const L = new THREE.Vector3(Math.sin(a)*Math.cos(e), Math.sin(e), Math.cos(a)*Math.cos(e));
+    atmosphere.sunDirectionECEF.value.copy(L.transformDirection(atmosphere.matrixWorldToECEF.value));
+  }
+  setSun();
+
+  // the sun and the sky's light on everything, with the sun's shadows in cascades (sharp near us, coarser far away)
+  renderer.library.addLight(AtmosphereLightNode, AtmosphereLight);
+  const sun = new AtmosphereLight(120);
+  sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048);
+  sun.target.position.set(0, 4, 25);
+  const cascades = new CSMShadowNode(sun, {cascades: 3, maxFar: 140, mode: 'practical', lightMargin: 40});
+  sun.shadow.shadowNode = cascades;
+  scene.add(sun, sun.target);
+
+  // the hill
+  const hill = new THREE.PlaneGeometry(140, 120, 140, 120); hill.rotateX(-Math.PI/2); hill.translate(0, 0, 40);
+  { const p = hill.attributes.position; for (let i = 0; i < p.count; i++) p.setY(i, ground(p.getX(i), p.getZ(i))); hill.computeVertexNormals(); }
+  const hillMesh = new THREE.Mesh(hill, new THREE.MeshStandardNodeMaterial({color: new THREE.Color().setRGB(0.16, 0.11, 0.05), roughness: 1}));
+  hillMesh.receiveShadow = true; scene.add(hillMesh);
+
+  // what lets light through — leaves, blades, fluff — glows where the sun is behind it (Frostbite's fast translucency, in
+// three.js's SSS material); shadows dim it too
+const translucent = (m, through) => Object.assign(m, {thicknessColorNode: through, thicknessDistortionNode: float(0.25),
+  thicknessAmbientNode: float(0), thicknessAttenuationNode: float(0.9), thicknessPowerNode: float(3), thicknessScaleNode: float(TRY.through ?? THROUGH)});
+// the field, for now: plain blades in the plumes' colour, so the light can be judged (rebuilt properly in step 5)
+  const blade = new THREE.PlaneGeometry(0.05, 1, 1, 3); blade.translate(0, 0.5, 0);
+  const field = new THREE.InstancedMesh(blade, translucent(new THREE.MeshSSSNodeMaterial({color: new THREE.Color().setRGB(0.62, 0.55, 0.42),
+    roughness: 0.8, side: THREE.DoubleSide}), vec3(0.9, 0.78, 0.55)), FIELD.blades);
+  { const m = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), s = new THREE.Vector3(), p = new THREE.Vector3();
+    let seed = 7; const r = () => (seed = (seed*16807) % 2147483647)/2147483647;
+    for (let i = 0; i < FIELD.blades; i++){
+      const x = FIELD.area[0][0] + r()*(FIELD.area[0][1] - FIELD.area[0][0]), z = FIELD.area[1][0] + r()*(FIELD.area[1][1] - FIELD.area[1][0]);
+      if (Math.hypot(x - TREE.at[0], z - TREE.at[1]) < 1.2) continue;
+      p.set(x, ground(x, z) - 0.05, z); e.set((r() - 0.5)*0.5, r()*6.28, (r() - 0.5)*0.5); s.set(1, 0.9 + r()*0.8, 1);
+      m.compose(p, q.setFromEuler(e), s); field.setMatrixAt(i, m);
+    } }
+  field.castShadow = field.receiveShadow = true; scene.add(field);
+
+  // the tree: Jacaranda from Poly Haven (CC0), its leaves turned to autumn (scene/import_tree.py, scene/autumn_leaves.py)
+  const tex = new THREE.TextureLoader();
+  const load = (n, srgb) => tex.loadAsync(`field-assets/ph/${n}.jpg`).then(t => { if (srgb) t.colorSpace = THREE.SRGBColorSpace;
+    t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 4; return t; });
+  const maps = {trunk: ['jacaranda_tree_trunk_diff_1k', 'jacaranda_tree_trunk_nor_gl_1k'],
+    branches: ['jacaranda_tree_branches_diff_1k', 'jacaranda_tree_branches_nor_gl_1k'],
+    leaves: ['jacaranda_leaves_autumn', 'jacaranda_tree_leaves_nor_gl_1k']};
+  const draco = new DRACOLoader().setDecoderPath('field-assets/draco/');
+  const [gltf, ...textures] = await Promise.all([new GLTFLoader().setDRACOLoader(draco).loadAsync(TREE.file),
+    ...Object.values(maps).flatMap(([c, n]) => [load(c, true), load(n, false)])]);
+  const texOf = {}; Object.keys(maps).forEach((k, i) => texOf[k] = [textures[2*i], textures[2*i + 1]]);
+  const tree = new THREE.Group();
+  gltf.scene.traverse(o => {
+    if (!o.isMesh) return;
+    const part = Object.keys(maps).find(k => o.name.includes(k)), leaves = part === 'leaves', [map, normalMap] = texOf[part];
+    const mat = leaves ? translucent(new THREE.MeshSSSNodeMaterial({map, normalMap, roughness: 0.6, side: THREE.DoubleSide}), texture(map).rgb)
+      : new THREE.MeshStandardNodeMaterial({map, normalMap, roughness: 0.9});
+    const mesh = new THREE.Mesh(o.geometry, mat);
+    mesh.castShadow = mesh.receiveShadow = true; tree.add(mesh);
+  });
+  tree.position.set(TREE.at[0], ground(...TREE.at) - 0.1, TREE.at[1]); tree.rotation.y = THREE.MathUtils.degToRad(TREE.turn);
+  scene.add(tree);
+
+  // after the scene: the air between us and every point, and the sky where nothing stands; shafts where the air is in
+  // the shadows; then the film curve
+  // the sky behind everything (the air between us and the hill, at most 60 m, is left to the haze of step 4: its
+  // physical amount at this distance is too small to see — Ghost thickens it by art)
+  scene.backgroundNode = skyBackground();
+  const pipeline = new (THREE.RenderPipeline || THREE.PostProcessing)(renderer);   // renamed in r185
+  pipeline.outputNode = saturation(pass(scene, camera, {samples: 0}).mul(vec3(...GRADE.white)), GRADE.saturation);
+
+  function resize(){
+    const box = document.documentElement, h = box.clientHeight, w = Math.min(box.clientWidth, Math.round(h*0.62));
+    canvas.style.width = w + 'px'; renderer.setSize(w, h, false); camera.aspect = w/h; camera.updateProjectionMatrix();
+  }
+  addEventListener('resize', resize); resize();
+
+  let frames = 0, t0 = performance.now();
+  renderer.setAnimationLoop(now => {
+    pipeline.render(); frames++;
+    if (now - t0 > 1000){
+      hud.textContent = `${Math.round(frames*1000/(now - t0))} кадров/с · ${renderer.backend.isWebGPUBackend ? 'WebGPU' : 'WebGL2'} · солнце ${SUN.az}°/${SUN.el}°`;
+      frames = 0; t0 = now;
+    }
+  });
+  window.world = {renderer, scene, camera, atmosphere, sun, cascades, pipeline, tree, field, setSun,
+    setExposure: e => { renderer.toneMappingExposure = e; }};   // for checking from the console
+} catch (err) {
+  hud.textContent = 'Не запустилось: ' + err.message;
+  console.error(err);
+}
+</script>
