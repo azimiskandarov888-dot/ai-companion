@@ -22,6 +22,8 @@ body { background: var(--bg); color: var(--fg); margin: 0; font: 12px/1.4 ui-mon
 #panel label { display: grid; gap: 4px; color: var(--fg); }
 #panel span { color: var(--muted); font-variant-numeric: tabular-nums; }
 #panel input { width: 100%; accent-color: var(--accent); }
+#panel select { font: inherit; color: var(--fg); background: rgba(255, 255, 255, 0.08); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; }
+#panel select option { color: #111; }
 </style>
 
 <canvas id="view" aria-label="Холм с белой травой и осенним деревом на закате"></canvas>
@@ -32,6 +34,7 @@ body { background: var(--bg); color: var(--fg); margin: 0; font: 12px/1.4 ui-mon
   <label>Солнце: высота <span id="elOut"></span><input id="el" type="range" min="3" max="40" step="1"></label>
   <label>Дымка <span id="hazeOut"></span><input id="haze" type="range" min="0" max="30" step="1"></label>
   <label>Ветер <span id="windOut"></span><input id="wind" type="range" min="0" max="100" step="1"></label>
+  <label>Метёлки<select id="look"></select></label>
 </div>
 
 <script type="importmap">
@@ -101,9 +104,18 @@ const DETAIL = {near: {r: 1, rSeg: 5, l: 1, lSeg: 6, sSeg: 8, w: 1}, mid: {r: 0.
 // grass between the plumes, out of the leaf layer: [from, to (m from the camera), blades per m², bends per blade]
 const GRASS = {bands: [[6, 18, 120, 4], [18, 34, 80, 3]], height: [0.3, 0.72], width: 0.011, perClump: 12, seed: 77};
 // how fluff takes light: Ghost's fuzz (its outline's glow), the sun through thin fluff, the light scattered all through
-// it, how solid its dense core is (alpha → coverage), and the silky sheen along its fibres (Kajiya–Kay, as hair): how
-// bright, how sharp, and how far the fibres slant out from a raceme's rib (radians)
-const FLUFF = {fuzz: 0.6, through: 2.5, inside: 0.1, cover: 1.7, shine: 0.6, sharp: 40, slant: 0.5};
+// it, and the silky sheen along its fibres (Kajiya–Kay, as hair): how bright, how sharp, and how far the fibres slant
+// out from a raceme's rib (radians)
+const FLUFF = {fuzz: 0.6, through: 2.5, inside: 0.1, shine: 0.6, sharp: 40, slant: 0.5};
+// looks for the fluff, to choose by eye before anything changes: how its texture is drawn (featherAtlas), whether its
+// edge is blended softly (sorted far to near) or cut into the pixel's samples (coverage), how solid its core is, and
+// any plume numbers of its own
+const LOOKS = {
+  A: {name: 'сейчас: тонкие волокна', atlas: 'fibre', blend: false, cover: 1.7, plume: {}},
+  B: {name: 'мягкий пух', atlas: 'soft', blend: true, cover: 1.2, plume: {}},
+  C: {name: 'шёлковые пряди', atlas: 'silk', blend: true, cover: 1.3, plume: {}},
+  D: {name: 'кисти', atlas: 'brush', blend: true, cover: 1.15, plume: {racemes: 7, featherMM: 24}},
+};
 // light bounced off the open field (Ghost adds the sun's bounce off the ground to its ambient): the field's albedo — white
 // plumes and gold — and how much of it fluff takes from all around (the plumes light each other)
 const BOUNCE = {field: 0.25, fluff: 0.06};
@@ -227,7 +239,8 @@ try {
   // tall plume — the lower ones open more, the tips curl outward and droop; a few bare twigs among them; twigs and
   // golden leaves lower down, the last leaf (the flag) just under the head; now and then a small young plume
   function buildPlant(Q, seed, D){
-    const R = rng(seed), S = new Strips(), H = Q.height, up = V3(0, 1, 0);
+    const R = rng(seed), body = new Strips(), heads = new Strips(), H = Q.height, up = V3(0, 1, 0);
+    const S = {add: (pts, o) => (o.part === PART.head ? heads : body).add(pts, o)};   // the fluff apart: it may be drawn see-through
     const archPhi = Math.PI*(0.8 + 0.3*R()), leanPhi = archPhi - 0.2 + 0.4*R(), arch = 0.2 + R();
     const archDir = V3(Math.cos(archPhi), 0, Math.sin(archPhi));
     const s0 = V3(), s1 = V3(0, H*0.45, 0), s2 = V3(0, H*0.8, 0).addScaledVector(archDir, H*0.04*arch), s3 = V3(0, H, 0).addScaledVector(archDir, H*0.06*arch);
@@ -305,7 +318,7 @@ try {
         normal: v => { const T = bezD(sheath, q1, q2, q3, v).normalize(), sv = T.clone().cross(out); if (sv.lengthSq() < 1e-8) sv.set(0, 0, 1);
                        return sv.normalize().cross(T).normalize(); }});
     }
-    return S;
+    return {body, heads};
   }
   // a clump of grass blades sharing their lean, height and colour (Ghost's clumps): each blade rises, then bends over
   function buildGrass(seed, segs){                                    // heights in units of a 0.5 m clump; its instance scales it
@@ -322,23 +335,48 @@ try {
     return S;
   }
 
-  // the fluff of a raceme, drawn once by code (four kinds side by side; the last thin, not fluffy yet): white fibres
-  // leaving a rib, slanting toward the tip — a dense core, then fewer and fewer, out to a soft airy halo. Kept as its
-  // own numbers (not a canvas, which would turn the see-through parts black and leave dark fringes)
-  function featherAtlas(w = 512, h = 1024){
-    const data = new Uint8Array(w*h*4), Wh = PLUME.featherMM/1000, Len = PLUME.rLenCm/100;
+  // the fluff of a raceme, drawn by code (four kinds side by side; the last thin, not fluffy yet), in one of the looks'
+  // styles. Kept as its own numbers (not a canvas, which would turn the see-through parts black and leave dark fringes)
+  //   fibre — hundreds of white fibres off a rib, slanting toward the tip, out to an airy halo; a few metres away a fibre
+  //           is thinner than a pixel, so in the wind it shimmers
+  //   soft  — the same fan as one soft body of cotton: no single fibres, a smooth edge, a faint grain along the fibres
+  //   silk  — fewer, broader locks combed toward the tip, soft-edged (as in his picture)
+  //   brush — a wide soft fan in a few broad strokes, its tip parting into locks (as Ghost paints its far pampas)
+  function featherAtlas(style, Wh, Len, w = 512, h = 1024){
+    const data = new Uint8Array(w*h*4);
     const h1 = n => { const x = Math.sin(n*12.9898)*43758.5453; return x - Math.floor(x); };
+    const n1 = x => { const i = Math.floor(x), f = x - i, q = f*f*(3 - 2*f); return h1(i) + (h1(i + 1) - h1(i))*q; };   // smooth noise
     const prof = v => (0.25 + 0.75*sm(0, 0.22, v))*(1 - 0.6*Math.pow(sm(0.6, 1, v), 1.6));   // slim base, then a tail
     for (let y = 0; y < h; y++){
-      const v = (y + 0.5)/h, along = v*Len, tn = 0.45 - 0.1*v, pv = prof(v), gold0 = 0.25*(1 - sm(0, 0.15, v));
+      const v = (y + 0.5)/h, along = v*Len, pv = prof(v), gold0 = 0.25*(1 - sm(0, 0.15, v));
       for (let x = 0; x < w; x++){
         const u = (x + 0.5)/w*VARIANTS, k = Math.floor(u), s = (u - k)*2 - 1, side = s < 0 ? -1 : 1, thin = k === VARIANTS - 1;
-        const r = Math.abs(s)*Wh, s0 = along - r/tn - 0.6*r*r/Wh;     // a fibre leaves the rib slanting toward the tip
-        const sp = 0.0014*(thin ? 1.7 : 1), fi = Math.floor(s0/sp), ff = s0/sp - fi, id = fi + side*733 + k*1913;
-        const len = Wh*prof(Math.min(1, Math.max(0, s0/Len)))*(0.35 + 0.9*h1(id))*(1 + 0.2*(h1(id + 5) - 0.5))*(thin ? 0.45 : 1);
-        const fibre = 1 - sm(0.15, 0.5, Math.abs(ff - 0.5)), core = Math.pow(Math.max(0, 1 - r/(Wh*pv)), 1.2);
-        const a = s0 < 0 ? 0 : (1 - sm(0.55, 1, r/Math.max(len, 1e-4)))*(0.55 + 0.45*fibre)*(0.16 + 0.5*core)*(thin ? 0.6 : 1);
-        const gold = gold0 + (thin ? 0.3 : 0), b = 0.92 + 0.08*h1(id + 9), i = (y*w + x)*4;   // white, a little uneven; golden at the base
+        const r = Math.abs(s)*Wh, core = Math.pow(Math.max(0, 1 - r/(Wh*pv)), 1.2);
+        let a, b;
+        if (style === 'fibre'){
+          const tn = 0.45 - 0.1*v, s0 = along - r/tn - 0.6*r*r/Wh;   // a fibre leaves the rib slanting toward the tip
+          const sp = 0.0014*(thin ? 1.7 : 1), fi = Math.floor(s0/sp), ff = s0/sp - fi, id = fi + side*733 + k*1913;
+          const len = Wh*prof(Math.min(1, Math.max(0, s0/Len)))*(0.35 + 0.9*h1(id))*(1 + 0.2*(h1(id + 5) - 0.5))*(thin ? 0.45 : 1);
+          const fibre = 1 - sm(0.15, 0.5, Math.abs(ff - 0.5));
+          a = s0 < 0 ? 0 : (1 - sm(0.55, 1, r/Math.max(len, 1e-4)))*(0.55 + 0.45*fibre)*(0.16 + 0.5*core)*(thin ? 0.6 : 1);
+          b = 0.92 + 0.08*h1(id + 9);
+        } else if (style === 'silk'){
+          const s0 = along - r/0.24 - 0.3*r*r/Wh;                     // locks lie closer along the rib
+          const sp = 0.0034*(thin ? 1.5 : 1), fi = Math.floor(s0/sp), ff = s0/sp - fi, id = fi + side*733 + k*1913;
+          const len = Wh*prof(Math.min(1, Math.max(0, s0/Len)))*(0.75 + 0.45*h1(id))*(thin ? 0.5 : 1);
+          const lock = 1 - sm(0.12, 0.42, Math.abs(ff - 0.5));        // a soft-edged lock, not a hair
+          a = s0 < 0 ? 0 : (1 - sm(0.6, 1, r/Math.max(len, 1e-4)))*(0.4 + 0.6*lock)*(0.35 + 0.55*core)*(thin ? 0.6 : 1);
+          b = 0.9 + 0.1*h1(id + 9);
+        } else {                                                      // soft, brush: one body, its edge drawn smooth
+          const brush = style === 'brush', s0 = along - r/0.4;
+          const wave = brush ? 0.7 + 0.3*n1(v*5 + k*7.3 + side*2.1) : 0.85 + 0.15*n1(v*7 + k*3.1 + side*1.7);
+          const parted = brush ? 1 - 0.6*sm(0.55, 1, v)*sm(0.3, 0.7, n1(s0/0.012 + k*5)) : 1;
+          const d = r/Math.max(Wh*pv*wave*(thin ? 0.55 : 1), 1e-5);
+          const grain = brush ? 0.75 + 0.25*n1(s0/0.008 + side*31 + k*17) : 0.9 + 0.1*n1(s0/0.003 + side*31 + k*17);
+          a = s0 < -0.002 ? 0 : (1 - sm(brush ? 0.3 : 0.4, 1, d))*(0.55 + 0.45*Math.pow(Math.max(0, 1 - d), 1.5))*grain*parted*(thin ? 0.55 : 1);
+          b = 0.94 + 0.06*n1(s0/0.01 + k*11);
+        }
+        const gold = gold0 + (thin ? 0.3 : 0), i = (y*w + x)*4;      // white, a little uneven; golden at the base
         data[i] = 255*(0.98*b*(1 - gold) + 0.9*gold); data[i + 1] = 255*(0.975*b*(1 - gold) + 0.8*gold);
         data[i + 2] = 255*(0.965*b*(1 - gold) + 0.62*gold); data[i + 3] = 255*Math.min(1, a);
       }
@@ -347,7 +385,7 @@ try {
     Object.assign(t, {colorSpace: THREE.SRGBColorSpace, generateMipmaps: true, minFilter: THREE.LinearMipmapLinearFilter, magFilter: THREE.LinearFilter, anisotropy: 4, needsUpdate: true});
     return t;
   }
-  const feather = featherAtlas();
+  const atlases = {}, atlasOf = (style, P) => atlases[style + P.featherMM] ||= featherAtlas(style, P.featherMM/1000, P.rLenCm/100);
 
   // ── one law of light for the whole field (Ghost: one physical light; materials differ only in how they answer it):
   // the sun from the atmosphere with its cascaded shadows, and the sky's light on each normal. Fluff answers as Ghost's
@@ -389,8 +427,10 @@ try {
   }
 
   // ── a plant drawn many times: each copy has its place and turn (iP) and its size, height, colour and give in the wind
-  // (iS). The wind bends it from its root, its top most (a spring); its feathers flutter
-  function fieldMaterial(H0, grass){
+  // (iS). The wind bends it from its root, its top most (a spring); its feathers flutter. mode: 'opaque' (stalks,
+  // leaves, grass), 'cover' (fluff cut into the pixel's samples), 'blend' (fluff with a soft see-through edge) or
+  // 'core' (the dense core of blended fluff, depth only, drawn first so the soft fluff over it overlaps right)
+  function fieldMaterial(H0, {grass = false, feather, mode = 'opaque', cover = 1} = {}){
     const iP = attribute('iP', 'vec4'), iS = attribute('iS', 'vec4');
     const aT = attribute('aT', 'vec3'), aK = attribute('aK', 'vec4'), aN = attribute('aN', 'vec4'), aC = attribute('aC', 'vec4');
     const side = aK.x, bend = aK.z, part = aK.w;
@@ -410,7 +450,9 @@ try {
     const across = select(flat, normalize(cross(T, Nleaf)), normalize(cross(T, V)));
     const w = aK.y.mul(iS.x).mul(select(flat, float(2).sub(abs(dot(Nleaf, V))), float(1)));
     const m = new THREE.NodeMaterial();
-    Object.assign(m, {lights: true, side: THREE.DoubleSide, alphaToCoverage: true, map: null});   // no map: the shadow pass would look for one
+    Object.assign(m, {lights: mode !== 'core', side: THREE.DoubleSide, alphaToCoverage: mode === 'cover', map: null});   // no map: the shadow pass would look for one
+    if (mode === 'blend') Object.assign(m, {transparent: true, depthWrite: false});
+    if (mode === 'core') Object.assign(m, {colorWrite: false, alphaTest: 0.5});
     m.positionNode = spine.add(across.mul(side).mul(w));
     // the light's normal: a plume is one soft ball of fluff around its middle (lit as a whole, as games light foliage),
     // leaning up — fluff takes the sky's light from all around, not only on its upper side; a stalk is round; a leaf
@@ -436,7 +478,7 @@ try {
     const leafCol = grass ? mix(vec3(0.2, 0.11, 0.04), vec3(0.62, 0.42, 0.18), smoothstep(0, 0.9, v))
       : mix(vec3(...lin([0.78, 0.53, 0.26])), vec3(...lin([0.86, 0.66, 0.36])), smoothstep(0.1, 1, v)).mul(low);
     m.colorNode = vec4(select(head, fluffCol, select(isFlat, leafCol, stalkCol).mul(amber).mul(vTint)), 1);
-    const alpha = select(head, fx.a.mul(FLUFF.cover).min(1), float(1));
+    const alpha = select(head, fx.a.mul(cover).min(1), float(1));
     m.opacityNode = alpha;
     m.maskShadowNode = head.not().or(fx.a.greaterThan(0.3));            // only the dense fluff stops the sun
     // a fibre leaves the rib slanting outward, to the side of the raceme it is on
@@ -485,21 +527,38 @@ try {
     g.instanceCount = list.length; return g;
   }
 
-  const field = new THREE.Group(), fieldInfo = {plumes: 0, blades: 0, tris: 0, draws: 0};
-  const plantMat = fieldMaterial(PLUME.height, false), grassMat = fieldMaterial(0.5, true);
-  { // one template per kind of head, each with a little randomness of its own, so neighbours are not clones
-    const shape = k => { const R = rng(500 + k), q = KINDS[k].q, m = (key, j) => PLUME[key]*(q[key] ?? 1)*j;
-      return {...PLUME, thin: q.thin || 0, racemes: Math.round(m('racemes', 0.9 + 0.2*R())), rLenCm: m('rLenCm', 0.92 + 0.16*R()),
+  const field = new THREE.Group(), plants = new THREE.Group(), fieldInfo = {plumes: 0, blades: 0, tris: 0, draws: 0, look: '', grassTris: 0, grassDraws: 0};
+  field.add(plants);
+  const tiers = scatter(), bodyMat = fieldMaterial(PLUME.height, {feather: atlasOf('fibre', PLUME)}), lookMats = {};
+  // the plants in one of the looks: one template per kind of head, each with a little randomness of its own, so
+  // neighbours are not clones; the fluff drawn far to near, so its soft edges lie over what is behind them
+  function setLook(key){
+    const look = LOOKS[key] ? key : 'A', L = LOOKS[look], P = {...PLUME, ...L.plume}, feather = atlasOf(L.atlas, P);
+    const mats = lookMats[look] ||= {heads: fieldMaterial(P.height, {feather, mode: L.blend ? 'blend' : 'cover', cover: L.cover}),
+      core: L.blend ? fieldMaterial(P.height, {feather, mode: 'core', cover: L.cover}) : null};
+    for (const m of [...plants.children]){ plants.remove(m); if (!m.userData.shared) m.geometry.dispose(); }
+    fieldInfo.plumes = 0; fieldInfo.look = look;
+    const shape = k => { const R = rng(500 + k), q = KINDS[k].q, m = (key, j) => P[key]*(q[key] ?? 1)*j;
+      return {...P, thin: q.thin || 0, racemes: Math.round(m('racemes', 0.9 + 0.2*R())), rLenCm: m('rLenCm', 0.92 + 0.16*R()),
         spread: m('spread', 0.85 + 0.3*R()), droop: m('droop', 0.7 + 0.6*R()), curl: m('curl', 0.8 + 0.4*R()), featherMM: m('featherMM', 1),
-        height: PLUME.height*(0.9 + 0.2*R())}; };
-    const tiers = scatter();
-    for (const tier of ['near', 'mid', 'far']) KINDS.forEach((_, k) => {
-      const list = tiers[tier].filter(q => q.k === k); if (!list.length) return;
-      const strips = buildPlant(shape(k), PLUME.seed + k*101, DETAIL[tier]), mesh = new THREE.Mesh(instanced(strips, list), plantMat);
-      mesh.castShadow = mesh.receiveShadow = true; field.add(mesh);
-      fieldInfo.plumes += list.length; fieldInfo.tris += strips.triangles*list.length; fieldInfo.draws++;
-    });
-    // the grass, in clumps, out of the top of the leaf layer
+        height: P.height*(0.9 + 0.2*R())}; };
+    const away = q => Math.hypot(q.p[0] - CAM.pos[0], q.p[2] - CAM.pos[2]);
+    let draws = 0, tris = 0;
+    ['near', 'mid', 'far'].forEach((tier, t) => KINDS.forEach((_, k) => {
+      const list = tiers[tier].filter(q => q.k === k).sort((a, b) => away(b) - away(a)); if (!list.length) return;
+      const {body, heads} = buildPlant(shape(k), PLUME.seed + k*101, DETAIL[tier]), fluff = instanced(heads, list);
+      const add = (geo, mat, order, cast, shared) => { const mesh = new THREE.Mesh(geo, mat);
+        Object.assign(mesh, {castShadow: cast, receiveShadow: true, renderOrder: order, frustumCulled: false}); mesh.userData.shared = shared; plants.add(mesh); draws++; };
+      add(instanced(body, list), bodyMat, 0, true, false);
+      if (mats.core) add(fluff, mats.core, 1, false, true);
+      add(fluff, mats.heads, L.blend ? 4 - t : 0, true, false);      // blended fluff: the far tier first
+      fieldInfo.plumes += list.length; tris += (body.triangles + heads.triangles*(mats.core ? 2 : 1))*list.length;
+    }));
+    fieldInfo.tris = fieldInfo.grassTris + tris; fieldInfo.draws = fieldInfo.grassDraws + draws;
+    return look;
+  }
+  const grassMat = fieldMaterial(0.5, {grass: true, feather: atlasOf('fibre', PLUME)});
+  { // the grass, in clumps, out of the top of the leaf layer
     const R = rng(GRASS.seed);
     GRASS.bands.forEach(([d0, d1, dens, segs], b) => {
       const list = [];
@@ -509,11 +568,11 @@ try {
         list.push({p: [x, ground(x, z) + leafTop(z) - 0.08, z, R()*6.283], s: [hgt/0.5*(0.85 + 0.3*R()), 1, 0.75 + 0.45*R(), 0.8 + 0.4*R()]});
       }
       const strips = buildGrass(GRASS.seed + b, segs), mesh = new THREE.Mesh(instanced(strips, list), grassMat);
-      mesh.receiveShadow = true; field.add(mesh);
-      fieldInfo.blades += list.length*GRASS.perClump; fieldInfo.tris += strips.triangles*list.length; fieldInfo.draws++;
+      Object.assign(mesh, {receiveShadow: true, frustumCulled: false}); field.add(mesh);
+      fieldInfo.blades += list.length*GRASS.perClump; fieldInfo.grassTris += strips.triangles*list.length; fieldInfo.grassDraws++;
     });
   }
-  for (const m of field.children) m.frustumCulled = false;
+  setLook((location.hash.match(/look=([A-D])/) || [])[1] || 'A');
   scene.add(field);
 
   // the hill, drawn at the top of the dense leaf layer: golden stalks standing close, lit ones and dark gaps; seen from
@@ -643,17 +702,19 @@ try {
     $('el').addEventListener('input', e => { setSun(SUN.az, +e.target.value); show(); });
     $('haze').addEventListener('input', e => { hazeDensity.value = e.target.value/1e4; show(); });
     $('wind').addEventListener('input', e => { windStrength.value = e.target.value/100; show(); });
+    for (const [k, L] of Object.entries(LOOKS)) $('look').append(new Option(`${k} — ${L.name}`, k));
+    $('look').value = fieldInfo.look; $('look').addEventListener('change', e => setLook(e.target.value));
     show(); }
 
   let frames = 0, t0 = performance.now();
   renderer.setAnimationLoop(now => {
     pipeline.render(); frames++;
     if (now - t0 > 1000){
-      hud.textContent = `${Math.round(frames*1000/(now - t0))} кадров/с · ${renderer.backend.isWebGPUBackend ? 'WebGPU' : 'WebGL2'} · солнце ${SUN.az}°/${SUN.el}°`;
+      hud.textContent = `${Math.round(frames*1000/(now - t0))} кадров/с · ${renderer.backend.isWebGPUBackend ? 'WebGPU' : 'WebGL2'} · солнце ${SUN.az}°/${SUN.el}° · метёлки ${fieldInfo.look}`;
       frames = 0; t0 = now;
     }
   });
-  window.world = {renderer, scene, camera, atmosphere, sun, cascades, pipeline, tree, field, fieldInfo, setSun, windStrength, windDir, parts, hazeDensity, airParts, sunMap, sunCam, sunView, frame, air, airTex,
+  window.world = {renderer, scene, camera, atmosphere, sun, cascades, pipeline, tree, field, fieldInfo, setSun, windStrength, windDir, parts, hazeDensity, airParts, sunMap, sunCam, sunView, frame, air, airTex, setLook,
     setExposure: e => { renderer.toneMappingExposure = e; }};   // for checking from the console
 } catch (err) {
   hud.textContent = 'Не запустилось: ' + err.message;
