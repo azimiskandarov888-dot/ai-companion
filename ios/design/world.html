@@ -38,6 +38,7 @@ body { background: var(--bg); color: var(--fg); margin: 0; font: 12px/1.4 ui-mon
   <label>Ветер <span id="windOut"></span><input id="wind" type="range" min="0" max="100" step="1"></label>
   <label>Метёлки<select id="look"></select></label>
   <label class="check"><input id="settle" type="checkbox"> Сглаживание (как TAA в Ghost)</label>
+  <label>Качество <span>(страница перезагрузится)</span><select id="quality"></select></label>
 </div>
 
 <script type="importmap">
@@ -142,14 +143,22 @@ const THROUGH = 3;                                                   // how stro
 // ══ Lighter on a phone. Safari on an iPhone closes a page that takes too much memory ("A problem repeatedly occurred").
 // The page remembers which step of loading it began last: if it never got as far as its first frames, the phone closed
 // it, and next time it starts a level lighter and says where it stopped. Levels: 0 full (a computer), 1 a phone, 2 the
-// lightest (no sun shadows). ?level=… tries one
+// lightest (no sun shadows). The panel's «Качество» picks one (kept, and in the address as #q=…; a pick that fell is
+// dropped, so a phone never gets stuck closing); ?level=… tries one
 const STEPS = {gpu: 'видеокарта', sky: 'небо', field: 'поле', tree: 'дерево', frames: 'первые кадры'};
 const memory = (() => { try { const m = localStorage; m.setItem('bob.check', '1'); m.removeItem('bob.check'); return m; } catch { return null; } })();
 const lastStep = memory?.getItem('bob.world.step'), lastLevel = Number(memory?.getItem('bob.world.level') ?? NaN);
 const fell = !!lastStep && lastStep !== 'done';                      // last time it began a step and never got its frames
 const onPhone = /iPhone|iPad|iPod|Android/.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent));
-let LEVEL = TRY.level ?? (onPhone ? 1 : 0);
-if (fell && TRY.level === undefined) LEVEL = Math.min(2, Math.max(LEVEL, (Number.isNaN(lastLevel) ? LEVEL : lastLevel) + 1));
+const QUALITY = ['полное', 'телефон', 'самое лёгкое'], auto = onPhone ? 1 : 0;
+const picked = (() => { const h = (location.hash.match(/q=([0-2])/) || [])[1]; if (h !== undefined) return +h;
+  const m = memory?.getItem('bob.world.quality'); return m === null || m === undefined ? undefined : +m; })();
+let LEVEL = TRY.level ?? picked ?? auto;
+if (fell && TRY.level === undefined){
+  LEVEL = Math.min(2, Math.max(auto, (Number.isNaN(lastLevel) ? LEVEL : lastLevel) + 1));
+  try { memory?.removeItem('bob.world.quality'); } catch {}
+  if (/q=/.test(location.hash)) history.replaceState(null, '', location.pathname + location.search);
+}
 const step = s => { try { memory?.setItem('bob.world.step', s); memory?.setItem('bob.world.level', String(LEVEL)); } catch {} };
 // per level: pixels per screen point at most, sun shadow cascades and their size, the tree and its maps, how many plumes
 // and grass (shares), the air's share of the screen
@@ -826,13 +835,19 @@ try {
     $('wind').addEventListener('input', e => { windStrength.value = e.target.value/100; show(); });
     for (const [k, L] of Object.entries(LOOKS)) $('look').append(new Option(`${k} — ${L.name}`, k));
     $('look').value = fieldInfo.look; $('look').addEventListener('change', e => setLook(e.target.value));
+    QUALITY.forEach((q, i) => $('quality').append(new Option(`${q}${i === auto ? ' (сам выбрал для этого устройства)' : ''}`, String(i))));
+    $('quality').value = String(LEVEL);
+    $('quality').addEventListener('change', e => {
+      try { memory?.setItem('bob.world.quality', e.target.value); } catch {}
+      location.hash = `look=${fieldInfo.look}&q=${e.target.value}`; location.reload();
+    });
     $('settle').checked = SETTLE.on;
     $('settle').addEventListener('change', e => { SETTLE.on = e.target.checked; crisp.value = SETTLE.on ? SETTLE.sharpen : 0; });
     show(); }
 
   step('frames');
   let frames = 0, total = 0, t0 = performance.now();
-  const note = (LEVEL ? ` · лёгкий режим ${LEVEL}` : '') + (fell ? ` · в прошлый раз закрылось: ${STEPS[lastStep] || lastStep}` : '')
+  const note = ` · качество: ${QUALITY[LEVEL]}` + (fell ? ` · в прошлый раз закрылось: ${STEPS[lastStep] || lastStep}` : '')
     + (treeTrouble ? ` · дерево не загрузилось: ${treeTrouble}` : '');
   renderer.setAnimationLoop(now => {
     draw(); frames++;
