@@ -10,7 +10,7 @@ html, body { height: 100%; }
 body { background: var(--bg); color: var(--fg); margin: 0; font: 12px/1.4 ui-monospace, "SF Mono", Menlo, monospace; overflow: hidden; }
 #view { display: block; margin: 0 auto; height: 100%; }
 #hud { position: fixed; left: max(12px, env(safe-area-inset-left, 0px)); bottom: calc(10px + env(safe-area-inset-bottom, 0px));
-  color: var(--muted); pointer-events: none; white-space: pre; font-variant-numeric: tabular-nums; }
+  right: 64px; color: var(--muted); pointer-events: none; white-space: pre-wrap; font-variant-numeric: tabular-nums; }
 #lightBtn { position: fixed; right: max(12px, env(safe-area-inset-right, 0px)); bottom: calc(8px + env(safe-area-inset-bottom, 0px));
   width: 44px; height: 44px; border-radius: 22px; border: 1px solid var(--line); background: var(--glass); color: var(--accent);
   font: 20px/1 system-ui, sans-serif; cursor: pointer; -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
@@ -160,6 +160,7 @@ const LIGHT = [
 ][LEVEL];
 
 const hud = document.getElementById('hud'), canvas = document.getElementById('view');
+let treeTrouble = '';                                                 // why the tree did not load, if it did not
 const V3 = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
 const sm = (a, b, x) => { const q = Math.min(1, Math.max(0, (x - a)/(b - a))); return q*q*(3 - 2*q); };
 const lin = c => c.map(v => Math.pow(v, 2.2));
@@ -636,8 +637,23 @@ try {
   const maps = {trunk: ['jacaranda_tree_trunk_diff_1k', 'jacaranda_tree_trunk_nor_gl_1k'],
     branches: ['jacaranda_tree_branches_diff_1k', 'jacaranda_tree_branches_nor_gl_1k'],
     leaves: ['jacaranda_leaves_autumn', 'jacaranda_tree_leaves_nor_gl_1k']};
+  // the tree's file keeps its binary part as text (an artifact serves no .glb). It is unpacked here into a binary glTF
+  // and handed to the loader whole: Safari on the iPhone refuses to fetch a data: address ("Failed to load buffer")
+  async function loadTree(url, loader){
+    const doc = await (await fetch(url)).json(), uri = doc.buffers[0].uri, text = atob(uri.slice(uri.indexOf(',') + 1));
+    const bin = new Uint8Array(text.length); for (let i = 0; i < text.length; i++) bin[i] = text.charCodeAt(i);
+    delete doc.buffers[0].uri;                                         // buffer 0 is now the binary chunk below
+    const json = new TextEncoder().encode(JSON.stringify(doc)), jl = (json.length + 3) & ~3, bl = (bin.length + 3) & ~3;
+    const glb = new ArrayBuffer(28 + jl + bl), v = new DataView(glb), b = new Uint8Array(glb);
+    v.setUint32(0, 0x46546C67, true); v.setUint32(4, 2, true); v.setUint32(8, glb.byteLength, true);              // "glTF", version 2
+    v.setUint32(12, jl, true); v.setUint32(16, 0x4E4F534A, true); b.set(json, 20); b.fill(0x20, 20 + json.length, 20 + jl);   // JSON
+    v.setUint32(20 + jl, bl, true); v.setUint32(24 + jl, 0x004E4942, true); b.set(bin, 28 + jl);                     // BIN
+    return loader.parseAsync(glb, '');
+  }
   const draco = new DRACOLoader().setDecoderPath('field-assets/draco/');
-  const [gltf, ...textures] = await Promise.all([new GLTFLoader().setDRACOLoader(draco).loadAsync(`field-assets/ph/${LIGHT.tree}.gltf.json`),
+  // the field stands even if the tree cannot load: then the line at the bottom says why
+  const [gltf, ...textures] = await Promise.all([loadTree(`field-assets/ph/${LIGHT.tree}.gltf.json`, new GLTFLoader().setDRACOLoader(draco))
+    .catch(err => { treeTrouble = err.message || String(err); console.error(err); return {scene: new THREE.Group()}; }),
     ...Object.values(maps).flatMap(([c, n]) => [load(c, true), load(n, false)])]);
   const texOf = {}; Object.keys(maps).forEach((k, i) => texOf[k] = [textures[2*i], textures[2*i + 1]]);
   const tree = new THREE.Group();
@@ -816,7 +832,8 @@ try {
 
   step('frames');
   let frames = 0, total = 0, t0 = performance.now();
-  const note = (LEVEL ? ` · лёгкий режим ${LEVEL}` : '') + (fell ? ` · в прошлый раз закрылось: ${STEPS[lastStep] || lastStep}` : '');
+  const note = (LEVEL ? ` · лёгкий режим ${LEVEL}` : '') + (fell ? ` · в прошлый раз закрылось: ${STEPS[lastStep] || lastStep}` : '')
+    + (treeTrouble ? ` · дерево не загрузилось: ${treeTrouble}` : '');
   renderer.setAnimationLoop(now => {
     draw(); frames++;
     if (++total === 60) step('done');                                  // it got its frames: it did not fall
