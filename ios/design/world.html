@@ -56,6 +56,8 @@ body { background: var(--bg); color: var(--fg); margin: 0; font: 12px/1.4 ui-mon
   <label>Метёлки<select id="look"></select></label>
   <label class="check"><input id="settle" type="checkbox"> Сглаживание (как TAA в Ghost)</label>
   <label>Качество <span>(страница перезагрузится)</span><select id="quality"></select></label>
+  <label>Тени <span>(страница перезагрузится)</span><select id="shadowMode">
+    <option value="turns">по очереди — на вид как было</option><option value="once">один раз — быстрее</option></select></label>
   <div class="row"><button id="testShort" type="button">Замер · 3 мин</button><button id="testLong" type="button">Долгий · 20 мин</button></div>
 </div>
 <div id="test" hidden role="status" aria-live="polite"></div>
@@ -85,8 +87,7 @@ import * as THREE from 'three/webgpu';
 import { pass, context, texture, vec2, vec3, vec4, float, saturation, attribute, uniform, time, mx_noise_float, cameraPosition,
   normalize, cross, dot, uv, Fn, cameraViewMatrix, cos, sin, select, mix, abs, exp, sqrt, fract, smoothstep, length, Loop, rtt,
   positionGeometry, positionWorld, normalWorld, normalView, positionViewDirection, diffuseColor, BRDF_Lambert, getViewPosition,
-  screenCoordinate, screenUV, interleavedGradientNoise, mrt, output, positionView, luminance, nodeObject, passTexture } from 'three/tsl';
-import { gaussianBlur } from 'three/addons/tsl/display/GaussianBlurNode.js';
+  screenUV, mrt, output, positionView, luminance, nodeObject, passTexture, floor } from 'three/tsl';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { CSMShadowNode } from 'three/addons/csm/CSMShadowNode.js';
@@ -149,15 +150,16 @@ const SETTLE = {on: true, keep: 0.88, clip: 1.0, sharpen: 0.35};
 const BOUNCE = {field: 0.25, fluff: 0.06};
 // the air (Ghost thickens it by art: physically the air between us and a hill 50 m away is almost clear): how thick at
 // the ground (per m), how fast it thins with height (m), Mie's pull toward the sun (Henyey–Greenstein g) and how much
-// of its light takes that pull, the steps along each ray, how far the march goes (and over the sky: the haze lies over
-// our field, the air beyond is clear); its share of the screen follows the level (LIGHT.air)
-const HAZE = {density: 0.0015, height: 6, g: 0.7, forward: 0.6, steps: 16, far: 160, skyFar: 70};
+// of its light takes that pull, the steps out to each kept distance along a ray (worked out once, so they can be many),
+// and how far it reaches over the sky (the haze lies over our field, the air beyond is clear); its share of the screen
+// follows the level (LIGHT.air)
+const HAZE = {density: 0.0015, height: 6, g: 0.7, forward: 0.6, steps: 24, skyFar: 70};
 const WIND = {dir: [-0.95, 0.3], strength: 0.55};                    // one wind for the whole world: where it blows, how hard
 const THROUGH = 3;                                                   // how strongly sunlight comes through the tree's leaves
 // for trying values from the address: ?az=…&el=…&exp=…&through=…&haze=…
 { const q = new URLSearchParams(location.search), n = k => q.has(k) ? +q.get(k) : undefined;
   SUN.az = n('az') ?? SUN.az; SUN.el = n('el') ?? SUN.el; HAZE.density = n('haze') ?? HAZE.density;
-  globalThis.TRY = {exp: n('exp'), through: n('through'), msaa: n('msaa'), steps: n('steps'), level: n('level')}; }
+  globalThis.TRY = {exp: n('exp'), through: n('through'), msaa: n('msaa'), steps: n('steps'), level: n('level'), shadows: q.get('shadows') ?? undefined}; }
 
 // ══ Lighter on a phone. Safari on an iPhone closes a page that takes too much memory ("A problem repeatedly occurred").
 // The page remembers which step of loading it began last: if it never got as far as its first frames, the phone closed
@@ -244,9 +246,19 @@ try {
   const sun = new AtmosphereLight(120);
   sun.castShadow = LIGHT.shadows; sun.shadow.mapSize.set(LIGHT.shadowMap, LIGHT.shadowMap);
   sun.target.position.set(0, 4, 25);
+  // the camera and the sun hold still, so the shadows are not all drawn every frame (that took more than a quarter of a
+  // phone's frame). 'turns', as Genshin Impact does it: the near cascade every second frame, the next every fourth, the
+  // farthest (past the crest, where nothing shows) only when something changes — the sun, the wind's strength, the
+  // plants. 'once': all only on a change, the plants then casting in their mean pose — faster, but a plume sways out of
+  // its shadow. Picked in the panel (kept, and in the address as #sh=…) or tried with ?shadows=…. The cascades copy
+  // this from the sun's shadow when they are made
+  const SHADOWS = (TRY.shadows || (location.hash.match(/sh=(once|turns)/) || [])[1] || memory?.getItem('bob.world.shadows')) === 'once' ? 'once' : 'turns';
+  sun.shadow.autoUpdate = false; sun.shadow.needsUpdate = true;
   const cascades = new CSMShadowNode(sun, {cascades: LIGHT.cascades, maxFar: 140, mode: 'practical', lightMargin: 40});
   sun.shadow.shadowNode = cascades;
   scene.add(sun, sun.target);
+  let shadowFrames = 30, shadowTick = 0, shadowTurns = SHADOWS === 'turns';   // frames left to draw them all afresh (at the start: till all is built)
+  const redrawShadows = (frames = 2) => { shadowFrames = Math.max(shadowFrames, frames); };
 
   // ── the wind, as in Ghost of Tsushima: one direction and strength for everything, and gusts from two layers of noise
   // drifting with it — large slow swells across the field and small quick ones (Rockenbeck, GDC 2021)
@@ -263,6 +275,26 @@ try {
   // big patches of colour over the field (Ghost of Yōtei's plains: "waves of gold"), gold to a deeper amber
   const macroAt = xz => smoothstep(0.42, 0.75, mx_noise_float(vec3(xz.mul(0.09), 3.1)).mul(0.35).add(0.5)
     .add(mx_noise_float(vec3(xz.mul(0.23), 7)).mul(0.15)));
+  // the gusts and the patches are the same for a whole plant, the light on the field for the whole scene, so they are
+  // worked out once into small pictures — the gusts and patches into a map of the field, half a metre a pixel, every
+  // frame; the light into one pixel, after the sun moves — and every point of a plant reads its plant's value there,
+  // instead of working the noise out again at each point (on the phone that cost a sixth of the frame)
+  const MAP = {x: [-12, 12], z: [-2, 50], perM: 2};
+  const fieldRT = new THREE.RenderTarget((MAP.x[1] - MAP.x[0])*MAP.perM, (MAP.z[1] - MAP.z[0])*MAP.perM, {type: THREE.HalfFloatType, depthBuffer: false});
+  const groundRT = new THREE.RenderTarget(1, 1, {type: THREE.HalfFloatType, depthBuffer: false});
+  const fieldQuad = new THREE.QuadMesh(new THREE.NodeMaterial()), groundQuad = new THREE.QuadMesh(new THREE.NodeMaterial());
+  { const xz = vec2(mix(float(MAP.x[0]), float(MAP.x[1]), uv().x), mix(float(MAP.z[0]), float(MAP.z[1]), uv().y));
+    fieldQuad.material.fragmentNode = vec4(gustAt(xz), macroAt(xz), 0, 1);
+    groundQuad.material.fragmentNode = vec4(openLight(), 1); }
+  const fieldAt = xz => texture(fieldRT.texture, xz.sub(vec2(MAP.x[0], MAP.z[0])).div(vec2(MAP.x[1] - MAP.x[0], MAP.z[1] - MAP.z[0]))).level(0);
+  const groundLight = texture(groundRT.texture, vec2(0.5, 0.5)).level(0).rgb;
+  let groundFrames = 90;                                               // (the atmosphere's tables are built over the first frames)
+  function fieldNow(){
+    const was = renderer.getRenderTarget();
+    renderer.setRenderTarget(fieldRT); fieldQuad.render(renderer);
+    if (groundFrames > 0){ groundFrames--; renderer.setRenderTarget(groundRT); groundQuad.render(renderer); }
+    renderer.setRenderTarget(was);
+  }
 
   // ══ The plants. A plant is a set of strips — a stalk, the racemes of its plume, leaves, twigs — each a middle line
   // the GPU makes into a ribbon. Per point: where it is, which way the line runs, which side of the ribbon and how wide,
@@ -490,9 +522,8 @@ try {
   // (iS). The wind bends it from its root, its top most (a spring); its feathers flutter. mode: 'opaque' (stalks,
   // leaves, grass), 'cover' (fluff cut into the pixel's samples), 'blend' (fluff with a soft see-through edge) or
   // 'core' (the dense core of blended fluff, depth only, drawn first so the soft fluff over it overlaps right).
-  // calm, only for the measurement: the gusts and the field's patches as if worked out once per plant, and the light on
-  // the field once per frame ({ground}: that light, read back once), instead of at every point
-  function fieldMaterial(H0, {grass = false, feather, mode = 'opaque', cover = 1, calm = null} = {}){
+  // calm, only for the measurement: steady gusts and patches, not even read from the field's map
+  function fieldMaterial(H0, {grass = false, feather, mode = 'opaque', cover = 1, calm = false} = {}){
     const iP = attribute('iP', 'vec4'), iS = attribute('iS', 'vec4');
     const aT = attribute('aT', 'vec3'), aK = attribute('aK', 'vec4'), aN = attribute('aN', 'vec4'), aC = attribute('aC', 'vec4');
     const side = aK.x, bend = aK.z, part = aK.w;
@@ -500,7 +531,7 @@ try {
     const size = vec3(iS.x, iS.x.mul(iS.y), iS.x), place = p => turn(p.mul(size)).add(iP.xyz);
     // the wind here: the gusts drifting over the field, the plant rocking a little on its own, its own give
     const phase = fract(iP.w.mul(7.31)).mul(6.283), H = size.y.mul(H0);
-    const gust = calm ? windStrength.mul(0.725) : gustAt(iP.xz);       // calm: the gusts' mean
+    const here = fieldAt(iP.xz), gust = calm ? windStrength.mul(0.725) : here.r;   // this plant's gusts and patch, from the map
     const reach = gust.mul(sin(time.mul(1.9).add(phase)).mul(0.3).add(1)).mul(iS.w).mul(0.28).add(0.02);
     const top = windDir.mul(reach.mul(H));                              // how far its top moves, m
     const bb = bend.clamp(0, 1.5), b2 = top.mul(bb.mul(bb));
@@ -517,13 +548,19 @@ try {
     if (mode === 'blend') Object.assign(m, {transparent: true, depthWrite: false});
     if (mode === 'core') Object.assign(m, {colorWrite: false, alphaTest: 0.5});
     m.positionNode = spine.add(across.mul(side).mul(w));
+    if (SHADOWS === 'once'){                                           // its shadow, drawn seldom: in the plant's mean pose,
+      const lean = windDir.mul(windStrength.mul(0.725).mul(iS.w).mul(0.28).add(0.02).mul(H)).mul(bb.mul(bb));   // leaning with the steady wind
+      const still = place(positionGeometry).add(vec3(lean.x, dot(lean, lean).mul(-0.5).div(bb.max(0.2)), lean.y)), Vs = normalize(cameraPosition.sub(still));
+      m.castShadowPositionNode = still.add(select(flat, normalize(cross(T, Nleaf)), normalize(cross(T, Vs))).mul(side)
+        .mul(aK.y.mul(iS.x).mul(select(flat, float(2).sub(abs(dot(Nleaf, Vs))), float(1)))));
+    }
     // the light's normal: a plume is one soft ball of fluff around its middle (lit as a whole, as games light foliage),
     // leaning up — fluff takes the sky's light from all around, not only on its upper side; a stalk is round; a leaf
     // flat, the side we see
     const vW = positionWorld, vT = T.toVarying('vT'), vSide = side.toVarying('vSide'), vNr = Nleaf.toVarying('vNr');
     const vCen = place(aC.xyz).add(vec3(top.x, 0, top.y).mul(1.2)).toVarying('vCen');
     const vPart = part.toVarying('vPart'), vAO = aN.w.toVarying('vAO'), vTint = iS.z.toVarying('vTint');
-    const vMacro = (calm ? float(0.15) : macroAt(iP.xz)).toVarying('vMacro'), vCombed = reach.toVarying('vCombed');
+    const vMacro = (calm ? float(0.15) : here.g).toVarying('vMacro'), vCombed = reach.toVarying('vCombed');
     const head = vPart.greaterThan(0.5).and(vPart.lessThan(1.5)), isFlat = vPart.greaterThan(1.5), Vf = normalize(cameraPosition.sub(vW));
     const acrossF = normalize(cross(vT, Vf)), towardF = normalize(cross(acrossF, vT));
     const nStalk = normalize(acrossF.mul(vSide).add(towardF.mul(sqrt(float(1).sub(vSide.mul(vSide)).max(0)))));
@@ -546,9 +583,8 @@ try {
     m.maskShadowNode = head.not().or(fx.a.greaterThan(0.3));            // only the dense fluff stops the sun
     // a fibre leaves the rib slanting outward, to the side of the raceme it is on
     const fibre = normalize(vT.mul(Math.cos(FLUFF.slant)).add(acrossF.mul(select(vSide.lessThan(0), float(-1), float(1))).mul(Math.sin(FLUFF.slant))));
-    const ground = calm?.ground ?? openLight().toVarying('vGround');   // once per point: it is the same everywhere
     const model = new FieldLight({head, flat: isFlat, thin: float(1).sub(alpha.mul(0.6)), combed: vCombed.mul(1.5).add(1),
-      fibre: normalize(cameraViewMatrix.mul(vec4(fibre, 0)).xyz), ground});
+      fibre: normalize(cameraViewMatrix.mul(vec4(fibre, 0)).xyz), ground: groundLight});
     m.setupLightingModel = () => model;
     m.userData.args = [H0, {grass, feather, mode, cover}];             // so the measurement can build its calm twin
     return m;
@@ -620,6 +656,7 @@ try {
       fieldInfo.plumes += list.length; tris += (body.triangles + heads.triangles*(mats.core ? 2 : 1))*list.length;
     }));
     fieldInfo.tris = fieldInfo.grassTris + tris; fieldInfo.draws = fieldInfo.grassDraws + draws;
+    redrawShadows();                                                   // new plants, new shadows
     return look;
   }
   const grassMat = fieldMaterial(0.5, {grass: true, feather: atlasOf('fibre', PLUME)});
@@ -648,7 +685,7 @@ try {
   { const W = positionWorld, dist = length(W.sub(cameraPosition)), sx = W.x.mul(34);
     const n1 = x => mx_noise_float(vec3(x, 0.5, 0.5)).mul(0.5).add(0.5);
     const st = mix(n1(sx).mul(0.65).add(n1(sx.mul(0.31).add(7)).mul(0.35)), float(0.5), smoothstep(16, 30, dist));
-    const near = mix(vec3(0.08, 0.045, 0.02), vec3(0.5, 0.33, 0.15), smoothstep(0.3, 0.8, st)).mul(mix(vec3(1), vec3(1, 0.8, 0.58), macroAt(W.xz)));
+    const near = mix(vec3(0.08, 0.045, 0.02), vec3(0.5, 0.33, 0.15), smoothstep(0.3, 0.8, st)).mul(mix(vec3(1), vec3(1, 0.8, 0.58), fieldAt(W.xz).g));
     const far = vec3(0.2, 0.12, 0.05).mul(mx_noise_float(vec3(W.x.mul(0.25), W.z.mul(0.5), 2)).mul(0.25).add(0.75));
     layer.colorNode = mix(near, far, smoothstep(26, 50, dist));
     const toUs = cameraPosition.sub(W);
@@ -696,21 +733,23 @@ try {
       : new THREE.MeshStandardNodeMaterial({map, normalMap, roughness: 0.9});
     // the gold of the sunlit field bounced up into the crown, less deep inside it (its depth is in the vertex colour)
     const deep = o.geometry.attributes.color ? attribute('color', 'vec4').x : float(1);
-    const glow = ground => texture(map).rgb.mul(ground).mul(BOUNCE.field/Math.PI).mul(float(1).sub(normalWorld.y).mul(0.5)).mul(deep);
-    mat.emissiveNode = glow(openLight().toVarying('vGround'));
+    mat.emissiveNode = texture(map).rgb.mul(groundLight).mul(BOUNCE.field/Math.PI).mul(float(1).sub(normalWorld.y).mul(0.5)).mul(deep);
     const mesh = new THREE.Mesh(o.geometry, mat);
     mesh.castShadow = mesh.receiveShadow = true; tree.add(mesh);
-    mesh.userData.calm = ground => Object.assign(mat.clone(), {emissiveNode: glow(ground)});   // for the measurement: that light once per frame
   });
   tree.position.set(TREE.at[0], ground(...TREE.at) - 0.1, TREE.at[1]); tree.rotation.y = THREE.MathUtils.degToRad(TREE.turn);
   scene.add(tree);
   draco.dispose();                                                     // the decoder's workers and their memory are not needed any more
 
-  // ══ The air (step 4). Ghost lights its haze with the sun and the sun's own shadows (froxels — Patry, SIGGRAPH 2021), so
-  // shafts of light show where the air is in shadow. Here: a march along each pixel's ray, at half the screen's size,
-  // through a thin haze lying low over the field and thinning with height; lit by the sky, and by the sun — more toward
-  // it (Mie's forward glow, Henyey–Greenstein) — wherever the sun's view of the tree and the hill says the air is lit;
-  // blurred, then laid over the frame: the frame seen through the air, plus the light the air sends us
+  // ══ The air (step 4). Ghost lights its haze with the sun and the sun's own shadows, kept in cells along the view
+  // (froxels — Patry, SIGGRAPH 2021), so shafts of light show where the air is in shadow. Our camera never moves, so the
+  // air along each pixel's ray stays the same from frame to frame: it is worked out once — when the sun moves, the haze
+  // thickens or the screen changes — at eight distances along every ray (at a quarter of the screen's size, the eight
+  // side by side in one picture), and each frame a pixel only reads the two around its own surface's distance. A plume
+  // swaying in the wind finds the air in front of it where it is now, with no ghost of where it was. Along a ray: a thin
+  // haze lying low over the field and thinning with height; lit by the sky, and by the sun — more toward it (Mie's
+  // forward glow, Henyey–Greenstein) — wherever the sun's view of the tree and the hill says the air is lit. Then laid
+  // over the frame: the frame seen through the air, plus the light the air sends us
   const AIR = 3, sunMap = new THREE.RenderTarget(1024, 1024);         // the sun's view of what shades the air
   sunMap.depthTexture = new THREE.DepthTexture(1024, 1024);
   const sunCam = new THREE.OrthographicCamera(-48, 48, 48, -48, 1, 500), sunView = uniform(new THREE.Matrix4());
@@ -729,31 +768,48 @@ try {
     .sub(smoothstep(47, 75, z).mul(4)).add(leafTopAt(z));             // the top of the leaf layer (its small ripples left out)
   // our camera, by name: inside a pass of its own a shader's "camera" is the pass's flat one
   const eye = {pos: uniform(camera.position), world: uniform(camera.matrixWorld), unproject: uniform(camera.projectionMatrixInverse)};
-  function airNode(distTex){                                          // distTex: how far each pixel's surface is (the sky: the far plane)
-    return Fn(() => {
-      const at = uv(), d = distTex.sample(at).r;
-      const dir = normalize(eye.world.mul(vec4(getViewPosition(at, float(1), eye.unproject), 0)).xyz);
-      const dist = select(d.greaterThan(500).or(d.lessThan(0.1)), float(HAZE.skyFar), d.min(HAZE.far));
-      const ds = dist.div(TRY.steps ?? HAZE.steps), cosT = dot(dir, sunDir), g = HAZE.g;
-      const hg = float((1 - g*g)/(4*Math.PI)).div(float(1 + g*g).sub(cosT.mul(2*g)).pow(1.5));
-      const lux = getSplitScalarIlluminance(atmosphere.cameraPositionUnit.add(atmosphere.altitudeCorrectionUnit), atmosphere.sunDirectionECEF);
-      // the sun's light turned toward us; the sky's from above and the field's bounce from below, each from half the sphere
-      const sunL = lux.get('direct').mul(mix(float(1/(4*Math.PI)), hg, HAZE.forward));
-      const skyL = lux.get('indirect').add(lux.get('direct').mul(sunUp).add(lux.get('indirect')).mul(BOUNCE.field)).div(2*Math.PI);
-      const T = float(1).toVar(), L = vec3(0).toVar(), t = interleavedGradientNoise(screenCoordinate).mul(ds).toVar();
-      Loop(TRY.steps ?? HAZE.steps, () => {
-        const p = eye.pos.add(dir.mul(t));
-        const sigma = exp(p.y.sub(hillAt(p.x, p.z)).max(0).div(-HAZE.height)).mul(hazeDensity);
-        const s = sunView.mul(vec4(p, 1)).xyz, su = vec2(s.x.mul(0.5).add(0.5), s.y.mul(-0.5).add(0.5));
-        const inside = su.x.greaterThan(0).and(su.x.lessThan(1)).and(su.y.greaterThan(0)).and(su.y.lessThan(1));
-        const lit = select(inside.and(texture(sunMap.depthTexture, su).level(0).r.add(0.001).lessThan(s.z)), float(0), float(1));
-        L.addAssign(sunL.mul(mix(float(1), lit, airParts.shade)).mul(airParts.sun).add(skyL.mul(airParts.sky)).mul(sigma.mul(T).mul(ds)));
-        T.mulAssign(exp(sigma.mul(ds).negate()));
-        t.addAssign(ds);
-      });
-      return vec4(L, T);
-    })();
+  // where along each ray the air is kept: k = 0…7 at 3.6, 11, 21, 33, 47, 63, 81 and 100 m — closer together near us
+  const RAY = {n: 8, far: 100, p: 1.6}, rayAt = k => float(RAY.far).mul(k.add(1).div(RAY.n).pow(RAY.p));
+  const airStrips = Fn(() => {                                        // strip k: the air from us out to its distance
+    const k = floor(uv().x.mul(RAY.n)), at = vec2(fract(uv().x.mul(RAY.n)), uv().y);
+    const dir = normalize(eye.world.mul(vec4(getViewPosition(at, float(1), eye.unproject), 0)).xyz);
+    const ds = rayAt(k).div(TRY.steps ?? HAZE.steps), cosT = dot(dir, sunDir), g = HAZE.g;
+    const hg = float((1 - g*g)/(4*Math.PI)).div(float(1 + g*g).sub(cosT.mul(2*g)).pow(1.5));
+    const lux = getSplitScalarIlluminance(atmosphere.cameraPositionUnit.add(atmosphere.altitudeCorrectionUnit), atmosphere.sunDirectionECEF);
+    // the sun's light turned toward us; the sky's from above and the field's bounce from below, each from half the sphere
+    const sunL = lux.get('direct').mul(mix(float(1/(4*Math.PI)), hg, HAZE.forward));
+    const skyL = lux.get('indirect').add(lux.get('direct').mul(sunUp).add(lux.get('indirect')).mul(BOUNCE.field)).div(2*Math.PI);
+    const T = float(1).toVar(), L = vec3(0).toVar(), t = ds.mul(0.5).toVar();
+    Loop(TRY.steps ?? HAZE.steps, () => {
+      const p = eye.pos.add(dir.mul(t));
+      const sigma = exp(p.y.sub(hillAt(p.x, p.z)).max(0).div(-HAZE.height)).mul(hazeDensity);
+      const s = sunView.mul(vec4(p, 1)).xyz, su = vec2(s.x.mul(0.5).add(0.5), s.y.mul(-0.5).add(0.5));
+      const inside = su.x.greaterThan(0).and(su.x.lessThan(1)).and(su.y.greaterThan(0)).and(su.y.lessThan(1));
+      const lit = select(inside.and(texture(sunMap.depthTexture, su).level(0).r.add(0.001).lessThan(s.z)), float(0), float(1));
+      L.addAssign(sunL.mul(mix(float(1), lit, airParts.shade)).mul(airParts.sun).add(skyL.mul(airParts.sky)).mul(sigma.mul(T).mul(ds)));
+      T.mulAssign(exp(sigma.mul(ds).negate()));
+      t.addAssign(ds);
+    });
+    return vec4(L, T);
+  });
+  const airAtlas = rtt(airStrips(), 1, 1), airHalf = uniform(0.01);   // airHalf: half a pixel of a strip, so strips never mix
+  airAtlas.autoUpdate = false;
+  const drawAir = () => { airAtlas.textureNeedsUpdate = true; };
+  let airWarm = 90;                                                    // (the atmosphere's tables are built over the first frames)
+  function airSize(){                                                  // half of LIGHT.air's share of the screen: a quarter at the full level
+    const s = renderer.getSize(new THREE.Vector2()), p = renderer.getPixelRatio()*LIGHT.air/2;
+    const w = Math.max(1, Math.round(s.x*p)), h = Math.max(1, Math.round(s.y*p));
+    airAtlas.setSize(w*RAY.n, h); airHalf.value = 0.5/w;
   }
+  // a pixel's air: the two kept distances around its surface's (over the sky: HAZE.skyFar), and between them by distance
+  const airAt = distTex => Fn(() => {
+    const at = uv(), d = distTex.sample(at).r;
+    const dd = select(d.greaterThan(500).or(d.lessThan(0.1)), float(HAZE.skyFar), d.min(RAY.far));
+    const i = floor(dd.div(RAY.far).pow(1/RAY.p).mul(RAY.n).sub(1).clamp(-1, RAY.n - 1)), j = i.add(1).min(RAY.n - 1);
+    const strip = k => airAtlas.sample(vec2(at.x.clamp(airHalf, float(1).sub(airHalf)).add(k).div(RAY.n), at.y));
+    const d0 = select(i.lessThan(0), float(0), rayAt(i)), near = select(i.lessThan(0), vec4(0, 0, 0, 1), strip(i.max(0)));
+    return mix(near, strip(j), dd.sub(d0).div(rayAt(j).sub(d0).max(1e-3)).clamp(0, 1));
+  })();
 
   // after the scene: the sky where nothing stands, darker than the light it throws (as Ghost's local tone mapping keeps
   // it); the air; the smoothing over time; then the grade and the film curve
@@ -773,8 +829,7 @@ try {
   // GPU's memory saved; without it, four samples (0 or 4 only: one sample breaks the pass)
   const frame = pass(scene, camera, {samples: TRY.msaa === 4 || (TRY.msaa === undefined && !SETTLE.on) ? 4 : 0});
   frame.setMRT(mrt({output, distance: vec4(length(positionView), 0, 0, 1)}));
-  const airTex = rtt(airNode(frame.getTextureNode('distance')), 1, 1);
-  const air = gaussianBlur(airTex, null, 1.5);
+  const air = airAt(frame.getTextureNode('distance'));
 
   // ══ Smoothing over time, as Ghost's TAA (temporal anti-aliasing). Each frame the camera shifts by a fraction of a
   // pixel (a Halton sequence) and the new frame is blended into the frames before it, so thin stalks, fibres and their
@@ -832,17 +887,22 @@ try {
   let jitter = 0;
   function draw(){                                                     // one frame, shifted by a fraction of a pixel while smoothing
     if (skyFrames > 0){ skyFrames--; skyNow(); }
+    fieldNow();                                                        // this frame's gusts, and the field's light after the sun moved
+    if (shadowFrames > 0){ shadowFrames--; sun.shadow.needsUpdate = true; cascades.lights.forEach(l => { l.shadow.needsUpdate = true; }); }
+    else if (shadowTurns){ const L = cascades.lights, k = ++shadowTick;   // at most one cascade a frame, the nearest most often
+      if (L[0] && k % 2 === 0) L[0].shadow.needsUpdate = true; else if (L[1] && k % 4 === 1) L[1].shadow.needsUpdate = true; }
+    if (airWarm > 0 && --airWarm % 10 === 0) drawAir();
     if (SETTLE.on){ const w = canvas.width, h = canvas.height; jitter = jitter % 16 + 1;
       camera.setViewOffset(w, h, halton(jitter, 2) - 0.5, halton(jitter, 3) - 0.5, w, h); }
     pipeline.render();
     if (SETTLE.on) camera.clearViewOffset();
   }
-  onSun = () => { drawSunMap(); drawSky(); }; drawSunMap();
+  onSun = () => { drawSunMap(); drawSky(); drawAir(); redrawShadows(); groundFrames = Math.max(groundFrames, 3); }; drawSunMap();
 
   function resize(){
     const box = document.documentElement, h = box.clientHeight, w = Math.min(box.clientWidth, Math.round(h*0.62)), dpr = renderer.getPixelRatio();
     canvas.style.width = w + 'px'; renderer.setSize(w, h, false); camera.aspect = w/h; camera.updateProjectionMatrix();
-    airTex.setSize(Math.round(w*dpr*LIGHT.air), Math.round(h*dpr*LIGHT.air));
+    airSize(); redrawShadows();
     skyTarget.setSize(Math.round(w*dpr), Math.round(h*dpr)); drawSky();
   }
   addEventListener('resize', resize); resize();
@@ -856,15 +916,20 @@ try {
     $('az').value = SUN.az; $('el').value = SUN.el; $('haze').value = Math.round(hazeDensity.value*1e4); $('wind').value = Math.round(windStrength.value*100);
     $('az').addEventListener('input', e => { setSun(+e.target.value, SUN.el); show(); });
     $('el').addEventListener('input', e => { setSun(SUN.az, +e.target.value); show(); });
-    $('haze').addEventListener('input', e => { hazeDensity.value = e.target.value/1e4; show(); });
-    $('wind').addEventListener('input', e => { windStrength.value = e.target.value/100; show(); });
+    $('haze').addEventListener('input', e => { hazeDensity.value = e.target.value/1e4; drawAir(); show(); });
+    $('wind').addEventListener('input', e => { windStrength.value = e.target.value/100; redrawShadows(); show(); });   // its lean moves the shadows
     for (const [k, L] of Object.entries(LOOKS)) $('look').append(new Option(`${k} — ${L.name}`, k));
     $('look').value = fieldInfo.look; $('look').addEventListener('change', e => setLook(e.target.value));
     QUALITY.forEach((q, i) => $('quality').append(new Option(`${q}${i === auto ? ' (сам выбрал для этого устройства)' : ''}`, String(i))));
     $('quality').value = String(LEVEL);
     $('quality').addEventListener('change', e => {
       try { memory?.setItem('bob.world.quality', e.target.value); } catch {}
-      location.hash = `look=${fieldInfo.look}&q=${e.target.value}`; location.reload();
+      location.hash = `look=${fieldInfo.look}&q=${e.target.value}&sh=${SHADOWS}`; location.reload();
+    });
+    $('shadowMode').value = SHADOWS;
+    $('shadowMode').addEventListener('change', e => {
+      try { memory?.setItem('bob.world.shadows', e.target.value); } catch {}
+      location.hash = `look=${fieldInfo.look}&q=${LEVEL}&sh=${e.target.value}`; location.reload();
     });
     $('settle').checked = SETTLE.on;
     $('settle').addEventListener('change', e => { SETTLE.on = e.target.checked; crisp.value = SETTLE.on ? SETTLE.sharpen : 0; });
@@ -879,6 +944,10 @@ try {
   const wait = ms => new Promise(r => setTimeout(r, FAST ? ms/4 : ms));
   const r1 = x => x === null || x === undefined || Number.isNaN(x) ? null : Math.round(x*10)/10;
   const quantile = (a, q) => a.length ? [...a].sort((x, y) => x - y)[Math.min(a.length - 1, Math.floor(a.length*q))] : null;
+  // the mean without the lightest and heaviest tenth: frames take turns at the shadows, so a median would jump between
+  // the light frames and the heavy ones, while the mean is what the phone pays on average
+  const trimmed = a => { if (!a.length) return null; const s = [...a].sort((x, y) => x - y), cut = Math.floor(s.length*0.1), m = s.slice(cut, s.length - cut);
+    return m.reduce((t, x) => t + x, 0)/m.length; };
   const mean = a => { const v = a.filter(x => x !== null && x !== undefined); return v.length ? v.reduce((s, x) => s + x, 0)/v.length : null; };
   let measure = null, win = null, gpuBusy = false, doneBusy = false;
   // the GPU's clock, per frame. A tiled GPU overlaps its passes (one pass's points while the last one's pixels finish),
@@ -942,8 +1011,8 @@ try {
     await Promise.race([wait(ms), stopNow?.promise].filter(Boolean));
     const w = win; win = null;
     return {fps: w.dt.length ? r1(1000*w.dt.length/w.dt.reduce((s, x) => s + x, 0)) : null, frame: r1(quantile(w.dt, 0.5)),
-      frame95: r1(quantile(w.dt, 0.95)), frameMax: r1(w.dt.length ? Math.max(...w.dt) : null), gpu: r1(quantile(w.gpu, 0.5)),
-      gpu90: r1(quantile(w.gpu, 0.9)), gpuSum: r1(quantile(w.gpuSum, 0.5)), gpuN: w.gpu.length, done: r1(quantile(w.done, 0.5)),
+      frame95: r1(quantile(w.dt, 0.95)), frameMax: r1(w.dt.length ? Math.max(...w.dt) : null), gpu: r1(trimmed(w.gpu)),
+      gpuMed: r1(quantile(w.gpu, 0.5)), gpu90: r1(quantile(w.gpu, 0.9)), gpuSum: r1(trimmed(w.gpuSum)), gpuN: w.gpu.length, done: r1(trimmed(w.done)),
       cpu: r1(quantile(w.cpu, 0.5)), draws: w.draws, drawsMin: Number.isFinite(w.drawsMin) ? w.drawsMin : null, tris: w.tris, frames: w.dt.length};
   }
   const awake = () => new Promise(r => { const f = () => { if (!document.hidden){ document.removeEventListener('visibilitychange', f); r(); } };
@@ -956,32 +1025,19 @@ try {
     }
   }
 
-  // what is switched, one at a time: each part off, or worked out cheaper, or fewer pixels
-  const airSize = share => { const s = renderer.getSize(new THREE.Vector2()), p = renderer.getPixelRatio();
-    airTex.setSize(Math.max(1, Math.round(s.x*p*share)), Math.max(1, Math.round(s.y*p*share))); };
+  // what is switched, one at a time: each part off, or drawn the old way, or fewer pixels
   const showAll = (list, yes) => list.forEach(o => { o.visible = yes; });
   const fluffOf = part => { const mats = lookMats[fieldInfo.look]; return plants.children.filter(m => m.material === mats[part]); };
   const grassMeshes = () => field.children.filter(o => o !== plants);
-  let pixels0 = 1, calmGround, calmTried = false, unsettled = null, settledWas = SETTLE.on;
+  let pixels0 = 1, unsettled = null, settledWas = SETTLE.on;
   const calmMats = new Map(), output0 = pipeline.outputNode;
-  async function groundLight(){                                        // the light on the open field, read back once
-    const probe = new THREE.RenderTarget(1, 1, {type: THREE.FloatType, depthBuffer: false}), m = new THREE.NodeMaterial();
-    m.fragmentNode = vec4(openLight(), 1);
-    renderer.setRenderTarget(probe); new THREE.QuadMesh(m).render(renderer); renderer.setRenderTarget(null);
-    const px = await renderer.readRenderTargetPixelsAsync(probe, 0, 0, 1, 1); probe.dispose(); m.dispose();
-    return new THREE.Vector3(px[0], px[1], px[2]);
-  }
-  async function calmDown(on){                                         // the field and the tree with their calm twins
-    if (on && !calmTried){ calmTried = true; try { calmGround = uniform(await groundLight()); } catch (e) { console.warn(e); } }
+  function calmDown(on){                                               // the field with its calm twins: steady gusts, no map read
     for (const m of [...plants.children, ...grassMeshes()]){
       if (on){ const own = m.material; let c = calmMats.get(own);
-        if (!c){ const [H0, o] = own.userData.args; c = fieldMaterial(H0, {...o, calm: {ground: calmGround}}); calmMats.set(own, c); }
+        if (!c){ const [H0, o] = own.userData.args; c = fieldMaterial(H0, {...o, calm: true}); calmMats.set(own, c); }
         m.userData.own = own; m.material = c; }
       else if (m.userData.own){ m.material = m.userData.own; delete m.userData.own; }
     }
-    if (calmGround) tree.traverse(o => { if (!o.userData.calm) return;
-      if (on){ o.userData.own = o.material; o.material = o.userData.calmMat ||= o.userData.calm(calmGround); }
-      else if (o.userData.own){ o.material = o.userData.own; delete o.userData.own; } });
   }
   function noSettle(on){                                               // the frame and its air straight to the screen
     if (on){ settledWas = SETTLE.on; SETTLE.on = false;
@@ -990,18 +1046,18 @@ try {
     pipeline.needsUpdate = true;
   }
   const SWITCHES = [
-    {key: 'shadows', name: 'тени не перерисовываются', set: on => cascades.lights.forEach(l => { l.shadow.autoUpdate = !on; }), skip: () => !cascades.lights.length},
+    {key: 'shadows', name: 'тени каждый кадр', set: on => cascades.lights.forEach(l => { l.shadow.autoUpdate = on; }), skip: () => !cascades.lights.length},
+    {key: 'still', name: 'тени застыли', set: on => { shadowTurns = !on; }, skip: () => SHADOWS !== 'turns' || !cascades.lights.length},
     {key: 'core', name: 'без «ядра» метёлок', set: on => showAll(fluffOf('core'), !on), skip: () => !lookMats[fieldInfo.look]?.core},
     {key: 'fluff', name: 'без пуха', set: on => showAll([...fluffOf('heads'), ...fluffOf('core')], !on)},
     {key: 'plants', name: 'без метёлок совсем', set: on => { plants.visible = !on; }},
     {key: 'grass', name: 'без травы', set: on => showAll(grassMeshes(), !on)},
     {key: 'tree', name: 'без дерева', set: on => { tree.visible = !on; }},
     {key: 'hill', name: 'без холма', set: on => { hillMesh.visible = !on; }},
-    {key: 'calm', name: 'ветер и свет посчитаны заранее', slow: true, set: calmDown},
-    {key: 'air', name: 'без дымки', set: on => airSize(on ? 0 : LIGHT.air)},
+    {key: 'calm', name: 'ветер без карты поля', slow: true, set: calmDown},
     {key: 'settle', name: 'без сглаживания', slow: true, set: noSettle},
-    {key: 'px75', name: 'пикселей ×0,75', set: on => { renderer.setPixelRatio(on ? pixels0*0.75 : pixels0); airSize(LIGHT.air); }},
-    {key: 'px50', name: 'пикселей ×0,5', set: on => { renderer.setPixelRatio(on ? pixels0*0.5 : pixels0); airSize(LIGHT.air); }},
+    {key: 'px75', name: 'пикселей ×0,75', set: on => { renderer.setPixelRatio(on ? pixels0*0.75 : pixels0); airSize(); }},
+    {key: 'px50', name: 'пикселей ×0,5', set: on => { renderer.setPixelRatio(on ? pixels0*0.5 : pixels0); airSize(); }},
   ];
 
   // what the box at the top says
@@ -1031,7 +1087,8 @@ try {
       gpu = {vendor: i.vendor || '', architecture: i.architecture || '', description: i.description || '', f16: !!a?.features.has('shader-f16')}; } catch {}
     return {ua: navigator.userAgent, screen: `${screen.width}×${screen.height} @${devicePixelRatio}`, canvas: `${canvas.width}×${canvas.height}`,
       pixels: renderer.getPixelRatio(), level: LEVEL, quality: QUALITY[LEVEL], look: fieldInfo.look, settle: SETTLE.on, plumes: fieldInfo.plumes,
-      blades: fieldInfo.blades, tree: treeTrouble ? 'не загрузилось' : LIGHT.tree, shadows: LIGHT.shadows ? `${LIGHT.cascades}×${LIGHT.shadowMap}` : 'нет',
+      blades: fieldInfo.blades, tree: treeTrouble ? 'не загрузилось' : LIGHT.tree,
+      shadows: LIGHT.shadows ? `${LIGHT.cascades}×${LIGHT.shadowMap}, ${SHADOWS === 'once' ? 'один раз' : 'по очереди'}` : 'нет',
       cores: navigator.hardwareConcurrency || null, stamps: !!renderer.backend.trackTimestamp, gpu};
   }
   async function idleBeat(){                                           // frames with nothing drawn: 60 a second, 30 in Low Power Mode
@@ -1089,7 +1146,7 @@ try {
       const a = of(k), g = mean(a.map(r => r.gpu)), d = mean(a.map(r => r.done)), any = run.rows.find(r => r.key === k), vs = !any.base;
       return {key: k, name: any.name, gpu: r1(g), dGpu: vs && g !== null && bG !== null ? r1(g - bG) : null,
         done: r1(d), dDone: vs && d !== null && bD !== null ? r1(d - bD) : null, frame: r1(mean(a.map(r => r.frame))),
-        fps: r1(mean(a.map(r => r.fps))), cpu: r1(mean(a.map(r => r.cpu))), sum: r1(mean(a.map(r => r.gpuSum))),
+        fps: r1(mean(a.map(r => r.fps))), cpu: r1(mean(a.map(r => r.cpu))), sum: r1(mean(a.map(r => r.gpuSum))), p90: r1(mean(a.map(r => r.gpu90))),
         each: a.map(r => r.gpu ?? r.done ?? '—').join(' / '),
         draws: a[0]?.draws ?? null, drawsMin: a.length ? Math.min(...a.map(r => r.drawsMin ?? Infinity)) : null, tris: a[0]?.tris ?? null,
         error: a.length ? undefined : any.error};
@@ -1098,15 +1155,15 @@ try {
   const signed = x => x === null ? '' : ` (${x > 0 ? '+' : ''}${x})`;
   function report(){                                                   // the same as text, to copy into the chat
     const d = run.device, lines = [`Замер мира Боба · ${run.kind === 'long' ? 'долгий' : 'короткий'} · ${run.at}`,
-      `качество: ${d.quality} · холст ${d.canvas} · экран ${d.screen} · пустой кадр ${run.idle ?? '—'} мс · не гаснет: ${d.awake ? 'да' : 'нет'}`,
+      `качество: ${d.quality} · тени: ${d.shadows} · холст ${d.canvas} · экран ${d.screen} · пустой кадр ${run.idle ?? '—'} мс · не гаснет: ${d.awake ? 'да' : 'нет'}`,
       `видеокарта: ${[d.gpu.vendor, d.gpu.architecture, d.gpu.description].filter(Boolean).join(' / ') || '—'} · таймер видеокарты: ${d.stamps ? 'есть' : 'нет'}`];
     if (run.previousStop) lines.push(`в прошлый раз замер прервался: ${run.previousStop.name}`);
     if (run.kind === 'long') for (const e of run.log) lines.push(`${e.t} с | ${e.fps ?? '—'} к/с | кадр ${e.frame ?? '—'} / 95% ${e.frame95 ?? '—'} | видеокарта ${e.gpu ?? '—'} | готов ${e.done ?? '—'}${e.dark ? ' | экран гас' : ''}`);
     else {
       const st = d.stamps;                                             // without the GPU's clock: when the GPU said it was done
-      lines.push(`что | ${st ? 'видеокарта' : 'готов'} мс (разница) | по кругам | ${st ? 'сумма проходов | ' : ''}к/с | процессор мс | вызовов | треугольников`);
+      lines.push(`что | ${st ? 'видеокарта' : 'готов'} мс (разница) | по кругам | ${st ? '9 из 10 кадров ≤ | сумма проходов | ' : ''}к/с | процессор мс | вызовов | треугольников`);
       for (const s of summary()) lines.push(`${s.name} | ${st ? `${s.gpu ?? '—'}${signed(s.dGpu)}` : `${s.done ?? '—'}${signed(s.dDone)}`} | ${s.each} | `
-        + `${st ? `${s.sum ?? '—'} | ` : ''}${s.fps ?? '—'} | ${s.cpu ?? '—'} | ${s.draws ?? '—'} | ${s.tris ?? '—'}${s.error ? ' | ошибка: ' + s.error : ''}`);
+        + `${st ? `${s.p90 ?? '—'} | ${s.sum ?? '—'} | ` : ''}${s.fps ?? '—'} | ${s.cpu ?? '—'} | ${s.draws ?? '—'} | ${s.tris ?? '—'}${s.error ? ' | ошибка: ' + s.error : ''}`);
     }
     if (run.error) lines.push('ошибка: ' + run.error);
     return lines.join('\n');
@@ -1178,7 +1235,7 @@ try {
       frames = 0; t0 = now;
     }
   });
-  window.world = {renderer, scene, camera, atmosphere, sun, cascades, pipeline, tree, field, fieldInfo, setSun, windStrength, windDir, parts, hazeDensity, airParts, sunMap, sunCam, sunView, frame, air, airTex, setLook, draw, SETTLE, settleKeep, crisp, settle, settled, sharpened, skyTarget, skyScene, drawSky, startTest, SWITCHES, lastRun: () => run,
+  window.world = {renderer, scene, camera, atmosphere, sun, cascades, pipeline, tree, field, fieldInfo, setSun, windStrength, windDir, parts, hazeDensity, airParts, sunMap, sunCam, sunView, frame, air, airAtlas, drawAir, fieldRT, groundRT, redrawShadows, setLook, draw, SETTLE, settleKeep, crisp, settle, settled, sharpened, skyTarget, skyScene, drawSky, startTest, SWITCHES, lastRun: () => run,
     setExposure: e => { renderer.toneMappingExposure = e; }};   // for checking from the console
 } catch (err) {
   hud.textContent = 'Не запустилось: ' + err.message;
