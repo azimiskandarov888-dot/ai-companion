@@ -83,7 +83,7 @@ const EXPOSURE = 7;                                                  // the came
 const GRADE = {white: [1, 1, 1], saturation: 1.3};
 // the sky, as Ghost's local tone mapping keeps it: darker than the light it throws, so its blue stays deep
 const SKY = {exposure: 0.47, saturation: 2};
-const TREE = {file: 'field-assets/ph/jacaranda.gltf.json', at: [6.6, 39.43], turn: 90};
+const TREE = {at: [6.6, 39.43], turn: 90};                           // the file follows the level (jacaranda, jacaranda-light)
 // the plume of his picture, tuned against it over many rounds (field.html): a fan of feather-like racemes on a golden
 // stalk with its leaves and twigs
 const PLUME = {racemes: 13, rLenCm: 22, spread: 0.26, curl: 0.7, droop: 0.45, lean: 0.15, featherMM: 13, height: 1.45, thickMM: 7,
@@ -130,14 +130,34 @@ const BOUNCE = {field: 0.25, fluff: 0.06};
 // the air (Ghost thickens it by art: physically the air between us and a hill 50 m away is almost clear): how thick at
 // the ground (per m), how fast it thins with height (m), Mie's pull toward the sun (Henyey–Greenstein g) and how much
 // of its light takes that pull, the steps along each ray, how far the march goes (and over the sky: the haze lies over
-// our field, the air beyond is clear), and its share of the screen
-const HAZE = {density: 0.0015, height: 6, g: 0.7, forward: 0.6, steps: 16, far: 160, skyFar: 70, scale: 0.5};
+// our field, the air beyond is clear); its share of the screen follows the level (LIGHT.air)
+const HAZE = {density: 0.0015, height: 6, g: 0.7, forward: 0.6, steps: 16, far: 160, skyFar: 70};
 const WIND = {dir: [-0.95, 0.3], strength: 0.55};                    // one wind for the whole world: where it blows, how hard
 const THROUGH = 3;                                                   // how strongly sunlight comes through the tree's leaves
 // for trying values from the address: ?az=…&el=…&exp=…&through=…&haze=…
 { const q = new URLSearchParams(location.search), n = k => q.has(k) ? +q.get(k) : undefined;
   SUN.az = n('az') ?? SUN.az; SUN.el = n('el') ?? SUN.el; HAZE.density = n('haze') ?? HAZE.density;
-  globalThis.TRY = {exp: n('exp'), through: n('through'), msaa: n('msaa'), steps: n('steps')}; }
+  globalThis.TRY = {exp: n('exp'), through: n('through'), msaa: n('msaa'), steps: n('steps'), level: n('level')}; }
+
+// ══ Lighter on a phone. Safari on an iPhone closes a page that takes too much memory ("A problem repeatedly occurred").
+// The page remembers which step of loading it began last: if it never got as far as its first frames, the phone closed
+// it, and next time it starts a level lighter and says where it stopped. Levels: 0 full (a computer), 1 a phone, 2 the
+// lightest (no sun shadows). ?level=… tries one
+const STEPS = {gpu: 'видеокарта', sky: 'небо', field: 'поле', tree: 'дерево', frames: 'первые кадры'};
+const memory = (() => { try { const m = localStorage; m.setItem('bob.check', '1'); m.removeItem('bob.check'); return m; } catch { return null; } })();
+const lastStep = memory?.getItem('bob.world.step'), lastLevel = Number(memory?.getItem('bob.world.level') ?? NaN);
+const fell = !!lastStep && lastStep !== 'done';                      // last time it began a step and never got its frames
+const onPhone = /iPhone|iPad|iPod|Android/.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent));
+let LEVEL = TRY.level ?? (onPhone ? 1 : 0);
+if (fell && TRY.level === undefined) LEVEL = Math.min(2, Math.max(LEVEL, (Number.isNaN(lastLevel) ? LEVEL : lastLevel) + 1));
+const step = s => { try { memory?.setItem('bob.world.step', s); memory?.setItem('bob.world.level', String(LEVEL)); } catch {} };
+// per level: pixels per screen point at most, sun shadow cascades and their size, the tree and its maps, how many plumes
+// and grass (shares), the air's share of the screen
+const LIGHT = [
+  {pixels: 2, shadows: true, cascades: 3, shadowMap: 2048, tree: 'jacaranda', maps: '', plumes: 1, grass: 1, air: 0.5},
+  {pixels: 1.5, shadows: true, cascades: 2, shadowMap: 1024, tree: 'jacaranda-light', maps: '-512', plumes: 0.8, grass: 0.6, air: 0.35},
+  {pixels: 1.25, shadows: false, cascades: 2, shadowMap: 1024, tree: 'jacaranda-light', maps: '-512', plumes: 0.6, grass: 0.35, air: 0.25},
+][LEVEL];
 
 const hud = document.getElementById('hud'), canvas = document.getElementById('view');
 const V3 = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
@@ -157,8 +177,10 @@ const leafTop = z => 0.95 + 0.3*sm(15, 38, z) + 0.4*sm(38, 46, z);
 const leafTopAt = z => smoothstep(15, 38, z).mul(0.3).add(smoothstep(38, 46, z).mul(0.4)).add(0.95);   // the same, on the GPU
 
 try {
+  if (fell) hud.textContent = `в прошлый раз закрылось на шаге «${STEPS[lastStep] || lastStep}» — облегчаю (уровень ${LEVEL})`;
+  step('gpu');
   const renderer = new THREE.WebGPURenderer({canvas, antialias: false});
-  renderer.setPixelRatio(Math.min(2, devicePixelRatio || 1, 1900/document.documentElement.clientHeight));   // no more than a phone's pixels
+  renderer.setPixelRatio(Math.min(LIGHT.pixels, devicePixelRatio || 1, 1900/document.documentElement.clientHeight));   // no more than a phone's pixels
   await renderer.init();
   renderer.shadowMap.enabled = true;
   renderer.toneMapping = THREE.AgXToneMapping;
@@ -169,6 +191,7 @@ try {
   camera.position.set(...CAM.pos); camera.lookAt(...CAM.look);
 
   // the one sky: where on Earth we stand, and where the sun is
+  step('sky');
   const atmosphere = new AtmosphereContext();
   atmosphere.camera = camera;
   renderer.contextNode = context({...renderer.contextNode.value, getAtmosphere: () => atmosphere});
@@ -190,9 +213,9 @@ try {
   // the sun and the sky's light on everything, with the sun's shadows in cascades (sharp near us, coarser far away)
   renderer.library.addLight(AtmosphereLightNode, AtmosphereLight);
   const sun = new AtmosphereLight(120);
-  sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048);
+  sun.castShadow = LIGHT.shadows; sun.shadow.mapSize.set(LIGHT.shadowMap, LIGHT.shadowMap);
   sun.target.position.set(0, 4, 25);
-  const cascades = new CSMShadowNode(sun, {cascades: 3, maxFar: 140, mode: 'practical', lightMargin: 40});
+  const cascades = new CSMShadowNode(sun, {cascades: LIGHT.cascades, maxFar: 140, mode: 'practical', lightMargin: 40});
   sun.shadow.shadowNode = cascades;
   scene.add(sun, sun.target);
 
@@ -514,7 +537,7 @@ try {
   function scatter(){
     const R = rng(FIELD.seed), tiers = {near: [], mid: [], far: []}, D = FIELD.D;
     for (const [d0, d1, tier] of [[D[0], D[1], 'near'], [D[1], D[2], 'mid'], [D[2], D[3], 'far']]){
-      for (const [x, z] of spots(R, d0, d1, Math.round(FIELD.density[tier]*th*(d1*d1 - d0*d0)/3.5))){
+      for (const [x, z] of spots(R, d0, d1, Math.round(FIELD.density[tier]*LIGHT.plumes*th*(d1*d1 - d0*d0)/3.5))){
         if (tier === 'far' && R() < 0.6*sm(44, 54, z - camZ)) continue;     // the very back, by the crest, thinner
         if (Math.hypot(x - TREE.at[0], z - TREE.at[1]) < 1.2) continue;     // room for the tree's trunk
         const n = 2 + Math.floor(R()*4), spread = 0.38 - 0.22*sm(18, 34, z - camZ), ch = 1 + (R()*2 - 1)*spread;   // no field is level
@@ -535,6 +558,7 @@ try {
     g.instanceCount = list.length; return g;
   }
 
+  step('field');
   const field = new THREE.Group(), plants = new THREE.Group(), fieldInfo = {plumes: 0, blades: 0, tris: 0, draws: 0, look: '', grassTris: 0, grassDraws: 0};
   field.add(plants);
   const tiers = scatter(), bodyMat = fieldMaterial(PLUME.height, {feather: atlasOf('fibre', PLUME)}), lookMats = {};
@@ -570,7 +594,7 @@ try {
     const R = rng(GRASS.seed);
     GRASS.bands.forEach(([d0, d1, dens, segs], b) => {
       const list = [];
-      for (let n = Math.round(dens*th*(d1*d1 - d0*d0)/GRASS.perClump), i = 0; i < n; i++){
+      for (let n = Math.round(dens*LIGHT.grass*th*(d1*d1 - d0*d0)/GRASS.perClump), i = 0; i < n; i++){
         const d = Math.sqrt(d0*d0 + R()*(d1*d1 - d0*d0)), x = (R()*2 - 1)*d*th, z = camZ + d;
         const hgt = GRASS.height[0] + (GRASS.height[1] - GRASS.height[0])*R();
         list.push({p: [x, ground(x, z) + leafTop(z) - 0.08, z, R()*6.283], s: [hgt/0.5*(0.85 + 0.3*R()), 1, 0.75 + 0.45*R(), 0.8 + 0.4*R()]});
@@ -606,13 +630,14 @@ try {
     thicknessAmbientNode: float(0), thicknessAttenuationNode: float(0.9), thicknessPowerNode: float(3), thicknessScaleNode: float(TRY.through ?? THROUGH)});
   // the tree: Jacaranda from Poly Haven (CC0), its leaves turned to autumn (scene/import_tree.py, scene/autumn_leaves.py)
   const tex = new THREE.TextureLoader();
-  const load = (n, srgb) => tex.loadAsync(`field-assets/ph/${n}.jpg`).then(t => { if (srgb) t.colorSpace = THREE.SRGBColorSpace;
+  step('tree');
+  const load = (n, srgb) => tex.loadAsync(`field-assets/ph/${n}${LIGHT.maps}.jpg`).then(t => { if (srgb) t.colorSpace = THREE.SRGBColorSpace;
     t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 4; return t; });
   const maps = {trunk: ['jacaranda_tree_trunk_diff_1k', 'jacaranda_tree_trunk_nor_gl_1k'],
     branches: ['jacaranda_tree_branches_diff_1k', 'jacaranda_tree_branches_nor_gl_1k'],
     leaves: ['jacaranda_leaves_autumn', 'jacaranda_tree_leaves_nor_gl_1k']};
   const draco = new DRACOLoader().setDecoderPath('field-assets/draco/');
-  const [gltf, ...textures] = await Promise.all([new GLTFLoader().setDRACOLoader(draco).loadAsync(TREE.file),
+  const [gltf, ...textures] = await Promise.all([new GLTFLoader().setDRACOLoader(draco).loadAsync(`field-assets/ph/${LIGHT.tree}.gltf.json`),
     ...Object.values(maps).flatMap(([c, n]) => [load(c, true), load(n, false)])]);
   const texOf = {}; Object.keys(maps).forEach((k, i) => texOf[k] = [textures[2*i], textures[2*i + 1]]);
   const tree = new THREE.Group();
@@ -629,6 +654,7 @@ try {
   });
   tree.position.set(TREE.at[0], ground(...TREE.at) - 0.1, TREE.at[1]); tree.rotation.y = THREE.MathUtils.degToRad(TREE.turn);
   scene.add(tree);
+  draco.dispose();                                                     // the decoder's workers and their memory are not needed any more
 
   // ══ The air (step 4). Ghost lights its haze with the sun and the sun's own shadows (froxels — Patry, SIGGRAPH 2021), so
   // shafts of light show where the air is in shadow. Here: a march along each pixel's ray, at half the screen's size,
@@ -766,7 +792,7 @@ try {
   function resize(){
     const box = document.documentElement, h = box.clientHeight, w = Math.min(box.clientWidth, Math.round(h*0.62)), dpr = renderer.getPixelRatio();
     canvas.style.width = w + 'px'; renderer.setSize(w, h, false); camera.aspect = w/h; camera.updateProjectionMatrix();
-    airTex.setSize(Math.round(w*dpr*HAZE.scale), Math.round(h*dpr*HAZE.scale));
+    airTex.setSize(Math.round(w*dpr*LIGHT.air), Math.round(h*dpr*LIGHT.air));
     skyTarget.setSize(Math.round(w*dpr), Math.round(h*dpr)); drawSky();
   }
   addEventListener('resize', resize); resize();
@@ -788,11 +814,14 @@ try {
     $('settle').addEventListener('change', e => { SETTLE.on = e.target.checked; crisp.value = SETTLE.on ? SETTLE.sharpen : 0; });
     show(); }
 
-  let frames = 0, t0 = performance.now();
+  step('frames');
+  let frames = 0, total = 0, t0 = performance.now();
+  const note = (LEVEL ? ` · лёгкий режим ${LEVEL}` : '') + (fell ? ` · в прошлый раз закрылось: ${STEPS[lastStep] || lastStep}` : '');
   renderer.setAnimationLoop(now => {
     draw(); frames++;
+    if (++total === 60) step('done');                                  // it got its frames: it did not fall
     if (now - t0 > 1000){
-      hud.textContent = `${Math.round(frames*1000/(now - t0))} кадров/с · ${renderer.backend.isWebGPUBackend ? 'WebGPU' : 'WebGL2'} · солнце ${SUN.az}°/${SUN.el}° · метёлки ${fieldInfo.look}`;
+      hud.textContent = `${Math.round(frames*1000/(now - t0))} кадров/с · ${renderer.backend.isWebGPUBackend ? 'WebGPU' : 'WebGL2'} · солнце ${SUN.az}°/${SUN.el}° · метёлки ${fieldInfo.look}${note}`;
       frames = 0; t0 = now;
     }
   });
@@ -800,6 +829,7 @@ try {
     setExposure: e => { renderer.toneMappingExposure = e; }};   // for checking from the console
 } catch (err) {
   hud.textContent = 'Не запустилось: ' + err.message;
+  step('done');                                                        // an error it could say, not a fall
   console.error(err);
 }
 </script>
