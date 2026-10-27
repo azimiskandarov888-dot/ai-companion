@@ -26,6 +26,23 @@ body { background: var(--bg); color: var(--fg); margin: 0; font: 12px/1.4 ui-mon
 #panel label.check input { width: auto; }
 #panel select { font: inherit; color: var(--fg); background: rgba(255, 255, 255, 0.08); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; }
 #panel select option { color: #111; }
+#panel .row, #test .row { display: flex; gap: 8px; }
+#panel button, #test button { flex: 1; font: inherit; color: var(--fg); background: rgba(255, 255, 255, 0.08); border: 1px solid var(--line);
+  border-radius: 8px; padding: 8px 6px; cursor: pointer; }
+#panel button:focus-visible, #test button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* the measurement's note: no blur behind it, which would cost the GPU what is being measured */
+#test { position: fixed; left: max(12px, env(safe-area-inset-left, 0px)); right: max(12px, env(safe-area-inset-right, 0px));
+  top: calc(12px + env(safe-area-inset-top, 0px)); max-width: 440px; max-height: calc(100% - 110px); margin: 0 auto; overflow: auto;
+  padding: 12px 14px; border-radius: 14px; border: 1px solid var(--line); background: rgba(12, 14, 13, 0.88);
+  font: 13px/1.4 system-ui, -apple-system, sans-serif; display: grid; gap: 8px; }
+#test[hidden] { display: none; }
+#test p { margin: 0; }
+#test b { color: var(--accent); font-weight: 600; }
+#test table { border-collapse: collapse; font: 11px/1.35 ui-monospace, "SF Mono", Menlo, monospace; font-variant-numeric: tabular-nums; }
+#test td { padding: 1px 0; vertical-align: top; }
+#test td + td { padding-left: 8px; text-align: right; white-space: nowrap; }
+#test textarea { width: 100%; box-sizing: border-box; height: 7em; font: 11px/1.3 ui-monospace, monospace; color: var(--fg);
+  background: rgba(0, 0, 0, 0.35); border: 1px solid var(--line); border-radius: 8px; }
 </style>
 
 <canvas id="view" aria-label="Холм с белой травой и осенним деревом на закате"></canvas>
@@ -39,7 +56,9 @@ body { background: var(--bg); color: var(--fg); margin: 0; font: 12px/1.4 ui-mon
   <label>Метёлки<select id="look"></select></label>
   <label class="check"><input id="settle" type="checkbox"> Сглаживание (как TAA в Ghost)</label>
   <label>Качество <span>(страница перезагрузится)</span><select id="quality"></select></label>
+  <div class="row"><button id="testShort" type="button">Замер · 3 мин</button><button id="testLong" type="button">Долгий · 20 мин</button></div>
 </div>
+<div id="test" hidden role="status" aria-live="polite"></div>
 
 <script type="importmap">
 {"imports": {
@@ -470,8 +489,10 @@ try {
   // ── a plant drawn many times: each copy has its place and turn (iP) and its size, height, colour and give in the wind
   // (iS). The wind bends it from its root, its top most (a spring); its feathers flutter. mode: 'opaque' (stalks,
   // leaves, grass), 'cover' (fluff cut into the pixel's samples), 'blend' (fluff with a soft see-through edge) or
-  // 'core' (the dense core of blended fluff, depth only, drawn first so the soft fluff over it overlaps right)
-  function fieldMaterial(H0, {grass = false, feather, mode = 'opaque', cover = 1} = {}){
+  // 'core' (the dense core of blended fluff, depth only, drawn first so the soft fluff over it overlaps right).
+  // calm, only for the measurement: the gusts and the field's patches as if worked out once per plant, and the light on
+  // the field once per frame ({ground}: that light, read back once), instead of at every point
+  function fieldMaterial(H0, {grass = false, feather, mode = 'opaque', cover = 1, calm = null} = {}){
     const iP = attribute('iP', 'vec4'), iS = attribute('iS', 'vec4');
     const aT = attribute('aT', 'vec3'), aK = attribute('aK', 'vec4'), aN = attribute('aN', 'vec4'), aC = attribute('aC', 'vec4');
     const side = aK.x, bend = aK.z, part = aK.w;
@@ -479,7 +500,8 @@ try {
     const size = vec3(iS.x, iS.x.mul(iS.y), iS.x), place = p => turn(p.mul(size)).add(iP.xyz);
     // the wind here: the gusts drifting over the field, the plant rocking a little on its own, its own give
     const phase = fract(iP.w.mul(7.31)).mul(6.283), H = size.y.mul(H0);
-    const reach = gustAt(iP.xz).mul(sin(time.mul(1.9).add(phase)).mul(0.3).add(1)).mul(iS.w).mul(0.28).add(0.02);
+    const gust = calm ? windStrength.mul(0.725) : gustAt(iP.xz);       // calm: the gusts' mean
+    const reach = gust.mul(sin(time.mul(1.9).add(phase)).mul(0.3).add(1)).mul(iS.w).mul(0.28).add(0.02);
     const top = windDir.mul(reach.mul(H));                              // how far its top moves, m
     const bb = bend.clamp(0, 1.5), b2 = top.mul(bb.mul(bb));
     const flick = sin(time.mul(6.7).add(aC.w.mul(4)).add(phase)).mul(windStrength.add(0.3).mul(0.014)).mul(uv().y).mul(select(bend.greaterThanEqual(1), float(1), float(0)));
@@ -501,7 +523,7 @@ try {
     const vW = positionWorld, vT = T.toVarying('vT'), vSide = side.toVarying('vSide'), vNr = Nleaf.toVarying('vNr');
     const vCen = place(aC.xyz).add(vec3(top.x, 0, top.y).mul(1.2)).toVarying('vCen');
     const vPart = part.toVarying('vPart'), vAO = aN.w.toVarying('vAO'), vTint = iS.z.toVarying('vTint');
-    const vMacro = macroAt(iP.xz).toVarying('vMacro'), vCombed = reach.toVarying('vCombed');
+    const vMacro = (calm ? float(0.15) : macroAt(iP.xz)).toVarying('vMacro'), vCombed = reach.toVarying('vCombed');
     const head = vPart.greaterThan(0.5).and(vPart.lessThan(1.5)), isFlat = vPart.greaterThan(1.5), Vf = normalize(cameraPosition.sub(vW));
     const acrossF = normalize(cross(vT, Vf)), towardF = normalize(cross(acrossF, vT));
     const nStalk = normalize(acrossF.mul(vSide).add(towardF.mul(sqrt(float(1).sub(vSide.mul(vSide)).max(0)))));
@@ -524,10 +546,11 @@ try {
     m.maskShadowNode = head.not().or(fx.a.greaterThan(0.3));            // only the dense fluff stops the sun
     // a fibre leaves the rib slanting outward, to the side of the raceme it is on
     const fibre = normalize(vT.mul(Math.cos(FLUFF.slant)).add(acrossF.mul(select(vSide.lessThan(0), float(-1), float(1))).mul(Math.sin(FLUFF.slant))));
-    const ground = openLight().toVarying('vGround');                    // once per point: it is the same everywhere
+    const ground = calm?.ground ?? openLight().toVarying('vGround');   // once per point: it is the same everywhere
     const model = new FieldLight({head, flat: isFlat, thin: float(1).sub(alpha.mul(0.6)), combed: vCombed.mul(1.5).add(1),
       fibre: normalize(cameraViewMatrix.mul(vec4(fibre, 0)).xyz), ground});
     m.setupLightingModel = () => model;
+    m.userData.args = [H0, {grass, feather, mode, cover}];             // so the measurement can build its calm twin
     return m;
   }
 
@@ -673,9 +696,11 @@ try {
       : new THREE.MeshStandardNodeMaterial({map, normalMap, roughness: 0.9});
     // the gold of the sunlit field bounced up into the crown, less deep inside it (its depth is in the vertex colour)
     const deep = o.geometry.attributes.color ? attribute('color', 'vec4').x : float(1);
-    mat.emissiveNode = texture(map).rgb.mul(openLight().toVarying('vGround')).mul(BOUNCE.field/Math.PI).mul(float(1).sub(normalWorld.y).mul(0.5)).mul(deep);
+    const glow = ground => texture(map).rgb.mul(ground).mul(BOUNCE.field/Math.PI).mul(float(1).sub(normalWorld.y).mul(0.5)).mul(deep);
+    mat.emissiveNode = glow(openLight().toVarying('vGround'));
     const mesh = new THREE.Mesh(o.geometry, mat);
     mesh.castShadow = mesh.receiveShadow = true; tree.add(mesh);
+    mesh.userData.calm = ground => Object.assign(mat.clone(), {emissiveNode: glow(ground)});   // for the measurement: that light once per frame
   });
   tree.position.set(TREE.at[0], ground(...TREE.at) - 0.1, TREE.at[1]); tree.rotation.y = THREE.MathUtils.degToRad(TREE.turn);
   scene.add(tree);
@@ -845,11 +870,307 @@ try {
     $('settle').addEventListener('change', e => { SETTLE.on = e.target.checked; crisp.value = SETTLE.on ? SETTLE.sharpen : 0; });
     show(); }
 
+  // ══ A measurement for the phone (the panel's «Замер»). One part of the scene at a time is switched off or made
+  // cheaper, and the GPU's own clock (timestamp queries) says how long each frame's passes took: at 60 frames a second
+  // the frame counter cannot show how much room is left. Two rounds, the second backwards, so a phone warming up
+  // favours neither end. The numbers go to the artifact's database for Claude to read, and can be copied. «Долгий»
+  // keeps the whole scene for 20 minutes and notes it every 10 seconds, to see the phone heat up
+  const testBox = document.getElementById('test'), FAST = new URLSearchParams(location.search).has('fast');   // ?fast: a quick run, to check it on a computer
+  const wait = ms => new Promise(r => setTimeout(r, FAST ? ms/4 : ms));
+  const r1 = x => x === null || x === undefined || Number.isNaN(x) ? null : Math.round(x*10)/10;
+  const quantile = (a, q) => a.length ? [...a].sort((x, y) => x - y)[Math.min(a.length - 1, Math.floor(a.length*q))] : null;
+  const mean = a => { const v = a.filter(x => x !== null && x !== undefined); return v.length ? v.reduce((s, x) => s + x, 0)/v.length : null; };
+  let measure = null, win = null, gpuBusy = false, doneBusy = false;
+  // the GPU's clock, per frame. A tiled GPU overlaps its passes (one pass's points while the last one's pixels finish),
+  // so the passes' times added up overstate the frame: the time it was busy is the union of their spans. (three.js r184
+  // gives only the sum, so its read-back is replaced with one that keeps both)
+  function busyClock(pool){
+    pool._resolveQueries = async function(){
+      if (this.isDisposed || this.resultBuffer.mapState !== 'unmapped') return this.lastValue;
+      const offsets = new Map(this.queryOffsets), count = this.currentQueryIndex, bytes = count*8;
+      this.currentQueryIndex = 0; this.queryOffsets.clear();
+      const enc = this.device.createCommandEncoder();
+      enc.resolveQuerySet(this.querySet, 0, count, this.resolveBuffer, 0); enc.copyBufferToBuffer(this.resolveBuffer, 0, this.resultBuffer, 0, bytes);
+      this.device.queue.submit([enc.finish()]);
+      await this.resultBuffer.mapAsync(GPUMapMode.READ, 0, bytes);
+      const times = new BigUint64Array(this.resultBuffer.getMappedRange(0, bytes).slice(0)); this.resultBuffer.unmap();
+      const frames = new Map();                                        // each frame's passes: [start, end] in ns
+      for (const [uid, i] of offsets){ const f = uid.slice(uid.lastIndexOf(':f') + 2), s = times[i], e = times[i + 1];
+        if (s && e > s){ if (!frames.has(f)) frames.set(f, []); frames.get(f).push([s, e]); } }
+      let busy = 0n, sum = 0n, end = 0n;
+      for (const [s, e] of ([...frames.values()].pop() || []).sort((a, b) => (a[0] < b[0] ? -1 : 1))){
+        sum += e - s; if (e > end){ busy += e - (s > end ? s : end); end = e; } }
+      this.lastSum = Number(sum)/1e6;
+      return this.lastValue = Number(busy)/1e6;
+    };
+    pool.patched = true;
+  }
+  // a frame while measuring: drawn and timed. The GPU's clock is read back on every frame it can be (unread, it runs out
+  // of room), and on any phone we also hear when the GPU has finished the frame
+  let pumping = false;
+  function testFrame(now){
+    const t = performance.now(); draw(); const cpu = performance.now() - t, w = win, pool = renderer.backend.timestampQueryPool?.render;
+    if (renderer.backend.trackTimestamp && pool && !gpuBusy){ gpuBusy = true; if (!pool.patched) busyClock(pool);
+      renderer.resolveTimestampsAsync('render').then(ms => { if (w && w === win && ms > 0){ w.gpu.push(ms); w.gpuSum.push(pool.lastSum); } })
+        .catch(() => {}).finally(() => { gpuBusy = false; }); }
+    const queue = renderer.backend.device?.queue;
+    if (!pumping && queue && !doneBusy && w){ doneBusy = true;
+      queue.onSubmittedWorkDone().then(() => { if (w === win) w.done.push(performance.now() - t); }).catch(() => {}).finally(() => { doneBusy = false; }); }
+    if (!w) return;
+    if (w.last !== null) w.dt.push(now - w.last);
+    w.last = now; w.cpu.push(cpu); w.draws = renderer.info.render.drawCalls; w.tris = renderer.info.render.triangles;
+    w.drawsMin = Math.min(w.drawsMin, w.draws);
+  }
+  // frames back to back, each as soon as the GPU has finished the one before, not at the screen's pace. Then the GPU
+  // stays busy and keeps its full speed (left idle between frames, a phone's GPU slows down, and every switch looks
+  // alike), no frame waits in line behind another, and frames a second says how many the phone could draw
+  async function pump(){
+    const queue = renderer.backend.device?.queue, nodes = renderer._nodes;
+    pumping = true; measure = () => {};                                // the screen's own frames now only tick
+    while (pumping){
+      renderer.info.reset(); nodes.nodeFrame.update(); renderer.info.frame = nodes.nodeFrame.frameId;
+      const t = performance.now(); testFrame(t); const w = win;
+      if (queue) await queue.onSubmittedWorkDone(); else await new Promise(r => requestAnimationFrame(r));
+      if (w && w === win) w.done.push(performance.now() - t);
+    }
+    if (run && !run.finished) measure = testFrame;
+  }
+  let hiddenNow = false, stopNow = null;                               // the screen went dark; «Стоп» was pressed
+  document.addEventListener('visibilitychange', () => { if (document.hidden) hiddenNow = true; });
+  async function sample(ms){                                           // the frames of the next ms
+    win = {dt: [], cpu: [], gpu: [], gpuSum: [], done: [], last: null, draws: 0, drawsMin: Infinity, tris: 0};
+    await Promise.race([wait(ms), stopNow?.promise].filter(Boolean));
+    const w = win; win = null;
+    return {fps: w.dt.length ? r1(1000*w.dt.length/w.dt.reduce((s, x) => s + x, 0)) : null, frame: r1(quantile(w.dt, 0.5)),
+      frame95: r1(quantile(w.dt, 0.95)), frameMax: r1(w.dt.length ? Math.max(...w.dt) : null), gpu: r1(quantile(w.gpu, 0.5)),
+      gpu90: r1(quantile(w.gpu, 0.9)), gpuSum: r1(quantile(w.gpuSum, 0.5)), gpuN: w.gpu.length, done: r1(quantile(w.done, 0.5)),
+      cpu: r1(quantile(w.cpu, 0.5)), draws: w.draws, drawsMin: Number.isFinite(w.drawsMin) ? w.drawsMin : null, tris: w.tris, frames: w.dt.length};
+  }
+  const awake = () => new Promise(r => { const f = () => { if (!document.hidden){ document.removeEventListener('visibilitychange', f); r(); } };
+    document.addEventListener('visibilitychange', f); f(); });
+  async function measured(warm, ms){                                   // let it settle, then listen; if the screen went dark, again
+    for (let tries = 0; ; tries++){
+      hiddenNow = false; await wait(warm); const s = await sample(ms);
+      if (!hiddenNow || tries === 2) return hiddenNow ? {...s, dark: true} : s;
+      tell([bold('Экран погас'), 'Продолжу, когда он снова включится.']); await awake(); warm = 2000;
+    }
+  }
+
+  // what is switched, one at a time: each part off, or worked out cheaper, or fewer pixels
+  const airSize = share => { const s = renderer.getSize(new THREE.Vector2()), p = renderer.getPixelRatio();
+    airTex.setSize(Math.max(1, Math.round(s.x*p*share)), Math.max(1, Math.round(s.y*p*share))); };
+  const showAll = (list, yes) => list.forEach(o => { o.visible = yes; });
+  const fluffOf = part => { const mats = lookMats[fieldInfo.look]; return plants.children.filter(m => m.material === mats[part]); };
+  const grassMeshes = () => field.children.filter(o => o !== plants);
+  let pixels0 = 1, calmGround, calmTried = false, unsettled = null, settledWas = SETTLE.on;
+  const calmMats = new Map(), output0 = pipeline.outputNode;
+  async function groundLight(){                                        // the light on the open field, read back once
+    const probe = new THREE.RenderTarget(1, 1, {type: THREE.FloatType, depthBuffer: false}), m = new THREE.NodeMaterial();
+    m.fragmentNode = vec4(openLight(), 1);
+    renderer.setRenderTarget(probe); new THREE.QuadMesh(m).render(renderer); renderer.setRenderTarget(null);
+    const px = await renderer.readRenderTargetPixelsAsync(probe, 0, 0, 1, 1); probe.dispose(); m.dispose();
+    return new THREE.Vector3(px[0], px[1], px[2]);
+  }
+  async function calmDown(on){                                         // the field and the tree with their calm twins
+    if (on && !calmTried){ calmTried = true; try { calmGround = uniform(await groundLight()); } catch (e) { console.warn(e); } }
+    for (const m of [...plants.children, ...grassMeshes()]){
+      if (on){ const own = m.material; let c = calmMats.get(own);
+        if (!c){ const [H0, o] = own.userData.args; c = fieldMaterial(H0, {...o, calm: {ground: calmGround}}); calmMats.set(own, c); }
+        m.userData.own = own; m.material = c; }
+      else if (m.userData.own){ m.material = m.userData.own; delete m.userData.own; }
+    }
+    if (calmGround) tree.traverse(o => { if (!o.userData.calm) return;
+      if (on){ o.userData.own = o.material; o.material = o.userData.calmMat ||= o.userData.calm(calmGround); }
+      else if (o.userData.own){ o.material = o.userData.own; delete o.userData.own; } });
+  }
+  function noSettle(on){                                               // the frame and its air straight to the screen
+    if (on){ settledWas = SETTLE.on; SETTLE.on = false;
+      pipeline.outputNode = unsettled ||= saturation(frame.rgb.mul(air.a).add(air.rgb).mul(vec3(...GRADE.white)), GRADE.saturation); }
+    else { pipeline.outputNode = output0; SETTLE.on = settledWas; settle.fresh.value = 1; }   // the smoothing starts afresh
+    pipeline.needsUpdate = true;
+  }
+  const SWITCHES = [
+    {key: 'shadows', name: 'тени не перерисовываются', set: on => cascades.lights.forEach(l => { l.shadow.autoUpdate = !on; }), skip: () => !cascades.lights.length},
+    {key: 'core', name: 'без «ядра» метёлок', set: on => showAll(fluffOf('core'), !on), skip: () => !lookMats[fieldInfo.look]?.core},
+    {key: 'fluff', name: 'без пуха', set: on => showAll([...fluffOf('heads'), ...fluffOf('core')], !on)},
+    {key: 'plants', name: 'без метёлок совсем', set: on => { plants.visible = !on; }},
+    {key: 'grass', name: 'без травы', set: on => showAll(grassMeshes(), !on)},
+    {key: 'tree', name: 'без дерева', set: on => { tree.visible = !on; }},
+    {key: 'hill', name: 'без холма', set: on => { hillMesh.visible = !on; }},
+    {key: 'calm', name: 'ветер и свет посчитаны заранее', slow: true, set: calmDown},
+    {key: 'air', name: 'без дымки', set: on => airSize(on ? 0 : LIGHT.air)},
+    {key: 'settle', name: 'без сглаживания', slow: true, set: noSettle},
+    {key: 'px75', name: 'пикселей ×0,75', set: on => { renderer.setPixelRatio(on ? pixels0*0.75 : pixels0); airSize(LIGHT.air); }},
+    {key: 'px50', name: 'пикселей ×0,5', set: on => { renderer.setPixelRatio(on ? pixels0*0.5 : pixels0); airSize(LIGHT.air); }},
+  ];
+
+  // what the box at the top says
+  const el = (tag, text) => { const e = document.createElement(tag); if (text !== undefined) e.textContent = text; return e; };
+  const bold = text => { const p = el('p'); p.append(el('b', text)); return p; };
+  const tell = (lines, extra = []) => { testBox.replaceChildren(...lines.map(l => typeof l === 'string' ? el('p', l) : l), ...extra); testBox.hidden = false; };
+  const eta = s => { s = FAST ? s/4 : s; return s > 90 ? `${Math.round(s/60)} мин` : `${Math.max(5, Math.round(s/5)*5)} с`; };
+
+  // where the numbers go: the artifact's database (one write at a time), and the page remembers a measurement it is in,
+  // so if the phone closes the page, the next one says where it stopped
+  let dbReady = null, run = null, saving = Promise.resolve(), saved = '';
+  function save(){
+    const body = JSON.parse(JSON.stringify(run)), id = run.id;
+    saving = saving.then(async () => {
+      const db = await dbReady; if (!db){ saved = 'нет базы'; return; }
+      try { await db.collection('runs').doc(id).set(body); saved = 'ok'; } catch (e) { saved = e?.code || e?.message || String(e); }
+    });
+    return saving;
+  }
+  let lastTest = null;
+  try { lastTest = JSON.parse(memory?.getItem('bob.world.test') || 'null'); memory?.removeItem('bob.world.test'); } catch {}
+  const mark = s => { try { s ? memory?.setItem('bob.world.test', JSON.stringify(s)) : memory?.removeItem('bob.world.test'); } catch {} };
+
+  async function device(){                                             // what this phone is, as far as a page can tell
+    let gpu = {};
+    try { const a = await navigator.gpu?.requestAdapter(), i = a?.info || {};
+      gpu = {vendor: i.vendor || '', architecture: i.architecture || '', description: i.description || '', f16: !!a?.features.has('shader-f16')}; } catch {}
+    return {ua: navigator.userAgent, screen: `${screen.width}×${screen.height} @${devicePixelRatio}`, canvas: `${canvas.width}×${canvas.height}`,
+      pixels: renderer.getPixelRatio(), level: LEVEL, quality: QUALITY[LEVEL], look: fieldInfo.look, settle: SETTLE.on, plumes: fieldInfo.plumes,
+      blades: fieldInfo.blades, tree: treeTrouble ? 'не загрузилось' : LIGHT.tree, shadows: LIGHT.shadows ? `${LIGHT.cascades}×${LIGHT.shadowMap}` : 'нет',
+      cores: navigator.hardwareConcurrency || null, stamps: !!renderer.backend.trackTimestamp, gpu};
+  }
+  async function idleBeat(){                                           // frames with nothing drawn: 60 a second, 30 in Low Power Mode
+    const dt = []; let last = null;
+    measure = now => { if (last !== null) dt.push(now - last); last = now; };
+    await wait(1200); measure = testFrame;
+    return r1(quantile(dt, 0.5));
+  }
+  async function shortRun(){
+    // first the scene as it runs, at the screen's pace; then every switch with the frames back to back (pump)
+    const parts = SWITCHES.filter(v => !v.skip?.()), base = {key: 'base', name: 'всё как есть', base: true};
+    const plan = [{key: 'natural', name: 'всё как есть, обычный ход', base: true}, base, ...parts, base, ...[...parts].reverse(), base], seen = new Set();
+    let pumped = null;
+    for (let i = 0; i < plan.length; i++){
+      const v = plan[i], first = v.slow && !seen.has(v.key);
+      if (i === 1) pumped = pump();
+      const left = plan.slice(i).reduce((s, x) => s + (x.slow && !seen.has(x.key) ? 8.5 : x.base ? 6 : 6.5), 0);
+      tell([bold(`Замер · шаг ${i + 1} из ${plan.length} · ещё ~${eta(left)}`), `Сейчас: ${v.name}`,
+        'Не трогай экран. Картинка будет меняться — так и надо.']);
+      mark({kind: 'short', step: i + 1, name: v.name});
+      const row = {key: v.key, name: v.name, round: i <= parts.length + 2 ? 1 : 2, ...(v.base ? {base: true} : {})};
+      try {
+        if (!v.base) await v.set(true);
+        Object.assign(row, await measured(i === 1 ? 3000 : v.base ? 1500 : first ? 4000 : 2000, 4000));   // (the GPU settles into the pump first)
+      } catch (e) { row.error = String(e?.message || e); }
+      try { if (!v.base) await v.set(false); } catch (e) { row.error ||= 'возврат: ' + (e?.message || e); }
+      seen.add(v.key); run.rows.push(row); save();
+    }
+    pumping = false; await pumped;
+  }
+  async function longRun(){
+    const total = FAST ? 20e3 : 20*60e3, t0 = performance.now(), mm = s => `${Math.floor(s/60)}:${String(Math.round(s % 60)).padStart(2, '0')}`;
+    const stop = el('button', 'Стоп'), go = {};
+    go.promise = new Promise(r => { go.end = r; }); stopNow = go;
+    stop.addEventListener('click', () => { go.done = true; go.end(); stop.textContent = 'Останавливаю…'; });
+    tell([bold('Долгий замер · начинаю'), 'Можно положить телефон, только не блокируй экран.'], [stop]);
+    await wait(1500);
+    for (let k = 1; performance.now() - t0 < total && !go.done; k++){
+      hiddenNow = false;
+      const s = await sample(10000), t = (performance.now() - t0)/1000;
+      run.log.push({t: Math.round(t), ...s, ...(hiddenNow ? {dark: true} : {})});
+      mark({kind: 'long', step: k, name: `${mm(t)} из ${mm(total/1000)}`});
+      tell([bold(`Долгий замер · ${mm(t)} из ${mm(total/1000)}`), `Сейчас: ${s.fps ?? '—'} кадров/с · видеокарта ${s.gpu ?? '—'} мс на кадр`,
+        'Можно положить телефон, только не блокируй экран.'], [stop]);
+      if (k % 6 === 0) save();
+    }
+    stopNow = null;
+  }
+
+  // the outcome: each switch against «всё как есть», from both rounds
+  function summary(){
+    const rows = run.rows.filter(r => !r.error), of = k => rows.filter(r => r.key === k);
+    const bG = mean(of('base').map(r => r.gpu)), bD = mean(of('base').map(r => r.done));
+    return [...new Set(run.rows.map(r => r.key))].map(k => {
+      const a = of(k), g = mean(a.map(r => r.gpu)), d = mean(a.map(r => r.done)), any = run.rows.find(r => r.key === k), vs = !any.base;
+      return {key: k, name: any.name, gpu: r1(g), dGpu: vs && g !== null && bG !== null ? r1(g - bG) : null,
+        done: r1(d), dDone: vs && d !== null && bD !== null ? r1(d - bD) : null, frame: r1(mean(a.map(r => r.frame))),
+        fps: r1(mean(a.map(r => r.fps))), cpu: r1(mean(a.map(r => r.cpu))), sum: r1(mean(a.map(r => r.gpuSum))),
+        each: a.map(r => r.gpu ?? r.done ?? '—').join(' / '),
+        draws: a[0]?.draws ?? null, drawsMin: a.length ? Math.min(...a.map(r => r.drawsMin ?? Infinity)) : null, tris: a[0]?.tris ?? null,
+        error: a.length ? undefined : any.error};
+    });
+  }
+  const signed = x => x === null ? '' : ` (${x > 0 ? '+' : ''}${x})`;
+  function report(){                                                   // the same as text, to copy into the chat
+    const d = run.device, lines = [`Замер мира Боба · ${run.kind === 'long' ? 'долгий' : 'короткий'} · ${run.at}`,
+      `качество: ${d.quality} · холст ${d.canvas} · экран ${d.screen} · пустой кадр ${run.idle ?? '—'} мс · не гаснет: ${d.awake ? 'да' : 'нет'}`,
+      `видеокарта: ${[d.gpu.vendor, d.gpu.architecture, d.gpu.description].filter(Boolean).join(' / ') || '—'} · таймер видеокарты: ${d.stamps ? 'есть' : 'нет'}`];
+    if (run.previousStop) lines.push(`в прошлый раз замер прервался: ${run.previousStop.name}`);
+    if (run.kind === 'long') for (const e of run.log) lines.push(`${e.t} с | ${e.fps ?? '—'} к/с | кадр ${e.frame ?? '—'} / 95% ${e.frame95 ?? '—'} | видеокарта ${e.gpu ?? '—'} | готов ${e.done ?? '—'}${e.dark ? ' | экран гас' : ''}`);
+    else {
+      const st = d.stamps;                                             // without the GPU's clock: when the GPU said it was done
+      lines.push(`что | ${st ? 'видеокарта' : 'готов'} мс (разница) | по кругам | ${st ? 'сумма проходов | ' : ''}к/с | процессор мс | вызовов | треугольников`);
+      for (const s of summary()) lines.push(`${s.name} | ${st ? `${s.gpu ?? '—'}${signed(s.dGpu)}` : `${s.done ?? '—'}${signed(s.dDone)}`} | ${s.each} | `
+        + `${st ? `${s.sum ?? '—'} | ` : ''}${s.fps ?? '—'} | ${s.cpu ?? '—'} | ${s.draws ?? '—'} | ${s.tris ?? '—'}${s.error ? ' | ошибка: ' + s.error : ''}`);
+    }
+    if (run.error) lines.push('ошибка: ' + run.error);
+    return lines.join('\n');
+  }
+  function results(){
+    const text = report(), area = el('textarea'), table = el('table'), row = el('div'), copy = el('button', 'Скопировать'), close = el('button', 'Закрыть');
+    area.value = text; area.readOnly = true; row.className = 'row'; row.append(copy, close);
+    copy.addEventListener('click', async () => {
+      try { await navigator.clipboard.writeText(text); copy.textContent = 'Скопировано ✓'; }
+      catch { area.focus(); area.select(); copy.textContent = 'Текст выделен — скопируй его'; }
+    });
+    close.addEventListener('click', () => { testBox.hidden = true; });
+    const line = (...cells) => { const tr = table.insertRow(); cells.forEach(c => { tr.insertCell().textContent = c; }); };
+    const stamps = run.device.stamps;
+    if (run.kind === 'long'){
+      const avg = (list, f) => r1(mean(list.map(f))), first = run.log.slice(0, 6), last = run.log.slice(-6);
+      line('', 'кадров/с', stamps ? 'видеокарта, мс' : 'готов, мс');
+      line('первая минута', avg(first, e => e.fps) ?? '—', avg(first, e => stamps ? e.gpu : e.done) ?? '—');
+      line('последняя минута', avg(last, e => e.fps) ?? '—', avg(last, e => stamps ? e.gpu : e.done) ?? '—');
+    } else {
+      line('', stamps ? 'видеокарта, мс' : 'готов, мс', 'кадров/с');
+      for (const s of summary()) line(s.name, s.error ? 'ошибка' : `${(stamps ? s.gpu : s.done) ?? '—'}${signed(stamps ? s.dGpu : s.dDone)}`, s.fps ?? '—');
+    }
+    const kept = el('p'), say = () => { kept.textContent = saved === 'ok' ? 'Цифры сохранены. Напиши мне в чат «готово».'
+      : `Сохранить не вышло (${saved || 'нет связи'}). Нажми «Скопировать» и пришли текст мне.`; };
+    say(); saving.then(say);                                           // a late save still turns it to «сохранены»
+    tell([bold('Готово ✓'), kept], [table, area, row]);
+  }
+
+  async function startTest(kind){
+    if (measure) return;
+    const $ = id => document.getElementById(id);
+    $('panel').hidden = true; $('lightBtn').setAttribute('aria-expanded', 'false');
+    $('lightBtn').hidden = true; hud.hidden = true;                    // their blur would cost the GPU too
+    tell([bold('Готовлюсь…')]);
+    dbReady ||= (globalThis.claude?.use ? globalThis.claude.use('db') : Promise.resolve(null)).catch(() => null);
+    let lock = null; try { lock = await navigator.wakeLock?.request('screen'); } catch {}   // keep the screen on, where allowed
+    renderer.backend.trackTimestamp = !!renderer.backend.device?.features.has('timestamp-query');
+    pixels0 = renderer.getPixelRatio(); measure = testFrame;
+    run = {id: `run-${Date.now()}`, kind, at: new Date().toISOString(), finished: false, device: {...await device(), awake: !!lock}, rows: [], log: []};
+    if (lastTest){ run.previousStop = lastTest; lastTest = null; }
+    const atMost = (p, ms) => Promise.race([p, new Promise(r => setTimeout(r, ms))]);
+    // the first write now, so a question about keeping the data comes while the phone is still in hand
+    tell([bold('Готовлюсь…'), 'Если спросят про сохранение данных — разреши.']); save(); await atMost(saving, 20000);
+    try {
+      while (skyFrames > 0) await new Promise(r => setTimeout(r, 100));   // the scene is whole first: its sky drawn
+      run.idle = await idleBeat();
+      await (kind === 'long' ? longRun() : shortRun());
+    } catch (e) { run.error = String(e?.message || e); }
+    run.finished = true; run.end = new Date().toISOString(); mark(null);
+    pumping = false; measure = null; win = null; renderer.backend.trackTimestamp = false;
+    try { await lock?.release(); } catch {}
+    tell([bold('Сохраняю…')]); save(); await atMost(saving, 10000);
+    results(); $('lightBtn').hidden = false; hud.hidden = false;
+  }
+  document.getElementById('testShort').addEventListener('click', () => startTest('short'));
+  document.getElementById('testLong').addEventListener('click', () => startTest('long'));
+
   step('frames');
   let frames = 0, total = 0, t0 = performance.now();
   const note = ` · качество: ${QUALITY[LEVEL]}` + (fell ? ` · в прошлый раз закрылось: ${STEPS[lastStep] || lastStep}` : '')
-    + (treeTrouble ? ` · дерево не загрузилось: ${treeTrouble}` : '');
+    + (treeTrouble ? ` · дерево не загрузилось: ${treeTrouble}` : '') + (lastTest ? ` · замер прервался: ${lastTest.name}` : '');
   renderer.setAnimationLoop(now => {
+    if (measure){ measure(now); frames = 0; t0 = now; return; }        // a measurement draws its own frames
     draw(); frames++;
     if (++total === 60) step('done');                                  // it got its frames: it did not fall
     if (now - t0 > 1000){
@@ -857,7 +1178,7 @@ try {
       frames = 0; t0 = now;
     }
   });
-  window.world = {renderer, scene, camera, atmosphere, sun, cascades, pipeline, tree, field, fieldInfo, setSun, windStrength, windDir, parts, hazeDensity, airParts, sunMap, sunCam, sunView, frame, air, airTex, setLook, draw, SETTLE, settleKeep, crisp, settle, settled, sharpened, skyTarget, skyScene, drawSky,
+  window.world = {renderer, scene, camera, atmosphere, sun, cascades, pipeline, tree, field, fieldInfo, setSun, windStrength, windDir, parts, hazeDensity, airParts, sunMap, sunCam, sunView, frame, air, airTex, setLook, draw, SETTLE, settleKeep, crisp, settle, settled, sharpened, skyTarget, skyScene, drawSky, startTest, SWITCHES, lastRun: () => run,
     setExposure: e => { renderer.toneMappingExposure = e; }};   // for checking from the console
 } catch (err) {
   hud.textContent = 'Не запустилось: ' + err.message;
