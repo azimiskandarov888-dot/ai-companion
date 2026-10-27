@@ -58,7 +58,7 @@ body { background: var(--bg); color: var(--fg); margin: 0; font: 12px/1.4 ui-mon
   <label>Качество <span>(страница перезагрузится)</span><select id="quality"></select></label>
   <label>Тени <span>(страница перезагрузится)</span><select id="shadowMode">
     <option value="turns">по очереди — на вид как было</option><option value="once">один раз — быстрее</option></select></label>
-  <div class="row"><button id="testShort" type="button">Замер · 3 мин</button><button id="testLong" type="button">Долгий · 20 мин</button></div>
+  <div class="row"><button id="testShort" type="button">Замер · 2 мин</button><button id="testLong" type="button">Долгий · 20 мин</button></div>
 </div>
 <div id="test" hidden role="status" aria-live="polite"></div>
 
@@ -182,7 +182,8 @@ if (fell && TRY.level === undefined){
 }
 const step = s => { try { memory?.setItem('bob.world.step', s); memory?.setItem('bob.world.level', String(LEVEL)); } catch {} };
 // per level: pixels per screen point at most, sun shadow cascades and their size, the tree and its maps, how many plumes
-// and grass (shares), the air's share of the screen
+// and grass (shares), the air's share of the screen. (The lighter tree, thinned by merging its leaves, shows holes in
+// the crown even 46 m away — ios/design/framing/tree-before-after.jpg — so the full level keeps the full one)
 const LIGHT = [
   {pixels: 2, shadows: true, cascades: 3, shadowMap: 2048, tree: 'jacaranda', maps: '', plumes: 1, grass: 1, air: 0.5},
   {pixels: 1.5, shadows: true, cascades: 2, shadowMap: 1024, tree: 'jacaranda-light', maps: '-512', plumes: 0.8, grass: 0.6, air: 0.35},
@@ -212,6 +213,7 @@ try {
   step('gpu');
   const renderer = new THREE.WebGPURenderer({canvas, antialias: false});
   renderer.setPixelRatio(Math.min(LIGHT.pixels, devicePixelRatio || 1, 1900/document.documentElement.clientHeight));   // no more than a phone's pixels
+  const pixelsMax = renderer.getPixelRatio();                          // (fewer, if this phone cannot keep 60 frames a second)
   await renderer.init();
   renderer.shadowMap.enabled = true;
   renderer.toneMapping = THREE.AgXToneMapping;
@@ -247,7 +249,7 @@ try {
   sun.castShadow = LIGHT.shadows; sun.shadow.mapSize.set(LIGHT.shadowMap, LIGHT.shadowMap);
   sun.target.position.set(0, 4, 25);
   // the camera and the sun hold still, so the shadows are not all drawn every frame (that took more than a quarter of a
-  // phone's frame). 'turns', as Genshin Impact does it: the near cascade every second frame, the next every fourth, the
+  // phone's frame). 'turns', as Genshin Impact does it: the near cascade every third frame, the next every sixth, the
   // farthest (past the crest, where nothing shows) only when something changes — the sun, the wind's strength, the
   // plants. 'once': all only on a change, the plants then casting in their mean pose — faster, but a plume sways out of
   // its shadow. Picked in the panel (kept, and in the address as #sh=…) or tried with ?shadows=…. The cascades copy
@@ -258,6 +260,7 @@ try {
   sun.shadow.shadowNode = cascades;
   scene.add(sun, sun.target);
   let shadowFrames = 30, shadowTick = 0, shadowTurns = SHADOWS === 'turns';   // frames left to draw them all afresh (at the start: till all is built)
+  let turnEvery = 3;                                                   // the near cascade every third frame, the next every sixth
   const redrawShadows = (frames = 2) => { shadowFrames = Math.max(shadowFrames, frames); };
 
   // ── the wind, as in Ghost of Tsushima: one direction and strength for everything, and gusts from two layers of noise
@@ -521,9 +524,8 @@ try {
   // ── a plant drawn many times: each copy has its place and turn (iP) and its size, height, colour and give in the wind
   // (iS). The wind bends it from its root, its top most (a spring); its feathers flutter. mode: 'opaque' (stalks,
   // leaves, grass), 'cover' (fluff cut into the pixel's samples), 'blend' (fluff with a soft see-through edge) or
-  // 'core' (the dense core of blended fluff, depth only, drawn first so the soft fluff over it overlaps right).
-  // calm, only for the measurement: steady gusts and patches, not even read from the field's map
-  function fieldMaterial(H0, {grass = false, feather, mode = 'opaque', cover = 1, calm = false} = {}){
+  // 'core' (the dense core of blended fluff, depth only, drawn first so the soft fluff over it overlaps right)
+  function fieldMaterial(H0, {grass = false, feather, mode = 'opaque', cover = 1} = {}){
     const iP = attribute('iP', 'vec4'), iS = attribute('iS', 'vec4');
     const aT = attribute('aT', 'vec3'), aK = attribute('aK', 'vec4'), aN = attribute('aN', 'vec4'), aC = attribute('aC', 'vec4');
     const side = aK.x, bend = aK.z, part = aK.w;
@@ -531,7 +533,7 @@ try {
     const size = vec3(iS.x, iS.x.mul(iS.y), iS.x), place = p => turn(p.mul(size)).add(iP.xyz);
     // the wind here: the gusts drifting over the field, the plant rocking a little on its own, its own give
     const phase = fract(iP.w.mul(7.31)).mul(6.283), H = size.y.mul(H0);
-    const here = fieldAt(iP.xz), gust = calm ? windStrength.mul(0.725) : here.r;   // this plant's gusts and patch, from the map
+    const here = fieldAt(iP.xz), gust = here.r;                        // this plant's gusts and patch, from the map
     const reach = gust.mul(sin(time.mul(1.9).add(phase)).mul(0.3).add(1)).mul(iS.w).mul(0.28).add(0.02);
     const top = windDir.mul(reach.mul(H));                              // how far its top moves, m
     const bb = bend.clamp(0, 1.5), b2 = top.mul(bb.mul(bb));
@@ -560,7 +562,7 @@ try {
     const vW = positionWorld, vT = T.toVarying('vT'), vSide = side.toVarying('vSide'), vNr = Nleaf.toVarying('vNr');
     const vCen = place(aC.xyz).add(vec3(top.x, 0, top.y).mul(1.2)).toVarying('vCen');
     const vPart = part.toVarying('vPart'), vAO = aN.w.toVarying('vAO'), vTint = iS.z.toVarying('vTint');
-    const vMacro = (calm ? float(0.15) : here.g).toVarying('vMacro'), vCombed = reach.toVarying('vCombed');
+    const vMacro = here.g.toVarying('vMacro'), vCombed = reach.toVarying('vCombed');
     const head = vPart.greaterThan(0.5).and(vPart.lessThan(1.5)), isFlat = vPart.greaterThan(1.5), Vf = normalize(cameraPosition.sub(vW));
     const acrossF = normalize(cross(vT, Vf)), towardF = normalize(cross(acrossF, vT));
     const nStalk = normalize(acrossF.mul(vSide).add(towardF.mul(sqrt(float(1).sub(vSide.mul(vSide)).max(0)))));
@@ -586,7 +588,6 @@ try {
     const model = new FieldLight({head, flat: isFlat, thin: float(1).sub(alpha.mul(0.6)), combed: vCombed.mul(1.5).add(1),
       fibre: normalize(cameraViewMatrix.mul(vec4(fibre, 0)).xyz), ground: groundLight});
     m.setupLightingModel = () => model;
-    m.userData.args = [H0, {grass, feather, mode, cover}];             // so the measurement can build its calm twin
     return m;
   }
 
@@ -890,7 +891,7 @@ try {
     fieldNow();                                                        // this frame's gusts, and the field's light after the sun moved
     if (shadowFrames > 0){ shadowFrames--; sun.shadow.needsUpdate = true; cascades.lights.forEach(l => { l.shadow.needsUpdate = true; }); }
     else if (shadowTurns){ const L = cascades.lights, k = ++shadowTick;   // at most one cascade a frame, the nearest most often
-      if (L[0] && k % 2 === 0) L[0].shadow.needsUpdate = true; else if (L[1] && k % 4 === 1) L[1].shadow.needsUpdate = true; }
+      if (L[0] && k % turnEvery === 0) L[0].shadow.needsUpdate = true; else if (L[1] && k % (2*turnEvery) === 1) L[1].shadow.needsUpdate = true; }
     if (airWarm > 0 && --airWarm % 10 === 0) drawAir();
     if (SETTLE.on){ const w = canvas.width, h = canvas.height; jitter = jitter % 16 + 1;
       camera.setViewOffset(w, h, halton(jitter, 2) - 0.5, halton(jitter, 3) - 0.5, w, h); }
@@ -906,6 +907,30 @@ try {
     skyTarget.setSize(Math.round(w*dpr), Math.round(h*dpr)); drawSky();
   }
   addEventListener('resize', resize); resize();
+
+  // ══ Keeping 60 frames a second. If this phone cannot — two seconds running, twice — the world draws fewer pixels:
+  // 2 → 1.75 → 1.5 per screen point at most (the smoothing over time hides most of it); a phone that can keeps them
+  // all. Each step is tried: if the frames do not come faster after it, the screen itself is what is slow (Low Power
+  // Mode gives 30 frames a second whatever is drawn), so the pixels go back and nothing changes any more
+  const PACE = {steps: [1, 0.875, 0.75], window: 2000, slow: 54};
+  let paceGaps = [], paceLast = 0, paceFrom = 0, paceStep = 0, paceLate = 0, paceTry = null, paceOff = false;
+  const setPace = () => { renderer.setPixelRatio(pixelsMax*PACE.steps[paceStep]); airSize(); };
+  function pace(now){
+    const gap = paceLast ? now - paceLast : 0; paceLast = now;
+    if (paceOff || skyFrames > 0 || shadowFrames > 0 || airWarm > 0 || gap > 250){ paceGaps = []; paceFrom = now; return; }   // still being built, or back from the background
+    paceGaps.push(gap);
+    if (now - paceFrom < PACE.window) return;
+    const fps = 1000*paceGaps.length/(now - paceFrom); paceGaps = []; paceFrom = now;
+    if (paceTry){                                                      // the last step down: did it help?
+      if (--paceTry.windows > 0) return;
+      if (fps < paceTry.fps*1.1){ paceStep--; setPace(); paceOff = true; }
+      paceTry = null; return;
+    }
+    paceLate = fps < PACE.slow ? paceLate + 1 : 0;
+    if (paceLate < 2 || paceStep >= PACE.steps.length - 1) return;
+    paceLate = 0; paceStep++; setPace(); paceTry = {fps, windows: 2};
+  }
+  function paceReset(){ paceStep = 0; paceLate = 0; paceTry = null; paceOff = false; paceGaps = []; paceLast = 0; setPace(); }
 
   // the sliders: the sun's side and height, the air's thickness, the wind
   { const $ = id => document.getElementById(id), btn = $('lightBtn'), panel = $('panel');
@@ -935,11 +960,12 @@ try {
     $('settle').addEventListener('change', e => { SETTLE.on = e.target.checked; crisp.value = SETTLE.on ? SETTLE.sharpen : 0; });
     show(); }
 
-  // ══ A measurement for the phone (the panel's «Замер»). One part of the scene at a time is switched off or made
-  // cheaper, and the GPU's own clock (timestamp queries) says how long each frame's passes took: at 60 frames a second
-  // the frame counter cannot show how much room is left. Two rounds, the second backwards, so a phone warming up
-  // favours neither end. The numbers go to the artifact's database for Claude to read, and can be copied. «Долгий»
-  // keeps the whole scene for 20 minutes and notes it every 10 seconds, to see the phone heat up
+  // ══ A measurement for the phone (the panel's «Замер»). One setting at a time is changed, at the screen's own pace —
+  // how many frames a second come, and how many come late — with the GPU's own clock (timestamp queries) beside it. (Frames
+  // drawn back to back, as fast as the GPU could, showed what each part costs while the frame was far from 60; near 60 a
+  // phone's GPU slows its clock to the work, and those numbers stop meaning much.) Two rounds, the second backwards, so
+  // a phone warming up favours neither end. The numbers go to the artifact's database for Claude to read, and can be
+  // copied. «Долгий» keeps the whole scene for 20 minutes and notes it every 10 seconds, to see the phone heat up
   const testBox = document.getElementById('test'), FAST = new URLSearchParams(location.search).has('fast');   // ?fast: a quick run, to check it on a computer
   const wait = ms => new Promise(r => setTimeout(r, FAST ? ms/4 : ms));
   const r1 = x => x === null || x === undefined || Number.isNaN(x) ? null : Math.round(x*10)/10;
@@ -976,33 +1002,18 @@ try {
   }
   // a frame while measuring: drawn and timed. The GPU's clock is read back on every frame it can be (unread, it runs out
   // of room), and on any phone we also hear when the GPU has finished the frame
-  let pumping = false;
   function testFrame(now){
     const t = performance.now(); draw(); const cpu = performance.now() - t, w = win, pool = renderer.backend.timestampQueryPool?.render;
     if (renderer.backend.trackTimestamp && pool && !gpuBusy){ gpuBusy = true; if (!pool.patched) busyClock(pool);
       renderer.resolveTimestampsAsync('render').then(ms => { if (w && w === win && ms > 0){ w.gpu.push(ms); w.gpuSum.push(pool.lastSum); } })
         .catch(() => {}).finally(() => { gpuBusy = false; }); }
     const queue = renderer.backend.device?.queue;
-    if (!pumping && queue && !doneBusy && w){ doneBusy = true;
+    if (queue && !doneBusy && w){ doneBusy = true;
       queue.onSubmittedWorkDone().then(() => { if (w === win) w.done.push(performance.now() - t); }).catch(() => {}).finally(() => { doneBusy = false; }); }
     if (!w) return;
     if (w.last !== null) w.dt.push(now - w.last);
     w.last = now; w.cpu.push(cpu); w.draws = renderer.info.render.drawCalls; w.tris = renderer.info.render.triangles;
     w.drawsMin = Math.min(w.drawsMin, w.draws);
-  }
-  // frames back to back, each as soon as the GPU has finished the one before, not at the screen's pace. Then the GPU
-  // stays busy and keeps its full speed (left idle between frames, a phone's GPU slows down, and every switch looks
-  // alike), no frame waits in line behind another, and frames a second says how many the phone could draw
-  async function pump(){
-    const queue = renderer.backend.device?.queue, nodes = renderer._nodes;
-    pumping = true; measure = () => {};                                // the screen's own frames now only tick
-    while (pumping){
-      renderer.info.reset(); nodes.nodeFrame.update(); renderer.info.frame = nodes.nodeFrame.frameId;
-      const t = performance.now(); testFrame(t); const w = win;
-      if (queue) await queue.onSubmittedWorkDone(); else await new Promise(r => requestAnimationFrame(r));
-      if (w && w === win) w.done.push(performance.now() - t);
-    }
-    if (run && !run.finished) measure = testFrame;
   }
   let hiddenNow = false, stopNow = null;                               // the screen went dark; «Стоп» was pressed
   document.addEventListener('visibilitychange', () => { if (document.hidden) hiddenNow = true; });
@@ -1011,6 +1022,7 @@ try {
     await Promise.race([wait(ms), stopNow?.promise].filter(Boolean));
     const w = win; win = null;
     return {fps: w.dt.length ? r1(1000*w.dt.length/w.dt.reduce((s, x) => s + x, 0)) : null, frame: r1(quantile(w.dt, 0.5)),
+      late: w.dt.length ? Math.round(100*w.dt.filter(x => x > 20).length/w.dt.length) : null,   // % of frames that missed the screen's 1/60 s
       frame95: r1(quantile(w.dt, 0.95)), frameMax: r1(w.dt.length ? Math.max(...w.dt) : null), gpu: r1(trimmed(w.gpu)),
       gpuMed: r1(quantile(w.gpu, 0.5)), gpu90: r1(quantile(w.gpu, 0.9)), gpuSum: r1(trimmed(w.gpuSum)), gpuN: w.gpu.length, done: r1(trimmed(w.done)),
       cpu: r1(quantile(w.cpu, 0.5)), draws: w.draws, drawsMin: Number.isFinite(w.drawsMin) ? w.drawsMin : null, tris: w.tris, frames: w.dt.length};
@@ -1025,39 +1037,20 @@ try {
     }
   }
 
-  // what is switched, one at a time: each part off, or drawn the old way, or fewer pixels
+  // what is changed, one at a time: the shadows' pace, a part off, or the steps the world takes down in pixels
   const showAll = (list, yes) => list.forEach(o => { o.visible = yes; });
   const fluffOf = part => { const mats = lookMats[fieldInfo.look]; return plants.children.filter(m => m.material === mats[part]); };
-  const grassMeshes = () => field.children.filter(o => o !== plants);
-  let pixels0 = 1, unsettled = null, settledWas = SETTLE.on;
-  const calmMats = new Map(), output0 = pipeline.outputNode;
-  function calmDown(on){                                               // the field with its calm twins: steady gusts, no map read
-    for (const m of [...plants.children, ...grassMeshes()]){
-      if (on){ const own = m.material; let c = calmMats.get(own);
-        if (!c){ const [H0, o] = own.userData.args; c = fieldMaterial(H0, {...o, calm: true}); calmMats.set(own, c); }
-        m.userData.own = own; m.material = c; }
-      else if (m.userData.own){ m.material = m.userData.own; delete m.userData.own; }
-    }
-  }
-  function noSettle(on){                                               // the frame and its air straight to the screen
-    if (on){ settledWas = SETTLE.on; SETTLE.on = false;
-      pipeline.outputNode = unsettled ||= saturation(frame.rgb.mul(air.a).add(air.rgb).mul(vec3(...GRADE.white)), GRADE.saturation); }
-    else { pipeline.outputNode = output0; SETTLE.on = settledWas; settle.fresh.value = 1; }   // the smoothing starts afresh
-    pipeline.needsUpdate = true;
-  }
+  let pixels0 = 1;
+  const pixels = k => on => { renderer.setPixelRatio(on ? pixels0*k : pixels0); airSize(); };
+  const sharpness = k => `чёткость ${(pixelsMax*k).toFixed(2).replace(/0$/, '').replace('.', ',')}`;
   const SWITCHES = [
-    {key: 'shadows', name: 'тени каждый кадр', set: on => cascades.lights.forEach(l => { l.shadow.autoUpdate = on; }), skip: () => !cascades.lights.length},
     {key: 'still', name: 'тени застыли', set: on => { shadowTurns = !on; }, skip: () => SHADOWS !== 'turns' || !cascades.lights.length},
-    {key: 'core', name: 'без «ядра» метёлок', set: on => showAll(fluffOf('core'), !on), skip: () => !lookMats[fieldInfo.look]?.core},
+    {key: 'turns2', name: 'ближние тени через кадр', set: on => { turnEvery = on ? 2 : 3; }, skip: () => SHADOWS !== 'turns' || !cascades.lights.length},
     {key: 'fluff', name: 'без пуха', set: on => showAll([...fluffOf('heads'), ...fluffOf('core')], !on)},
     {key: 'plants', name: 'без метёлок совсем', set: on => { plants.visible = !on; }},
-    {key: 'grass', name: 'без травы', set: on => showAll(grassMeshes(), !on)},
     {key: 'tree', name: 'без дерева', set: on => { tree.visible = !on; }},
-    {key: 'hill', name: 'без холма', set: on => { hillMesh.visible = !on; }},
-    {key: 'calm', name: 'ветер без карты поля', slow: true, set: calmDown},
-    {key: 'settle', name: 'без сглаживания', slow: true, set: noSettle},
-    {key: 'px75', name: 'пикселей ×0,75', set: on => { renderer.setPixelRatio(on ? pixels0*0.75 : pixels0); airSize(); }},
-    {key: 'px50', name: 'пикселей ×0,5', set: on => { renderer.setPixelRatio(on ? pixels0*0.5 : pixels0); airSize(); }},
+    {key: 'px875', name: sharpness(0.875), set: pixels(0.875)},
+    {key: 'px75', name: sharpness(0.75), set: pixels(0.75)},
   ];
 
   // what the box at the top says
@@ -1098,26 +1091,21 @@ try {
     return r1(quantile(dt, 0.5));
   }
   async function shortRun(){
-    // first the scene as it runs, at the screen's pace; then every switch with the frames back to back (pump)
     const parts = SWITCHES.filter(v => !v.skip?.()), base = {key: 'base', name: 'всё как есть', base: true};
-    const plan = [{key: 'natural', name: 'всё как есть, обычный ход', base: true}, base, ...parts, base, ...[...parts].reverse(), base], seen = new Set();
-    let pumped = null;
+    const plan = [base, ...parts, base, ...[...parts].reverse(), base];
     for (let i = 0; i < plan.length; i++){
-      const v = plan[i], first = v.slow && !seen.has(v.key);
-      if (i === 1) pumped = pump();
-      const left = plan.slice(i).reduce((s, x) => s + (x.slow && !seen.has(x.key) ? 8.5 : x.base ? 6 : 6.5), 0);
+      const v = plan[i], left = plan.slice(i).reduce((s, x) => s + (x.base ? 6 : 6.5), 0);
       tell([bold(`Замер · шаг ${i + 1} из ${plan.length} · ещё ~${eta(left)}`), `Сейчас: ${v.name}`,
         'Не трогай экран. Картинка будет меняться — так и надо.']);
       mark({kind: 'short', step: i + 1, name: v.name});
-      const row = {key: v.key, name: v.name, round: i <= parts.length + 2 ? 1 : 2, ...(v.base ? {base: true} : {})};
+      const row = {key: v.key, name: v.name, round: i <= parts.length + 1 ? 1 : 2, ...(v.base ? {base: true} : {})};
       try {
         if (!v.base) await v.set(true);
-        Object.assign(row, await measured(i === 1 ? 3000 : v.base ? 1500 : first ? 4000 : 2000, 4000));   // (the GPU settles into the pump first)
+        Object.assign(row, await measured(i === 0 ? 3000 : v.base ? 1500 : 2000, 4000));
       } catch (e) { row.error = String(e?.message || e); }
       try { if (!v.base) await v.set(false); } catch (e) { row.error ||= 'возврат: ' + (e?.message || e); }
-      seen.add(v.key); run.rows.push(row); save();
+      run.rows.push(row); save();
     }
-    pumping = false; await pumped;
   }
   async function longRun(){
     const total = FAST ? 20e3 : 20*60e3, t0 = performance.now(), mm = s => `${Math.floor(s/60)}:${String(Math.round(s % 60)).padStart(2, '0')}`;
@@ -1146,8 +1134,8 @@ try {
       const a = of(k), g = mean(a.map(r => r.gpu)), d = mean(a.map(r => r.done)), any = run.rows.find(r => r.key === k), vs = !any.base;
       return {key: k, name: any.name, gpu: r1(g), dGpu: vs && g !== null && bG !== null ? r1(g - bG) : null,
         done: r1(d), dDone: vs && d !== null && bD !== null ? r1(d - bD) : null, frame: r1(mean(a.map(r => r.frame))),
-        fps: r1(mean(a.map(r => r.fps))), cpu: r1(mean(a.map(r => r.cpu))), sum: r1(mean(a.map(r => r.gpuSum))), p90: r1(mean(a.map(r => r.gpu90))),
-        each: a.map(r => r.gpu ?? r.done ?? '—').join(' / '),
+        fps: r1(mean(a.map(r => r.fps))), late: r1(mean(a.map(r => r.late))), cpu: r1(mean(a.map(r => r.cpu))), p90: r1(mean(a.map(r => r.gpu90))),
+        each: a.map(r => r.fps ?? '—').join(' / '),
         draws: a[0]?.draws ?? null, drawsMin: a.length ? Math.min(...a.map(r => r.drawsMin ?? Infinity)) : null, tris: a[0]?.tris ?? null,
         error: a.length ? undefined : any.error};
     });
@@ -1161,9 +1149,9 @@ try {
     if (run.kind === 'long') for (const e of run.log) lines.push(`${e.t} с | ${e.fps ?? '—'} к/с | кадр ${e.frame ?? '—'} / 95% ${e.frame95 ?? '—'} | видеокарта ${e.gpu ?? '—'} | готов ${e.done ?? '—'}${e.dark ? ' | экран гас' : ''}`);
     else {
       const st = d.stamps;                                             // without the GPU's clock: when the GPU said it was done
-      lines.push(`что | ${st ? 'видеокарта' : 'готов'} мс (разница) | по кругам | ${st ? '9 из 10 кадров ≤ | сумма проходов | ' : ''}к/с | процессор мс | вызовов | треугольников`);
-      for (const s of summary()) lines.push(`${s.name} | ${st ? `${s.gpu ?? '—'}${signed(s.dGpu)}` : `${s.done ?? '—'}${signed(s.dDone)}`} | ${s.each} | `
-        + `${st ? `${s.p90 ?? '—'} | ${s.sum ?? '—'} | ` : ''}${s.fps ?? '—'} | ${s.cpu ?? '—'} | ${s.draws ?? '—'} | ${s.tris ?? '—'}${s.error ? ' | ошибка: ' + s.error : ''}`);
+      lines.push(`что | кадров/с | по кругам | опаздывает | ${st ? 'видеокарта' : 'готов'} мс (разница) | ${st ? '9 из 10 кадров ≤ | ' : ''}процессор мс | вызовов | треугольников`);
+      for (const s of summary()) lines.push(`${s.name} | ${s.fps ?? '—'} | ${s.each} | ${s.late ?? '—'}% | ${st ? `${s.gpu ?? '—'}${signed(s.dGpu)}` : `${s.done ?? '—'}${signed(s.dDone)}`} | `
+        + `${st ? `${s.p90 ?? '—'} | ` : ''}${s.cpu ?? '—'} | ${s.draws ?? '—'} | ${s.tris ?? '—'}${s.error ? ' | ошибка: ' + s.error : ''}`);
     }
     if (run.error) lines.push('ошибка: ' + run.error);
     return lines.join('\n');
@@ -1184,8 +1172,8 @@ try {
       line('первая минута', avg(first, e => e.fps) ?? '—', avg(first, e => stamps ? e.gpu : e.done) ?? '—');
       line('последняя минута', avg(last, e => e.fps) ?? '—', avg(last, e => stamps ? e.gpu : e.done) ?? '—');
     } else {
-      line('', stamps ? 'видеокарта, мс' : 'готов, мс', 'кадров/с');
-      for (const s of summary()) line(s.name, s.error ? 'ошибка' : `${(stamps ? s.gpu : s.done) ?? '—'}${signed(stamps ? s.dGpu : s.dDone)}`, s.fps ?? '—');
+      line('', 'кадров/с', 'опаздывает');
+      for (const s of summary()) line(s.name, s.error ? 'ошибка' : s.fps ?? '—', s.late === null || s.late === undefined ? '—' : `${s.late}%`);
     }
     const kept = el('p'), say = () => { kept.textContent = saved === 'ok' ? 'Цифры сохранены. Напиши мне в чат «готово».'
       : `Сохранить не вышло (${saved || 'нет связи'}). Нажми «Скопировать» и пришли текст мне.`; };
@@ -1202,7 +1190,7 @@ try {
     dbReady ||= (globalThis.claude?.use ? globalThis.claude.use('db') : Promise.resolve(null)).catch(() => null);
     let lock = null; try { lock = await navigator.wakeLock?.request('screen'); } catch {}   // keep the screen on, where allowed
     renderer.backend.trackTimestamp = !!renderer.backend.device?.features.has('timestamp-query');
-    pixels0 = renderer.getPixelRatio(); measure = testFrame;
+    paceReset(); pixels0 = renderer.getPixelRatio(); measure = testFrame;   // all its pixels while measuring; it adapts again after
     run = {id: `run-${Date.now()}`, kind, at: new Date().toISOString(), finished: false, device: {...await device(), awake: !!lock}, rows: [], log: []};
     if (lastTest){ run.previousStop = lastTest; lastTest = null; }
     const atMost = (p, ms) => Promise.race([p, new Promise(r => setTimeout(r, ms))]);
@@ -1214,7 +1202,7 @@ try {
       await (kind === 'long' ? longRun() : shortRun());
     } catch (e) { run.error = String(e?.message || e); }
     run.finished = true; run.end = new Date().toISOString(); mark(null);
-    pumping = false; measure = null; win = null; renderer.backend.trackTimestamp = false;
+    measure = null; win = null; renderer.backend.trackTimestamp = false;
     try { await lock?.release(); } catch {}
     tell([bold('Сохраняю…')]); save(); await atMost(saving, 10000);
     results(); $('lightBtn').hidden = false; hud.hidden = false;
@@ -1228,14 +1216,16 @@ try {
     + (treeTrouble ? ` · дерево не загрузилось: ${treeTrouble}` : '') + (lastTest ? ` · замер прервался: ${lastTest.name}` : '');
   renderer.setAnimationLoop(now => {
     if (measure){ measure(now); frames = 0; t0 = now; return; }        // a measurement draws its own frames
-    draw(); frames++;
+    draw(); frames++; pace(now);
     if (++total === 60) step('done');                                  // it got its frames: it did not fall
     if (now - t0 > 1000){
-      hud.textContent = `${Math.round(frames*1000/(now - t0))} кадров/с · ${renderer.backend.isWebGPUBackend ? 'WebGPU' : 'WebGL2'} · солнце ${SUN.az}°/${SUN.el}° · метёлки ${fieldInfo.look}${note}`;
+      const sharp = paceStep ? ` · чёткость ${renderer.getPixelRatio().toFixed(2).replace('.', ',')} (телефон не держал 60)` : '';
+      hud.textContent = `${Math.round(frames*1000/(now - t0))} кадров/с · ${renderer.backend.isWebGPUBackend ? 'WebGPU' : 'WebGL2'} · солнце ${SUN.az}°/${SUN.el}° · метёлки ${fieldInfo.look}${note}${sharp}`;
       frames = 0; t0 = now;
     }
   });
   window.world = {renderer, scene, camera, atmosphere, sun, cascades, pipeline, tree, field, fieldInfo, setSun, windStrength, windDir, parts, hazeDensity, airParts, sunMap, sunCam, sunView, frame, air, airAtlas, drawAir, fieldRT, groundRT, redrawShadows, setLook, draw, SETTLE, settleKeep, crisp, settle, settled, sharpened, skyTarget, skyScene, drawSky, startTest, SWITCHES, lastRun: () => run,
+    pace, paceReset, paceState: () => ({step: paceStep, off: paceOff, trying: !!paceTry, pixels: renderer.getPixelRatio()}),
     setExposure: e => { renderer.toneMappingExposure = e; }};   // for checking from the console
 } catch (err) {
   hud.textContent = 'Не запустилось: ' + err.message;
