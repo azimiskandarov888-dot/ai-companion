@@ -85,7 +85,7 @@ import * as THREE from 'three/webgpu';
 import { pass, context, texture, vec2, vec3, vec4, float, saturation, attribute, uniform, time, mx_noise_float, cameraPosition,
   normalize, cross, dot, uv, Fn, cameraViewMatrix, cos, sin, select, mix, abs, exp, fract, smoothstep, length, Loop, rtt,
   positionGeometry, positionLocal, positionWorld, normalLocal, normalWorld, normalView, positionViewDirection, diffuseColor, BRDF_Lambert, getViewPosition,
-  screenUV, mrt, output, positionView, luminance, nodeObject, passTexture, floor } from 'three/tsl';
+  screenUV, mrt, output, positionView, luminance, nodeObject, passTexture, floor, min, max, clamp, renderOutput } from 'three/tsl';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { CSMShadowNode } from 'three/addons/csm/CSMShadowNode.js';
@@ -98,8 +98,9 @@ const PLACE = {lon: 140.81, lat: 42.83, height: 300};                // a meadow
 const SUN = {az: 8, el: 12};                                         // degrees from straight ahead (+ to the left), above the horizon:
                                                                      // low behind the tree: crown and grass glow through the haze (his pick)
 const EXPOSURE = 7;                                                  // the camera's exposure, for light in physical units
-// the grade, where Ghost puts its art (after the light, never in it): white balance toward his warm evening, more colour
-const GRADE = {white: [1, 1, 1], saturation: 1.3};
+// the grade, where Ghost puts its art (after the light, never in it): white balance toward his warm evening, more colour;
+// and the tree's own colour, given back after the film curve (which holds bright orange near grey)
+const GRADE = {white: [1, 1, 1], saturation: 1.3, tree: 1.6};
 // the sky, as Ghost's local tone mapping keeps it: darker than the light it throws, so its blue stays deep
 const SKY = {exposure: 0.47, saturation: 2};
 // the tree (its file follows the level: jacaranda, jacaranda-light): where, turned how, how tall; and how it moves in
@@ -127,7 +128,12 @@ const BOUNCE = {field: 0.25};
 // follows the level (LIGHT.air)
 const HAZE = {density: 0.0015, height: 6, g: 0.7, forward: 0.6, steps: 24, skyFar: 70};
 const WIND = {dir: [-0.95, 0.3], strength: 0.55};                    // one wind for the whole world: where it blows, how hard
-const THROUGH = 3;                                                   // how strongly sunlight comes through the tree's leaves
+// sunlight through the tree's leaves, and through its crown: how strongly a leaf lets the sun through (Frostbite's fast
+// translucency); and, as in a real crown, where light passes leaf after leaf (Beer–Lambert; Monsi and Saeki 1953), a
+// leaf deep inside gets less of it but never none — not all or nothing from the shadow map: how fast the crown dims it
+// (per m of crown on the way), what the deepest leaves still get, and how much more the leaves just under the crown's
+// sunlit skin glow (by eye: his picture glows all through)
+const THROUGH = {scale: 0.08, dim: 0.3, least: 0.05, rim: 6};
 // for trying values from the address: ?az=…&el=…&exp=…&through=…&haze=…
 { const q = new URLSearchParams(location.search), n = k => q.has(k) ? +q.get(k) : undefined;
   SUN.az = n('az') ?? SUN.az; SUN.el = n('el') ?? SUN.el; HAZE.density = n('haze') ?? HAZE.density;
@@ -410,9 +416,9 @@ try {
   hillMesh.receiveShadow = true; scene.add(hillMesh);
 
   // what lets light through — the tree's leaves — glows where the sun is behind it (Frostbite's fast translucency, in
-  // three.js's SSS material); shadows dim it too
+  // three.js's SSS material); how much sun reaches a leaf inside the crown is set with the sun's view of it (crownLight)
   const translucent = (m, through) => Object.assign(m, {thicknessColorNode: through, thicknessDistortionNode: float(0.25),
-    thicknessAmbientNode: float(0), thicknessAttenuationNode: float(0.9), thicknessPowerNode: float(3), thicknessScaleNode: float(TRY.through ?? THROUGH)});
+    thicknessAmbientNode: float(0), thicknessAttenuationNode: float(0.9), thicknessPowerNode: float(3), thicknessScaleNode: float(TRY.through ?? THROUGH.scale)});
   // the tree: Jacaranda from Poly Haven (CC0), its leaves turned to autumn (scene/import_tree.py, scene/autumn_leaves.py)
   const tex = new THREE.TextureLoader();
   step('tree');
@@ -467,6 +473,7 @@ try {
     // the gold of the sunlit field bounced up into the crown, less deep inside it (its depth is in the vertex colour)
     const deep = o.geometry.attributes.color ? attribute('color', 'vec4').x : float(1);
     mat.emissiveNode = texture(map).rgb.mul(groundLight).mul(BOUNCE.field/Math.PI).mul(float(1).sub(normalWorld.y).mul(0.5)).mul(deep);
+    mat.mrtNode = mrt({distance: vec4(length(positionView), 1, 0, 1)});   // marked, for its own colour after the film (the grade)
     if (o.geometry.attributes.color) mat.positionNode = swayed();
     const mesh = new THREE.Mesh(o.geometry, mat);
     mesh.castShadow = mesh.receiveShadow = true; tree.add(mesh);
@@ -497,6 +504,23 @@ try {
     scene.overrideMaterial = null; scene.backgroundNode = bg;
     sunView.value.multiplyMatrices(sunCam.projectionMatrix, sunCam.matrixWorldInverse);   // after: the renderer sets its depth range
   }
+  // how much sun a leaf inside the crown gets: how far it lies behind the first leaf on the sun's way, from the sun's
+  // view (five looks a third of a metre apart, so the map's steps leave no grain), as the light left after that much
+  // crown. Where the shadow map has a leaf in shade, it gets that instead of none (without sun shadows, always); the
+  // sunlit stay sunlit. The map holds the tree at rest: the crown's thickness hardly changes as it sways
+  const crownParts = {dim: uniform(THROUGH.dim), least: uniform(THROUGH.least), rim: uniform(THROUGH.rim)};
+  const crownLight = Fn(() => {
+    const s = sunView.mul(vec4(positionWorld, 1)).xyz, at = vec2(s.x.mul(0.5).add(0.5), s.y.mul(-0.5).add(0.5)), r = 0.34/(sunCam.right - sunCam.left);
+    const left = d => exp(s.z.sub(texture(sunMap.depthTexture, at.add(d)).level(0).r).max(0).mul(sunCam.far - sunCam.near).mul(crownParts.dim).negate());
+    const T = left(vec2(0, 0)).add(left(vec2(r, r))).add(left(vec2(-r, r))).add(left(vec2(r, -r))).add(left(vec2(-r, -r))).mul(0.2);
+    return crownParts.least.add(T.mul(float(1).sub(crownParts.least))).add(T.pow(8).mul(crownParts.rim));
+  })();
+  tree.traverse(o => {
+    const m = o.material;
+    if (!o.isMesh || !m.thicknessColorNode) return;                   // the leaves
+    if (LIGHT.shadows) m.receivedShadowNode = shade => mix(crownLight, float(1), shade);
+    else m.thicknessColorNode = m.thicknessColorNode.mul(crownLight);
+  });
   const hazeDensity = uniform(HAZE.density), airParts = {sun: uniform(1), sky: uniform(1), shade: uniform(1)};   // for checking
   const hillAt = (x, z) => smoothstep(0, 46, z).mul(5.2).mul(sin(x.mul(0.06).add(1.3)).mul(0.15).add(0.85)).add(x.mul(0.13).mul(smoothstep(0, 46, z)))
     .sub(smoothstep(47, 75, z).mul(4)).add(leafTopAt(z));             // the top of the leaf layer (its small ripples left out)
@@ -595,29 +619,40 @@ try {
     setup(builder){
       const now = this.input, at = uv(), texel = this.texel, past = texture(this.history.texture);
       const resolve = Fn(() => {
-        const c = now.sample(at).rgb, m1 = c.toVar(), m2 = c.mul(c).toVar();
+        const here = now.sample(at), c = here.rgb, m1 = c.toVar(), m2 = c.mul(c).toVar(), lo = here.a.toVar(), hi = here.a.toVar();
         for (const [dx, dy] of [[-1, -1], [0, -1], [1, -1], [-1, 0], [1, 0], [-1, 1], [0, 1], [1, 1]]){
-          const n = now.sample(at.add(vec2(dx, dy).mul(texel))).rgb; m1.addAssign(n); m2.addAssign(n.mul(n));
+          const n = now.sample(at.add(vec2(dx, dy).mul(texel))); m1.addAssign(n.rgb); m2.addAssign(n.rgb.mul(n.rgb));
+          lo.assign(min(lo, n.a)); hi.assign(max(hi, n.a));
         }
         const mean = m1.div(9), spread = m2.div(9).sub(mean.mul(mean)).max(0).sqrt().mul(SETTLE.clip);
-        const prev = past.sample(at).rgb.max(mean.sub(spread)).min(mean.add(spread)), keep = mix(settleKeep, float(0), this.fresh);
+        const was = past.sample(at), prev = was.rgb.max(mean.sub(spread)).min(mean.add(spread)), keep = mix(settleKeep, float(0), this.fresh);
         const wc = float(1).sub(keep).div(luminance(c).add(1)), wp = keep.div(luminance(prev).add(1));
-        return vec4(c.mul(wc).add(prev.mul(wp)).div(wc.add(wp)), 1);
+        // (in alpha, where the tree is: it settles with the colour, held to where the tree is around this pixel now)
+        return vec4(c.mul(wc).add(prev.mul(wp)), here.a.mul(wc).add(was.a.clamp(lo, hi).mul(wp))).div(wc.add(wp));
       });
       const m = new THREE.NodeMaterial(); m.fragmentNode = resolve().context(builder.getSharedContext()); m.name = 'Settle';
       this.quad.material = m;
       return passTexture(this, this.resolve.texture);
     }
   }
-  const settle = new SettleNode(rtt(frame.rgb.mul(air.a).add(air.rgb))), settled = passTexture(settle, settle.resolve.texture);   // the frame seen through the air, settled
-  // then a little crispness back (the shifts over time soften by about a pixel; games sharpen after TAA too)
+  const settle = new SettleNode(rtt(vec4(frame.rgb.mul(air.a).add(air.rgb), frame.getTextureNode('distance').g)));   // the frame seen through
+  const settled = passTexture(settle, settle.resolve.texture);        // the air, and where the tree is; settled
+  // then a little crispness back (the shifts over time soften by about a pixel; games sharpen after TAA too): in
+  // brightness only, and never past the pixels around (as AMD's CAS) — sharpening each colour on its own drew cyan rims
+  // round the bright leaves, red and green falling below nothing next to the sky
   const crisp = uniform(SETTLE.on ? SETTLE.sharpen : 0), sharpened = Fn(() => {
-    const at = uv(), e = settle.texel, c = nodeObject(settle).rgb;    // the node itself, so its pass runs each frame
-    const around = settled.sample(at.add(vec2(e.x, 0))).rgb.add(settled.sample(at.sub(vec2(e.x, 0))).rgb)
-      .add(settled.sample(at.add(vec2(0, e.y))).rgb).add(settled.sample(at.sub(vec2(0, e.y))).rgb).mul(0.25);
-    return c.add(c.sub(around).mul(crisp)).max(0);
+    const at = uv(), e = settle.texel, me = nodeObject(settle), c = me.rgb;   // the node itself, so its pass runs each frame
+    const n = settled.sample(at.add(vec2(0, e.y))).rgb, s = settled.sample(at.sub(vec2(0, e.y))).rgb;
+    const east = settled.sample(at.add(vec2(e.x, 0))).rgb, west = settled.sample(at.sub(vec2(e.x, 0))).rgb;
+    const L = luminance(c), sharp = c.mul(L.add(L.sub(luminance(n.add(s).add(east).add(west).mul(0.25))).mul(crisp)).max(0).div(L.max(1e-4)));
+    return vec4(clamp(sharp, min(c, min(min(n, s), min(east, west))), max(c, max(max(n, s), max(east, west)))), me.a);
   })();
-  pipeline.outputNode = saturation(sharpened.mul(vec3(...GRADE.white)), GRADE.saturation);
+  // the grade, the film curve (AgX), and after it the tree's own colour: the film holds bright orange near grey, so it
+  // is given back after it, on the tree alone (the grass and the sky keep their grade)
+  const treeColour = uniform(GRADE.tree);
+  pipeline.outputColorTransform = false;
+  const film = renderOutput(vec4(saturation(sharpened.rgb.mul(vec3(...GRADE.white)), GRADE.saturation), 1), THREE.AgXToneMapping, THREE.LinearSRGBColorSpace);
+  pipeline.outputNode = renderOutput(vec4(saturation(film.rgb, mix(float(1), treeColour, sharpened.a)), 1), THREE.NoToneMapping, THREE.SRGBColorSpace);
   let jitter = 0;
   function draw(){                                                     // one frame, shifted by a fraction of a pixel while smoothing
     if (skyFrames > 0){ skyFrames--; skyNow(); }
@@ -951,7 +986,7 @@ try {
       frames = 0; t0 = now;
     }
   });
-  window.world = {renderer, scene, camera, atmosphere, sun, cascades, pipeline, tree, field, fieldInfo, setSun, windStrength, windDir, parts, hazeDensity, airParts, sunMap, sunCam, sunView, frame, air, airAtlas, drawAir, fieldRT, groundRT, redrawShadows, treeWind, draw, SETTLE, settleKeep, crisp, settle, settled, sharpened, skyTarget, skyScene, drawSky, startTest, SWITCHES, lastRun: () => run,
+  window.world = {renderer, scene, camera, atmosphere, sun, cascades, pipeline, tree, field, fieldInfo, setSun, windStrength, windDir, parts, hazeDensity, airParts, sunMap, sunCam, sunView, frame, air, airAtlas, drawAir, fieldRT, groundRT, redrawShadows, treeWind, draw, SETTLE, settleKeep, crisp, settle, settled, sharpened, crownParts, treeColour, skyTarget, skyScene, drawSky, startTest, SWITCHES, lastRun: () => run,
     pace, paceReset, paceState: () => ({step: paceStep, off: paceOff, trying: !!paceTry, pixels: renderer.getPixelRatio()}),
     setExposure: e => { renderer.toneMappingExposure = e; }};   // for checking from the console
 } catch (err) {
