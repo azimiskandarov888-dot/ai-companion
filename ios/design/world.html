@@ -103,8 +103,9 @@ const GRADE = {white: [1, 1, 1], saturation: 1.3};
 // the sky, as Ghost's local tone mapping keeps it: darker than the light it throws, so its blue stays deep
 const SKY = {exposure: 0.47, saturation: 2};
 // the tree (its file follows the level: jacaranda, jacaranda-light): where, turned how, how tall; and how it moves in
-// the wind, in metres at a full gust — how far its top leans, a branch swings, a leaf flutters
-const TREE = {at: [6.6, 39.43], turn: 90, height: 16.5, wind: {lean: 0.5, branch: 0.08, leaf: 0.015}};
+// the wind, in metres at the usual wind's mean gust — how far its top leans, a branch swings, a leaf flutters (a strong
+// wind moves it several times more, a breeze far less)
+const TREE = {at: [6.6, 39.43], turn: 90, height: 16.5, wind: {lean: 0.6, branch: 0.25, leaf: 0.05}};
 // the field as Ghost of Tsushima draws it (his choice, 2026-10-28: tall grass going in waves under the wind): blades as
 // curves in clumps that share their lean, height and colour, coarser farther away (Wohllaib, GDC 2021). Bands: from,
 // to (m from the camera), blades per m², bends per blade, width (×); heights (m), a clump's give in the wind; colours
@@ -219,14 +220,15 @@ try {
   const sun = new AtmosphereLight(120);
   sun.castShadow = LIGHT.shadows; sun.shadow.mapSize.set(LIGHT.shadowMap, LIGHT.shadowMap);
   sun.target.position.set(0, 4, 25);
-  // the camera, the sun, the tree and the hill hold still, and the grass casts no shadow, so the shadows are drawn once
-  // and again only when the sun moves (drawing them every frame took more than a quarter of a phone's frame). The
-  // cascades copy this from the sun's shadow when they are made
+  // the camera, the sun and the hill hold still, and the grass casts no shadow, so the shadows are not all drawn every
+  // frame (that took more than a quarter of a phone's frame): only the tree moves, so, as Genshin Impact does it, the
+  // near cascade is drawn every third frame, the next every sixth, the farthest (past the crest, where nothing shows)
+  // only when the sun moves. The cascades copy this from the sun's shadow when they are made
   sun.shadow.autoUpdate = false; sun.shadow.needsUpdate = true;
   const cascades = new CSMShadowNode(sun, {cascades: LIGHT.cascades, maxFar: 140, mode: 'practical', lightMargin: 40});
   sun.shadow.shadowNode = cascades;
   scene.add(sun, sun.target);
-  let shadowFrames = 30;                                               // frames left to draw them afresh (at the start: till all is built)
+  let shadowFrames = 30, shadowTick = 0, shadowTurns = true;          // frames left to draw them all afresh (at the start: till all is built)
   const redrawShadows = (frames = 2) => { shadowFrames = Math.max(shadowFrames, frames); };
 
   // ── the wind, as in Ghost of Tsushima: one direction and strength for everything, and gusts from two layers of noise
@@ -442,14 +444,16 @@ try {
   // the tree in the wind, as Crysis moves its vegetation (GPU Gems 3, ch. 16): the whole tree leans with the gusts that
   // reach it — more toward the top — and sways about that lean; its branches swing, each in its own time (the phase in
   // its vertex colour, so nearby parts move together), the more the more they bend (toward the top and the crown's
-  // edge, also in the colour); its leaves flutter. One wind with the grass: the same gusts, from the field's map; calm
-  // air still stirs it a little. Its shadow keeps the still tree: the shadows are drawn once
+  // edge, also in the colour); its leaves flutter. One wind with the grass: the same gusts, from the field's map — and,
+  // as a real tree, it gives more than the wind grows (the wind's push goes with its speed squared): a breeze barely
+  // stirs it, a strong wind throws it about. Its shadow moves with it (the cascades take turns, in draw)
   const treeWind = {lean: uniform(TREE.wind.lean), branch: uniform(TREE.wind.branch), leaf: uniform(TREE.wind.leaf)};
   const windHere = uniform(new THREE.Vector3(WIND.dir[0], 0, WIND.dir[1]).normalize().applyAxisAngle(V3(0, 1, 0), -THREE.MathUtils.degToRad(TREE.turn)));   // in the tree's own turn
   const swayed = Fn(() => {
     const col = attribute('color', 'vec4'), p = positionLocal, h = p.y.div(TREE.height).clamp(0, 1.2);
-    const gust = fieldAt(vec2(...TREE.at)).r, stir = gust.add(0.1);
-    const lean = windHere.mul(gust.mul(treeWind.lean).mul(h.mul(h)).mul(sin(time.mul(0.9)).mul(0.25).add(1)));
+    const w = fieldAt(vec2(...TREE.at)).r.div(0.725*WIND.strength);    // the gust here; 1 at the usual wind's mean gust
+    const push = w.mul(w.add(0.5)).div(1.5), stir = push.add(0.08);     // (calm air still stirs it a little)
+    const lean = windHere.mul(push.mul(treeWind.lean).mul(h.mul(h)).mul(sin(time.mul(0.9)).mul(0.25).add(1)));
     const ph = col.b.mul(6.283), swing = sin(time.mul(1.7).add(ph)).mul(0.65).add(sin(time.mul(2.9).add(ph.mul(1.9))).mul(0.35));
     const branch = windHere.add(vec3(0, 0.35, 0)).mul(swing.mul(col.g).mul(treeWind.branch).mul(stir));
     const flutter = normalLocal.mul(sin(time.mul(11).add(col.b.mul(97))).mul(col.a).mul(col.g.add(0.3)).mul(treeWind.leaf).mul(stir));
@@ -463,7 +467,7 @@ try {
     // the gold of the sunlit field bounced up into the crown, less deep inside it (its depth is in the vertex colour)
     const deep = o.geometry.attributes.color ? attribute('color', 'vec4').x : float(1);
     mat.emissiveNode = texture(map).rgb.mul(groundLight).mul(BOUNCE.field/Math.PI).mul(float(1).sub(normalWorld.y).mul(0.5)).mul(deep);
-    if (o.geometry.attributes.color){ mat.positionNode = swayed(); mat.castShadowPositionNode = positionLocal; }
+    if (o.geometry.attributes.color) mat.positionNode = swayed();
     const mesh = new THREE.Mesh(o.geometry, mat);
     mesh.castShadow = mesh.receiveShadow = true; tree.add(mesh);
   });
@@ -619,6 +623,8 @@ try {
     if (skyFrames > 0){ skyFrames--; skyNow(); }
     fieldNow();                                                        // this frame's gusts, and the field's light after the sun moved
     if (shadowFrames > 0){ shadowFrames--; sun.shadow.needsUpdate = true; cascades.lights.forEach(l => { l.shadow.needsUpdate = true; }); }
+    else if (shadowTurns){ const L = cascades.lights, k = ++shadowTick;   // at most one cascade a frame, the nearest most often
+      if (L[0] && k % 3 === 0) L[0].shadow.needsUpdate = true; else if (L[1] && k % 6 === 1) L[1].shadow.needsUpdate = true; }
     if (airWarm > 0 && --airWarm % 10 === 0) drawAir();
     if (SETTLE.on){ const w = canvas.width, h = canvas.height; jitter = jitter % 16 + 1;
       camera.setViewOffset(w, h, halton(jitter, 2) - 0.5, halton(jitter, 3) - 0.5, w, h); }
@@ -769,6 +775,7 @@ try {
   const SWITCHES = [
     {key: 'grass', name: 'без травы', set: on => showAll(field.children, !on)},
     {key: 'tree', name: 'без дерева', set: on => { tree.visible = !on; }},
+    {key: 'still', name: 'тени дерева застыли', set: on => { shadowTurns = !on; }, skip: () => !cascades.lights.length},
     {key: 'px875', name: sharpness(0.875), set: pixels(0.875)},
     {key: 'px75', name: sharpness(0.75), set: pixels(0.75)},
   ];
@@ -800,7 +807,7 @@ try {
       gpu = {vendor: i.vendor || '', architecture: i.architecture || '', description: i.description || '', f16: !!a?.features.has('shader-f16')}; } catch {}
     return {ua: navigator.userAgent, screen: `${screen.width}×${screen.height} @${devicePixelRatio}`, canvas: `${canvas.width}×${canvas.height}`,
       pixels: renderer.getPixelRatio(), level: LEVEL, quality: QUALITY[LEVEL], settle: SETTLE.on, field: 'трава', blades: fieldInfo.blades,
-      tree: treeTrouble ? 'не загрузилось' : LIGHT.tree, shadows: LIGHT.shadows ? `${LIGHT.cascades}×${LIGHT.shadowMap}, один раз` : 'нет',
+      tree: treeTrouble ? 'не загрузилось' : LIGHT.tree, shadows: LIGHT.shadows ? `${LIGHT.cascades}×${LIGHT.shadowMap}, по очереди` : 'нет',
       cores: navigator.hardwareConcurrency || null, stamps: !!renderer.backend.trackTimestamp, gpu};
   }
   async function idleBeat(){                                           // frames with nothing drawn: 60 a second, 30 in Low Power Mode
