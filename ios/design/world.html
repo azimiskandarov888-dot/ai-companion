@@ -50,7 +50,7 @@ body { background: var(--bg); color: var(--fg); margin: 0; font: 12px/1.4 ui-mon
 <button id="lightBtn" type="button" aria-expanded="false" aria-controls="panel" title="Свет">☀</button>
 <div id="panel" hidden>
   <label>Солнце: где <span id="azOut"></span><input id="az" type="range" min="-100" max="30" step="1"></label>
-  <label>Солнце: высота <span id="elOut"></span><input id="el" type="range" min="3" max="40" step="1"></label>
+  <label>Солнце: высота <span id="elOut"></span><input id="el" type="range" min="-6" max="40" step="0.5"></label>
   <label>Дымка <span id="hazeOut"></span><input id="haze" type="range" min="0" max="30" step="1"></label>
   <label>Ветер <span id="windOut"></span><input id="wind" type="range" min="0" max="100" step="1"></label>
   <label class="check"><input id="settle" type="checkbox"> Сглаживание (как TAA в Ghost)</label>
@@ -104,7 +104,7 @@ THREE.GLSLNodeBuilder.prototype.getStructs = function(stage){
 // the numbers of the world
 const CAM = {pos: [0, 2.1, -7], look: [0, 11.4, 43], fov: 25};      // his picture's telephoto view up the hill
 const PLACE = {lon: 140.81, lat: 42.83, height: 300};                // a meadow below Mount Yōtei, Hokkaido
-const SUN = {az: 8, el: 12};                                         // degrees from straight ahead (+ to the left), above the horizon:
+const SUN = {az: 4.5, el: 12};                                         // degrees from straight ahead (+ to the left), above the horizon:
                                                                      // low behind the tree: crown and grass glow through the haze (his pick)
 const EXPOSURE = 7;                                                  // the camera's exposure, for light in physical units
 // the grade, where Ghost puts its art (after the light, never in it): white balance toward his warm evening, more colour;
@@ -112,7 +112,14 @@ const EXPOSURE = 7;                                                  // the came
 // middle tones; its bright leaves stay pale, as in his picture (saturated, they burned like fire)
 const GRADE = {white: [1, 1, 1], saturation: 1.3, tree: 1.3};
 // the sky, as Ghost's local tone mapping keeps it: darker than the light it throws, so its blue stays deep
-const SKY = {exposure: 0.47, saturation: 2};
+const SKY = {exposure: 0.47, saturation: 2};                         // (its colour is given after the film curve: before it, ×2 pushed
+                                                                     // a low sun's sky below nothing — flat yellow bands)
+// the sun seen: its disc a little larger than life (as the sky's authors advise), how bright the disc, the tight glow
+// round it and the wide veil a camera's lens spreads (as seen, after the exposure), and how wide each is (radians)
+const SUNSEE = {radius: 0.0065, disc: 12, core: 1.2, veil: 0.12, coreWidth: 0.02, veilWidth: 0.12};
+// how much brighter the camera sees as the sun sinks (EV at a height): the sky loses about 1 EV a degree near the
+// horizon, and at a fixed exposure dusk went black
+const DUSK = [[12, 0], [5, 0.85], [1, 2.1], [0, 2.7], [-2, 4.2], [-4, 6.3], [-6, 8.9]];
 // the tree: where, turned how, how tall; and how it moves in
 // the wind, in metres at the usual wind's mean gust — how far its top leans, a branch swings, a leaf flutters (a strong
 // wind moves it several times more, a breeze far less)
@@ -206,7 +213,7 @@ try {
   renderer.contextNode = context({...renderer.contextNode.value, getAtmosphere: () => atmosphere});
   const here = new Geodetic(radians(PLACE.lon), radians(PLACE.lat), PLACE.height).toECEF();
   Ellipsoid.WGS84.getNorthUpEastFrame(here, atmosphere.matrixWorldToECEF.value);   // our x: north, y: up, z: east
-  const sunUp = uniform(0), sunDir = uniform(new THREE.Vector3());    // the sun's height (the sine of its angle), its direction
+  const sunUp = uniform(0), sunDir = uniform(new THREE.Vector3()), exposureNow = uniform(EXPOSURE);    // the sun's height (the sine of its angle), its direction
   let onSun = () => {};                                                // what else follows the sun (the air's shadows)
   function setSun(az = SUN.az, el = SUN.el){
     SUN.az = az; SUN.el = el;
@@ -214,6 +221,10 @@ try {
     sunUp.value = Math.sin(e);
     const L = new THREE.Vector3(Math.sin(a)*Math.cos(e), Math.sin(e), Math.cos(a)*Math.cos(e));
     sunDir.value.copy(L);
+    const k = DUSK.findIndex(([h]) => h <= el), ev = k < 0 ? DUSK.at(-1)[1] : k === 0 ? 0
+      : THREE.MathUtils.mapLinear(el, DUSK[k - 1][0], DUSK[k][0], DUSK[k - 1][1], DUSK[k][1]);
+    exposureNow.value = (TRY.exp ?? EXPOSURE)*2**(0.7*ev);          // (a little less: the field, lit by the sky, came out pale)
+    renderer.toneMappingExposure = exposureNow.value;
     atmosphere.sunDirectionECEF.value.copy(L.clone().transformDirection(atmosphere.matrixWorldToECEF.value));
     onSun();
   }
@@ -668,7 +679,8 @@ try {
   // the sky is drawn once into a picture of its own, and again only when the sun moves or the screen changes size: the
   // camera holds still, and drawing the physical sky afresh for every pixel of every frame cost more than all the rest
   const skyScene = new THREE.Scene(), skyTarget = new THREE.RenderTarget(1, 1, {type: THREE.HalfFloatType, depthBuffer: false});
-  skyScene.backgroundNode = vec4(saturation(skyBackground().rgb.mul(SKY.exposure), SKY.saturation), 1);
+  const skyLight = skyBackground(); skyLight.showSun = skyLight.showMoon = false;   // the sun is drawn in the last pass
+  skyScene.backgroundNode = vec4(skyLight.rgb.mul(SKY.exposure), 1);
   scene.backgroundNode = texture(skyTarget.texture, screenUV);
   // (a shader is built in the background the first time it is used, so after a change the sky is drawn again for a
   // while, until it surely has been)
@@ -736,7 +748,8 @@ try {
       return this.output;
     }
   }
-  const settle = new SettleNode(rtt(vec4(frame.rgb.mul(air.a).add(air.rgb), frame.getTextureNode('distance').g)));
+  const dist = frame.getTextureNode('distance'), isSky = select(dist.r.greaterThan(500).or(dist.r.lessThan(0.1)), float(1), float(0));
+  const settle = new SettleNode(rtt(vec4(frame.rgb.mul(air.a).add(air.rgb), dist.g.sub(isSky))));   // (alpha: tree +1, sky −1)
   const settled = passTexture(settle, settle.resolve.texture); settle.external = settled;
   // then a little crispness back (the shifts over time soften by about a pixel; games sharpen after TAA too): in
   // brightness only, and never past the pixels around (as AMD's CAS) — sharpening each colour on its own drew cyan rims
@@ -748,13 +761,49 @@ try {
     const L = luminance(c), sharp = c.mul(L.add(L.sub(luminance(n.add(s).add(east).add(west).mul(0.25))).mul(crisp)).max(0).div(L.max(1e-4)));
     return vec4(clamp(sharp, min(c, min(min(n, s), min(east, west))), max(c, max(max(n, s), max(east, west)))), me.a);
   })();
-  // the grade, the film curve (AgX), and after it the tree's own colour: the film holds bright orange near grey, so it
-  // is given back after it, on the tree alone (the grass and the sky keep their grade)
-  const treeColour = uniform(GRADE.tree);
+  // the sun itself, seen: drawn here and not in the cached sky (there its disc was a flat circle that the sky's grade
+  // turned yellow), over everything — a small disc where the sky shows, and the glow a camera's lens spreads round it, a
+  // tight core and a wide veil (analytic: no bloom passes), as bright as the sun is unhidden. How much shows is counted
+  // once a frame in one pixel, from twelve looks at the frame round the sun. Its colour is the sunlight's here
+  const sunSee = Object.fromEntries(Object.entries(SUNSEE).map(([k, v]) => [k, uniform(v)]));
+  const clean = uniform(new THREE.Matrix4()), sunAt = uniform(new THREE.Vector2()), sunSpan = uniform(new THREE.Vector2());
+  function placeSun(){                                                 // where the sun is on the screen, unshifted
+    const p = camera.position.clone().addScaledVector(sunDir.value, 1000).project(camera);
+    sunAt.value.set(p.x*0.5 + 0.5, 0.5 - p.y*0.5);
+    const v = SUNSEE.radius/(2*Math.tan(THREE.MathUtils.degToRad(camera.fov/2))); sunSpan.value.set(v/camera.aspect, v);
+  }
+  const sunPeek = rtt(Fn(() => {
+    const lux = getSplitScalarIlluminance(atmosphere.cameraPositionUnit.add(atmosphere.altitudeCorrectionUnit), atmosphere.sunDirectionECEF).get('direct');
+    const shows = float(0).toVar();
+    for (let k = 0; k < 12; k++){
+      const a = k*2.39996, r = Math.sqrt((k + 0.5)/12), at = sunAt.add(vec2(Math.cos(a)*r, Math.sin(a)*r).mul(sunSpan));
+      const inside = at.x.greaterThan(0).and(at.x.lessThan(1)).and(at.y.greaterThan(0)).and(at.y.lessThan(1)), d = dist.sample(at).r;
+      shows.addAssign(select(inside.not().or(d.greaterThan(500)).or(d.lessThan(0.1)), float(1/12), float(0)));
+    }
+    return vec4(lux.div(max(lux.x, max(lux.y, lux.z)).max(1e-6)), shows);
+  })(), 1, 1);
+  const sunSeen = Fn(() => {
+    const here = sunPeek.sample(vec2(0.5, 0.5)), tint = here.rgb.max(0), shows = here.a;
+    const dir = normalize(eye.world.mul(vec4(getViewPosition(uv(), float(1), clean), 0)).xyz);
+    const off = float(1).sub(dot(dir, sunDir)).mul(2).max(0).sqrt();   // the angle from the sun
+    const level = mix(float(3), sunSee.disc, smoothstep(0.03, 0.26, sunUp));   // (a low sun dimmer, so the film keeps it red, not white)
+    const disc = smoothstep(sunSee.radius.add(0.0008), sunSee.radius.sub(0.0008), off).mul(sharpened.a.negate().max(0)).mul(level);
+    const glow = exp(off.div(sunSee.coreWidth).pow2().negate()).mul(sunSee.core).add(exp(off.div(sunSee.veilWidth).negate()).mul(sunSee.veil)).mul(shows);
+    return tint.mul(disc.add(glow)).div(exposureNow).mul(select(sunUp.greaterThan(-0.02), float(1), float(0)));
+  })();
+  // the grade, the film curve (AgX), and after it colour given back: the film holds bright orange near grey, so the tree
+  // and the sky get theirs after it (the bright leaves keep the film's paleness); then a soft darkening toward the
+  // corners, and, last, a noise of under one step of the screen's 256, so the sky's long gradients show no bands
+  // (Gjøl/Playdead: the noise must come before the colours are rounded, not after)
+  const treeColour = uniform(GRADE.tree), skyColour = uniform(SKY.saturation), grainFrame = uniform(0);
   pipeline.outputColorTransform = false;
-  const film = renderOutput(vec4(saturation(sharpened.rgb.mul(vec3(...GRADE.white)), GRADE.saturation), 1), THREE.AgXToneMapping, THREE.LinearSRGBColorSpace);
-  const pale = smoothstep(0.55, 0.9, luminance(film.rgb));           // (the bright leaves keep the film's paleness)
-  pipeline.outputNode = renderOutput(vec4(saturation(film.rgb, mix(float(1), treeColour, sharpened.a.mul(float(1).sub(pale)))), 1), THREE.NoToneMapping, THREE.SRGBColorSpace);
+  const film = renderOutput(vec4(saturation(sharpened.rgb.add(sunSeen).mul(vec3(...GRADE.white)), GRADE.saturation), 1), THREE.AgXToneMapping, THREE.LinearSRGBColorSpace);
+  const pale = smoothstep(0.55, 0.9, luminance(film.rgb)), onTree = sharpened.a.max(0), onSky = sharpened.a.negate().max(0);
+  const graded = saturation(film.rgb, float(1).add(treeColour.sub(1).mul(onTree.mul(float(1).sub(pale)))).add(skyColour.sub(1).mul(onSky)));
+  const corner = float(1).sub(smoothstep(0.45, 1.1, length(uv().sub(0.5).mul(vec2(1.2, 1)))).mul(0.22));
+  const onScreen = renderOutput(vec4(graded.mul(corner), 1), THREE.NoToneMapping, THREE.SRGBColorSpace);
+  const px = uv().div(settle.texel).add(grainFrame.mul(5.588)), ign = q => fract(fract(dot(q, vec2(0.06711056, 0.00583715))).mul(52.9829189));
+  pipeline.outputNode = vec4(onScreen.rgb.add(ign(px).sub(ign(px.add(vec2(47.3, 17.9)))).div(255)), 1);
   let jitter = 0;
   function draw(){                                                     // one frame, shifted by a fraction of a pixel while smoothing
     if (skyFrames > 0){ skyFrames--; skyNow(); }
@@ -763,16 +812,18 @@ try {
     else if (shadowTurns){ const L = cascades.lights, k = ++shadowTick;   // at most one cascade a frame, the nearest most often
       if (L[0] && k % 3 === 0) L[0].shadow.needsUpdate = true; else if (L[1] && k % 6 === 1) L[1].shadow.needsUpdate = true; }
     if (airWarm > 0 && --airWarm % 10 === 0) drawAir();
+    grainFrame.value = (grainFrame.value + 1) % 64;
     if (SETTLE.on){ const w = canvas.width, h = canvas.height; jitter = jitter % 16 + 1;
       camera.setViewOffset(w, h, halton(jitter, 2) - 0.5, halton(jitter, 3) - 0.5, w, h); }
     pipeline.render();
     if (SETTLE.on) camera.clearViewOffset();
   }
-  onSun = () => { drawSunMap(); drawSky(); drawAir(); redrawShadows(); groundFrames = Math.max(groundFrames, 3); }; drawSunMap();
+  onSun = () => { placeSun(); drawSunMap(); drawSky(); drawAir(); redrawShadows(); groundFrames = Math.max(groundFrames, 3); }; drawSunMap();
 
   function resize(){
     const box = document.documentElement, h = box.clientHeight, w = Math.min(box.clientWidth, Math.round(h*0.62)), dpr = renderer.getPixelRatio();
     canvas.style.width = w + 'px'; renderer.setSize(w, h, false); camera.aspect = w/h; camera.updateProjectionMatrix();
+    clean.value.copy(camera.projectionMatrixInverse); placeSun();
     airSize(); redrawShadows();
     skyTarget.setSize(Math.round(w*dpr), Math.round(h*dpr)); drawSky();
   }
@@ -1081,7 +1132,8 @@ try {
     + (treeTrouble ? ` · дерево не загрузилось: ${treeTrouble}` : '') + (lastTest ? ` · замер прервался: ${lastTest.name}` : '');
   renderer.setAnimationLoop(now => {
     if (document.hidden) return;
-    if (lastDraw && now - lastDraw < 1000/(measure ? CADENCE.full : paceTarget) - 1) return;
+    if (lastDraw && now - lastDraw < 750/(measure ? CADENCE.full : paceTarget)) return;   // (¾ of a frame: a screen's uneven beat
+                                                                       // must not drop a frame; a 120 Hz one still gets 60)
     lastDraw = now;
     if (measure){ measure(now); frames = 0; t0 = now; return; }
     draw(); frames++; pace(now);
@@ -1093,7 +1145,7 @@ try {
       frames = 0; t0 = now;
     }
   });
-  window.world = {renderer, scene, camera, atmosphere, sun, cascades, pipeline, tree, field, fieldInfo, setSun, windStrength, windDir, parts, hazeDensity, airParts, sunMap, sunCam, sunView, frame, air, airAtlas, drawAir, fieldRT, groundRT, redrawShadows, treeWind, draw, SETTLE, settleKeep, crisp, settle, settled, sharpened, crownParts, treeColour, fallen, fallWind, skyTarget, skyScene, drawSky, startTest, SWITCHES, lastRun: () => run,
+  window.world = {renderer, scene, camera, atmosphere, sun, cascades, pipeline, tree, field, fieldInfo, setSun, windStrength, windDir, parts, hazeDensity, airParts, sunMap, sunCam, sunView, frame, air, airAtlas, drawAir, fieldRT, groundRT, redrawShadows, treeWind, draw, SETTLE, settleKeep, crisp, settle, settled, sharpened, crownParts, treeColour, skyColour, sunSee, sunPeek, fallen, fallWind, skyTarget, skyScene, drawSky, startTest, SWITCHES, lastRun: () => run,
     pace, paceReset, paceState: () => ({step: paceStep, off: paceOff, trying: !!paceTry, pixels: renderer.getPixelRatio(), target: paceTarget}),
     setExposure: e => { renderer.toneMappingExposure = e; }};   // for checking from the console
 } catch (err) {
