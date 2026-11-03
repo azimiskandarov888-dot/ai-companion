@@ -799,14 +799,16 @@ try {
   // toward the sun (two Henyey–Greenstein lobes), and by the sky's light; they thin out toward the horizon. They drift
   // so slowly that a sixteenth of the picture, one band, is drawn afresh a frame, and no one sees it. Each visit has its
   // own weather; sadness brings more of the low grey layer, slowly. Heights and sizes (m), depths, how far the air
-  // lets each be seen (m), drift (m/s)
+  // lets each be seen (m), drift (m/s); how wide a group of clouds is (m), how fast their shapes change, how far toward
+  // the sun a cloud looks for its own shade (in its sizes)
   const CLOUDS = {heights: [1500, 3500, 8000], sizes: [1600, 650, 2600], depth: [5, 2.5, 0.5], clear: [14000, 22000, 45000], drift: 6, bands: 16,
+    groups: 9000, change: 0.0025, lightStep: 0.25,
     weathers: [[0.1, 0.2, 0.5], [0.12, 0.45, 0.2], [0.45, 0.15, 0.1], [0.05, 0.1, 0.25], [0.3, 0.35, 0.35]]};   // (low, middle, high)
   const skies = rng(Date.now() % 1e9 + 13), weather = CLOUDS.weathers[Math.floor(skies()*CLOUDS.weathers.length)];
   const cloudCover = uniform(new THREE.Vector3(...weather)), cloudGain = uniform(0.3), cloudBand = uniform(0);
   const cloudTarget = new THREE.RenderTarget(1, 1, {type: THREE.HalfFloatType, depthBuffer: false});
-  const fbm = q => mx_noise_float(vec3(q, 0)).mul(0.5).add(mx_noise_float(vec3(q.mul(2.03), 1.7)).mul(0.25))
-    .add(mx_noise_float(vec3(q.mul(4.01), 3.1)).mul(0.125)).mul(0.57).add(0.5);
+  const fbm = (q, z = float(0)) => mx_noise_float(vec3(q, z)).mul(0.5).add(mx_noise_float(vec3(q.mul(2.03), z.add(1.7))).mul(0.25))
+    .add(mx_noise_float(vec3(q.mul(4.01), z.add(3.1))).mul(0.125)).mul(0.57).add(0.5);
   // the layers seen along a direction: what they let through, and (lit) the light they send — each lit by the sunlight
   // at its own height (high clouds keep the sun for minutes after the field has lost it: the pink after sunset)
   const skyward = normalize(atmosphere.cameraPositionUnit), ours = atmosphere.cameraPositionUnit.add(atmosphere.altitudeCorrectionUnit);
@@ -814,22 +816,32 @@ try {
   function cloudsAlong(dir, lit){
     const c = dot(dir, sunDir), hg = g => float((1 - g*g)/(4*Math.PI)).div(float(1 + g*g).sub(c.mul(2*g)).pow(1.5));
     const phase = hg(0.8).mul(0.7).add(hg(-0.2).mul(0.3)), rise = dir.y.max(0.02), fade = smoothstep(0.025, 0.12, dir.y);
-    const wind = vec2(...WIND.dir).normalize().mul(time.mul(CLOUDS.drift)), side = vec2(-WIND.dir[1], WIND.dir[0]).normalize();   // (subtracted: they
-                                                                       // sail with the wind, as the leaves do)
+    const along = vec2(...WIND.dir).normalize(), side = vec2(-WIND.dir[1], WIND.dir[0]).normalize();
+    const wind = along.mul(time.mul(CLOUDS.drift)), grow = time.mul(CLOUDS.change);   // (wind subtracted: they sail with it, as the
+    const toSun = normalize(sunDir.xz.add(vec2(0, 1e-4)));             // leaves do; grow: their shapes slowly change)
+    // a layer's density at a point: its kind's shape, in a weather of its own — clouds in groups with clear sky between,
+    // the groups kilometres wide — and the shape slowly growing and melting (the noise drifts through its third axis)
+    const densityAt = (k, p, cover) => {
+      const z = grow.add(k*5.3);
+      const shape = k === 2 ? fbm(vec2(dot(p, along).mul(0.4), dot(p, side).mul(2.2)), z)
+        : k === 1 ? float(1).sub(mx_worley_noise_float(vec3(p, z.add(0.5)))).mul(0.55).add(fbm(p.mul(2), z).mul(0.3)).add(fbm(p.mul(5.3), z).mul(0.15))
+        : fbm(p, z).mul(0.6).add(float(1).sub(mx_worley_noise_float(vec3(p.mul(1.3), z.add(2.5)))).mul(0.25)).add(fbm(p.mul(4.7), z).mul(0.15));
+      return smoothstep(float(1).sub(cover), float(1.45).sub(cover), shape).pow(1.4);   // (soft edges, thicker within)
+    };
     const L = vec3(0).toVar(), T = float(1).toVar();
     for (const k of [2, 1, 0]){                                        // from the highest down: each in front of the one above
-      const far = rise.reciprocal().mul(CLOUDS.heights[k]);             // how far along the ray the layer lies (m)
-      const p = dir.xz.mul(far).sub(wind).div(CLOUDS.sizes[k]), cover = [cloudCover.x, cloudCover.y, cloudCover.z][k];
-      const shape = k === 2 ? fbm(vec2(dot(p, vec2(...WIND.dir).normalize()).mul(0.4), dot(p, side).mul(2.2)))
-        : k === 1 ? float(1).sub(mx_worley_noise_float(vec3(p, 0.5))).mul(0.55).add(fbm(p.mul(2)).mul(0.3)).add(fbm(p.mul(5.3)).mul(0.15))
-        : fbm(p).mul(0.6).add(float(1).sub(mx_worley_noise_float(vec3(p.mul(1.3), 2.5))).mul(0.25)).add(fbm(p.mul(4.7)).mul(0.15));
-      // (soft edges, thicker within; and the air between thins a far cloud out, as it does a far hill: a layer 30 km off
-      // melts into the haze over the horizon instead of diving behind the crest sharp — the higher, the thinner the air)
-      const dens = smoothstep(float(1).sub(cover), float(1.45).sub(cover), shape).pow(1.4).mul(fade).mul(exp(far.div(-CLOUDS.clear[k])));
+      const far = rise.reciprocal().mul(CLOUDS.heights[k]), at = dir.xz.mul(far).sub(wind);   // how far the layer lies, and where (m)
+      const groups = smoothstep(0.36, 0.66, fbm(at.div(CLOUDS.groups).add(k*3.7), grow.mul(0.5)));
+      const cover = [cloudCover.x, cloudCover.y, cloudCover.z][k].mul(mix(float(0.2), float(1.6), groups)).min(0.95), p = at.div(CLOUDS.sizes[k]);
+      // (and the air between thins a far cloud out, as it does a far hill: a layer 30 km off melts into the haze over the
+      // horizon instead of diving behind the crest sharp — the higher, the thinner the air)
+      const dens = densityAt(k, p, cover).mul(fade).mul(exp(far.div(-CLOUDS.clear[k])));
       const tau = dens.mul(CLOUDS.depth[k]).div(rise.mul(4).add(0.2)).min(8), Ti = exp(tau.negate());
       if (lit){
-        const lux = litAt(CLOUDS.heights[k]);
-        const sun = lux.get('direct').mul(phase).mul(exp(tau.mul(-0.35))).mul(float(1).sub(exp(tau.mul(-2))).mul(1.6).add(0.2));
+        // light from the sun reaches a point through the cloud between it and the sun: a second look a little toward the
+        // sun says how much (the side toward it bright, the rest in its own shade — so a cloud has a body, not one flat tint)
+        const lux = litAt(CLOUDS.heights[k]), shade = exp(densityAt(k, p.add(toSun.mul(CLOUDS.lightStep)), cover).mul(-CLOUDS.depth[k]*0.9));
+        const sun = lux.get('direct').mul(phase).mul(mix(float(0.2), float(1), shade)).mul(float(1).sub(exp(tau.mul(-2))).mul(1.6).add(0.2));
         L.assign(L.mul(Ti).add(sun.add(lux.get('indirect').mul(1/(4*Math.PI))).mul(float(1).sub(Ti))));
       }
       T.mulAssign(Ti);
