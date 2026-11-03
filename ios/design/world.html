@@ -87,7 +87,7 @@ import { pass, context, texture, vec2, vec3, vec4, float, saturation, attribute,
   normalize, cross, dot, uv, Fn, cameraViewMatrix, cos, sin, select, mix, abs, exp, fract, smoothstep, length, Loop, rtt,
   positionGeometry, positionLocal, positionWorld, normalLocal, normalWorld, normalView, positionViewDirection, diffuseColor, BRDF_Lambert, getViewPosition,
   screenUV, mrt, output, positionView, luminance, nodeObject, passTexture, floor, min, max, clamp, renderOutput,
-  hash, instanceIndex, rotate, step as threshold, uint, modelWorldMatrix, mx_worley_noise_float, If, Discard } from 'three/tsl';   // (step: 1 at or over an edge, else 0)
+  hash, instanceIndex, rotate, step as threshold, uint, modelWorldMatrix, mx_worley_noise_float, If, Discard, asin } from 'three/tsl';   // (step: 1 at or over an edge, else 0)
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { CSMShadowNode } from 'three/addons/csm/CSMShadowNode.js';
@@ -803,9 +803,14 @@ try {
   // the sun a cloud looks for its own shade (in its sizes)
   const CLOUDS = {heights: [1500, 3500, 8000], sizes: [1600, 650, 2600], depth: [5, 2.5, 0.5], clear: [14000, 22000, 45000], drift: 6, bands: 16,
     groups: 9000, change: 0.0025, lightStep: 0.25,
-    weathers: [[0.1, 0.2, 0.5], [0.12, 0.45, 0.2], [0.45, 0.15, 0.1], [0.05, 0.1, 0.25], [0.3, 0.35, 0.35]]};   // (low, middle, high)
+    // the weathers a visit may have: how much of the low, middle and high layer, and how large the clouds (×): from a few
+    // big ones to fine flecks and small scattered puffs, not always the same fat clouds
+    weathers: [[0.1, 0.2, 0.5, 1], [0.12, 0.45, 0.2, 1], [0.45, 0.15, 0.1, 1.3], [0.05, 0.1, 0.25, 1], [0.3, 0.35, 0.35, 1],
+      [0.06, 0.5, 0.15, 0.45], [0.42, 0.08, 0.05, 0.55], [0.15, 0.3, 0.45, 0.7], [0.0, 0.05, 0.6, 1.2]],
+    horizon: 0};                                                       // where the layers seem to meet the sky's edge (° above the true horizon)
   const skies = rng(Date.now() % 1e9 + 13), weather = CLOUDS.weathers[Math.floor(skies()*CLOUDS.weathers.length)];
-  const cloudCover = uniform(new THREE.Vector3(...weather)), cloudGain = uniform(0.3), cloudBand = uniform(0);
+  const cloudCover = uniform(new THREE.Vector3(...weather.slice(0, 3))), cloudScale = uniform(weather[3]), cloudGain = uniform(0.3), cloudBand = uniform(0);
+  const cloudHorizon = uniform(THREE.MathUtils.degToRad(CLOUDS.horizon));
   const cloudTarget = new THREE.RenderTarget(1, 1, {type: THREE.HalfFloatType, depthBuffer: false});
   const fbm = (q, z = float(0)) => mx_noise_float(vec3(q, z)).mul(0.5).add(mx_noise_float(vec3(q.mul(2.03), z.add(1.7))).mul(0.25))
     .add(mx_noise_float(vec3(q.mul(4.01), z.add(3.1))).mul(0.125)).mul(0.57).add(0.5);
@@ -815,7 +820,10 @@ try {
   const litAt = h => getSplitScalarIlluminance(ours.add(skyward.mul(atmosphere.parametersNode.worldToUnit.mul(h))), atmosphere.sunDirectionECEF);
   function cloudsAlong(dir, lit){
     const c = dot(dir, sunDir), hg = g => float((1 - g*g)/(4*Math.PI)).div(float(1 + g*g).sub(c.mul(2*g)).pow(1.5));
-    const phase = hg(0.8).mul(0.7).add(hg(-0.2).mul(0.3)), rise = dir.y.max(0.02), fade = smoothstep(0.025, 0.12, dir.y);
+    // (the ray's height over the layers' own horizon: the true one, or raised a little where the eye takes the hill's
+    // crest for it)
+    const el = asin(dir.y.clamp(-1, 1)).sub(cloudHorizon), flat = normalize(dir.xz.add(vec2(1e-5, 0)));
+    const phase = hg(0.8).mul(0.7).add(hg(-0.2).mul(0.3)), rise = sin(el).max(0.02), fade = smoothstep(0.025, 0.12, sin(el));
     const along = vec2(...WIND.dir).normalize(), side = vec2(-WIND.dir[1], WIND.dir[0]).normalize();
     const wind = along.mul(time.mul(CLOUDS.drift)), grow = time.mul(CLOUDS.change);   // (wind subtracted: they sail with it, as the
     const toSun = normalize(sunDir.xz.add(vec2(0, 1e-4)));             // leaves do; grow: their shapes slowly change)
@@ -830,9 +838,9 @@ try {
     };
     const L = vec3(0).toVar(), T = float(1).toVar();
     for (const k of [2, 1, 0]){                                        // from the highest down: each in front of the one above
-      const far = rise.reciprocal().mul(CLOUDS.heights[k]), at = dir.xz.mul(far).sub(wind);   // how far the layer lies, and where (m)
+      const far = rise.reciprocal().mul(CLOUDS.heights[k]), at = flat.mul(cos(el)).mul(far).sub(wind);   // how far the layer lies, and where (m)
       const groups = smoothstep(0.36, 0.66, fbm(at.div(CLOUDS.groups).add(k*3.7), grow.mul(0.5)));
-      const cover = [cloudCover.x, cloudCover.y, cloudCover.z][k].mul(mix(float(0.2), float(1.6), groups)).min(0.95), p = at.div(CLOUDS.sizes[k]);
+      const cover = [cloudCover.x, cloudCover.y, cloudCover.z][k].mul(mix(float(0.2), float(1.6), groups)).min(0.95), p = at.div(cloudScale.mul(CLOUDS.sizes[k]));
       // (and the air between thins a far cloud out, as it does a far hill: a layer 30 km off melts into the haze over the
       // horizon instead of diving behind the crest sharp — the higher, the thinner the air)
       const dens = densityAt(k, p, cover).mul(fade).mul(exp(far.div(-CLOUDS.clear[k])));
@@ -1278,7 +1286,7 @@ try {
       frames = 0; t0 = now;
     }
   });
-  window.world = {renderer, scene, camera, atmosphere, sun, cascades, pipeline, tree, field, fieldInfo, setSun, windStrength, windDir, parts, hazeDensity, airParts, sunMap, sunCam, sunView, frame, air, airAtlas, drawAir, fieldRT, groundRT, redrawShadows, treeWind, draw, SETTLE, settleKeep, crisp, settle, settled, sharpened, crownParts, treeColour, skyColour, sunSee, sunPeek, setMood, mood, cloudCover, cloudGain, cloudTarget, fallen, fallWind, skyTarget, skyScene, drawSky, startTest, SWITCHES, lastRun: () => run,
+  window.world = {renderer, scene, camera, atmosphere, sun, cascades, pipeline, tree, field, fieldInfo, setSun, windStrength, windDir, parts, hazeDensity, airParts, sunMap, sunCam, sunView, frame, air, airAtlas, drawAir, fieldRT, groundRT, redrawShadows, treeWind, draw, SETTLE, settleKeep, crisp, settle, settled, sharpened, crownParts, treeColour, skyColour, sunSee, sunPeek, setMood, mood, cloudCover, cloudScale, cloudHorizon, cloudGain, cloudTarget, fallen, fallWind, skyTarget, skyScene, drawSky, startTest, SWITCHES, lastRun: () => run,
     pace, paceReset, paceState: () => ({step: paceStep, off: paceOff, trying: !!paceTry, pixels: renderer.getPixelRatio(), target: paceTarget}),
     setExposure: e => { renderer.toneMappingExposure = e; }};   // for checking from the console
 } catch (err) {
