@@ -778,33 +778,34 @@ try {
   }
   addEventListener('resize', resize); resize();
 
-  // ══ Thirty frames a second at rest, sixty while the companion or the viewer is interacting. If the current target is
-  // missed twice, the world draws fewer pixels; a step that does not help is undone (the display itself may be capped).
-  const PACE = {steps: [1, 0.875, 0.75], window: 2000}, CADENCE = {idle: 30, active: 60, hold: 2000};
-  let paceGaps = [], paceLast = 0, paceFrom = 0, paceStep = 0, paceLate = 0, paceTry = null, paceOff = false, paceTarget = 0;
-  let activeUntil = 0, lastDraw = 0;
+  // ══ Sixty frames a second, all the time: on the main screen one looks and talks, and does not touch. If this phone
+  // cannot keep them (two seconds running, twice), the world draws fewer pixels: 2 → 1.75 → 1.5 per screen point at most
+  // (the smoothing over time hides most of it). Each step is tried. When none is left, or one does not help (Low Power
+  // Mode gives 30 frames a second whatever is drawn), the world draws thirty frames a second and stays there, so that a
+  // phone grown hot over a long talk can cool
+  const PACE = {steps: [1, 0.875, 0.75], window: 2000}, CADENCE = {full: 60, cool: 30};
+  let paceGaps = [], paceLast = 0, paceFrom = 0, paceStep = 0, paceLate = 0, paceTry = null, paceOff = false, paceTarget = CADENCE.full;
+  let lastDraw = 0;
   const setPace = () => { renderer.setPixelRatio(pixelsMax*PACE.steps[paceStep]); airSize(); };
-  const interact = () => { activeUntil = performance.now() + CADENCE.hold; };
-  for (const name of ['pointerdown', 'wheel', 'touchstart', 'keydown', 'world-active']) addEventListener(name, interact, {passive: true});
-  addEventListener('pointermove', e => { if (e.buttons) interact(); }, {passive: true});
+  const cool = () => { paceTarget = CADENCE.cool; paceOff = true; };
   document.addEventListener('visibilitychange', () => { lastDraw = paceLast = 0; });
-  function pace(now, target){
-    if (target !== paceTarget){ paceTarget = target; paceGaps = []; paceFrom = now; paceLate = 0; paceTry = null; }
+  function pace(now){
     const gap = paceLast ? now - paceLast : 0; paceLast = now;
     if (paceOff || skyFrames > 0 || shadowFrames > 0 || airWarm > 0 || gap > 250){ paceGaps = []; paceFrom = now; return; }
     paceGaps.push(gap);
     if (now - paceFrom < PACE.window) return;
     const fps = 1000*paceGaps.length/(now - paceFrom); paceGaps = []; paceFrom = now;
-    if (paceTry){
+    if (paceTry){                                                      // the last step down: did it help?
       if (--paceTry.windows > 0) return;
-      if (fps < paceTry.fps*1.1){ paceStep--; setPace(); paceOff = true; }
+      if (fps < paceTry.fps*1.1){ paceStep--; setPace(); cool(); }
       paceTry = null; return;
     }
-    paceLate = fps < target*0.9 ? paceLate + 1 : 0;
-    if (paceLate < 2 || paceStep >= PACE.steps.length - 1) return;
-    paceLate = 0; paceStep++; setPace(); paceTry = {fps, windows: 2};
+    paceLate = fps < paceTarget*0.9 ? paceLate + 1 : 0;
+    if (paceLate < 2) return;
+    paceLate = 0;
+    if (paceStep < PACE.steps.length - 1){ paceStep++; setPace(); paceTry = {fps, windows: 2}; } else cool();
   }
-  function paceReset(){ paceStep = 0; paceLate = 0; paceTry = null; paceOff = false; paceGaps = []; paceLast = 0; paceTarget = 0; setPace(); }
+  function paceReset(){ paceStep = 0; paceLate = 0; paceTry = null; paceOff = false; paceGaps = []; paceLast = 0; paceTarget = CADENCE.full; setPace(); }
 
   // the sliders: the sun's side and height, the air's thickness, the wind
   { const $ = id => document.getElementById(id), btn = $('lightBtn'), panel = $('panel');
@@ -885,7 +886,7 @@ try {
   async function sample(ms){                                           // the frames of the next ms
     win = {dt: [], cpu: [], gpu: [], gpuSum: [], done: [], last: null, draws: 0, drawsMin: Infinity, tris: 0};
     await Promise.race([wait(ms), stopNow?.promise].filter(Boolean));
-    const w = win; win = null, lateAfter = 1000/(run?.target ?? CADENCE.active)*1.2;
+    const w = win; win = null, lateAfter = 1000/CADENCE.full*1.2;
     return {fps: w.dt.length ? r1(1000*w.dt.length/w.dt.reduce((s, x) => s + x, 0)) : null, frame: r1(quantile(w.dt, 0.5)),
       late: w.dt.length ? Math.round(100*w.dt.filter(x => x > lateAfter).length/w.dt.length) : null,
       frame95: r1(quantile(w.dt, 0.95)), frameMax: r1(w.dt.length ? Math.max(...w.dt) : null), gpu: r1(trimmed(w.gpu)),
@@ -1054,7 +1055,7 @@ try {
     let lock = null; try { lock = await navigator.wakeLock?.request('screen'); } catch {}   // keep the screen on, where allowed
     renderer.backend.trackTimestamp = ASK_GPU && !!renderer.backend.device?.features.has('timestamp-query');
     paceReset(); pixels0 = renderer.getPixelRatio(); measure = testFrame;   // all its pixels while measuring; it adapts again after
-    run = {id: `run-${Date.now()}`, kind, target: kind === 'long' ? CADENCE.idle : CADENCE.active, at: new Date().toISOString(), finished: false,
+    run = {id: `run-${Date.now()}`, kind, target: CADENCE.full, at: new Date().toISOString(), finished: false,
       device: {...await device(), awake: !!lock}, rows: [], log: []};
     if (lastTest){ run.previousStop = lastTest; lastTest = null; }
     const atMost = (p, ms) => Promise.race([p, new Promise(r => setTimeout(r, ms))]);
@@ -1080,20 +1081,20 @@ try {
     + (treeTrouble ? ` · дерево не загрузилось: ${treeTrouble}` : '') + (lastTest ? ` · замер прервался: ${lastTest.name}` : '');
   renderer.setAnimationLoop(now => {
     if (document.hidden) return;
-    const target = measure ? run?.target ?? CADENCE.active : now < activeUntil ? CADENCE.active : CADENCE.idle, interval = 1000/target;
-    if (lastDraw && now - lastDraw < interval - 1) return;
+    if (lastDraw && now - lastDraw < 1000/(measure ? CADENCE.full : paceTarget) - 1) return;
     lastDraw = now;
     if (measure){ measure(now); frames = 0; t0 = now; return; }
-    draw(); frames++; pace(now, target);
+    draw(); frames++; pace(now);
     if (++total === 60) step('done');
     if (now - t0 > 1000){
-      const sharp = paceStep ? ` · чёткость ${renderer.getPixelRatio().toFixed(2).replace('.', ',')} (не держал ${paceTarget})` : '';
+      const sharp = (paceStep ? ` · чёткость ${renderer.getPixelRatio().toFixed(2).replace('.', ',')} (не держал 60)` : '')
+        + (paceTarget < CADENCE.full ? ' · 30 кадров/с: телефон не держит 60, бережёт себя' : '');
       hud.textContent = `${Math.round(frames*1000/(now - t0))} кадров/с · ${renderer.backend.isWebGPUBackend ? 'WebGPU' : 'WebGL2'} · солнце ${SUN.az}°/${SUN.el}°${note}${sharp}`;
       frames = 0; t0 = now;
     }
   });
   window.world = {renderer, scene, camera, atmosphere, sun, cascades, pipeline, tree, field, fieldInfo, setSun, windStrength, windDir, parts, hazeDensity, airParts, sunMap, sunCam, sunView, frame, air, airAtlas, drawAir, fieldRT, groundRT, redrawShadows, treeWind, draw, SETTLE, settleKeep, crisp, settle, settled, sharpened, crownParts, treeColour, fallen, fallWind, skyTarget, skyScene, drawSky, startTest, SWITCHES, lastRun: () => run,
-    pace, paceReset, interact, paceState: () => ({step: paceStep, off: paceOff, trying: !!paceTry, pixels: renderer.getPixelRatio(), target: paceTarget}),
+    pace, paceReset, paceState: () => ({step: paceStep, off: paceOff, trying: !!paceTry, pixels: renderer.getPixelRatio(), target: paceTarget}),
     setExposure: e => { renderer.toneMappingExposure = e; }};   // for checking from the console
 } catch (err) {
   hud.textContent = 'Не запустилось: ' + err.message;
