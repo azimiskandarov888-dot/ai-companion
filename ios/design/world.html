@@ -53,6 +53,8 @@ body { background: var(--bg); color: var(--fg); margin: 0; font: 12px/1.4 ui-mon
   <label>Солнце: высота <span id="elOut"></span><input id="el" type="range" min="-6" max="40" step="0.5"></label>
   <label>Дымка <span id="hazeOut"></span><input id="haze" type="range" min="0" max="30" step="1"></label>
   <label>Ветер <span id="windOut"></span><input id="wind" type="range" min="0" max="100" step="1"></label>
+  <label>Настроение Боба: радость <span id="joyOut"></span><input id="joy" type="range" min="-1" max="2" step="0.1"></label>
+  <label>Настроение Боба: бодрость <span id="awakeOut"></span><input id="awake" type="range" min="-2" max="2" step="0.1"></label>
   <label class="check"><input id="settle" type="checkbox"> Сглаживание (как TAA в Ghost)</label>
   <div class="row"><button id="testShort" type="button">Замер · 2 мин</button><button id="testLong" type="button">Долгий · 20 мин</button></div>
 </div>
@@ -106,6 +108,13 @@ const CAM = {pos: [0, 2.1, -7], look: [0, 11.4, 43], fov: 25};      // his pictu
 const PLACE = {lon: 140.81, lat: 42.83, height: 300};                // a meadow below Mount Yōtei, Hokkaido
 const SUN = {az: 4.5, el: 12};                                         // degrees from straight ahead (+ to the left), above the horizon:
                                                                      // low behind the tree: crown and grass glow through the haze (his pick)
+// the sky lives as a real one (his wish, 2026-11-03): each visit the sun stands somewhere of its own — behind the crown
+// or out beside it — and drifts on as slowly as a real one (a quarter of a degree a minute), never twice the same; and
+// how low it stands, so the sunset's colour, follows the companion's mood (feeling.py: valence −1…2, arousal −2…2):
+// glad, a golden sun; calm, low and red; sad and tired, the violet dusk. A changed mood moves it there just as slowly,
+// so no one sees it change. Seconds between steps; °/min it may move; where it may stand; the haze's thickening in sadness
+const SKYLIFE = {every: 15, speed: 0.3, az: [-4, 8], el: [-3, 13], haze: 0.4};
+const moodHeight = (valence, arousal) => Math.min(SKYLIFE.el[1], Math.max(SKYLIFE.el[0], 6 + 3.5*valence - 1.5*Math.max(0, -arousal)));
 const EXPOSURE = 7;                                                  // the camera's exposure, for light in physical units
 // the grade, where Ghost puts its art (after the light, never in it): white balance toward his warm evening, more colour;
 // and the tree's own colour, given back after the film curve (which holds bright orange near grey) in its shade and
@@ -156,7 +165,9 @@ const WIND = {dir: [-0.95, 0.3], strength: 0.55};                    // one wind
 const THROUGH = {scale: 0.08, dim: 0.3, least: 0.05, rim: 1.5};
 // for trying values from the address: ?az=…&el=…&exp=…&through=…&haze=…
 { const q = new URLSearchParams(location.search), n = k => q.has(k) ? +q.get(k) : undefined;
-  SUN.az = n('az') ?? SUN.az; SUN.el = n('el') ?? SUN.el; HAZE.density = n('haze') ?? HAZE.density;
+  const start = rng(Date.now() % 1e9);                                // (a new sky each visit)
+  SUN.az = n('az') ?? +(SKYLIFE.az[0] + start()*(SKYLIFE.az[1] - SKYLIFE.az[0])).toFixed(2);
+  SUN.el = n('el') ?? +(moodHeight(0.5, 0) + (start() - 0.5)*5).toFixed(2); HAZE.density = n('haze') ?? HAZE.density;
   globalThis.TRY = {exp: n('exp'), through: n('through'), msaa: n('msaa'), steps: n('steps')}; }
 
 // one look for every phone, the full one: his iPhone 11 Pro Max, the oldest that runs iOS 26, held 60 frames a second in
@@ -215,7 +226,7 @@ try {
   Ellipsoid.WGS84.getNorthUpEastFrame(here, atmosphere.matrixWorldToECEF.value);   // our x: north, y: up, z: east
   const sunUp = uniform(0), sunDir = uniform(new THREE.Vector3()), exposureNow = uniform(EXPOSURE);    // the sun's height (the sine of its angle), its direction
   let onSun = () => {};                                                // what else follows the sun (the air's shadows)
-  function setSun(az = SUN.az, el = SUN.el){
+  function setSun(az = SUN.az, el = SUN.el, gently = false){
     SUN.az = az; SUN.el = el;
     const a = THREE.MathUtils.degToRad(az), e = THREE.MathUtils.degToRad(el);
     sunUp.value = Math.sin(e);
@@ -226,7 +237,7 @@ try {
     exposureNow.value = (TRY.exp ?? EXPOSURE)*2**(0.7*ev);          // (a little less: the field, lit by the sky, came out pale)
     renderer.toneMappingExposure = exposureNow.value;
     atmosphere.sunDirectionECEF.value.copy(L.clone().transformDirection(atmosphere.matrixWorldToECEF.value));
-    onSun();
+    onSun(gently);
   }
   setSun();
 
@@ -685,7 +696,7 @@ try {
   // (a shader is built in the background the first time it is used, so after a change the sky is drawn again for a
   // while, until it surely has been)
   let skyFrames = 0;
-  const drawSky = () => { skyFrames = 90; };
+  const drawSky = (frames = 90) => { skyFrames = Math.max(skyFrames, frames); };
   function skyNow(){ const was = renderer.getRenderTarget(); renderer.setRenderTarget(skyTarget); renderer.render(skyScene, camera); renderer.setRenderTarget(was); }
   const pipeline = new (THREE.RenderPipeline || THREE.PostProcessing)(renderer);   // renamed in r185
   // the frame, and how far each pixel's surface is (a sampled depth buffer cannot be read back, a colour can). With the
@@ -818,7 +829,7 @@ try {
     pipeline.render();
     if (SETTLE.on) camera.clearViewOffset();
   }
-  onSun = () => { placeSun(); drawSunMap(); drawSky(); drawAir(); redrawShadows(); groundFrames = Math.max(groundFrames, 3); }; drawSunMap();
+  onSun = gently => { placeSun(); drawSunMap(); drawSky(gently ? 2 : 90); drawAir(); redrawShadows(); groundFrames = Math.max(groundFrames, 3); }; drawSunMap();   // (gently: a drifting sun, its shaders long built)
 
   function resize(){
     const box = document.documentElement, h = box.clientHeight, w = Math.min(box.clientWidth, Math.round(h*0.62)), dpr = renderer.getPixelRatio();
@@ -858,7 +869,23 @@ try {
   }
   function paceReset(){ paceStep = 0; paceLate = 0; paceTry = null; paceOff = false; paceGaps = []; paceLast = 0; paceTarget = CADENCE.full; setPace(); }
 
-  // the sliders: the sun's side and height, the air's thickness, the wind
+  // the sky's life (SKYLIFE): every few seconds the sun takes a small step toward where the mood wants it, wandering a
+  // little on its own; the haze thickens a touch in sadness. Paused while measuring, so a test sees one sky
+  const mood = {valence: 0.5, arousal: 0}, wander = rng(Date.now() % 1e9 + 7);
+  let aimAz = SUN.az;
+  function setMood(valence, arousal){ mood.valence = valence; mood.arousal = arousal; }
+  addEventListener('message', e => { const m = e.data?.bobMood; if (m) setMood(+m.valence || 0, +m.arousal || 0); });   // (from the app)
+  setInterval(() => {
+    if (measure || document.hidden) return;
+    const most = SKYLIFE.speed*SKYLIFE.every/60, toward = (from, to) => from + Math.max(-most, Math.min(most, to - from));
+    if (Math.abs(aimAz - SUN.az) < 0.05) aimAz = SKYLIFE.az[0] + wander()*(SKYLIFE.az[1] - SKYLIFE.az[0]);
+    const el = toward(SUN.el, moodHeight(mood.valence, mood.arousal)), az = toward(SUN.az, aimAz);
+    const haze = HAZE.density*(1 + SKYLIFE.haze*Math.max(0, -mood.valence));
+    hazeDensity.value += Math.max(-HAZE.density*0.02, Math.min(HAZE.density*0.02, haze - hazeDensity.value));
+    if (Math.abs(el - SUN.el) + Math.abs(az - SUN.az) > 0.01) setSun(+az.toFixed(3), +el.toFixed(3), true);
+  }, SKYLIFE.every*1000);
+
+  // the sliders: the sun's side and height, the air's thickness, the wind, the companion's mood
   { const $ = id => document.getElementById(id), btn = $('lightBtn'), panel = $('panel');
     btn.addEventListener('click', () => { panel.hidden = !panel.hidden; btn.setAttribute('aria-expanded', String(!panel.hidden)); });
     const side = a => a < -60 ? 'справа' : a < -20 ? 'справа впереди' : a < 0 ? 'впереди' : 'за деревом';
@@ -869,6 +896,10 @@ try {
     $('el').addEventListener('input', e => { setSun(SUN.az, +e.target.value); show(); });
     $('haze').addEventListener('input', e => { hazeDensity.value = e.target.value/1e4; drawAir(); show(); });
     $('wind').addEventListener('input', e => { windStrength.value = e.target.value/100; show(); });
+    const showMood = () => { $('joyOut').textContent = mood.valence.toFixed(1); $('awakeOut').textContent = mood.arousal.toFixed(1); };
+    $('joy').value = mood.valence; $('awake').value = mood.arousal; showMood();
+    $('joy').addEventListener('input', e => { setMood(+e.target.value, mood.arousal); showMood(); });
+    $('awake').addEventListener('input', e => { setMood(mood.valence, +e.target.value); showMood(); });
     $('settle').checked = SETTLE.on;
     $('settle').addEventListener('change', e => { SETTLE.on = e.target.checked; crisp.value = SETTLE.on ? SETTLE.sharpen : 0; });
     show(); }
@@ -1145,7 +1176,7 @@ try {
       frames = 0; t0 = now;
     }
   });
-  window.world = {renderer, scene, camera, atmosphere, sun, cascades, pipeline, tree, field, fieldInfo, setSun, windStrength, windDir, parts, hazeDensity, airParts, sunMap, sunCam, sunView, frame, air, airAtlas, drawAir, fieldRT, groundRT, redrawShadows, treeWind, draw, SETTLE, settleKeep, crisp, settle, settled, sharpened, crownParts, treeColour, skyColour, sunSee, sunPeek, fallen, fallWind, skyTarget, skyScene, drawSky, startTest, SWITCHES, lastRun: () => run,
+  window.world = {renderer, scene, camera, atmosphere, sun, cascades, pipeline, tree, field, fieldInfo, setSun, windStrength, windDir, parts, hazeDensity, airParts, sunMap, sunCam, sunView, frame, air, airAtlas, drawAir, fieldRT, groundRT, redrawShadows, treeWind, draw, SETTLE, settleKeep, crisp, settle, settled, sharpened, crownParts, treeColour, skyColour, sunSee, sunPeek, setMood, mood, fallen, fallWind, skyTarget, skyScene, drawSky, startTest, SWITCHES, lastRun: () => run,
     pace, paceReset, paceState: () => ({step: paceStep, off: paceOff, trying: !!paceTry, pixels: renderer.getPixelRatio(), target: paceTarget}),
     setExposure: e => { renderer.toneMappingExposure = e; }};   // for checking from the console
 } catch (err) {
