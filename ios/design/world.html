@@ -886,7 +886,7 @@ try {
   async function sample(ms){                                           // the frames of the next ms
     win = {dt: [], cpu: [], gpu: [], gpuSum: [], done: [], last: null, draws: 0, drawsMin: Infinity, tris: 0};
     await Promise.race([wait(ms), stopNow?.promise].filter(Boolean));
-    const w = win; win = null, lateAfter = 1000/CADENCE.full*1.2;
+    const w = win, lateAfter = 1000/CADENCE.full*1.2; win = null;     // late: past 1.2 of a 60th of a second
     return {fps: w.dt.length ? r1(1000*w.dt.length/w.dt.reduce((s, x) => s + x, 0)) : null, frame: r1(quantile(w.dt, 0.5)),
       late: w.dt.length ? Math.round(100*w.dt.filter(x => x > lateAfter).length/w.dt.length) : null,
       frame95: r1(quantile(w.dt, 0.95)), frameMax: r1(w.dt.length ? Math.max(...w.dt) : null), gpu: r1(trimmed(w.gpu)),
