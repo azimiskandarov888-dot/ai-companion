@@ -434,7 +434,9 @@ try {
     layer.normalNode = normalize(cameraViewMatrix.mul(vec4(normalize(vec3(toUs.x, 0, toUs.z).normalize().mul(0.8).add(normalWorld.mul(0.6))), 0)).xyz);
   }
   const hillMesh = new THREE.Mesh(hill, layer);
-  hillMesh.receiveShadow = true; scene.add(hillMesh);
+  // it casts a shadow too: when the sun sinks behind its crest, the field before us goes into shade (it did not, and the
+  // grass kept glowing in a sun that had set behind the hill)
+  hillMesh.receiveShadow = hillMesh.castShadow = true; scene.add(hillMesh);
 
   // what lets light through — the tree's leaves — glows where the sun is behind it (Frostbite's fast translucency, in
   // three.js's SSS material); how much sun reaches a leaf inside the crown is set with the sun's view of it (crownLight)
