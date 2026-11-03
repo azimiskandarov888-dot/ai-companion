@@ -54,7 +54,6 @@ body { background: var(--bg); color: var(--fg); margin: 0; font: 12px/1.4 ui-mon
   <label>Дымка <span id="hazeOut"></span><input id="haze" type="range" min="0" max="30" step="1"></label>
   <label>Ветер <span id="windOut"></span><input id="wind" type="range" min="0" max="100" step="1"></label>
   <label class="check"><input id="settle" type="checkbox"> Сглаживание (как TAA в Ghost)</label>
-  <label>Качество <span>(страница перезагрузится)</span><select id="quality"></select></label>
   <div class="row"><button id="testShort" type="button">Замер · 2 мин</button><button id="testLong" type="button">Долгий · 20 мин</button></div>
 </div>
 <div id="test" hidden role="status" aria-live="polite"></div>
@@ -85,12 +84,22 @@ import * as THREE from 'three/webgpu';
 import { pass, context, texture, vec2, vec3, vec4, float, saturation, attribute, uniform, time, mx_noise_float, cameraPosition,
   normalize, cross, dot, uv, Fn, cameraViewMatrix, cos, sin, select, mix, abs, exp, fract, smoothstep, length, Loop, rtt,
   positionGeometry, positionLocal, positionWorld, normalLocal, normalWorld, normalView, positionViewDirection, diffuseColor, BRDF_Lambert, getViewPosition,
-  screenUV, mrt, output, positionView, luminance, nodeObject, passTexture, floor, min, max, clamp, renderOutput } from 'three/tsl';
+  screenUV, mrt, output, positionView, luminance, nodeObject, passTexture, floor, min, max, clamp, renderOutput,
+  hash, instanceIndex, rotate, step as threshold, uint, modelWorldMatrix } from 'three/tsl';   // (step: 1 at or over an edge, else 0)
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { CSMShadowNode } from 'three/addons/csm/CSMShadowNode.js';
 import { Ellipsoid, Geodetic, radians } from '@takram/three-geospatial';
 import { AtmosphereContext, AtmosphereLight, AtmosphereLightNode, skyBackground, getSplitScalarIlluminance } from '@takram/three-atmosphere/webgpu';
+
+// r184 can leave atmosphere struct declarations out of the star vertex shader
+const glslStructs = THREE.GLSLNodeBuilder.prototype.getStructs;
+THREE.GLSLNodeBuilder.prototype.getStructs = function(stage){
+  const own = this.structs[stage], other = this.structs[stage === 'vertex' ? 'fragment' : 'vertex'];
+  if (!own.some(struct => !struct.output))
+    for (const struct of other) if (!struct.output) own.push(struct);
+  return glslStructs.call(this, stage);
+};
 
 // the numbers of the world
 const CAM = {pos: [0, 2.1, -7], look: [0, 11.4, 43], fov: 25};      // his picture's telephoto view up the hill
@@ -99,14 +108,19 @@ const SUN = {az: 8, el: 12};                                         // degrees 
                                                                      // low behind the tree: crown and grass glow through the haze (his pick)
 const EXPOSURE = 7;                                                  // the camera's exposure, for light in physical units
 // the grade, where Ghost puts its art (after the light, never in it): white balance toward his warm evening, more colour;
-// and the tree's own colour, given back after the film curve (which holds bright orange near grey)
-const GRADE = {white: [1, 1, 1], saturation: 1.3, tree: 1.6};
+// and the tree's own colour, given back after the film curve (which holds bright orange near grey) in its shade and
+// middle tones; its bright leaves stay pale, as in his picture (saturated, they burned like fire)
+const GRADE = {white: [1, 1, 1], saturation: 1.3, tree: 1.3};
 // the sky, as Ghost's local tone mapping keeps it: darker than the light it throws, so its blue stays deep
 const SKY = {exposure: 0.47, saturation: 2};
-// the tree (its file follows the level: jacaranda, jacaranda-light): where, turned how, how tall; and how it moves in
+// the tree: where, turned how, how tall; and how it moves in
 // the wind, in metres at the usual wind's mean gust — how far its top leans, a branch swings, a leaf flutters (a strong
 // wind moves it several times more, a breeze far less)
 const TREE = {at: [6.6, 39.43], turn: 90, height: 16.5, wind: {lean: 0.6, branch: 0.25, leaf: 0.05}};
+// its falling leaves (his choice, 2026-10-28: as many as the wind tears off — a few in a breeze, a flurry in a gust —
+// flying off with it across the sky, as in his picture): at most how many, how long one flies (s), how big (m), how
+// fast it sinks (m/s), how fast the wind carries it (m/s in full wind), how far it swings to and fro (m) and in how long (s)
+const FALL = {leaves: 400, life: 9, size: 0.2, sink: [0.5, 1.2], carry: 5, swing: [0.3, 0.9], beat: [1.2, 2.4]};
 // the field as Ghost of Tsushima draws it (his choice, 2026-10-28: tall grass going in waves under the wind): blades as
 // curves in clumps that share their lean, height and colour, coarser farther away (Wohllaib, GDC 2021). Bands: from,
 // to (m from the camera), blades per m², bends per blade, width (×); heights (m), a clump's give in the wind; colours
@@ -124,49 +138,33 @@ const BOUNCE = {field: 0.25};
 // the air (Ghost thickens it by art: physically the air between us and a hill 50 m away is almost clear): how thick at
 // the ground (per m), how fast it thins with height (m), Mie's pull toward the sun (Henyey–Greenstein g) and how much
 // of its light takes that pull, the steps out to each kept distance along a ray (worked out once, so they can be many),
-// and how far it reaches over the sky (the haze lies over our field, the air beyond is clear); its share of the screen
-// follows the level (LIGHT.air)
+// and how far it reaches over the sky (the haze lies over our field, the air beyond is clear); its screen share is LIGHT.air
 const HAZE = {density: 0.0015, height: 6, g: 0.7, forward: 0.6, steps: 24, skyFar: 70};
 const WIND = {dir: [-0.95, 0.3], strength: 0.55};                    // one wind for the whole world: where it blows, how hard
 // sunlight through the tree's leaves, and through its crown: how strongly a leaf lets the sun through (Frostbite's fast
 // translucency); and, as in a real crown, where light passes leaf after leaf (Beer–Lambert; Monsi and Saeki 1953), a
 // leaf deep inside gets less of it but never none — not all or nothing from the shadow map: how fast the crown dims it
 // (per m of crown on the way), what the deepest leaves still get, and how much more the leaves just under the crown's
-// sunlit skin glow (by eye: his picture glows all through)
-const THROUGH = {scale: 0.08, dim: 0.3, least: 0.05, rim: 6};
+// sunlit skin glow (a little: more, and the crown burned like fire)
+const THROUGH = {scale: 0.08, dim: 0.3, least: 0.05, rim: 1.5};
 // for trying values from the address: ?az=…&el=…&exp=…&through=…&haze=…
 { const q = new URLSearchParams(location.search), n = k => q.has(k) ? +q.get(k) : undefined;
   SUN.az = n('az') ?? SUN.az; SUN.el = n('el') ?? SUN.el; HAZE.density = n('haze') ?? HAZE.density;
-  globalThis.TRY = {exp: n('exp'), through: n('through'), msaa: n('msaa'), steps: n('steps'), level: n('level')}; }
+  globalThis.TRY = {exp: n('exp'), through: n('through'), msaa: n('msaa'), steps: n('steps')}; }
 
-// ══ Lighter on a phone. Safari on an iPhone closes a page that takes too much memory ("A problem repeatedly occurred").
-// The page remembers which step of loading it began last: if it never got as far as its first frames, the phone closed
-// it, and next time it starts a level lighter and says where it stopped. Levels: 0 full (a computer), 1 a phone, 2 the
-// lightest (no sun shadows). The panel's «Качество» picks one (kept, and in the address as #q=…; a pick that fell is
-// dropped, so a phone never gets stuck closing); ?level=… tries one
+// one look for every phone, the full one: his iPhone 11 Pro Max, the oldest that runs iOS 26, held 60 frames a second in
+// it, and fewer pixels made it no faster (pace, below, still lowers the sharpness on a phone that cannot keep up).
+// Safari closes a page that takes too much memory ("A problem repeatedly occurred"), so the page remembers which step
+// of loading it began last: if it never got its first frames, this time it starts lighter and says where it stopped.
+// Per look: pixels per screen point at most, sun shadow cascades and their size, the tree and its maps, how much grass
+// (a share), the air's share of the screen
 const STEPS = {gpu: 'видеокарта', sky: 'небо', field: 'поле', tree: 'дерево', frames: 'первые кадры'};
 const memory = (() => { try { const m = localStorage; m.setItem('bob.check', '1'); m.removeItem('bob.check'); return m; } catch { return null; } })();
-const lastStep = memory?.getItem('bob.world.step'), lastLevel = Number(memory?.getItem('bob.world.level') ?? NaN);
-const fell = !!lastStep && lastStep !== 'done';                      // last time it began a step and never got its frames
-const onPhone = /iPhone|iPad|iPod|Android/.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent));
-const QUALITY = ['полное', 'телефон', 'самое лёгкое'], auto = onPhone ? 1 : 0;
-const picked = (() => { const h = (location.hash.match(/q=([0-2])/) || [])[1]; if (h !== undefined) return +h;
-  const m = memory?.getItem('bob.world.quality'); return m === null || m === undefined ? undefined : +m; })();
-let LEVEL = TRY.level ?? picked ?? auto;
-if (fell && TRY.level === undefined){
-  LEVEL = Math.min(2, Math.max(auto, (Number.isNaN(lastLevel) ? LEVEL : lastLevel) + 1));
-  try { memory?.removeItem('bob.world.quality'); } catch {}
-  if (/q=/.test(location.hash)) history.replaceState(null, '', location.pathname + location.search);
-}
-const step = s => { try { memory?.setItem('bob.world.step', s); memory?.setItem('bob.world.level', String(LEVEL)); } catch {} };
-// per level: pixels per screen point at most, sun shadow cascades and their size, the tree and its maps, how much grass
-// (a share), the air's share of the screen. (The lighter tree, thinned by merging its leaves, shows holes in the crown
-// even 46 m away — ios/design/framing/tree-before-after.jpg — so the full level keeps the full one)
-const LIGHT = [
-  {pixels: 2, shadows: true, cascades: 3, shadowMap: 2048, tree: 'jacaranda', maps: '', grass: 1, air: 0.5},
-  {pixels: 1.5, shadows: true, cascades: 2, shadowMap: 1024, tree: 'jacaranda-light', maps: '-512', grass: 0.6, air: 0.35},
-  {pixels: 1.25, shadows: false, cascades: 2, shadowMap: 1024, tree: 'jacaranda-light', maps: '-512', grass: 0.35, air: 0.25},
-][LEVEL];
+const lastStep = memory?.getItem('bob.world.step');
+const fell = !!lastStep && lastStep !== 'done';
+const step = s => { try { memory?.setItem('bob.world.step', s); } catch {} };
+const LIGHT = fell ? {pixels: 1.5, shadows: true, cascades: 2, shadowMap: 1024, tree: 'jacaranda', maps: '-512', grass: 0.6, air: 0.35}
+  : {pixels: 2, shadows: true, cascades: 3, shadowMap: 2048, tree: 'jacaranda', maps: '', grass: 1, air: 0.5};
 
 const hud = document.getElementById('hud'), canvas = document.getElementById('view');
 let treeTrouble = '';                                                 // why the tree did not load, if it did not
@@ -187,7 +185,7 @@ const leafTop = z => 0.95 + 0.3*sm(15, 38, z) + 0.4*sm(38, 46, z);
 const leafTopAt = z => smoothstep(15, 38, z).mul(0.3).add(smoothstep(38, 46, z).mul(0.4)).add(0.95);   // the same, on the GPU
 
 try {
-  if (fell) hud.textContent = `в прошлый раз закрылось на шаге «${STEPS[lastStep] || lastStep}» — облегчаю (уровень ${LEVEL})`;
+  if (fell) hud.textContent = `в прошлый раз закрылось на шаге «${STEPS[lastStep] || lastStep}» — в этот раз легче`;
   step('gpu');
   const renderer = new THREE.WebGPURenderer({canvas, antialias: false});
   renderer.setPixelRatio(Math.min(LIGHT.pixels, devicePixelRatio || 1, 1900/document.documentElement.clientHeight));   // no more than a phone's pixels
@@ -240,11 +238,12 @@ try {
   // ── the wind, as in Ghost of Tsushima: one direction and strength for everything, and gusts from two layers of noise
   // drifting with it — large slow swells across the field and small quick ones (Rockenbeck, GDC 2021)
   const windDir = uniform(new THREE.Vector2(...WIND.dir).normalize()), windStrength = uniform(WIND.strength);
-  const gustAt = Fn(([xz]) => {
-    const big = mx_noise_float(vec3(xz.mul(0.04).sub(windDir.mul(time.mul(0.45))), time.mul(0.03))).mul(0.5).add(0.5);
-    const small = mx_noise_float(vec3(xz.mul(0.16).sub(windDir.mul(time.mul(1.1))), time.mul(0.15))).mul(0.5).add(0.5);
+  const gustOf = (xz, t) => {                                          // the gust at a place, at a moment
+    const big = mx_noise_float(vec3(xz.mul(0.04).sub(windDir.mul(t.mul(0.45))), t.mul(0.03))).mul(0.5).add(0.5);
+    const small = mx_noise_float(vec3(xz.mul(0.16).sub(windDir.mul(t.mul(1.1))), t.mul(0.15))).mul(0.5).add(0.5);
     return windStrength.mul(float(0.3).add(big.mul(big).mul(1.1)).add(small.mul(0.3)));
-  });
+  };
+  const gustAt = Fn(([xz]) => gustOf(xz, time));
   // the light on the open field around us — the sun's at its height and the sky's — from the atmosphere; what the field
   // bounces back up lights everything from below
   const openLight = () => { const o = getSplitScalarIlluminance(atmosphere.cameraPositionUnit.add(atmosphere.altitudeCorrectionUnit), atmosphere.sunDirectionECEF);
@@ -430,7 +429,7 @@ try {
   // the tree's file keeps its binary part as text (an artifact serves no .glb). It is unpacked here into a binary glTF
   // and handed to the loader whole: Safari on the iPhone refuses to fetch a data: address ("Failed to load buffer")
   async function loadTree(url, loader){
-    const doc = await (await fetch(url)).json(), uri = doc.buffers[0].uri, text = atob(uri.slice(uri.indexOf(',') + 1));
+    const doc = await (await fetch(url, {cache: 'no-cache'})).json(), uri = doc.buffers[0].uri, text = atob(uri.slice(uri.indexOf(',') + 1));
     const bin = new Uint8Array(text.length); for (let i = 0; i < text.length; i++) bin[i] = text.charCodeAt(i);
     delete doc.buffers[0].uri;                                         // buffer 0 is now the binary chunk below
     const json = new TextEncoder().encode(JSON.stringify(doc)), jl = (json.length + 3) & ~3, bl = (bin.length + 3) & ~3;
@@ -447,23 +446,36 @@ try {
     ...Object.values(maps).flatMap(([c, n]) => [load(c, true), load(n, false)])]);
   const texOf = {}; Object.keys(maps).forEach((k, i) => texOf[k] = [textures[2*i], textures[2*i + 1]]);
   const tree = new THREE.Group();
-  // the tree in the wind, as Crysis moves its vegetation (GPU Gems 3, ch. 16): the whole tree leans with the gusts that
-  // reach it — more toward the top — and sways about that lean; its branches swing, each in its own time (the phase in
-  // its vertex colour, so nearby parts move together), the more the more they bend (toward the top and the crown's
-  // edge, also in the colour); its leaves flutter. One wind with the grass: the same gusts, from the field's map — and,
-  // as a real tree, it gives more than the wind grows (the wind's push goes with its speed squared): a breeze barely
-  // stirs it, a strong wind throws it about. Its shadow moves with it (the cascades take turns, in draw)
+  // Trunk → welded branch → attached leaf cluster. Pivots are packed into normalized COLOR_1/2 by import_tree.py;
+  // second-order Rodrigues rotation preserves branch length without the cost of a full matrix per vertex.
   const treeWind = {lean: uniform(TREE.wind.lean), branch: uniform(TREE.wind.branch), leaf: uniform(TREE.wind.leaf)};
-  const windHere = uniform(new THREE.Vector3(WIND.dir[0], 0, WIND.dir[1]).normalize().applyAxisAngle(V3(0, 1, 0), -THREE.MathUtils.degToRad(TREE.turn)));   // in the tree's own turn
+  const windHere = uniform(new THREE.Vector3(WIND.dir[0], 0, WIND.dir[1]).normalize().applyAxisAngle(V3(0, 1, 0), -THREE.MathUtils.degToRad(TREE.turn)));
+  const packMin = vec3(-TREE.height, 0, -TREE.height), packSize = vec3(2*TREE.height, TREE.height, 2*TREE.height);
+  const branchOf = a => vec4(a.xyz.mul(packSize).add(packMin), a.w.mul(TREE.height));
+  const clusterOf = a => vec4(a.xyz.mul(packSize).add(packMin), a.w);
+  const turn = (v, a) => { const first = cross(a, v); return v.add(first).add(cross(a, first).mul(0.5)); };
+  const turnNormal = (v, a) => v.add(cross(a, v));
+  const pushOf = gust => { const w = gust.div(0.725*WIND.strength); return w.mul(w.add(0.5)).div(1.5); };
+  function treeMotion(p, branch, cluster, col, t, push, direction){
+    const axis = vec3(direction.z, 0, direction.x.negate()), stir = push.add(0.08);
+    const lean = push.mul(treeWind.lean).div(TREE.height).mul(sin(t.mul(0.9)).mul(0.25).add(1));
+    const trunkAt = y => axis.mul(lean.mul(y.div(TREE.height).clamp(0, 1.2).pow(2)).clamp(-0.16, 0.16));
+    const trunk = trunkAt(p.y), pT = turn(p, trunk), branchT = turn(branch.xyz, trunkAt(branch.y)), clusterT = turn(cluster.xyz, trunkAt(cluster.y));
+    const phase = col.b.mul(2*Math.PI), swing = sin(t.mul(1.7).add(phase)).mul(0.65).add(sin(t.mul(2.9).add(phase.mul(1.9))).mul(0.35));
+    const branchAmount = treeWind.branch.mul(col.g).div(branch.w.max(0.45)).mul(push.mul(0.55).add(swing.mul(stir).mul(0.45))).clamp(-0.28, 0.28);
+    const branchTurn = axis.mul(branchAmount).add(vec3(0, branchAmount.mul(0.18), 0));
+    const pB = branchT.add(turn(pT.sub(branchT), branchTurn)), clusterB = branchT.add(turn(clusterT.sub(branchT), branchTurn));
+    const leafPhase = cluster.w.mul(2*Math.PI), flutter = sin(t.mul(5.7).add(leafPhase)).mul(0.65).add(sin(t.mul(9.3).add(leafPhase.mul(1.7))).mul(0.35));
+    const leafAmount = treeWind.leaf.div(0.45).mul(stir).mul(flutter).mul(col.a).clamp(-0.3, 0.3);
+    const leafTurn = axis.mul(leafAmount).add(vec3(0, leafAmount.mul(0.45), 0));
+    return {at: clusterB.add(turn(pB.sub(clusterB), leafTurn)), trunk, smaller: branchTurn.add(leafTurn)};
+  }
   const swayed = Fn(() => {
-    const col = attribute('color', 'vec4'), p = positionLocal, h = p.y.div(TREE.height).clamp(0, 1.2);
-    const w = fieldAt(vec2(...TREE.at)).r.div(0.725*WIND.strength);    // the gust here; 1 at the usual wind's mean gust
-    const push = w.mul(w.add(0.5)).div(1.5), stir = push.add(0.08);     // (calm air still stirs it a little)
-    const lean = windHere.mul(push.mul(treeWind.lean).mul(h.mul(h)).mul(sin(time.mul(0.9)).mul(0.25).add(1)));
-    const ph = col.b.mul(6.283), swing = sin(time.mul(1.7).add(ph)).mul(0.65).add(sin(time.mul(2.9).add(ph.mul(1.9))).mul(0.35));
-    const branch = windHere.add(vec3(0, 0.35, 0)).mul(swing.mul(col.g).mul(treeWind.branch).mul(stir));
-    const flutter = normalLocal.mul(sin(time.mul(11).add(col.b.mul(97))).mul(col.a).mul(col.g.add(0.3)).mul(treeWind.leaf).mul(stir));
-    return p.add(lean).add(branch).add(flutter).sub(vec3(0, dot(lean, lean).mul(0.5).div(p.y.max(1)), 0));   // (a leaning top comes down a little)
+    const col = attribute('color', 'vec4'), p = positionGeometry;
+    const branch = branchOf(attribute('color_1', 'vec4')), cluster = clusterOf(attribute('color_2', 'vec4'));
+    const push = pushOf(fieldAt(vec2(...TREE.at)).r), moved = treeMotion(p, branch, cluster, col, time, push, windHere);
+    normalLocal.assign(normalize(turnNormal(turnNormal(normalLocal, moved.trunk), moved.smaller)));
+    return moved.at;
   });
   gltf.scene.traverse(o => {
     if (!o.isMesh) return;
@@ -474,7 +486,7 @@ try {
     const deep = o.geometry.attributes.color ? attribute('color', 'vec4').x : float(1);
     mat.emissiveNode = texture(map).rgb.mul(groundLight).mul(BOUNCE.field/Math.PI).mul(float(1).sub(normalWorld.y).mul(0.5)).mul(deep);
     mat.mrtNode = mrt({distance: vec4(length(positionView), 1, 0, 1)});   // marked, for its own colour after the film (the grade)
-    if (o.geometry.attributes.color) mat.positionNode = swayed();
+    if (o.geometry.attributes.color_1 && o.geometry.attributes.color_2) mat.positionNode = swayed();
     const mesh = new THREE.Mesh(o.geometry, mat);
     mesh.castShadow = mesh.receiveShadow = true; tree.add(mesh);
   });
@@ -507,19 +519,24 @@ try {
   // how much sun a leaf inside the crown gets: how far it lies behind the first leaf on the sun's way, from the sun's
   // view (five looks a third of a metre apart, so the map's steps leave no grain), as the light left after that much
   // crown. Where the shadow map has a leaf in shade, it gets that instead of none (without sun shadows, always); the
-  // sunlit stay sunlit. The map holds the tree at rest: the crown's thickness hardly changes as it sways
+  // sunlit stay sunlit; and the leaves just under the crown's sunlit skin glow more, in sun or shade alike (were it the
+  // shaded ones only, the edge flickered as the crown swayed). The map holds the tree at rest, so a leaf looks itself up
+  // where it is at rest (the crown in front of it sways with it; looked up where it is now, a leaf swayed toward the sun
+  // glared white)
   const crownParts = {dim: uniform(THROUGH.dim), least: uniform(THROUGH.least), rim: uniform(THROUGH.rim)};
   const crownLight = Fn(() => {
-    const s = sunView.mul(vec4(positionWorld, 1)).xyz, at = vec2(s.x.mul(0.5).add(0.5), s.y.mul(-0.5).add(0.5)), r = 0.34/(sunCam.right - sunCam.left);
-    const left = d => exp(s.z.sub(texture(sunMap.depthTexture, at.add(d)).level(0).r).max(0).mul(sunCam.far - sunCam.near).mul(crownParts.dim).negate());
+    const s = sunView.mul(vec4(modelWorldMatrix.mul(vec4(positionGeometry, 1)).xyz.toVarying('vRestAt'), 1)).xyz;
+    const at = vec2(s.x.mul(0.5).add(0.5), s.y.mul(-0.5).add(0.5)), r = 0.34/(sunCam.right - sunCam.left);
+    const left = d => exp(s.z.sub(texture(sunMap.depthTexture, at.add(d))).max(0).mul(sunCam.far - sunCam.near).mul(crownParts.dim).negate());
     const T = left(vec2(0, 0)).add(left(vec2(r, r))).add(left(vec2(-r, r))).add(left(vec2(r, -r))).add(left(vec2(-r, -r))).mul(0.2);
-    return crownParts.least.add(T.mul(float(1).sub(crownParts.least))).add(T.pow(8).mul(crownParts.rim));
+    return vec2(crownParts.least.add(T.mul(float(1).sub(crownParts.least))), T.pow(8).mul(crownParts.rim).add(1));   // what gets through; the glow
   })();
+  const crownLit = shade => mix(crownLight.x, float(1), shade).mul(crownLight.y);   // (for a leaf's shade: 0…1)
   tree.traverse(o => {
     const m = o.material;
     if (!o.isMesh || !m.thicknessColorNode) return;                   // the leaves
-    if (LIGHT.shadows) m.receivedShadowNode = shade => mix(crownLight, float(1), shade);
-    else m.thicknessColorNode = m.thicknessColorNode.mul(crownLight);
+    if (LIGHT.shadows) m.receivedShadowNode = crownLit;
+    else m.thicknessColorNode = m.thicknessColorNode.mul(crownLit(float(0)));
   });
   const hazeDensity = uniform(HAZE.density), airParts = {sun: uniform(1), sky: uniform(1), shade: uniform(1)};   // for checking
   const hillAt = (x, z) => smoothstep(0, 46, z).mul(5.2).mul(sin(x.mul(0.06).add(1.3)).mul(0.15).add(0.85)).add(x.mul(0.13).mul(smoothstep(0, 46, z)))
@@ -543,7 +560,7 @@ try {
       const sigma = exp(p.y.sub(hillAt(p.x, p.z)).max(0).div(-HAZE.height)).mul(hazeDensity);
       const s = sunView.mul(vec4(p, 1)).xyz, su = vec2(s.x.mul(0.5).add(0.5), s.y.mul(-0.5).add(0.5));
       const inside = su.x.greaterThan(0).and(su.x.lessThan(1)).and(su.y.greaterThan(0)).and(su.y.lessThan(1));
-      const lit = select(inside.and(texture(sunMap.depthTexture, su).level(0).r.add(0.001).lessThan(s.z)), float(0), float(1));
+      const lit = select(inside.and(texture(sunMap.depthTexture, su).add(0.001).lessThan(s.z)), float(0), float(1));
       L.addAssign(sunL.mul(mix(float(1), lit, airParts.shade)).mul(airParts.sun).add(skyL.mul(airParts.sky)).mul(sigma.mul(T).mul(ds)));
       T.mulAssign(exp(sigma.mul(ds).negate()));
       t.addAssign(ds);
@@ -554,7 +571,7 @@ try {
   airAtlas.autoUpdate = false;
   const drawAir = () => { airAtlas.textureNeedsUpdate = true; };
   let airWarm = 90;                                                    // (the atmosphere's tables are built over the first frames)
-  function airSize(){                                                  // half of LIGHT.air's share of the screen: a quarter at the full level
+  function airSize(){                                                  // half of LIGHT.air's share of the screen
     const s = renderer.getSize(new THREE.Vector2()), p = renderer.getPixelRatio()*LIGHT.air/2;
     const w = Math.max(1, Math.round(s.x*p)), h = Math.max(1, Math.round(s.y*p));
     airAtlas.setSize(w*RAY.n, h); airHalf.value = 0.5/w;
@@ -568,6 +585,83 @@ try {
     const d0 = select(i.lessThan(0), float(0), rayAt(i)), near = select(i.lessThan(0), vec4(0, 0, 0, 1), strip(i.max(0)));
     return mix(near, strip(j), dd.sub(d0).div(rayAt(j).sub(d0).max(1e-3)).clamp(0, 1));
   })();
+
+  // ── Falling leaves use real outer-crown attachments. A 4×N float texture carries rest position, branch pivot,
+  // cluster pivot and phases; the same treeMotion evaluates release at birth, so a leaf never jumps off a moving twig.
+  const crownBox = new THREE.Box3(); tree.updateMatrixWorld(true);
+  tree.traverse(o => { if (o.isMesh && o.material.thicknessColorNode){ o.geometry.computeBoundingBox(); crownBox.union(o.geometry.boundingBox.clone().applyMatrix4(o.matrixWorld)); } });
+  const crownMid = crownBox.getCenter(new THREE.Vector3()), crownSize = crownBox.getSize(new THREE.Vector3());
+  const sources = [], sourceGoal = FALL.leaves, sourceRandom = rng(731); let sourceCandidates = 0;
+  tree.traverse(o => {
+    if (!o.isMesh || !o.material.thicknessColorNode || !o.geometry.attributes.color_1) return;
+    const p = o.geometry.attributes.position, stride = Math.max(1, Math.floor(p.count/200000)), v = new THREE.Vector3();
+    for (let i = 0; i < p.count; i += stride){
+      v.fromBufferAttribute(p, i).applyMatrix4(o.matrixWorld);
+      if (Math.hypot(v.x - crownMid.x, v.z - crownMid.z) < Math.max(crownSize.x, crownSize.z)*0.22 || v.y < crownBox.min.y + crownSize.y*0.25) continue;
+      sourceCandidates++;
+      const ref = {mesh: o, index: i};
+      if (sources.length < sourceGoal) sources.push(ref);
+      else { const replace = Math.floor(sourceRandom()*sourceCandidates); if (replace < sourceGoal) sources[replace] = ref; }
+    }
+  });
+  const sourceCount = sources.length, sourceData = new Float32Array(Math.max(1, sourceCount)*16);
+  sources.forEach(({mesh, index}, i) => {
+    const g = mesh.geometry, p = new THREE.Vector3().fromBufferAttribute(g.attributes.position, index).applyMatrix4(mesh.matrixWorld);
+    const a = g.attributes.color_1, b = g.attributes.color_2, col = g.attributes.color;
+    const branch = new THREE.Vector3(a.getX(index), a.getY(index), a.getZ(index)).multiply(new THREE.Vector3(2*TREE.height, TREE.height, 2*TREE.height))
+      .add(new THREE.Vector3(-TREE.height, 0, -TREE.height)).applyMatrix4(mesh.matrixWorld);
+    const cluster = new THREE.Vector3(b.getX(index), b.getY(index), b.getZ(index)).multiply(new THREE.Vector3(2*TREE.height, TREE.height, 2*TREE.height))
+      .add(new THREE.Vector3(-TREE.height, 0, -TREE.height)).applyMatrix4(mesh.matrixWorld);
+    sourceData.set([p.x, p.y, p.z, col.getY(index), branch.x, branch.y, branch.z, a.getW(index)*TREE.height,
+      cluster.x, cluster.y, cluster.z, b.getW(index), col.getZ(index), 0, 0, 0], i*16);
+  });
+  const sourceTex = new THREE.DataTexture(sourceData, 4, Math.max(1, sourceCount), THREE.RGBAFormat, THREE.FloatType);
+  sourceTex.minFilter = sourceTex.magFilter = THREE.NearestFilter; sourceTex.needsUpdate = true;
+  const sourceAt = x => texture(sourceTex, vec2(float(x).add(0.5).div(4), float(instanceIndex).add(0.5).div(Math.max(1, sourceCount)))).level(0);
+  const rest = sourceAt(0), branch = sourceAt(1), cluster = sourceAt(2), extra = sourceAt(3);
+  const leafShape = [[0, 0], [0.22, 0.12], [0.31, 0.35], [0.28, 0.62], [0.16, 0.85], [0, 1], [-0.16, 0.85], [-0.28, 0.62], [-0.31, 0.35], [-0.22, 0.12]];
+  const fallGeometry = new THREE.InstancedBufferGeometry();
+  fallGeometry.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0, ...leafShape.flatMap(([x, y]) => [x, y - 0.5, 0.08*Math.abs(x)])], 3));
+  fallGeometry.setAttribute('uv', new THREE.Float32BufferAttribute([0.5, 0.5, ...leafShape.flatMap(([x, y]) => [x/0.62 + 0.5, y])], 2));
+  fallGeometry.setAttribute('normal', new THREE.Float32BufferAttribute(Array(leafShape.length + 1).fill([0, 0, 1]).flat(), 3));
+  fallGeometry.setAttribute('edge', new THREE.Float32BufferAttribute([0, ...leafShape.map(() => 1)], 1));
+  fallGeometry.setIndex(leafShape.flatMap((_, i) => [0, i + 1, (i + 1) % leafShape.length + 1]));
+  fallGeometry.instanceCount = Math.min(FALL.leaves, sourceCount);
+  const fallWind = uniform(new THREE.Vector3(WIND.dir[0], 0, WIND.dir[1]).normalize());
+  const life = float(FALL.life), flights = time.div(life).add(hash(instanceIndex.mul(uint(9781))));
+  const age = fract(flights).mul(life), birth = time.sub(age), flight = floor(flights).toUint();
+  const seed = j => hash(instanceIndex.mul(uint(7919)).add(flight.mul(uint(104729))).add(uint(j)));
+  const gustBirth = gustOf(rest.xz, birth), sourceCol = vec4(0, rest.w, extra.x, 1);
+  const attached = treeMotion(rest.xyz, branch, cluster, sourceCol, birth, pushOf(gustBirth), fallWind).at;
+  const before = treeMotion(rest.xyz, branch, cluster, sourceCol, birth.sub(0.12), pushOf(gustBirth), fallWind).at;
+  const release = attached.sub(before).div(0.12).mul(0.45).mul(float(1).sub(exp(age.div(-0.45))));
+  const torn = threshold(seed(1), smoothstep(0.15, 0.9, gustBirth).mul(0.8));
+  const phase0 = seed(11).mul(2*Math.PI), swing = age.mul(2*Math.PI).div(mix(FALL.beat[0], FALL.beat[1], seed(10))).add(phase0), reach = mix(FALL.swing[0], FALL.swing[1], seed(9));
+  const carry = mix(0.6, 1.4, seed(6)), middle = age.mul(0.5);
+  const gustMiddle = gustOf(rest.xz.add(fallWind.xz.mul(gustBirth.mul(FALL.carry).mul(carry).mul(middle))), birth.add(middle));
+  const gustNow = gustOf(rest.xz.add(fallWind.xz.mul(gustBirth.add(gustMiddle).mul(0.5*FALL.carry).mul(carry).mul(age))), time);
+  const carried = fallWind.mul(gustBirth.add(gustMiddle.mul(2)).add(gustNow).mul(0.25*FALL.carry).mul(carry).mul(age));
+  const leafAt = attached.add(carried).add(release)
+    .add(vec3(cos(seed(8).mul(2*Math.PI)), 0, sin(seed(8).mul(2*Math.PI))).mul(reach.mul(sin(swing).sub(sin(phase0)))))
+    .add(vec3(0, mix(FALL.sink[0], FALL.sink[1], seed(7)).mul(age).add(reach.mul(0.25).mul(cos(swing.mul(2)).sub(cos(phase0.mul(2))))).negate(), 0));
+  const shown = torn.mul(smoothstep(0, 0.4, age)).mul(float(1).sub(smoothstep(life.sub(0.8), life, age))).mul(threshold(hillAt(leafAt.x, leafAt.z), leafAt.y));
+  const leafTurn = vec3(float(1.2).add(cos(swing).mul(0.9)).add(threshold(0.67, seed(12)).mul(age).mul(mix(3, 7, seed(13)))), seed(14).mul(2*Math.PI).add(age.mul(0.4)), sin(swing).mul(0.5));
+  const autumn = [[0.32, 0.12, 0.025], [0.42, 0.25, 0.045], [0.24, 0.055, 0.018], [0.16, 0.075, 0.025]];
+  const pick = seed(15), leafTint = select(pick.lessThan(0.55), vec3(...autumn[0]), select(pick.lessThan(0.8), vec3(...autumn[1]),
+    select(pick.lessThan(0.92), vec3(...autumn[2]), vec3(...autumn[3])))).mul(mix(0.8, 1.2, seed(16))).toVarying('vLeafTint');
+  const rim = smoothstep(0.86, 1, attribute('edge', 'float'));
+  const vein = float(1).sub(smoothstep(0.006, 0.018, abs(attribute('uv', 'vec2').x.sub(0.5))));
+  const leafColour = leafTint.mul(mix(float(1), float(0.2), rim)).mul(mix(float(1), float(0.45), vein));
+  const fallMat = translucent(new THREE.MeshSSSNodeMaterial({roughness: 0.6, side: THREE.DoubleSide}), leafColour.mul(0.35));
+  fallMat.colorNode = leafColour;
+  fallMat.positionNode = Fn(() => {
+    normalLocal.assign(rotate(normalLocal, leafTurn));
+    return leafAt.add(rotate(positionLocal.mul(mix(0.8, 1.3, seed(17)).mul(FALL.size).mul(shown)), leafTurn));
+  })();
+  fallMat.emissiveNode = leafColour.mul(groundLight).mul(BOUNCE.field/Math.PI).mul(float(1).sub(normalWorld.y).mul(0.5));
+  fallMat.mrtNode = mrt({distance: vec4(length(positionView), 1, 0, 1)});
+  const fallen = new THREE.Mesh(fallGeometry, fallMat);
+  fallen.frustumCulled = false; fallen.receiveShadow = true; scene.add(fallen);
 
   // after the scene: the sky where nothing stands, darker than the light it throws (as Ghost's local tone mapping keeps
   // it); the air; the smoothing over time; then the grade and the film curve
@@ -598,26 +692,33 @@ try {
   let rendererState;
   const settleKeep = uniform(SETTLE.keep);
   class SettleNode extends THREE.TempNode {
-    constructor(input){                                                 // input: the frame, drawn into a texture of its own
+    constructor(input){
       super('vec4');
       const target = () => new THREE.RenderTarget(1, 1, {depthBuffer: false, type: THREE.HalfFloatType});
-      Object.assign(this, {input, history: target(), resolve: target(), quad: new THREE.QuadMesh(), texel: uniform(new THREE.Vector2(1, 1)),
+      const histories = [target(), target()];
+      Object.assign(this, {input, histories, index: 0, history: histories[0], resolve: histories[1], quad: new THREE.QuadMesh(), texel: uniform(new THREE.Vector2(1, 1)),
         fresh: uniform(1), updateBeforeType: THREE.NodeUpdateType.FRAME});
     }
     updateBefore({renderer}){
       const size = renderer.getDrawingBufferSize(new THREE.Vector2());
       rendererState = THREE.RendererUtils.resetRendererState(renderer, rendererState);
-      if (this.history.width !== size.x || this.history.height !== size.y){   // a new size: start again from this frame
-        this.history.setSize(size.x, size.y); this.resolve.setSize(size.x, size.y); this.texel.value.set(1/size.x, 1/size.y);
-        renderer.initRenderTarget(this.history); renderer.initRenderTarget(this.resolve); this.fresh.value = 1;
+      if (this.history.width !== size.x || this.history.height !== size.y){
+        for (const target of this.histories){ target.setSize(size.x, size.y); renderer.initRenderTarget(target); }
+        this.texel.value.set(1/size.x, 1/size.y); this.fresh.value = 1;
       }
-      renderer.setRenderTarget(this.resolve); this.quad.render(renderer);
-      renderer.copyTextureToTexture(this.resolve.texture, this.history.texture);
+      const read = this.histories[this.index], write = this.histories[1 - this.index];
+      this.history = read; this.resolve = write;
+      if (this.past) this.past.value = read.texture;
+      if (this.output) this.output.value = write.texture;
+      if (this.external) this.external.value = write.texture;
+      renderer.setRenderTarget(write); this.quad.render(renderer);
+      this.index = 1 - this.index;
       THREE.RendererUtils.restoreRendererState(renderer, rendererState);
-      this.fresh.value = SETTLE.on ? 0 : 1;                            // off: every frame stands alone
+      this.fresh.value = SETTLE.on ? 0 : 1;
     }
     setup(builder){
-      const now = this.input, at = uv(), texel = this.texel, past = texture(this.history.texture);
+      const now = this.input, at = uv(), texel = this.texel;
+      this.past = texture(this.history.texture);
       const resolve = Fn(() => {
         const here = now.sample(at), c = here.rgb, m1 = c.toVar(), m2 = c.mul(c).toVar(), lo = here.a.toVar(), hi = here.a.toVar();
         for (const [dx, dy] of [[-1, -1], [0, -1], [1, -1], [-1, 0], [1, 0], [-1, 1], [0, 1], [1, 1]]){
@@ -625,18 +726,18 @@ try {
           lo.assign(min(lo, n.a)); hi.assign(max(hi, n.a));
         }
         const mean = m1.div(9), spread = m2.div(9).sub(mean.mul(mean)).max(0).sqrt().mul(SETTLE.clip);
-        const was = past.sample(at), prev = was.rgb.max(mean.sub(spread)).min(mean.add(spread)), keep = mix(settleKeep, float(0), this.fresh);
+        const was = this.past.sample(at), prev = was.rgb.max(mean.sub(spread)).min(mean.add(spread)), keep = mix(settleKeep, float(0), this.fresh);
         const wc = float(1).sub(keep).div(luminance(c).add(1)), wp = keep.div(luminance(prev).add(1));
-        // (in alpha, where the tree is: it settles with the colour, held to where the tree is around this pixel now)
         return vec4(c.mul(wc).add(prev.mul(wp)), here.a.mul(wc).add(was.a.clamp(lo, hi).mul(wp))).div(wc.add(wp));
       });
       const m = new THREE.NodeMaterial(); m.fragmentNode = resolve().context(builder.getSharedContext()); m.name = 'Settle';
       this.quad.material = m;
-      return passTexture(this, this.resolve.texture);
+      this.output = passTexture(this, this.resolve.texture);
+      return this.output;
     }
   }
-  const settle = new SettleNode(rtt(vec4(frame.rgb.mul(air.a).add(air.rgb), frame.getTextureNode('distance').g)));   // the frame seen through
-  const settled = passTexture(settle, settle.resolve.texture);        // the air, and where the tree is; settled
+  const settle = new SettleNode(rtt(vec4(frame.rgb.mul(air.a).add(air.rgb), frame.getTextureNode('distance').g)));
+  const settled = passTexture(settle, settle.resolve.texture); settle.external = settled;
   // then a little crispness back (the shifts over time soften by about a pixel; games sharpen after TAA too): in
   // brightness only, and never past the pixels around (as AMD's CAS) — sharpening each colour on its own drew cyan rims
   // round the bright leaves, red and green falling below nothing next to the sky
@@ -652,7 +753,8 @@ try {
   const treeColour = uniform(GRADE.tree);
   pipeline.outputColorTransform = false;
   const film = renderOutput(vec4(saturation(sharpened.rgb.mul(vec3(...GRADE.white)), GRADE.saturation), 1), THREE.AgXToneMapping, THREE.LinearSRGBColorSpace);
-  pipeline.outputNode = renderOutput(vec4(saturation(film.rgb, mix(float(1), treeColour, sharpened.a)), 1), THREE.NoToneMapping, THREE.SRGBColorSpace);
+  const pale = smoothstep(0.55, 0.9, luminance(film.rgb));           // (the bright leaves keep the film's paleness)
+  pipeline.outputNode = renderOutput(vec4(saturation(film.rgb, mix(float(1), treeColour, sharpened.a.mul(float(1).sub(pale)))), 1), THREE.NoToneMapping, THREE.SRGBColorSpace);
   let jitter = 0;
   function draw(){                                                     // one frame, shifted by a fraction of a pixel while smoothing
     if (skyFrames > 0){ skyFrames--; skyNow(); }
@@ -676,29 +778,33 @@ try {
   }
   addEventListener('resize', resize); resize();
 
-  // ══ Keeping 60 frames a second. If this phone cannot — two seconds running, twice — the world draws fewer pixels:
-  // 2 → 1.75 → 1.5 per screen point at most (the smoothing over time hides most of it); a phone that can keeps them
-  // all. Each step is tried: if the frames do not come faster after it, the screen itself is what is slow (Low Power
-  // Mode gives 30 frames a second whatever is drawn), so the pixels go back and nothing changes any more
-  const PACE = {steps: [1, 0.875, 0.75], window: 2000, slow: 54};
-  let paceGaps = [], paceLast = 0, paceFrom = 0, paceStep = 0, paceLate = 0, paceTry = null, paceOff = false;
+  // ══ Thirty frames a second at rest, sixty while the companion or the viewer is interacting. If the current target is
+  // missed twice, the world draws fewer pixels; a step that does not help is undone (the display itself may be capped).
+  const PACE = {steps: [1, 0.875, 0.75], window: 2000}, CADENCE = {idle: 30, active: 60, hold: 2000};
+  let paceGaps = [], paceLast = 0, paceFrom = 0, paceStep = 0, paceLate = 0, paceTry = null, paceOff = false, paceTarget = 0;
+  let activeUntil = 0, lastDraw = 0;
   const setPace = () => { renderer.setPixelRatio(pixelsMax*PACE.steps[paceStep]); airSize(); };
-  function pace(now){
+  const interact = () => { activeUntil = performance.now() + CADENCE.hold; };
+  for (const name of ['pointerdown', 'wheel', 'touchstart', 'keydown', 'world-active']) addEventListener(name, interact, {passive: true});
+  addEventListener('pointermove', e => { if (e.buttons) interact(); }, {passive: true});
+  document.addEventListener('visibilitychange', () => { lastDraw = paceLast = 0; });
+  function pace(now, target){
+    if (target !== paceTarget){ paceTarget = target; paceGaps = []; paceFrom = now; paceLate = 0; paceTry = null; }
     const gap = paceLast ? now - paceLast : 0; paceLast = now;
-    if (paceOff || skyFrames > 0 || shadowFrames > 0 || airWarm > 0 || gap > 250){ paceGaps = []; paceFrom = now; return; }   // still being built, or back from the background
+    if (paceOff || skyFrames > 0 || shadowFrames > 0 || airWarm > 0 || gap > 250){ paceGaps = []; paceFrom = now; return; }
     paceGaps.push(gap);
     if (now - paceFrom < PACE.window) return;
     const fps = 1000*paceGaps.length/(now - paceFrom); paceGaps = []; paceFrom = now;
-    if (paceTry){                                                      // the last step down: did it help?
+    if (paceTry){
       if (--paceTry.windows > 0) return;
       if (fps < paceTry.fps*1.1){ paceStep--; setPace(); paceOff = true; }
       paceTry = null; return;
     }
-    paceLate = fps < PACE.slow ? paceLate + 1 : 0;
+    paceLate = fps < target*0.9 ? paceLate + 1 : 0;
     if (paceLate < 2 || paceStep >= PACE.steps.length - 1) return;
     paceLate = 0; paceStep++; setPace(); paceTry = {fps, windows: 2};
   }
-  function paceReset(){ paceStep = 0; paceLate = 0; paceTry = null; paceOff = false; paceGaps = []; paceLast = 0; setPace(); }
+  function paceReset(){ paceStep = 0; paceLate = 0; paceTry = null; paceOff = false; paceGaps = []; paceLast = 0; paceTarget = 0; setPace(); }
 
   // the sliders: the sun's side and height, the air's thickness, the wind
   { const $ = id => document.getElementById(id), btn = $('lightBtn'), panel = $('panel');
@@ -711,12 +817,6 @@ try {
     $('el').addEventListener('input', e => { setSun(SUN.az, +e.target.value); show(); });
     $('haze').addEventListener('input', e => { hazeDensity.value = e.target.value/1e4; drawAir(); show(); });
     $('wind').addEventListener('input', e => { windStrength.value = e.target.value/100; show(); });
-    QUALITY.forEach((q, i) => $('quality').append(new Option(`${q}${i === auto ? ' (сам выбрал для этого устройства)' : ''}`, String(i))));
-    $('quality').value = String(LEVEL);
-    $('quality').addEventListener('change', e => {                    // kept for next time, and in the address
-      try { memory?.setItem('bob.world.quality', e.target.value); } catch {}
-      location.hash = `q=${e.target.value}`; location.reload();
-    });
     $('settle').checked = SETTLE.on;
     $('settle').addEventListener('change', e => { SETTLE.on = e.target.checked; crisp.value = SETTLE.on ? SETTLE.sharpen : 0; });
     show(); }
@@ -785,9 +885,9 @@ try {
   async function sample(ms){                                           // the frames of the next ms
     win = {dt: [], cpu: [], gpu: [], gpuSum: [], done: [], last: null, draws: 0, drawsMin: Infinity, tris: 0};
     await Promise.race([wait(ms), stopNow?.promise].filter(Boolean));
-    const w = win; win = null;
+    const w = win; win = null, lateAfter = 1000/(run?.target ?? CADENCE.active)*1.2;
     return {fps: w.dt.length ? r1(1000*w.dt.length/w.dt.reduce((s, x) => s + x, 0)) : null, frame: r1(quantile(w.dt, 0.5)),
-      late: w.dt.length ? Math.round(100*w.dt.filter(x => x > 20).length/w.dt.length) : null,   // % of frames that missed the screen's 1/60 s
+      late: w.dt.length ? Math.round(100*w.dt.filter(x => x > lateAfter).length/w.dt.length) : null,
       frame95: r1(quantile(w.dt, 0.95)), frameMax: r1(w.dt.length ? Math.max(...w.dt) : null), gpu: r1(trimmed(w.gpu)),
       gpuMed: r1(quantile(w.gpu, 0.5)), gpu90: r1(quantile(w.gpu, 0.9)), gpuSum: r1(trimmed(w.gpuSum)), gpuN: w.gpu.length, done: r1(trimmed(w.done)),
       cpu: r1(quantile(w.cpu, 0.5)), draws: w.draws, drawsMin: Number.isFinite(w.drawsMin) ? w.drawsMin : null, tris: w.tris, frames: w.dt.length};
@@ -811,6 +911,7 @@ try {
     {key: 'grass', name: 'без травы', set: on => showAll(field.children, !on)},
     {key: 'tree', name: 'без дерева', set: on => { tree.visible = !on; }},
     {key: 'still', name: 'тени дерева застыли', set: on => { shadowTurns = !on; }, skip: () => !cascades.lights.length},
+    {key: 'leaves', name: 'без падающих листьев', set: on => { fallen.visible = !on; }},
     {key: 'px875', name: sharpness(0.875), set: pixels(0.875)},
     {key: 'px75', name: sharpness(0.75), set: pixels(0.75)},
   ];
@@ -841,7 +942,7 @@ try {
     try { const a = await navigator.gpu?.requestAdapter(), i = a?.info || {};
       gpu = {vendor: i.vendor || '', architecture: i.architecture || '', description: i.description || '', f16: !!a?.features.has('shader-f16')}; } catch {}
     return {ua: navigator.userAgent, screen: `${screen.width}×${screen.height} @${devicePixelRatio}`, canvas: `${canvas.width}×${canvas.height}`,
-      pixels: renderer.getPixelRatio(), level: LEVEL, quality: QUALITY[LEVEL], settle: SETTLE.on, field: 'трава', blades: fieldInfo.blades,
+      pixels: renderer.getPixelRatio(), quality: fell ? 'облегчённое' : 'полное', settle: SETTLE.on, field: 'трава', blades: fieldInfo.blades,
       tree: treeTrouble ? 'не загрузилось' : LIGHT.tree, shadows: LIGHT.shadows ? `${LIGHT.cascades}×${LIGHT.shadowMap}, по очереди` : 'нет',
       cores: navigator.hardwareConcurrency || null, stamps: !!renderer.backend.trackTimestamp, gpu};
   }
@@ -953,7 +1054,8 @@ try {
     let lock = null; try { lock = await navigator.wakeLock?.request('screen'); } catch {}   // keep the screen on, where allowed
     renderer.backend.trackTimestamp = ASK_GPU && !!renderer.backend.device?.features.has('timestamp-query');
     paceReset(); pixels0 = renderer.getPixelRatio(); measure = testFrame;   // all its pixels while measuring; it adapts again after
-    run = {id: `run-${Date.now()}`, kind, at: new Date().toISOString(), finished: false, device: {...await device(), awake: !!lock}, rows: [], log: []};
+    run = {id: `run-${Date.now()}`, kind, target: kind === 'long' ? CADENCE.idle : CADENCE.active, at: new Date().toISOString(), finished: false,
+      device: {...await device(), awake: !!lock}, rows: [], log: []};
     if (lastTest){ run.previousStop = lastTest; lastTest = null; }
     const atMost = (p, ms) => Promise.race([p, new Promise(r => setTimeout(r, ms))]);
     // the first write now, so a question about keeping the data comes while the phone is still in hand
@@ -974,20 +1076,24 @@ try {
 
   step('frames');
   let frames = 0, total = 0, t0 = performance.now();
-  const note = ` · качество: ${QUALITY[LEVEL]}` + (fell ? ` · в прошлый раз закрылось: ${STEPS[lastStep] || lastStep}` : '')
+  const note = (fell ? ` · в прошлый раз закрылось: ${STEPS[lastStep] || lastStep}` : '')
     + (treeTrouble ? ` · дерево не загрузилось: ${treeTrouble}` : '') + (lastTest ? ` · замер прервался: ${lastTest.name}` : '');
   renderer.setAnimationLoop(now => {
-    if (measure){ measure(now); frames = 0; t0 = now; return; }        // a measurement draws its own frames
-    draw(); frames++; pace(now);
-    if (++total === 60) step('done');                                  // it got its frames: it did not fall
+    if (document.hidden) return;
+    const target = measure ? run?.target ?? CADENCE.active : now < activeUntil ? CADENCE.active : CADENCE.idle, interval = 1000/target;
+    if (lastDraw && now - lastDraw < interval - 1) return;
+    lastDraw = now;
+    if (measure){ measure(now); frames = 0; t0 = now; return; }
+    draw(); frames++; pace(now, target);
+    if (++total === 60) step('done');
     if (now - t0 > 1000){
-      const sharp = paceStep ? ` · чёткость ${renderer.getPixelRatio().toFixed(2).replace('.', ',')} (телефон не держал 60)` : '';
+      const sharp = paceStep ? ` · чёткость ${renderer.getPixelRatio().toFixed(2).replace('.', ',')} (не держал ${paceTarget})` : '';
       hud.textContent = `${Math.round(frames*1000/(now - t0))} кадров/с · ${renderer.backend.isWebGPUBackend ? 'WebGPU' : 'WebGL2'} · солнце ${SUN.az}°/${SUN.el}°${note}${sharp}`;
       frames = 0; t0 = now;
     }
   });
-  window.world = {renderer, scene, camera, atmosphere, sun, cascades, pipeline, tree, field, fieldInfo, setSun, windStrength, windDir, parts, hazeDensity, airParts, sunMap, sunCam, sunView, frame, air, airAtlas, drawAir, fieldRT, groundRT, redrawShadows, treeWind, draw, SETTLE, settleKeep, crisp, settle, settled, sharpened, crownParts, treeColour, skyTarget, skyScene, drawSky, startTest, SWITCHES, lastRun: () => run,
-    pace, paceReset, paceState: () => ({step: paceStep, off: paceOff, trying: !!paceTry, pixels: renderer.getPixelRatio()}),
+  window.world = {renderer, scene, camera, atmosphere, sun, cascades, pipeline, tree, field, fieldInfo, setSun, windStrength, windDir, parts, hazeDensity, airParts, sunMap, sunCam, sunView, frame, air, airAtlas, drawAir, fieldRT, groundRT, redrawShadows, treeWind, draw, SETTLE, settleKeep, crisp, settle, settled, sharpened, crownParts, treeColour, fallen, fallWind, skyTarget, skyScene, drawSky, startTest, SWITCHES, lastRun: () => run,
+    pace, paceReset, interact, paceState: () => ({step: paceStep, off: paceOff, trying: !!paceTry, pixels: renderer.getPixelRatio(), target: paceTarget}),
     setExposure: e => { renderer.toneMappingExposure = e; }};   // for checking from the console
 } catch (err) {
   hud.textContent = 'Не запустилось: ' + err.message;
