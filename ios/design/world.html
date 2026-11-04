@@ -9,6 +9,7 @@
 html, body { height: 100%; }
 body { background: var(--bg); color: var(--fg); margin: 0; font: 12px/1.4 ui-monospace, "SF Mono", Menlo, monospace; overflow: hidden; }
 #view { display: block; margin: 0 auto; height: 100%; }
+body.clean #hud, body.clean #lightBtn, body.clean #panel { display: none !important; }
 #hud { position: fixed; left: max(12px, env(safe-area-inset-left, 0px)); bottom: calc(10px + env(safe-area-inset-bottom, 0px));
   right: 64px; color: var(--muted); pointer-events: none; white-space: pre-wrap; font-variant-numeric: tabular-nums; }
 #lightBtn { position: fixed; right: max(12px, env(safe-area-inset-right, 0px)); bottom: calc(8px + env(safe-area-inset-bottom, 0px));
@@ -211,6 +212,8 @@ const LIGHT = fell ? {pixels: 1.5, shadows: true, cascades: 2, shadowMap: 1024, 
   : {pixels: 2, shadows: true, cascades: 3, shadowMap: 2048, tree: 'jacaranda', maps: '', grass: 1, air: 0.5};
 
 const hud = document.getElementById('hud'), canvas = document.getElementById('view');
+const CLEAN = new URLSearchParams(location.search).has('clean');   // (the world alone, under the app's own screens)
+if (CLEAN) document.body.classList.add('clean');
 let treeTrouble = '';                                                 // why the tree did not load, if it did not
 const V3 = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
 const sm = (a, b, x) => { const q = Math.min(1, Math.max(0, (x - a)/(b - a))); return q*q*(3 - 2*q); };
@@ -1077,11 +1080,15 @@ try {
     if (act === 'tree'){ b.aim = new THREE.Vector3(TRUNK.at[0], 0, TRUNK.at[1]); b.top = BOB.dash; }
     if (act === 'mark') b.aim = home();
     if (act === 'go') b.aim = goTo.clone();
+    if (act === 'away'){ b.p.set(TRUNK.at[0] - 2, surf(TRUNK.at[0] - 2, 55) + BOB.radius, 55); b.v.set(0, 0, 0); b.aim = null; }   // (not here yet: over the crest)
+    if (act === 'arrive'){ b.aim = home(); b.top = 3.2; }               // (he comes: over the crest by the tree, down to the mark)
   }
   // touching the world (to play with him in the prototype): on him — he jumps; on the tree — he charges it; anywhere
   // on the field — he rolls there. (The real app is talked to, not touched; here it shows how he lives)
   const goTo = new THREE.Vector3(), aimRay = new THREE.Raycaster();
+  let playable = !CLEAN;
   canvas.addEventListener('pointerdown', e => {
+    if (!playable) return;
     const r = canvas.getBoundingClientRect(), x = (e.clientX - r.left)/r.width*2 - 1, y = 1 - (e.clientY - r.top)/r.height*2;
     const here = body.p.clone().project(camera), act = a => { setBob({act: a}); begin(a, performance.now()/1000); const box = document.getElementById('actAuto'); if (box) box.checked = false; };
     if (Math.hypot((x - here.x)*camera.aspect, y - here.y) < orb.size.value*5) return act('jump');
@@ -1138,6 +1145,7 @@ try {
     const b = body;
     if (actNow === 'roll' && b.aim && Math.hypot(b.aim.x - b.p.x, b.aim.z - b.p.z) < 0.4) b.aim = anywhere();   // (and on he goes)
     for (acc = Math.min(acc + dt, 0.25); acc >= 1/120; acc -= 1/120) stepBody(1/120);
+    if (actNow === 'away'){ b.p.set(TRUNK.at[0] - 2, surf(TRUNK.at[0] - 2, 55) + BOB.radius, 55); b.v.set(0, 0, 0); }   // (waits there, unseen)
     // the tree he knocked: leans away and swings back, dying down; its branches shake a moment
     const since = t - knockT, angle = knockA*Math.exp(-since/1.6)*Math.sin(2*Math.PI*0.9*since);
     treeKnock.value.set(knockDir.z, 0, -knockDir.x).multiplyScalar(angle); treeShake.value = Math.min(1.2, knockA*25)*Math.exp(-since/1.2);
@@ -1178,7 +1186,7 @@ try {
   const setBob = b => { if (b.way || b.state) bob.way = b.way || b.state; if (b.hue !== undefined) bob.hue = +b.hue; if (b.known !== undefined) bob.known = +b.known;
     if (b.act !== undefined) bob.act = b.act || null;
     if (b.level !== undefined){ bob.level = Math.max(0, Math.min(1, +b.level)); bob.heard = performance.now()/1000; } };
-  addEventListener('message', e => { const b = e.data?.bob; if (b) setBob(b); });   // (from the app: {bob: {way, level, hue, known}})
+  addEventListener('message', e => { const b = e.data?.bob; if (b) setBob(b); if (e.data?.play !== undefined) playable = !!e.data.play; });   // (from the app: {bob: {way, level, hue, known}})
   // the grade, the film curve (AgX), and after it colour given back: the film holds bright orange near grey, so the tree
   // and the sky get theirs after it (the bright leaves keep the film's paleness); then a soft darkening toward the
   // corners, and, last, a noise of under one step of the screen's 256, so the sky's long gradients show no bands
