@@ -144,7 +144,7 @@ const SUNSEE = {radius: 0.0065, disc: 12, core: 1.2, veil: 0.12, coreWidth: 0.02
 // there), how far it lies down (1: flat), how long it takes to stand up again (s)
 const BOB = {mark: [-0.5, 10], radius: 0.7, halo: 1.45, ribbons: 0.28, heart: 0.8, light: 9, reach: 8, hue: 38, known: 0,
   g: 9.8, bounce: 0.35, knock: 0.45, drag: 0.9, roll: 0.25, push: 7, top: 4.5, dash: 9, jump: 4.6, hide: 0.32,
-  give: 1.6, lean: 1, rise: 5};
+  give: 2, lean: 1, rise: 10};
 // how much brighter the camera sees as the sun sinks (EV at a height): the sky loses about 1 EV a degree near the
 // horizon, and at a fixed exposure dusk went black
 const DUSK = [[12, 0], [5, 0.85], [1, 2.1], [0, 2.7], [-2, 4.2], [-4, 6.3], [-6, 8.9]];
@@ -395,6 +395,10 @@ try {
   // field's gold thrown back up (Ghost adds the ground's bounce to its ambient)
   const through = (N, L, V, bend, power) => dot(V, normalize(L.add(N.mul(bend))).negate()).clamp(0, 1).pow(power);
   const parts = {sun: uniform(1), sky: uniform(1)};                    // for checking: the sun's share and the sky's
+  // the grass shades itself: deep in a dense field the sun and the sky reach only the upper part of each blade, the
+  // rest lies in the shade of the blades round it (Ghost of Tsushima darkens its grass toward the root the same way).
+  // Lit root to tip, every blade alike, the field ran together — blade into blade, and into the sky
+  const canopySun = () => mix(float(0.08), float(1), smoothstep(0.25, 0.95, uv().y)), canopySky = () => mix(float(0.12), float(1), smoothstep(0.05, 0.9, uv().y));
   class GrassLight extends THREE.LightingModel {
     direct({lightDirection: L, lightColor, reflectedLight}){
       // the sun off a blade's face, and through it from behind: light that passes through a blade comes out in its colour
@@ -402,12 +406,12 @@ try {
       // glowed cream on an orange sky, and the grass there looked see-through
       const N = normalView, V = positionViewDirection, albedo = diffuseColor.rgb, tint = albedo.div(max(albedo.x, max(albedo.y, albedo.z)).max(1e-3));
       const lit = tint.mul(through(N, L, V, 0.2, 4).mul(MEADOW.light.glow)).add(dot(N, L).max(0));
-      reflectedLight.directDiffuse.addAssign(lightColor.mul(parts.sun).mul(lit).mul(BRDF_Lambert({diffuseColor: albedo})));
+      reflectedLight.directDiffuse.addAssign(lightColor.mul(parts.sun).mul(lit).mul(canopySun()).mul(BRDF_Lambert({diffuseColor: albedo})));
     }
     indirect(builder){
       const {irradiance, reflectedLight} = builder.context;
       const bounce = groundLight.mul(MEADOW.light.bounced).mul(float(1).sub(normalWorld.y).mul(0.5));
-      reflectedLight.indirectDiffuse.addAssign(irradiance.add(bounce).mul(parts.sky).mul(BRDF_Lambert({diffuseColor: diffuseColor.rgb})));
+      reflectedLight.indirectDiffuse.addAssign(irradiance.add(bounce).mul(parts.sky).mul(canopySky()).mul(BRDF_Lambert({diffuseColor: diffuseColor.rgb})));
     }
   }
 
@@ -436,7 +440,7 @@ try {
     Object.assign(m, {lights: true, side: THREE.DoubleSide, map: null});   // no map: the shadow pass would look for one
     m.positionNode = spine.add(normalize(cross(T, Nb)).mul(side).mul(aK.y.mul(iS.x).mul(float(2).sub(abs(dot(Nb, V))))));
     const vW = positionWorld, vT = T.toVarying('vT'), vSide = side.toVarying('vSide'), vNr = Nb.toVarying('vNr');
-    const vTint = iS.z.toVarying('vTint'), vMacro = here.g.toVarying('vMacro'), vReach = reach.toVarying('vReach');
+    const vBlade = fract(aK.w.mul(7.31).add(iP.w.mul(3.7))).toVarying('vBlade'), vTint = iS.z.toVarying('vTint'), vMacro = here.g.toVarying('vMacro'), vReach = reach.toVarying('vReach');
     const Vf = normalize(cameraPosition.sub(vW)), facing = select(dot(vNr, Vf).lessThan(0), vNr.negate(), vNr);
     m.normalNode = normalize(cameraViewMatrix.mul(vec4(normalize(facing.add(normalize(cross(vT, vNr)).mul(vSide).mul(0.5))), 0)).xyz);
     // dark at the root, golden, pale at the tip; greener in the field's patches, each clump warmer or cooler, and lighter
@@ -444,7 +448,8 @@ try {
     const v = uv().y, wave = vReach.div(windStrength.mul(0.28).add(0.03)).clamp(0, 1.5);
     m.colorNode = vec4(mix(mix(vec3(...MEADOW.root), vec3(...MEADOW.body), smoothstep(0, 0.45, v)), vec3(...MEADOW.tip), smoothstep(0.5, 1, v))
       .mul(mix(vec3(1), vec3(...MEADOW.green), vMacro.mul(0.6))).mul(mix(vec3(...MEADOW.warm), vec3(...MEADOW.cool), vTint.sub(0.75).div(0.45).clamp(0, 1)))
-      .mul(wave.sub(0.6).mul(MEADOW.waves).add(1)).mul(vTint).mul(mix(float(1), float(0.45), smoothstep(12, 45, length(positionWorld.sub(cameraPosition))))), 1);   // (far off: more shade between the blades)
+      .mul(wave.sub(0.6).mul(MEADOW.waves).add(1)).mul(vTint).mul(mix(float(0.74), float(1.24), vBlade))   // (each blade a shade of its own: dry grass is never one colour)
+      .mul(mix(float(1), float(0.45), smoothstep(12, 45, length(positionWorld.sub(cameraPosition))))), 1);   // (far off: more shade between the blades)
     const model = new GrassLight();
     m.setupLightingModel = () => model; m.receivedShadowNode = underClouds;
     return m;
