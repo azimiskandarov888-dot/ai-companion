@@ -140,11 +140,11 @@ const SUNSEE = {radius: 0.0065, disc: 12, core: 1.2, veil: 0.12, coreWidth: 0.02
 // while new). His body: gravity (m/s²); how much a landing and the trunk throw him back; how much of his speed a
 // second the grass takes (when he is deep in it) and rolling takes; how hard he can push himself (m/s²) and how fast he
 // rolls at most, or charging (m/s); how fast he leaves the ground jumping (m/s); how deep he presses into the grass to
-// hide (m). The grass: how wide it gives way round him (in his radii), how far it leans (of a blade), how long it
-// takes to stand up again (s)
-const BOB = {mark: [-0.5, 10], radius: 0.35, halo: 2.6, ribbons: 0.28, heart: 0.8, light: 6, reach: 7, hue: 38, known: 0,
+// hide (m). The grass: it gives way only where he touches it (in his radii — he is a ball, with no shell round
+// him), how far it leans (of a blade), how long it takes to stand up again (s)
+const BOB = {mark: [-0.5, 10], radius: 0.55, halo: 1.45, ribbons: 0.28, heart: 0.8, light: 9, reach: 8, hue: 38, known: 0,
   g: 9.8, bounce: 0.35, knock: 0.45, drag: 0.9, roll: 0.25, push: 7, top: 4.5, dash: 9, jump: 4.6, hide: 0.32,
-  give: 2.3, lean: 0.75, rise: 2.5};
+  give: 1.08, lean: 0.85, rise: 2.5};
 // how much brighter the camera sees as the sun sinks (EV at a height): the sky loses about 1 EV a degree near the
 // horizon, and at a fixed exposure dusk went black
 const DUSK = [[12, 0], [5, 0.85], [1, 2.1], [0, 2.7], [-2, 4.2], [-4, 6.3], [-6, 8.9]];
@@ -182,6 +182,13 @@ const WIND = {dir: [-0.95, 0.3], strength: 0.55};                    // one wind
 // (per m of crown on the way), what the deepest leaves still get, and how much more the leaves just under the crown's
 // sunlit skin glow (a little: more, and the crown burned like fire)
 const THROUGH = {scale: 0.08, dim: 0.3, least: 0.05, rim: 1.5};
+// ?offscreen: frames keep coming while the window is hidden or covered (the browser then sends none), so the world
+// can be recorded on the Mac by Claude without anyone watching — not for the phone
+const OFFSCREEN = new URLSearchParams(location.search).has('offscreen');
+if (OFFSCREEN){ const mc = new MessageChannel(), waiting = []; let next = 0;
+  mc.port1.onmessage = () => { const now = performance.now(); if (now < next){ mc.port2.postMessage(0); return; }
+    next = now + 1000/60; const due = waiting.splice(0); due.forEach(cb => cb(now)); };
+  window.requestAnimationFrame = cb => { waiting.push(cb); mc.port2.postMessage(0); return waiting.length; }; }
 // for trying values from the address: ?az=…&el=…&exp=…&through=…&haze=…
 { const q = new URLSearchParams(location.search), n = k => q.has(k) ? +q.get(k) : undefined;
   const start = rng(Date.now() % 1e9);                                // (a new sky each visit)
@@ -320,7 +327,7 @@ try {
   const pressQuad = new THREE.QuadMesh(new THREE.NodeMaterial());
   { const xz = vec2(mix(float(PRESS.x[0]), float(PRESS.x[1]), uv().x), mix(float(PRESS.z[0]), float(PRESS.z[1]), uv().y));
     const was = pressBefore.sample(uv()).rg.mul(exp(pressDt.div(-BOB.rise)));   // (standing up again)
-    const d = xz.sub(ballNow.xy), r = length(d), R = ballNow.w.mul(BOB.give), under = float(1).sub(smoothstep(R.mul(0.25), R, r)).mul(ballNow.z);
+    const d = xz.sub(ballNow.xy), r = length(d), R = ballNow.w.mul(BOB.give), under = float(1).sub(smoothstep(R.mul(0.55), R, r)).mul(ballNow.z);
     const away = d.div(r.max(0.02)), along = ballGo.z.min(1).mul(float(1).sub(r.div(R)).clamp(0, 1));   // (under him: along his way)
     const lean = normalize(mix(away, normalize(ballGo.xy.add(vec2(1e-4, 0))), along)).mul(under).mul(BOB.lean);
     pressQuad.material.fragmentNode = vec4(select(length(lean).greaterThan(length(was)), lean, was), 0, 1); }
@@ -846,7 +853,7 @@ try {
     // and the air, which reads the same, went missing everywhere else)
     const far = select(d.lessThan(0.1), float(1e4), d).toVar();
     If(r.lessThan(BOB.halo), () => {
-      const t = orb.flow, deep = float(1).sub(r.mul(r)).max(0).sqrt(), inside = float(1).sub(smoothstep(0.88, 1.0, r));
+      const t = orb.flow, deep = float(1).sub(r.mul(r)).max(0).sqrt(), inside = float(1).sub(smoothstep(0.95, 1.0, r));
       let rib = vec3(0);
       [[0.31, 0.9, orb.warm], [-0.23, 1.3, orb.colour], [0.17, 0.7, orb.cool]].forEach(([w, f, c], i) => {
         const a = t.mul(w).add(orb.spin).add(i*2.1), dir = vec2(cos(a), sin(a)), side = vec2(dir.y.negate(), dir.x);
@@ -854,10 +861,10 @@ try {
         const v = sin(dot(q.add(orb.roll), dir).mul(1.7).add(t.mul(w)).add(sin(dot(q, side).mul(2.3).add(t.mul(f)).add(i)).mul(0.5)));
         rib = rib.add(c.mul(exp(v.div(0.4).pow2().negate())));
       });
-      const body = rib.mul(BOB.ribbons).add(orb.colour.mul(0.05)).mul(deep.mul(0.7).add(0.3)).mul(inside)
+      const body = rib.mul(BOB.ribbons).add(orb.colour.mul(0.08)).mul(deep.mul(0.7).add(0.3)).mul(inside)
         .add(orb.colour.mul(smoothstep(0.7, 0.97, r).mul(inside).mul(0.25)))                  // (a glassy rim)
         .add(vec3(1, 0.95, 0.85).mul(exp(r.pow2().mul(-16))).mul(BOB.heart));                  // (the hot heart)
-      const halo = orb.colour.mul(exp(r.sub(1).max(0).mul(-2.4))).mul(0.14).mul(float(1).sub(smoothstep(1, BOB.halo, r)));
+      const halo = orb.colour.mul(exp(r.sub(1).max(0).mul(-6))).mul(0.08).mul(float(1).sub(smoothstep(1, BOB.halo, r)));   // (a breath of glow: his edge is his edge)
       const seen = smoothstep(orb.far.sub(BOB.radius*2), orb.far.add(BOB.radius*0.5), far);
       out.assign(body.add(halo).mul(orb.glow).mul(seen));
     });
@@ -1041,7 +1048,7 @@ try {
   const body = {p: home(), v: new THREE.Vector3(), ground: false, aim: null, top: BOB.top, sink: 0, deep: 0, jumpIn: -1, landed: 0};
   const BOBWAYS = {rest: {glow: 1, breath: 0.18}, listen: {glow: 1.3, breath: 0.05}, think: {glow: 1.1, breath: 0.04, shimmer: 0.12},
     speak: {glow: 0.95, breath: 0, voice: 1}, cant: {glow: 0.5, breath: 0.1, pale: 0.7}, sleep: {glow: 0.35, breath: 0.3}};
-  const BOBLIFE = [['rest', 5], ['roll', 7], ['rest', 4], ['jump', 3], ['roll', 6], ['hide', 6], ['roll', 5], ['tree', 9], ['roll', 7]];   // «сам»: his day, over and over
+  const BOBLIFE = [['roll', 6], ['rest', 3], ['jump', 3], ['roll', 6], ['tree', 9], ['roll', 7], ['jump', 3], ['hide', 4], ['rest', 3]];   // «сам»: his day, over and over
   const bob = {way: 'auto', act: null, hue: BOB.hue, known: BOB.known, level: 0, heard: -1e9};
   let bobT = performance.now()/1000, bobGlowNow = 1, bobPale = 0, voice = 0, voiceAim = 0, voiceNext = 0, flowNow = 0, acc = 0;
   let actNow = '', actFrom = 0, squashV = 0, squashNow = 1, knockT = -100, knockA = 0;
@@ -1054,7 +1061,21 @@ try {
     if (act === 'jump'){ b.aim = null; b.jumpIn = 0.25; }
     if (act === 'tree'){ b.aim = new THREE.Vector3(TRUNK.at[0], 0, TRUNK.at[1]); b.top = BOB.dash; }
     if (act === 'mark') b.aim = home();
+    if (act === 'go') b.aim = goTo.clone();
   }
+  // touching the world (to play with him in the prototype): on him — he jumps; on the tree — he charges it; anywhere
+  // on the field — he rolls there. (The real app is talked to, not touched; here it shows how he lives)
+  const goTo = new THREE.Vector3(), aimRay = new THREE.Raycaster();
+  canvas.addEventListener('pointerdown', e => {
+    const r = canvas.getBoundingClientRect(), x = (e.clientX - r.left)/r.width*2 - 1, y = 1 - (e.clientY - r.top)/r.height*2;
+    const here = body.p.clone().project(camera), act = a => { setBob({act: a}); begin(a, performance.now()/1000); const box = document.getElementById('actAuto'); if (box) box.checked = false; };
+    if (Math.hypot((x - here.x)*camera.aspect, y - here.y) < orb.size.value*5) return act('jump');
+    aimRay.setFromCamera(new THREE.Vector2(x, y), camera);
+    const o = aimRay.ray.origin, d = aimRay.ray.direction, trunk = new THREE.Vector3(TRUNK.at[0], surf(...TRUNK.at) + 5, TRUNK.at[1]);
+    if (aimRay.ray.distanceToPoint(trunk) < 4) return act('tree');
+    for (let t = 2; t < 140; t += 0.2){ const px = o.x + d.x*t, py = o.y + d.y*t, pz = o.z + d.z*t;
+      if (py <= surf(px, pz) + 0.6){ goTo.set(px, 0, pz); return act('go'); } }   // (where the eye meets the grass)
+  });
   function knockTree(speed, dx, dz){                                   // he hit the trunk this hard, going this way
     const t = performance.now()/1000; knockT = t; knockA = Math.min(0.05, 0.007*speed);
     knockDir.set(dx, 0, dz).applyAxisAngle(up, -THREE.MathUtils.degToRad(TREE.turn));   // (into the tree's own frame)
@@ -1135,7 +1156,7 @@ try {
     orb.size.value = BOB.radius/(2*far*Math.tan(THREE.MathUtils.degToRad(camera.fov/2)));
     bobLight.position.copy(b.p); bobLight.color.copy(orb.colour.value); bobLight.intensity = BOB.light*bobGlowNow*(1 - 0.5*b.deep/BOB.hide);
     // the grass under and round him
-    const low = Math.max(0, Math.min(1, 1 - (b.p.y - BOB.radius - surf(b.p.x, b.p.z) + b.deep)/0.6));
+    const low = Math.max(0, Math.min(1, 1 - (b.p.y - BOB.radius - surf(b.p.x, b.p.z) + b.deep)/0.9));
     ballNow.value.set(b.p.x, b.p.z, low, BOB.radius); ballGo.value.set(b.v.x, b.v.z, speed);
     pressNow(dt);
   }
@@ -1546,7 +1567,7 @@ try {
   const note = (fell ? ` · в прошлый раз закрылось: ${STEPS[lastStep] || lastStep}` : '')
     + (treeTrouble ? ` · дерево не загрузилось: ${treeTrouble}` : '') + (lastTest ? ` · замер прервался: ${lastTest.name}` : '');
   renderer.setAnimationLoop(now => {
-    if (document.hidden) return;
+    if (document.hidden && !OFFSCREEN) return;
     if (lastDraw && now - lastDraw < 750/(measure ? CADENCE.full : paceTarget)) return;   // (¾ of a frame: a screen's uneven beat
                                                                        // must not drop a frame; a 120 Hz one still gets 60)
     lastDraw = now;
