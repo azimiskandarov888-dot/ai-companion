@@ -349,8 +349,12 @@ try {
   const parts = {sun: uniform(1), sky: uniform(1)};                    // for checking: the sun's share and the sky's
   class GrassLight extends THREE.LightingModel {
     direct({lightDirection: L, lightColor, reflectedLight}){
-      const N = normalView, V = positionViewDirection, lit = dot(N, L).max(0).add(through(N, L, V, 0.2, 4).mul(MEADOW.light.glow));
-      reflectedLight.directDiffuse.addAssign(lightColor.mul(parts.sun).mul(lit).mul(BRDF_Lambert({diffuseColor: diffuseColor.rgb})));
+      // the sun off a blade's face, and through it from behind: light that passes through a blade comes out in its colour
+      // (its pigment filters it once more), deep gold, not pale — pale, the tips the low sun still reaches on the crest
+      // glowed cream on an orange sky, and the grass there looked see-through
+      const N = normalView, V = positionViewDirection, albedo = diffuseColor.rgb, tint = albedo.div(max(albedo.x, max(albedo.y, albedo.z)).max(1e-3));
+      const lit = tint.mul(through(N, L, V, 0.2, 4).mul(MEADOW.light.glow)).add(dot(N, L).max(0));
+      reflectedLight.directDiffuse.addAssign(lightColor.mul(parts.sun).mul(lit).mul(BRDF_Lambert({diffuseColor: albedo})));
     }
     indirect(builder){
       const {irradiance, reflectedLight} = builder.context;
@@ -807,10 +811,15 @@ try {
     // big ones to fine flecks and small scattered puffs, not always the same fat clouds
     weathers: [[0.1, 0.2, 0.5, 1], [0.12, 0.45, 0.2, 1], [0.45, 0.15, 0.1, 1.3], [0.05, 0.1, 0.25, 1], [0.3, 0.35, 0.35, 1],
       [0.06, 0.5, 0.15, 0.45], [0.42, 0.08, 0.05, 0.55], [0.15, 0.3, 0.45, 0.7], [0.0, 0.05, 0.6, 1.2]],
-    horizon: 0};                                                       // where the layers seem to meet the sky's edge (° above the true horizon)
+    horizon: 0,                                                        // where the layers seem to meet the sky's edge (° above the true horizon)
+    // a layer is not paper: it has a thickness (m), and a ray low over the horizon crosses it sideways, through kilometres
+    // of it — so there the clouds close up into long bands, as real ones do, with no clear holes between their groups (how
+    // much of a group they all are there: a little over the half, the sky's average); and the mist low over the land,
+    // which those far bands sink into: how thick it is at the horizon, and how high it reaches (as a sine of the height)
+    thick: [600, 400, 250], far: 0.8, mist: [0.5, 0.12]};
   const skies = rng(Date.now() % 1e9 + 13), weather = CLOUDS.weathers[Math.floor(skies()*CLOUDS.weathers.length)];
   const cloudCover = uniform(new THREE.Vector3(...weather.slice(0, 3))), cloudScale = uniform(weather[3]), cloudGain = uniform(0.3), cloudBand = uniform(0);
-  const cloudHorizon = uniform(THREE.MathUtils.degToRad(CLOUDS.horizon));
+  const cloudHorizon = uniform(THREE.MathUtils.degToRad(CLOUDS.horizon)), cloudThick = uniform(1), cloudMist = uniform(CLOUDS.mist[0]), cloudFar = uniform(CLOUDS.far);
   const cloudTarget = new THREE.RenderTarget(1, 1, {type: THREE.HalfFloatType, depthBuffer: false});
   const fbm = (q, z = float(0)) => mx_noise_float(vec3(q, z)).mul(0.5).add(mx_noise_float(vec3(q.mul(2.03), z.add(1.7))).mul(0.25))
     .add(mx_noise_float(vec3(q.mul(4.01), z.add(3.1))).mul(0.125)).mul(0.57).add(0.5);
@@ -823,14 +832,19 @@ try {
     // (the ray's height over the layers' own horizon: the true one, or raised a little where the eye takes the hill's
     // crest for it)
     const el = asin(dir.y.clamp(-1, 1)).sub(cloudHorizon), flat = normalize(dir.xz.add(vec2(1e-5, 0)));
-    const phase = hg(0.8).mul(0.7).add(hg(-0.2).mul(0.3)), rise = sin(el).max(0.02), fade = smoothstep(0.025, 0.12, sin(el));
+    const phase = hg(0.8).mul(0.7).add(hg(-0.2).mul(0.3)), rise = sin(el).max(0.02), fade = smoothstep(0, 0.04, sin(el));
+    // (how far the ray runs sideways through a layer's thickness: next to nothing overhead, kilometres near the horizon;
+    // there one sees the clouds from their side, many behind one another, and they draw out into long bands with no
+    // holes between their groups — a cloud seen far off is a long one: across the view it is drawn out (ahead, across)
+    const sideways = float(1).sub(smoothstep(0.08, 0.4, rise)).mul(cloudThick);
+    const ahead = normalize(eye.world.mul(vec4(0, 0, -1, 0)).xz), across = vec2(ahead.y.negate(), ahead.x), long = mix(float(1), float(0.4), sideways);
     const along = vec2(...WIND.dir).normalize(), side = vec2(-WIND.dir[1], WIND.dir[0]).normalize();
     const wind = along.mul(time.mul(CLOUDS.drift)), grow = time.mul(CLOUDS.change);   // (wind subtracted: they sail with it, as the
     const toSun = normalize(sunDir.xz.add(vec2(0, 1e-4)));             // leaves do; grow: their shapes slowly change)
     // a layer's density at a point: its kind's shape, in a weather of its own — clouds in groups with clear sky between,
     // the groups kilometres wide — and the shape slowly growing and melting (the noise drifts through its third axis)
-    const densityAt = (k, p, cover) => {
-      const z = grow.add(k*5.3);
+    const densityAt = (k, p, cover, up = 0) => {
+      const z = grow.add(k*5.3).add(up);                                // (up: higher or lower in the layer — a cloud changes with it)
       const shape = k === 2 ? fbm(vec2(dot(p, along).mul(0.4), dot(p, side).mul(2.2)), z)
         : k === 1 ? float(1).sub(mx_worley_noise_float(vec3(p, z.add(0.5)))).mul(0.55).add(fbm(p.mul(2), z).mul(0.3)).add(fbm(p.mul(5.3), z).mul(0.15))
         : fbm(p, z).mul(0.6).add(float(1).sub(mx_worley_noise_float(vec3(p.mul(1.3), z.add(2.5)))).mul(0.25)).add(fbm(p.mul(4.7), z).mul(0.15));
@@ -838,12 +852,19 @@ try {
     };
     const L = vec3(0).toVar(), T = float(1).toVar();
     for (const k of [2, 1, 0]){                                        // from the highest down: each in front of the one above
-      const far = rise.reciprocal().mul(CLOUDS.heights[k]), at = flat.mul(cos(el)).mul(far).sub(wind);   // how far the layer lies, and where (m)
-      const groups = smoothstep(0.36, 0.66, fbm(at.div(CLOUDS.groups).add(k*3.7), grow.mul(0.5)));
-      const cover = [cloudCover.x, cloudCover.y, cloudCover.z][k].mul(mix(float(0.2), float(1.6), groups)).min(0.95), p = at.div(cloudScale.mul(CLOUDS.sizes[k]));
+      // the layer looked at three times through its thickness — its bottom, middle and top third — each where the ray
+      // crosses that height (m): overhead the three are one place, low over the horizon kilometres apart
+      const look = t => {
+        const far = rise.reciprocal().mul(sideways.mul(t*CLOUDS.thick[k]).add(CLOUDS.heights[k])), where = flat.mul(cos(el)).mul(far).sub(wind);
+        const at = ahead.mul(dot(where, ahead)).add(across.mul(dot(where, across).mul(long)));
+        const groups = mix(smoothstep(0.36, 0.66, fbm(at.div(CLOUDS.groups).add(k*3.7), grow.mul(0.5))), cloudFar, sideways);
+        const cover = [cloudCover.x, cloudCover.y, cloudCover.z][k].mul(mix(float(0.2), float(1.6), groups)).min(0.95), p = at.div(cloudScale.mul(CLOUDS.sizes[k]));
+        return {far, cover, p, dens: densityAt(k, p, cover, sideways.mul(t*0.6))};
+      };
+      const {far, cover, p, dens: middle} = look(0);
       // (and the air between thins a far cloud out, as it does a far hill: a layer 30 km off melts into the haze over the
       // horizon instead of diving behind the crest sharp — the higher, the thinner the air)
-      const dens = densityAt(k, p, cover).mul(fade).mul(exp(far.div(-CLOUDS.clear[k])));
+      const dens = middle.add(look(-1/3).dens).add(look(1/3).dens).div(3).mul(fade).mul(exp(far.div(-CLOUDS.clear[k])));
       const tau = dens.mul(CLOUDS.depth[k]).div(rise.mul(4).add(0.2)).min(8), Ti = exp(tau.negate());
       if (lit){
         // light from the sun reaches a point through the cloud between it and the sun: a second look a little toward the
@@ -860,9 +881,14 @@ try {
   cloudQuad.material.fragmentNode = Fn(() => {
     const at = uv();
     If(floor(at.y.mul(CLOUDS.bands)).notEqual(cloudBand), () => { Discard(); });
-    const {L, T} = cloudsAlong(normalize(eye.world.mul(vec4(getViewPosition(at, float(1), clean), 0)).xyz), true);
-    return vec4(mix(vec3(luminance(L)), L, 0.8).mul(SKY.exposure).mul(cloudGain), T);   // (a little less colour: the sky's grade
-  })();                                                                // gives them more, and sunset clouds went neon)
+    const dir = normalize(eye.world.mul(vec4(getViewPosition(at, float(1), clean), 0)).xyz), {L, T} = cloudsAlong(dir, true);
+    // the mist over the land, in front of the far clouds: the sky's own colour there, paler and a little brighter — what
+    // the far bands sink into, so the sky over the crest is haze, not an empty gap
+    const sky = texture(skyTarget.texture, at).rgb, mist = exp(dir.y.max(0).div(-CLOUDS.mist[1])).mul(cloudMist);
+    const veil = mix(vec3(luminance(sky)), sky, 0.9).mul(1.12);
+    const lit = mix(vec3(luminance(L)), L, 0.8).mul(SKY.exposure).mul(cloudGain);   // (a little less colour: the sky's grade
+    return vec4(mix(lit, veil, mist), T.mul(float(1).sub(mist)));        // gives them more, and sunset clouds went neon)
+  })();
   sunThroughQuad.material.fragmentNode = Fn(() => vec4(cloudsAlong(sunDir, false).T, 0, 0, 1))();
   const cloudsSeen = texture(cloudTarget.texture, screenUV);
   scene.backgroundNode = vec4(texture(skyTarget.texture, screenUV).rgb.mul(cloudsSeen.a).add(cloudsSeen.rgb), 1);
@@ -892,7 +918,7 @@ try {
     const dir = normalize(eye.world.mul(vec4(getViewPosition(uv(), float(1), clean), 0)).xyz);
     const off = float(1).sub(dot(dir, sunDir)).mul(2).max(0).sqrt();   // the angle from the sun
     const level = mix(float(3), sunSee.disc, smoothstep(0.03, 0.26, sunUp));   // (a low sun dimmer, so the film keeps it red, not white)
-    const disc = smoothstep(sunSee.radius.add(0.0008), sunSee.radius.sub(0.0008), off).mul(sharpened.a.negate().max(0)).mul(level);
+    const disc = smoothstep(sunSee.radius.add(0.0008), sunSee.radius.sub(0.0008), off).mul(sharpened.a.negate().max(0)).mul(level).mul(cloudsSeen.a);   // (a cloud in front hides it)
     const glow = exp(off.div(sunSee.coreWidth).pow2().negate()).mul(sunSee.core).add(exp(off.div(sunSee.veilWidth).negate()).mul(sunSee.veil)).mul(shows);
     return tint.mul(disc.add(glow)).div(exposureNow).mul(select(sunUp.greaterThan(-0.02), float(1), float(0)));
   })();
@@ -1286,7 +1312,7 @@ try {
       frames = 0; t0 = now;
     }
   });
-  window.world = {renderer, scene, camera, atmosphere, sun, cascades, pipeline, tree, field, fieldInfo, setSun, windStrength, windDir, parts, hazeDensity, airParts, sunMap, sunCam, sunView, frame, air, airAtlas, drawAir, fieldRT, groundRT, redrawShadows, treeWind, draw, SETTLE, settleKeep, crisp, settle, settled, sharpened, crownParts, treeColour, skyColour, sunSee, sunPeek, setMood, mood, cloudCover, cloudScale, cloudHorizon, cloudGain, cloudTarget, fallen, fallWind, skyTarget, skyScene, drawSky, startTest, SWITCHES, lastRun: () => run,
+  window.world = {renderer, scene, camera, atmosphere, sun, cascades, pipeline, tree, field, fieldInfo, setSun, windStrength, windDir, parts, hazeDensity, airParts, sunMap, sunCam, sunView, frame, air, airAtlas, drawAir, fieldRT, groundRT, redrawShadows, treeWind, draw, SETTLE, settleKeep, crisp, settle, settled, sharpened, crownParts, treeColour, skyColour, sunSee, sunPeek, setMood, mood, cloudCover, cloudScale, cloudHorizon, cloudThick, cloudMist, cloudFar, cloudGain, cloudTarget, fallen, fallWind, skyTarget, skyScene, drawSky, startTest, SWITCHES, lastRun: () => run,
     pace, paceReset, paceState: () => ({step: paceStep, off: paceOff, trying: !!paceTry, pixels: renderer.getPixelRatio(), target: paceTarget}),
     setExposure: e => { renderer.toneMappingExposure = e; }};   // for checking from the console
 } catch (err) {
