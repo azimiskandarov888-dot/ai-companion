@@ -250,6 +250,7 @@ try {
   renderer.library.addLight(AtmosphereLightNode, AtmosphereLight);
   const sun = new AtmosphereLight(120);
   sun.castShadow = LIGHT.shadows; sun.shadow.mapSize.set(LIGHT.shadowMap, LIGHT.shadowMap);
+  sun.shadow.camera.layers.enable(1);                                  // (the tree kept for its shadow: below)
   sun.target.position.set(0, 4, 25);
   // the camera, the sun and the hill hold still, and the grass casts no shadow, so the shadows are not all drawn every
   // frame (that took more than a quarter of a phone's frame): only the tree moves, so, as Genshin Impact does it, the
@@ -475,8 +476,12 @@ try {
   }
   const draco = new DRACOLoader().setDecoderPath('field-assets/draco/');
   // the field stands even if the tree cannot load: then the line at the bottom says why
-  const [gltf, ...textures] = await Promise.all([loadTree(`field-assets/ph/${LIGHT.tree}.gltf.json`, new GLTFLoader().setDRACOLoader(draco))
+  // and the same tree thinned to a third (import_tree.py, keep 0.07), only for its shadow: the shadow needs its shape, not
+  // each leaf's, and the full tree drawn into the sun's shadow every other frame was a sixth of the GPU's work (not in the
+  // lighter look, for memory: there the tree casts its own)
+  const [gltf, shade, ...textures] = await Promise.all([loadTree(`field-assets/ph/${LIGHT.tree}.gltf.json`, new GLTFLoader().setDRACOLoader(draco))
     .catch(err => { treeTrouble = err.message || String(err); console.error(err); return {scene: new THREE.Group()}; }),
+    fell ? null : loadTree(`field-assets/ph/${LIGHT.tree}-shadow.gltf.json`, new GLTFLoader().setDRACOLoader(draco)).catch(err => { console.error(err); return null; }),
     ...Object.values(maps).flatMap(([c, n]) => [load(c, true), load(n, false)])]);
   const texOf = {}; Object.keys(maps).forEach((k, i) => texOf[k] = [textures[2*i], textures[2*i + 1]]);
   const tree = new THREE.Group();
@@ -523,7 +528,14 @@ try {
     mat.receivedShadowNode = underClouds;                              // (the leaves' own, below, takes it too)
     if (o.geometry.attributes.color_1 && o.geometry.attributes.color_2) mat.positionNode = swayed();
     const mesh = new THREE.Mesh(o.geometry, mat);
-    mesh.castShadow = mesh.receiveShadow = true; tree.add(mesh);
+    mesh.castShadow = !shade; mesh.receiveShadow = true; tree.add(mesh);
+  });
+  shade?.scene.traverse(o => {                                         // seen only by the sun's shadow (layer 1), swaying the same
+    if (!o.isMesh) return;
+    const mat = new THREE.MeshBasicNodeMaterial({side: THREE.DoubleSide});
+    if (o.geometry.attributes.color_1 && o.geometry.attributes.color_2) mat.positionNode = swayed();
+    const mesh = new THREE.Mesh(o.geometry, mat);
+    mesh.castShadow = true; mesh.receiveShadow = false; mesh.layers.set(1); tree.add(mesh);
   });
   tree.position.set(TREE.at[0], ground(...TREE.at) - 0.1, TREE.at[1]); tree.rotation.y = THREE.MathUtils.degToRad(TREE.turn);
   scene.add(tree);
@@ -541,7 +553,8 @@ try {
   const AIR = 3, sunMap = new THREE.RenderTarget(1024, 1024);         // the sun's view of what shades the air
   sunMap.depthTexture = new THREE.DepthTexture(1024, 1024);
   const sunCam = new THREE.OrthographicCamera(-48, 48, 48, -48, 1, 500), sunView = uniform(new THREE.Matrix4());
-  sunCam.layers.set(AIR); hillMesh.layers.enable(AIR); tree.traverse(o => o.layers.enable(AIR));
+  sunCam.layers.set(AIR); hillMesh.layers.enable(AIR);
+  tree.traverse(o => { if (o.isMesh && (!shade || o.layers.isEnabled(1))) o.layers.enable(AIR); });   // (the thinned tree, where there is one)
   const solid = new THREE.MeshBasicNodeMaterial({side: THREE.DoubleSide, colorWrite: false});
   function drawSunMap(){                                               // once, and when the sun moves: the tree and the hill hold still
     const at = new THREE.Vector3(2, 5, 32);
@@ -796,16 +809,17 @@ try {
     sunAt.value.set(p.x*0.5 + 0.5, 0.5 - p.y*0.5);
     const v = SUNSEE.radius/(2*Math.tan(THREE.MathUtils.degToRad(camera.fov/2))); sunSpan.value.set(v/camera.aspect, v);
   }
-  // ── clouds (the research's step 4): thin lit layers drawn into a picture of their own at half the screen's size, with
-  // the cached sky behind them — so a moving sun does not redraw them, and they hide its disc. Three kinds in one shader:
-  // stratocumulus low, altocumulus («барашки») higher, cirrus high and drawn out along the wind. Each is lit by the sun's
-  // light here, from the atmosphere, through its own depth (Beer's law, with the powder of a cloud's thin edge), most
-  // toward the sun (two Henyey–Greenstein lobes), and by the sky's light; they thin out toward the horizon. They drift
-  // so slowly that a thirty-second of the picture, one band, is drawn afresh a frame, and no one sees it. Each visit has its
+  // ── clouds (the research's step 4): thin lit layers drawn into a picture of their own, a quarter of the screen's size
+  // (they are soft), with the cached sky behind them — so a moving sun does not redraw them, and they hide its disc. Three
+  // kinds in one shader: stratocumulus low, altocumulus («барашки») higher, cirrus high and drawn out along the wind.
+  // Each is lit by the sun's light here, from the atmosphere, through its own depth (Beer's law, with the powder of a
+  // cloud's thin edge), most toward the sun (two Henyey–Greenstein lobes), and by the sky's light; they thin out toward
+  // the horizon. They drift so slowly that a sixty-fourth of the picture, one band, is drawn afresh a frame, and no one
+  // sees it (each band once a second: the fastest clouds have moved a point by then). Each visit has its
   // own weather; sadness brings more of the low grey layer, slowly. Heights and sizes (m), depths, how far the air
   // lets each be seen (m), drift (m/s); how wide a group of clouds is (m), how fast their shapes change, how far toward
   // the sun a cloud looks for its own shade (in its sizes)
-  const CLOUDS = {heights: [1500, 3500, 8000], sizes: [1600, 650, 2600], depth: [5, 2.5, 0.5], clear: [14000, 22000, 45000], drift: 6, bands: 32,
+  const CLOUDS = {heights: [1500, 3500, 8000], sizes: [1600, 650, 2600], depth: [5, 2.5, 0.5], clear: [14000, 22000, 45000], drift: 6, bands: 64, res: 4,   // (res: the screen's size divided by)
     groups: 9000, change: 0.0025, lightStep: 0.25,
     // the weathers a visit may have: how much of the low, middle and high layer, and how large the clouds (×): from a few
     // big ones to fine flecks and small scattered puffs, not always the same fat clouds
@@ -818,7 +832,7 @@ try {
     // which those far bands sink into: how thick it is at the horizon, and how high it reaches (as a sine of the height)
     thick: [600, 400, 250], far: 0.8, mist: [0.5, 0.12]};
   const skies = rng(Date.now() % 1e9 + 13), weather = CLOUDS.weathers[Math.floor(skies()*CLOUDS.weathers.length)];
-  const cloudCover = uniform(new THREE.Vector3(...weather.slice(0, 3))), cloudScale = uniform(weather[3]), cloudGain = uniform(0.3), cloudBand = uniform(0);
+  const cloudCover = uniform(new THREE.Vector3(...weather.slice(0, 3))), cloudScale = uniform(weather[3]), cloudGain = uniform(0.3);
   const cloudHorizon = uniform(THREE.MathUtils.degToRad(CLOUDS.horizon)), cloudThick = uniform(1), cloudMist = uniform(CLOUDS.mist[0]), cloudFar = uniform(CLOUDS.far);
   const cloudTarget = new THREE.RenderTarget(1, 1, {type: THREE.HalfFloatType, depthBuffer: false});
   const fbm = (q, z = float(0)) => mx_noise_float(vec3(q, z)).mul(0.5).add(mx_noise_float(vec3(q.mul(2.03), z.add(1.7))).mul(0.25))
@@ -882,7 +896,6 @@ try {
   const cloudQuad = new THREE.QuadMesh(new THREE.NodeMaterial()), sunThroughQuad = new THREE.QuadMesh(new THREE.NodeMaterial());
   cloudQuad.material.fragmentNode = Fn(() => {
     const at = uv();
-    If(floor(at.y.mul(CLOUDS.bands)).notEqual(cloudBand), () => { Discard(); });
     const dir = normalize(eye.world.mul(vec4(getViewPosition(at, float(1), clean), 0)).xyz), {L, T} = cloudsAlong(dir, true);
     // the mist over the land, in front of the far clouds: the sky's own colour there, paler and a little brighter — what
     // the far bands sink into, so the sky over the crest is haze, not an empty gap
@@ -895,11 +908,18 @@ try {
   const cloudsSeen = texture(cloudTarget.texture, screenUV);
   scene.backgroundNode = vec4(texture(skyTarget.texture, screenUV).rgb.mul(cloudsSeen.a).add(cloudsSeen.rgb), 1);
   let cloudsHeld = false;                                              // (for the test: what drawing them costs)
-  function cloudsNow(){                                                // one band a frame
-    cloudBand.value = (cloudBand.value + 1) % CLOUDS.bands;
+  // one band a frame, cut out with the scissor: the GPU then shades no pixel outside it. (Discarding the pixels outside
+  // in the shader did not spare them: in WebGPU a discarded pixel still runs to the shader's end — every pixel of the
+  // clouds was worked out every frame, two thirds of all the GPU's work)
+  let cloudBand = 0;
+  function cloudsNow(){
+    cloudBand = (cloudBand + 1) % CLOUDS.bands;
     const was = renderer.getRenderTarget(), clear = renderer.autoClear; renderer.autoClear = false;
-    renderer.setRenderTarget(cloudTarget); cloudQuad.render(renderer);
-    renderer.setRenderTarget(sunThroughRT); sunThroughQuad.render(renderer);   // (one pixel: how much sun the clouds let by)
+    const H = cloudTarget.height, from = Math.floor(cloudBand*H/CLOUDS.bands), to = Math.floor((cloudBand + 1)*H/CLOUDS.bands);
+    cloudTarget.scissor.set(0, from, cloudTarget.width, to - from); renderer.setScissorTest(true);
+    renderer.setRenderTarget(cloudTarget); cloudQuad.render(renderer); renderer.setScissorTest(false);
+    // (one pixel: how much sun the clouds let by — every 8th frame: it changes slowly)
+    if (cloudBand % 8 === 0){ renderer.setRenderTarget(sunThroughRT); sunThroughQuad.render(renderer); }
     renderer.setRenderTarget(was); renderer.autoClear = clear;
   }
   setInterval(() => {                                                  // the weather drifts toward the mood's, slowly
@@ -972,7 +992,7 @@ try {
     clean.value.copy(camera.projectionMatrixInverse); placeSun();
     airSize(); redrawShadows();
     skyTarget.setSize(Math.round(w*dpr), Math.round(h*dpr)); drawSky();
-    cloudTarget.setSize(Math.round(w*dpr/2), Math.round(h*dpr/2));   // (clear: no clouds, till its bands are drawn)
+    cloudTarget.setSize(Math.round(w*dpr/CLOUDS.res), Math.round(h*dpr/CLOUDS.res));   // (clear: no clouds, till its bands are drawn)
     { const was = renderer.getRenderTarget(); renderer.setRenderTarget(cloudTarget); renderer.setClearColor(0x000000, 1); renderer.clear(); renderer.setRenderTarget(was); }
   }
   addEventListener('resize', resize); resize();
