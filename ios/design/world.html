@@ -801,11 +801,11 @@ try {
   // stratocumulus low, altocumulus («барашки») higher, cirrus high and drawn out along the wind. Each is lit by the sun's
   // light here, from the atmosphere, through its own depth (Beer's law, with the powder of a cloud's thin edge), most
   // toward the sun (two Henyey–Greenstein lobes), and by the sky's light; they thin out toward the horizon. They drift
-  // so slowly that a sixteenth of the picture, one band, is drawn afresh a frame, and no one sees it. Each visit has its
+  // so slowly that a thirty-second of the picture, one band, is drawn afresh a frame, and no one sees it. Each visit has its
   // own weather; sadness brings more of the low grey layer, slowly. Heights and sizes (m), depths, how far the air
   // lets each be seen (m), drift (m/s); how wide a group of clouds is (m), how fast their shapes change, how far toward
   // the sun a cloud looks for its own shade (in its sizes)
-  const CLOUDS = {heights: [1500, 3500, 8000], sizes: [1600, 650, 2600], depth: [5, 2.5, 0.5], clear: [14000, 22000, 45000], drift: 6, bands: 16,
+  const CLOUDS = {heights: [1500, 3500, 8000], sizes: [1600, 650, 2600], depth: [5, 2.5, 0.5], clear: [14000, 22000, 45000], drift: 6, bands: 32,
     groups: 9000, change: 0.0025, lightStep: 0.25,
     // the weathers a visit may have: how much of the low, middle and high layer, and how large the clouds (×): from a few
     // big ones to fine flecks and small scattered puffs, not always the same fat clouds
@@ -854,14 +854,16 @@ try {
     for (const k of [2, 1, 0]){                                        // from the highest down: each in front of the one above
       // the layer looked at three times through its thickness — its bottom, middle and top third — each where the ray
       // crosses that height (m): overhead the three are one place, low over the horizon kilometres apart
-      const look = t => {
+      // (the groups looked up once, in the middle: where the three looks part, far off, the groups give way to the
+      // average anyway)
+      const spot = t => {
         const far = rise.reciprocal().mul(sideways.mul(t*CLOUDS.thick[k]).add(CLOUDS.heights[k])), where = flat.mul(cos(el)).mul(far).sub(wind);
-        const at = ahead.mul(dot(where, ahead)).add(across.mul(dot(where, across).mul(long)));
-        const groups = mix(smoothstep(0.36, 0.66, fbm(at.div(CLOUDS.groups).add(k*3.7), grow.mul(0.5))), cloudFar, sideways);
-        const cover = [cloudCover.x, cloudCover.y, cloudCover.z][k].mul(mix(float(0.2), float(1.6), groups)).min(0.95), p = at.div(cloudScale.mul(CLOUDS.sizes[k]));
-        return {far, cover, p, dens: densityAt(k, p, cover, sideways.mul(t*0.6))};
+        return {far, at: ahead.mul(dot(where, ahead)).add(across.mul(dot(where, across).mul(long)))};
       };
-      const {far, cover, p, dens: middle} = look(0);
+      const {far, at} = spot(0), size = cloudScale.mul(CLOUDS.sizes[k]), p = at.div(size);
+      const groups = mix(smoothstep(0.36, 0.66, fbm(at.div(CLOUDS.groups).add(k*3.7), grow.mul(0.5))), cloudFar, sideways);
+      const cover = [cloudCover.x, cloudCover.y, cloudCover.z][k].mul(mix(float(0.2), float(1.6), groups)).min(0.95);
+      const look = t => ({dens: densityAt(k, spot(t).at.div(size), cover, sideways.mul(t*0.6))}), middle = densityAt(k, p, cover);
       // (and the air between thins a far cloud out, as it does a far hill: a layer 30 km off melts into the haze over the
       // horizon instead of diving behind the crest sharp — the higher, the thinner the air)
       const dens = middle.add(look(-1/3).dens).add(look(1/3).dens).div(3).mul(fade).mul(exp(far.div(-CLOUDS.clear[k])));
@@ -892,6 +894,7 @@ try {
   sunThroughQuad.material.fragmentNode = Fn(() => vec4(cloudsAlong(sunDir, false).T, 0, 0, 1))();
   const cloudsSeen = texture(cloudTarget.texture, screenUV);
   scene.backgroundNode = vec4(texture(skyTarget.texture, screenUV).rgb.mul(cloudsSeen.a).add(cloudsSeen.rgb), 1);
+  let cloudsHeld = false;                                              // (for the test: what drawing them costs)
   function cloudsNow(){                                                // one band a frame
     cloudBand.value = (cloudBand.value + 1) % CLOUDS.bands;
     const was = renderer.getRenderTarget(), clear = renderer.autoClear; renderer.autoClear = false;
@@ -939,7 +942,7 @@ try {
   let jitter = 0;
   function draw(){                                                     // one frame, shifted by a fraction of a pixel while smoothing
     if (skyFrames > 0){ skyFrames--; skyNow(); }
-    cloudsNow();
+    if (!cloudsHeld) cloudsNow();
     if (later.length) later.shift()();
     fieldNow();                                                        // this frame's gusts, and the field's light after the sun moved
     if (shadowFrames > 0){ shadowFrames--; sun.shadow.needsUpdate = true; cascades.lights.forEach(l => { l.shadow.needsUpdate = true; }); }
@@ -1131,6 +1134,7 @@ try {
     {key: 'tree', name: 'без дерева', set: on => { tree.visible = !on; }},
     {key: 'still', name: 'тени дерева застыли', set: on => { shadowTurns = !on; }, skip: () => !cascades.lights.length},
     {key: 'leaves', name: 'без падающих листьев', set: on => { fallen.visible = !on; }},
+    {key: 'clouds', name: 'облака не рисуются', set: on => { cloudsHeld = on; }},
     {key: 'px875', name: sharpness(0.875), set: pixels(0.875)},
     {key: 'px75', name: sharpness(0.75), set: pixels(0.75)},
   ];
