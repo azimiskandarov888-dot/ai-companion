@@ -142,7 +142,7 @@ const SUNSEE = {radius: 0.0065, disc: 12, core: 1.2, veil: 0.12, coreWidth: 0.02
 // rolls at most, or charging (m/s); how fast he leaves the ground jumping (m/s); how deep he presses into the grass to
 // hide (m). The grass: it gives way only where he touches it (in his radii — he is a ball, with no shell round
 // him), how far it leans (of a blade), how long it takes to stand up again (s)
-const BOB = {mark: [-0.5, 10], radius: 0.55, halo: 1.45, ribbons: 0.28, heart: 0.8, light: 9, reach: 8, hue: 38, known: 0,
+const BOB = {mark: [-0.5, 10], radius: 0.7, halo: 1.45, ribbons: 0.28, heart: 0.8, light: 9, reach: 8, hue: 38, known: 0,
   g: 9.8, bounce: 0.35, knock: 0.45, drag: 0.9, roll: 0.25, push: 7, top: 4.5, dash: 9, jump: 4.6, hide: 0.32,
   give: 1.08, lean: 0.85, rise: 2.5};
 // how much brighter the camera sees as the sun sinks (EV at a height): the sky loses about 1 EV a degree near the
@@ -865,7 +865,8 @@ try {
         .add(orb.colour.mul(smoothstep(0.7, 0.97, r).mul(inside).mul(0.25)))                  // (a glassy rim)
         .add(vec3(1, 0.95, 0.85).mul(exp(r.pow2().mul(-16))).mul(BOB.heart));                  // (the hot heart)
       const halo = orb.colour.mul(exp(r.sub(1).max(0).mul(-6))).mul(0.08).mul(float(1).sub(smoothstep(1, BOB.halo, r)));   // (a breath of glow: his edge is his edge)
-      const seen = smoothstep(orb.far.sub(BOB.radius*2), orb.far.add(BOB.radius*0.5), far);
+      // (hidden only by what stands in front of his surface there — not by blades inside him, which he has bent away)
+      const front = orb.far.sub(deep.mul(BOB.radius)), seen = smoothstep(front.sub(0.12), front.add(0.04), far);
       out.assign(body.add(halo).mul(orb.glow).mul(seen));
     });
     return out;
