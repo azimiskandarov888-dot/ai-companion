@@ -999,21 +999,38 @@ try {
 
   // ══ Sixty frames a second, all the time: on the main screen one looks and talks, and does not touch. If this phone
   // cannot keep them (two seconds running, twice), the world draws fewer pixels: 2 → 1.75 → 1.5 per screen point at most
-  // (the smoothing over time hides most of it). Each step is tried. When none is left, or one does not help (Low Power
-  // Mode gives 30 frames a second whatever is drawn), the world draws thirty frames a second and stays there, so that a
-  // phone grown hot over a long talk can cool
-  const PACE = {steps: [1, 0.875, 0.75], window: 2000}, CADENCE = {full: 60, cool: 30};
+  // (the smoothing over time hides most of it). Each step is tried. When none is left, or one does not help, the world
+  // draws thirty frames a second, so that a phone grown hot over a long talk can cool — and after two minutes tries
+  // sixty again (a phone cools).
+  // But a steady thirty that the GPU is not behind — it finished its frame long before the next was asked for — is not
+  // this phone failing: Safari or iOS gives the page only thirty (Safari does so for a page shown inside another site's
+  // page — as claude.ai shows this one — till it is touched; Low Power Mode; a hot phone). Fewer pixels would not help
+  // then: the world waits, ready for sixty, and says why. (Taking that for "cannot keep up" sent it to thirty for good
+  // the moment it was opened.) How long the GPU took is heard once a window, not every frame: asking every frame made
+  // Safari wait
+  const PACE = {steps: [1, 0.875, 0.75], window: 2000, retry: 120e3}, CADENCE = {full: 60, cool: 30};
   let paceGaps = [], paceLast = 0, paceFrom = 0, paceStep = 0, paceLate = 0, paceTry = null, paceOff = false, paceTarget = CADENCE.full;
-  let lastDraw = 0;
+  let lastDraw = 0, paceCooled = 0, paceHeld = false, gpuLag = null, gpuAsking = false, touched = false;
+  const inside = window.top !== window;                                // (shown inside another page, as claude.ai shows it)
+  addEventListener('pointerdown', () => { touched = true; }, {capture: true, passive: true});
   const setPace = () => { renderer.setPixelRatio(pixelsMax*PACE.steps[paceStep]); airSize(); };
-  const cool = () => { paceTarget = CADENCE.cool; paceOff = true; };
+  const cool = () => { paceTarget = CADENCE.cool; paceOff = true; paceCooled = performance.now(); };
   document.addEventListener('visibilitychange', () => { lastDraw = paceLast = 0; });
+  function hearGpu(){                                                  // when the GPU finishes the frame just sent
+    const queue = renderer.backend.device?.queue; if (!queue || gpuAsking) return;
+    gpuAsking = true; const t = performance.now();
+    queue.onSubmittedWorkDone().then(() => { gpuLag = performance.now() - t; }).catch(() => {}).finally(() => { gpuAsking = false; });
+  }
   function pace(now){
     const gap = paceLast ? now - paceLast : 0; paceLast = now;
-    if (paceOff || skyFrames > 0 || shadowFrames > 0 || airWarm > 0 || gap > 250){ paceGaps = []; paceFrom = now; return; }
+    if (paceOff){ if (now - paceCooled > PACE.retry) paceReset(); return; }
+    if (skyFrames > 0 || shadowFrames > 0 || airWarm > 0 || gap > 250){ paceGaps = []; paceFrom = now; return; }
     paceGaps.push(gap);
+    if (paceGaps.length === 20) hearGpu();
     if (now - paceFrom < PACE.window) return;
-    const fps = 1000*paceGaps.length/(now - paceFrom); paceGaps = []; paceFrom = now;
+    const gaps = paceGaps, fps = 1000*gaps.length/(now - paceFrom); paceGaps = []; paceFrom = now;
+    paceHeld = gaps.filter(g => g > 28 && g < 40).length > 0.9*gaps.length && ((inside && !touched) || (gpuLag !== null && gpuLag < 20));
+    if (paceHeld){ paceLate = 0; return; }                             // (held at thirty from outside: wait)
     if (paceTry){                                                      // the last step down: did it help?
       if (--paceTry.windows > 0) return;
       if (fps < paceTry.fps*1.1){ paceStep--; setPace(); cool(); }
@@ -1024,7 +1041,7 @@ try {
     paceLate = 0;
     if (paceStep < PACE.steps.length - 1){ paceStep++; setPace(); paceTry = {fps, windows: 2}; } else cool();
   }
-  function paceReset(){ paceStep = 0; paceLate = 0; paceTry = null; paceOff = false; paceGaps = []; paceLast = 0; paceTarget = CADENCE.full; setPace(); }
+  function paceReset(){ paceStep = 0; paceLate = 0; paceTry = null; paceOff = paceHeld = false; paceGaps = []; paceLast = 0; paceTarget = CADENCE.full; setPace(); }
 
   // the sky's life (SKYLIFE): every few seconds the sun takes a small step toward where the mood wants it, wandering a
   // little on its own; the haze thickens a touch in sadness. Paused while measuring, so a test sees one sky
@@ -1331,13 +1348,14 @@ try {
     if (++total === 60) step('done');
     if (now - t0 > 1000){
       const sharp = (paceStep ? ` · чёткость ${renderer.getPixelRatio().toFixed(2).replace('.', ',')} (не держал 60)` : '')
-        + (paceTarget < CADENCE.full ? ' · 30 кадров/с: телефон не держит 60, бережёт себя' : '');
+        + (paceTarget < CADENCE.full ? ' · 30 кадров/с: телефон не держит 60, бережёт себя (через 2 мин попробует снова)'
+          : paceHeld ? (inside && !touched ? ' · 30 кадров/с даёт Safari, пока не коснёшься картинки' : ' · 30 кадров/с даёт iPhone (энергосбережение или нагрев)') : '');
       hud.textContent = `${Math.round(frames*1000/(now - t0))} кадров/с · ${renderer.backend.isWebGPUBackend ? 'WebGPU' : 'WebGL2'} · солнце ${SUN.az.toFixed(1)}°/${SUN.el.toFixed(1)}°${note}${sharp}`;
       frames = 0; t0 = now;
     }
   });
   window.world = {renderer, scene, camera, atmosphere, sun, cascades, pipeline, tree, field, fieldInfo, setSun, windStrength, windDir, parts, hazeDensity, airParts, sunMap, sunCam, sunView, frame, air, airAtlas, drawAir, fieldRT, groundRT, redrawShadows, treeWind, draw, SETTLE, settleKeep, crisp, settle, settled, sharpened, crownParts, treeColour, skyColour, sunSee, sunPeek, setMood, mood, cloudCover, cloudScale, cloudHorizon, cloudThick, cloudMist, cloudFar, cloudGain, cloudTarget, fallen, fallWind, skyTarget, skyScene, drawSky, startTest, SWITCHES, lastRun: () => run,
-    pace, paceReset, paceState: () => ({step: paceStep, off: paceOff, trying: !!paceTry, pixels: renderer.getPixelRatio(), target: paceTarget}),
+    pace, paceReset, paceState: () => ({step: paceStep, off: paceOff, trying: !!paceTry, held: paceHeld, gpuLag, pixels: renderer.getPixelRatio(), target: paceTarget}),
     setExposure: e => { renderer.toneMappingExposure = e; }};   // for checking from the console
 } catch (err) {
   hud.textContent = 'Не запустилось: ' + err.message;
