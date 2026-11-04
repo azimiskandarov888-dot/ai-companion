@@ -55,6 +55,10 @@ body { background: var(--bg); color: var(--fg); margin: 0; font: 12px/1.4 ui-mon
   <label>Ветер <span id="windOut"></span><input id="wind" type="range" min="0" max="100" step="1"></label>
   <label>Настроение Боба: радость <span id="joyOut"></span><input id="joy" type="range" min="-1" max="2" step="0.1"></label>
   <label>Настроение Боба: бодрость <span id="awakeOut"></span><input id="awake" type="range" min="-2" max="2" step="0.1"></label>
+  <label>Боб <select id="bobWay"><option value="auto">сам (показ разговора)</option><option value="rest">покой</option><option value="listen">слушает</option>
+    <option value="think">думает</option><option value="speak">говорит</option><option value="cant">не слышит</option><option value="sleep">спит</option></select></label>
+  <label>Его цвет <span id="hueOut"></span><input id="bobHue" type="range" min="0" max="359" step="1"></label>
+  <label>Насколько знакомы <span id="knownOut"></span><input id="bobKnown" type="range" min="0" max="3" step="1"></label>
   <label class="check"><input id="settle" type="checkbox"> Сглаживание (как TAA в Ghost)</label>
   <div class="row"><button id="testShort" type="button">Замер · 2 мин</button><button id="testLong" type="button">Долгий · 20 мин</button></div>
 </div>
@@ -126,6 +130,12 @@ const SKY = {exposure: 0.47, saturation: 2};                         // (its col
 // the sun seen: its disc a little larger than life (as the sky's authors advise), how bright the disc, the tight glow
 // round it and the wide veil a camera's lens spreads (as seen, after the exposure), and how wide each is (radians)
 const SUNSEE = {radius: 0.0065, disc: 12, core: 1.2, veil: 0.12, coreWidth: 0.02, veilWidth: 0.12};
+// Bob, for now a ball of light over the field (his choice, 2026-11-04): where it floats (x, z in m; how high over the
+// grass tops); a small white-hot heart (m, and its radiance) inside a soft body of light with no edge, and a faint
+// veil round it (how bright, how wide — in screen heights); the light it throws on the grass round it (how much, how
+// far, m); his colour, as a hue — pale while he is new, fuller as they come to know each other (three layers)
+const BOB = {at: [-0.5, 10], above: 0.9, heart: 0.04, bright: 6, body: 0.22, bodyWidth: 0.024, veil: 0.025, veilWidth: 0.06,
+  light: 5, reach: 6, hue: 38, known: 0};
 // how much brighter the camera sees as the sun sinks (EV at a height): the sky loses about 1 EV a degree near the
 // horizon, and at a fixed exposure dusk went black
 const DUSK = [[12, 0], [5, 0.85], [1, 2.1], [0, 2.7], [-2, 4.2], [-4, 6.3], [-6, 8.9]];
@@ -945,13 +955,60 @@ try {
     const glow = exp(off.div(sunSee.coreWidth).pow2().negate()).mul(sunSee.core).add(exp(off.div(sunSee.veilWidth).negate()).mul(sunSee.veil)).mul(shows);
     return tint.mul(disc.add(glow)).div(exposureNow).mul(select(sunUp.greaterThan(-0.02), float(1), float(0)));
   })();
+  // ══ Bob, for now a ball of light. A real light: a small glowing ball, a light in the scene that lights the grass round
+  // it (and a falling leaf passing by), and its glow on the lens, as the sun's. It breathes at rest; listening, it
+  // brightens and holds still; thinking, it shimmers; speaking, it follows his voice (the app sends its loudness;
+  // without it, a voice is made up here); unheard, it dims and pales; asleep, it breathes slowly and low. It floats a
+  // little and sways with the wind. «Сам» plays a conversation over and over, to be looked at
+  const bobColour = uniform(new THREE.Color(1, 1, 1)), bobGlow = uniform(0), bobAt = uniform(new THREE.Vector2(0.5, 0.5)), bobSpan = uniform(new THREE.Vector2(1, 1));
+  const bobMat = new THREE.MeshBasicNodeMaterial();
+  bobMat.colorNode = mix(vec3(1), bobColour, 0.4).mul(bobGlow).mul(BOB.bright);   // (the heart nearly white, as any hot light)
+  const bobBall = new THREE.Mesh(new THREE.SphereGeometry(BOB.heart, 16, 12), bobMat), bobLight = new THREE.PointLight(0xffffff, 0, BOB.reach, 2);
+  scene.add(bobBall, bobLight);
+  const bobSeen = Fn(() => {
+    const r = length(uv().sub(bobAt).mul(bobSpan)), size = bobGlow.sqrt();   // (brighter is a little bigger too)
+    return bobColour.mul(bobGlow).mul(exp(r.div(size.mul(BOB.bodyWidth)).pow2().negate()).mul(BOB.body).add(exp(r.div(BOB.veilWidth).negate()).mul(BOB.veil)));
+  })();
+  const BOBWAYS = {rest: {glow: 1, breath: 0.18, period: 5}, listen: {glow: 1.4, breath: 0.05, period: 4}, think: {glow: 1.15, breath: 0.04, period: 3, shimmer: 0.14},
+    speak: {glow: 0.95, breath: 0, period: 4, voice: 1}, cant: {glow: 0.5, breath: 0.1, period: 5, pale: 0.7}, sleep: {glow: 0.3, breath: 0.3, period: 8}};
+  const BOBSHOW = [['listen', 5], ['think', 1.6], ['speak', 6.5], ['rest', 4]];   // «сам»: one turn of a talk, again and again
+  const bob = {way: 'auto', hue: BOB.hue, known: BOB.known, level: 0, heard: -1e9};
+  let bobT = performance.now()/1000, bobGlowNow = 0, bobPale = 0, voice = 0, voiceAim = 0, voiceNext = 0;
+  const bobBase = new THREE.Vector3(BOB.at[0], ground(...BOB.at) + leafTop(BOB.at[1]) + 0.8 + BOB.above, BOB.at[1]), bobTint = new THREE.Color();
+  function bobNow(){
+    const t = performance.now()/1000, dt = Math.min(0.1, t - bobT); bobT = t;
+    let way = bob.way;
+    if (way === 'auto'){ const all = BOBSHOW.reduce((s, [, d]) => s + d, 0); let k = t % all; way = BOBSHOW.find(([, d]) => (k -= d) < 0)[0]; }
+    const w = BOBWAYS[way] ?? BOBWAYS.rest;
+    // the voice: the app's loudness while it comes, else made up — syllables a tenth or two of a second, now and then a pause
+    if (t - bob.heard < 0.3) voiceAim = bob.level;
+    else if (w.voice){ if (t > voiceNext){ const pause = Math.random() < 0.13; voiceAim = pause ? 0 : 0.35 + 0.65*Math.random();
+      voiceNext = t + (pause ? 0.3 + 0.45*Math.random() : 0.08 + 0.13*Math.random()); } }
+    else voiceAim = 0;
+    voice += (voiceAim - voice)*Math.min(1, dt*16);
+    const breath = 0.5 - 0.5*Math.cos(2*Math.PI*t/w.period), shimmer = w.shimmer ? w.shimmer*(Math.sin(t*7.3) + Math.sin(t*11.9 + 1.3))*0.5 : 0;
+    const aim = w.glow*(1 + w.breath*(breath - 0.5)) + shimmer + (w.voice ?? 0)*0.85*voice;
+    bobGlowNow += (aim - bobGlowNow)*Math.min(1, dt*(w.voice ? 14 : 3));
+    bobPale += ((w.pale ?? 0) - bobPale)*Math.min(1, dt*2);
+    bobGlow.value = bobGlowNow;
+    bobTint.setHSL(bob.hue/360, (0.6 + 0.35*bob.known/3)*(1 - bobPale), 0.6); bobColour.value.copy(bobTint);
+    bobLight.color.copy(bobTint); bobLight.intensity = BOB.light*bobGlowNow;
+    // it floats: a slow rise and fall, a little sway with the wind (and it leans toward us, listening)
+    const lean = way === 'listen' ? 0.25 : 0;
+    bobBall.position.set(bobBase.x + 0.05*Math.sin(t*0.53)*windStrength.value, bobBase.y + 0.05*Math.sin(t*2*Math.PI/6.3), bobBase.z - lean);
+    bobLight.position.copy(bobBall.position);
+    const q = bobBall.position.clone().project(camera); bobAt.value.set(q.x*0.5 + 0.5, 0.5 - q.y*0.5); bobSpan.value.set(camera.aspect, 1);
+  }
+  const setBob = b => { if (b.way || b.state) bob.way = b.way || b.state; if (b.hue !== undefined) bob.hue = +b.hue; if (b.known !== undefined) bob.known = +b.known;
+    if (b.level !== undefined){ bob.level = Math.max(0, Math.min(1, +b.level)); bob.heard = performance.now()/1000; } };
+  addEventListener('message', e => { const b = e.data?.bob; if (b) setBob(b); });   // (from the app: {bob: {way, level, hue, known}})
   // the grade, the film curve (AgX), and after it colour given back: the film holds bright orange near grey, so the tree
   // and the sky get theirs after it (the bright leaves keep the film's paleness); then a soft darkening toward the
   // corners, and, last, a noise of under one step of the screen's 256, so the sky's long gradients show no bands
   // (Gjøl/Playdead: the noise must come before the colours are rounded, not after)
   const treeColour = uniform(GRADE.tree), skyColour = uniform(SKY.saturation), grainFrame = uniform(0);
   pipeline.outputColorTransform = false;
-  const film = renderOutput(vec4(saturation(sharpened.rgb.add(sunSeen).mul(vec3(...GRADE.white)), GRADE.saturation), 1), THREE.AgXToneMapping, THREE.LinearSRGBColorSpace);
+  const film = renderOutput(vec4(saturation(sharpened.rgb.add(sunSeen).add(bobSeen).mul(vec3(...GRADE.white)), GRADE.saturation), 1), THREE.AgXToneMapping, THREE.LinearSRGBColorSpace);
   const pale = smoothstep(0.55, 0.9, luminance(film.rgb)), onTree = sharpened.a.max(0), onSky = sharpened.a.negate().max(0);
   const graded = saturation(film.rgb, float(1).add(treeColour.sub(1).mul(onTree.mul(float(1).sub(pale)))).add(skyColour.sub(1).mul(onSky)));
   const corner = float(1).sub(smoothstep(0.45, 1.1, length(uv().sub(0.5).mul(vec2(1.2, 1)))).mul(0.22));
@@ -970,6 +1027,7 @@ try {
       if (L[0] && k % 3 === 0) L[0].shadow.needsUpdate = true; else if (L[1] && k % 6 === 1) L[1].shadow.needsUpdate = true; }
     if (airWarm > 0 && --airWarm % 10 === 0) drawAir();
     grainFrame.value = (grainFrame.value + 1) % 64;
+    bobNow();                                                          // (before the camera's shift: his glow is drawn unshifted)
     if (SETTLE.on){ const w = canvas.width, h = canvas.height; jitter = jitter % 16 + 1;
       camera.setViewOffset(w, h, halton(jitter, 2) - 0.5, halton(jitter, 3) - 0.5, w, h); }
     pipeline.render();
@@ -1076,6 +1134,11 @@ try {
     $('joy').value = mood.valence; $('awake').value = mood.arousal; showMood();
     $('joy').addEventListener('input', e => { setMood(+e.target.value, mood.arousal); showMood(); });
     $('awake').addEventListener('input', e => { setMood(mood.valence, +e.target.value); showMood(); });
+    const showBob = () => { $('hueOut').textContent = `${bob.hue}°`; $('knownOut').textContent = ['новый', 'немного', 'хорошо', 'близко'][bob.known]; };
+    $('bobWay').value = bob.way; $('bobHue').value = bob.hue; $('bobKnown').value = bob.known; showBob();
+    $('bobWay').addEventListener('change', e => setBob({way: e.target.value}));
+    $('bobHue').addEventListener('input', e => { setBob({hue: +e.target.value}); showBob(); });
+    $('bobKnown').addEventListener('input', e => { setBob({known: +e.target.value}); showBob(); });
     $('settle').checked = SETTLE.on;
     $('settle').addEventListener('change', e => { SETTLE.on = e.target.checked; crisp.value = SETTLE.on ? SETTLE.sharpen : 0; });
     show(); }
@@ -1354,7 +1417,7 @@ try {
       frames = 0; t0 = now;
     }
   });
-  window.world = {renderer, scene, camera, atmosphere, sun, cascades, pipeline, tree, field, fieldInfo, setSun, windStrength, windDir, parts, hazeDensity, airParts, sunMap, sunCam, sunView, frame, air, airAtlas, drawAir, fieldRT, groundRT, redrawShadows, treeWind, draw, SETTLE, settleKeep, crisp, settle, settled, sharpened, crownParts, treeColour, skyColour, sunSee, sunPeek, setMood, mood, cloudCover, cloudScale, cloudHorizon, cloudThick, cloudMist, cloudFar, cloudGain, cloudTarget, fallen, fallWind, skyTarget, skyScene, drawSky, startTest, SWITCHES, lastRun: () => run,
+  window.world = {renderer, scene, camera, atmosphere, sun, cascades, pipeline, tree, field, fieldInfo, setSun, windStrength, windDir, parts, hazeDensity, airParts, sunMap, sunCam, sunView, frame, air, airAtlas, drawAir, fieldRT, groundRT, redrawShadows, treeWind, draw, SETTLE, settleKeep, crisp, settle, settled, sharpened, crownParts, treeColour, skyColour, sunSee, sunPeek, setMood, mood, cloudCover, cloudScale, cloudHorizon, cloudThick, cloudMist, cloudFar, cloudGain, cloudTarget, bob, setBob, bobBall, bobLight, bobGlow, fallen, fallWind, skyTarget, skyScene, drawSky, startTest, SWITCHES, lastRun: () => run,
     pace, paceReset, paceState: () => ({step: paceStep, off: paceOff, trying: !!paceTry, held: paceHeld, gpuLag, pixels: renderer.getPixelRatio(), target: paceTarget}),
     setExposure: e => { renderer.toneMappingExposure = e; }};   // for checking from the console
 } catch (err) {
