@@ -142,7 +142,7 @@ const SUNSEE = {radius: 0.0065, disc: 12, core: 1.2, veil: 0.12, coreWidth: 0.02
 // rolls at most, or charging (m/s); how fast he leaves the ground jumping (m/s); how deep he presses into the grass to
 // hide (m). The grass: how far round him it gives way (in his radii: flat under him, leaning less and less out to
 // there), how far it lies down (1: flat), how long it takes to stand up again (s)
-const BOB = {mark: [-0.5, 10], radius: 0.7, halo: 1.45, ribbons: 0.28, heart: 0.8, light: 9, reach: 8, hue: 38, known: 0,
+const BOB = {mark: [-0.5, 10], radius: 0.7, halo: 1.45, solid: 0.92, ribbons: 0.28, heart: 0.8, light: 9, reach: 8, hue: 38, known: 0,
   g: 9.8, bounce: 0.35, knock: 0.45, drag: 0.9, roll: 0.25, push: 7, top: 4.5, dash: 9, jump: 4.6, hide: 0.32,
   give: 2, lean: 1, rise: 10};
 // how much brighter the camera sees as the sun sinks (EV at a height): the sky loses about 1 EV a degree near the
@@ -858,7 +858,7 @@ try {
     flow: uniform(0), spin: uniform(0), roll: uniform(new THREE.Vector2()), squash: uniform(new THREE.Vector2(1, 0))};
   const bobHere = Fn(([d]) => {
     const q0 = uv().sub(orb.at).mul(vec2(orb.span, 1)).div(orb.size), qr = rotate(q0, orb.squash.y.negate());   // (in his radii)
-    const q = rotate(vec2(qr.x.div(orb.squash.x), qr.y.mul(orb.squash.x)), orb.squash.y), r = length(q), out = vec3(0).toVar();
+    const q = rotate(vec2(qr.x.div(orb.squash.x), qr.y.mul(orb.squash.x)), orb.squash.y), r = length(q), out = vec4(0).toVar();
     // (the pixel's distance read before the branch: a node first worked out inside it is not worked out outside it,
     // and the air, which reads the same, went missing everywhere else)
     const far = select(d.lessThan(0.1), float(1e4), d).toVar();
@@ -871,17 +871,21 @@ try {
         const v = sin(dot(q.add(orb.roll), dir).mul(1.7).add(t.mul(w)).add(sin(dot(q, side).mul(2.3).add(t.mul(f)).add(i)).mul(0.5)));
         rib = rib.add(c.mul(exp(v.div(0.4).pow2().negate())));
       });
-      const body = rib.mul(BOB.ribbons).add(orb.colour.mul(0.08)).mul(deep.mul(0.7).add(0.3)).mul(inside)
+      // (a body of his own colour, brighter toward the middle, as a lit sphere — he is solid: what is behind him does
+      // not show through; the ribbons flow in it, a glassy rim, a hot heart)
+      const body = rib.mul(BOB.ribbons).add(orb.colour.mul(deep.mul(0.25).add(0.2))).mul(deep.mul(0.7).add(0.3)).mul(inside)
         .add(orb.colour.mul(smoothstep(0.7, 0.97, r).mul(inside).mul(0.25)))                  // (a glassy rim)
         .add(vec3(1, 0.95, 0.85).mul(exp(r.pow2().mul(-16))).mul(BOB.heart));                  // (the hot heart)
       const halo = orb.colour.mul(exp(r.sub(1).max(0).mul(-6))).mul(0.08).mul(float(1).sub(smoothstep(1, BOB.halo, r)));   // (a breath of glow: his edge is his edge)
       // (hidden only by what stands in front of his surface there — not by blades inside him, which he has bent away)
       const front = orb.far.sub(deep.mul(BOB.radius)), seen = smoothstep(front.sub(0.12), front.add(0.04), far);
-      out.assign(body.add(halo).mul(orb.glow).mul(seen));
+      out.assign(vec4(body.add(halo).mul(orb.glow).mul(seen), inside.mul(seen).mul(BOB.solid)));   // (alpha: how much of what is behind he hides)
     });
     return out;
   });
-  const settle = new SettleNode(rtt(vec4(frame.rgb.mul(air.a).add(air.rgb).add(bobHere(dist.r)), dist.g.sub(isSky))));   // (alpha: tree +1, sky −1)
+  const composed = Fn(() => { const b = bobHere(dist.r).toVar();   // (the frame seen through the air, and Bob in it)
+    return vec4(frame.rgb.mul(air.a).add(air.rgb).mul(float(1).sub(b.a)).add(b.rgb), dist.g.sub(isSky)); })();
+  const settle = new SettleNode(rtt(composed));   // (alpha: tree +1, sky −1)
   const settled = passTexture(settle, settle.resolve.texture); settle.external = settled;
   // then a little crispness back (the shifts over time soften by about a pixel; games sharpen after TAA too): in
   // brightness only, and never past the pixels around (as AMD's CAS) — sharpening each colour on its own drew cyan rims
