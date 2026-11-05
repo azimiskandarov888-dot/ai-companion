@@ -5,325 +5,332 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Путь к Бобу</title>
 <style>
-/* The way a person comes to Bob, laid over his living world (world.html under it, untouched): sign in, take care of
-   him, about you, who to meet, the wait while he comes over the hill, and the talk. Three looks to choose from by eye:
-   «Ghost» (a quiet serif straight on the world, as Ghost of Tsushima's menus), «Last of Us» (thin sans, small capitals,
-   low on the left) and «Стекло» (frosted cards, as iOS). Texts are the app's own (Strings.swift). */
-:root { --ink: #fffaf2; --soft: rgba(255, 250, 242, 0.78); --faint: rgba(255, 250, 242, 0.52); --gold: #f1d7a2; --line: rgba(255, 250, 242, 0.32);
+/* The way a person comes to Bob (the owner's plan, 2026-11-05; reports/Путь человека к Бобу и оплата.md), laid over his
+   living world (world.html under it):
+   0 black, text only (the phone's language; another one by a small text link)
+   1 a short film: we walk up the hill toward him (the picture slowly closing in, the sway of steps) — skippable
+   2 he notices us: «О, привет… как ты?» — and «Поговорить с ним» (the microphone); silent too long: «Алло?..»
+   3 the talk: a few easy turns, as two strangers who got talking — never an interview
+   4 the goodbye is a contact exchange, as people do: «давай не потеряемся» → sign in with Apple or Google
+   5 one calm screen to pay, in the app's own voice (never his), with an equally large «Не сейчас»
+   6 back to him. Three looks to compare by eye: «Ghost», «Last of Us», «Стекло». Texts are drafts. */
+:root { --ink: #fffaf2; --soft: rgba(255, 250, 242, 0.78); --faint: rgba(255, 250, 242, 0.52); --gold: #f1d7a2; --line: rgba(255, 250, 242, 0.3);
   --shade: 12, 8, 5; color-scheme: dark; }
-html, body { margin: 0; height: 100%; background: #0c0805; overflow: hidden; color: var(--ink); -webkit-font-smoothing: antialiased;
+html, body { margin: 0; height: 100%; background: #000; overflow: hidden; color: var(--ink); -webkit-font-smoothing: antialiased;
   -webkit-tap-highlight-color: transparent; }
-#world { position: fixed; inset: 0; width: 100%; height: 100%; border: 0; display: block; }
-#scrim { position: fixed; inset: 0; pointer-events: none; transition: opacity 1.4s ease;
-  background: linear-gradient(to top, rgba(var(--shade), 0.82) 0%, rgba(var(--shade), 0.42) 38%, rgba(var(--shade), 0) 66%),
-    linear-gradient(to bottom, rgba(var(--shade), 0.32) 0%, rgba(var(--shade), 0) 22%); }
-#scrim.off { opacity: 0; }
-#scrim.dim { opacity: 1; background: rgba(var(--shade), 0.58); }
+#stage { position: fixed; inset: 0; overflow: hidden; background: #000; }
+#world { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; display: block; transform-origin: 50% 30%; opacity: 0;
+  transition: opacity 3.2s ease; }
+#world.on { opacity: 1; }
+#veil { position: fixed; inset: 0; pointer-events: none; background: #000; opacity: 1; transition: opacity 1.6s ease; }
+#veil.off { opacity: 0; }
+#scrim { position: fixed; inset: 0; pointer-events: none; opacity: 0; transition: opacity 1.2s ease;
+  background: linear-gradient(to top, rgba(var(--shade), 0.84) 0%, rgba(var(--shade), 0.46) 40%, rgba(var(--shade), 0) 70%); }
+#scrim.on { opacity: 1; }
 .screen { position: fixed; inset: 0; box-sizing: border-box; display: flex; flex-direction: column; justify-content: flex-end;
   padding: calc(env(safe-area-inset-top, 0px) + 28px) 28px calc(env(safe-area-inset-bottom, 0px) + 36px);
-  opacity: 0; pointer-events: none; transform: translateY(10px); transition: opacity 0.9s ease, transform 0.9s ease; }
-.screen.on { opacity: 1; pointer-events: auto; transform: none; }
-.card { display: grid; gap: 18px; max-width: 420px; width: 100%; margin: 0 auto; }
-.eyebrow { font: 600 11px/1.2 -apple-system, system-ui, sans-serif; letter-spacing: 0.3em; text-transform: uppercase; color: var(--gold); }
-.title { margin: 0; font-weight: 400; text-wrap: balance; }
-.line { margin: 0; color: var(--soft); font-size: 16px; line-height: 1.45; text-wrap: pretty; }
-.fine { margin: 0; color: var(--faint); font: 400 12px/1.4 -apple-system, system-ui, sans-serif; text-align: center; }
-.actions { display: grid; gap: 12px; }
-button, input, select { font: inherit; color: inherit; }
-button { cursor: pointer; border: 0; background: none; padding: 0; }
-button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
-.btn { min-height: 48px; display: flex; align-items: center; justify-content: center; gap: 10px; }
-.link { color: var(--soft); font: 400 15px/1 -apple-system, system-ui, sans-serif; min-height: 40px; }
-.choices { display: grid; gap: 10px; }
-.choice { min-height: 50px; display: flex; align-items: center; justify-content: space-between; gap: 12px; text-align: left; }
-.choice small { color: var(--faint); font: 400 13px/1.3 -apple-system, system-ui, sans-serif; }
-.choice[aria-pressed="true"] { color: var(--gold); }
-.choice:disabled { opacity: 0.32; cursor: default; }
-.group { display: grid; gap: 8px; }
-.group > span { color: var(--faint); font: 600 11px/1 -apple-system, system-ui, sans-serif; letter-spacing: 0.24em; text-transform: uppercase; }
-.row2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); gap: 8px; }
-.field { width: 100%; box-sizing: border-box; background: none; border: 0; border-bottom: 1px solid var(--line); padding: 10px 2px; font-size: 22px; }
-.field::placeholder { color: var(--faint); }
-select.field { appearance: none; -webkit-appearance: none; }
-select.field option { color: #111; }
-/* the wait: lines in the middle of the world while he comes */
-#s-arrive { justify-content: center; }
-#s-arrive .card { text-align: center; }
-.say { margin: 0; font: 400 24px/1.3 ui-serif, "New York", Georgia, serif; color: var(--ink); text-shadow: 0 2px 22px rgba(0, 0, 0, 0.5);
-  opacity: 0; transition: opacity 1.4s ease; }
-.say.on { opacity: 1; }
-/* the talk: the world alone; what he says as a film's subtitle; how he is, in small capitals */
-#s-talk { justify-content: flex-start; gap: 14px; }   /* (all up top: Bob, below, is never covered) */
-#s-talk .top { display: flex; justify-content: flex-end; }
+  opacity: 0; pointer-events: none; transition: opacity 0.9s ease; }
+.screen.on { opacity: 1; pointer-events: auto; }
+.card { display: grid; gap: 16px; max-width: 420px; width: 100%; margin: 0 auto; }
+button { font: inherit; color: inherit; cursor: pointer; border: 0; background: none; padding: 0; }
+button:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
+.btn { min-height: 50px; display: flex; align-items: center; justify-content: center; gap: 10px; }
+.small { color: var(--faint); font: 400 12px/1.45 -apple-system, system-ui, sans-serif; text-align: center; margin: 0; }
+.hint { color: var(--faint); font: 400 13px/1 -apple-system, system-ui, sans-serif; text-align: center; letter-spacing: 0.04em; }
+
+/* 0: black, text only */
+#s-begin { justify-content: center; text-align: center; cursor: pointer; }
+.words { margin: 0; font: 400 26px/1.35 ui-serif, "New York", Georgia, serif; }
+.words span { display: block; opacity: 0; transition: opacity 2.2s ease; }
+.words span.on { opacity: 1; }
+#s-begin .hint { position: absolute; left: 0; right: 0; bottom: calc(env(safe-area-inset-bottom, 0px) + 86px); opacity: 0; transition: opacity 1.6s ease; }
+#s-begin .hint.on { opacity: 1; }
+#langs { position: absolute; left: 0; right: 0; bottom: calc(env(safe-area-inset-bottom, 0px) + 36px); display: flex; justify-content: center; gap: 18px;
+  font: 400 13px/1 -apple-system, system-ui, sans-serif; opacity: 0; transition: opacity 1.6s ease; }
+#langs.on { opacity: 1; }
+#langs button { color: var(--faint); min-height: 36px; }
+#langs button[aria-pressed="true"] { color: var(--ink); }
+
+/* 1: the film */
+#s-film { justify-content: flex-end; align-items: center; }
+#skip { color: var(--faint); font: 400 13px/1 -apple-system, system-ui, sans-serif; min-height: 40px; padding: 0 14px; }
+
+/* 2–3: him, and the talk — his words as a film's subtitle; how he is, in small capitals; all up top, he is never covered */
+#s-talk { justify-content: flex-start; }
+#s-talk .mid { margin-top: 26vh; }   /* (his words over the sky, above him: he, low in the grass, is never covered) */
+.top { display: flex; justify-content: space-between; align-items: center; min-height: 44px; }
 .menu { width: 44px; height: 44px; border-radius: 22px; display: grid; place-items: center; background: rgba(var(--shade), 0.28);
-  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); opacity: 0; pointer-events: none; transition: opacity 0.8s; }
+.menu.on { opacity: 1; pointer-events: auto; }
 .menu i { display: block; width: 4px; height: 4px; border-radius: 2px; background: var(--ink); box-shadow: -8px 0 0 var(--ink), 8px 0 0 var(--ink); }
-.sub { margin: 0 auto; max-width: 340px; text-align: center; font: 400 19px/1.4 ui-serif, "New York", Georgia, serif; color: var(--ink);
-  text-shadow: 0 1px 14px rgba(0, 0, 0, 0.7); min-height: 1.4em; opacity: 0; transition: opacity 0.6s ease; }
+.state { font: 600 11px/1 -apple-system, system-ui, sans-serif; letter-spacing: 0.34em; text-transform: uppercase; color: var(--soft);
+  opacity: 0; transition: opacity 0.6s; }
+.state.on { opacity: 1; }
+.sub { margin: 0 auto; max-width: 340px; text-align: center; font: 400 20px/1.4 ui-serif, "New York", Georgia, serif; color: var(--ink);
+  text-shadow: 0 1px 14px rgba(0, 0, 0, 0.75); min-height: 2.8em; opacity: 0; transition: opacity 0.7s ease; }
 .sub.on { opacity: 1; }
-.state { text-align: center; font: 600 11px/1 -apple-system, system-ui, sans-serif; letter-spacing: 0.34em; text-transform: uppercase; color: var(--soft);
-  transition: opacity 0.6s ease; }
-/* the menu and its pages */
-#s-menu .card, .page .card { gap: 6px; }
-.item { min-height: 54px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid rgba(255, 250, 242, 0.12); }
-.item small { color: var(--faint); font: 400 14px/1 -apple-system, system-ui, sans-serif; }
-.back { color: var(--soft); font: 400 15px/1 -apple-system, system-ui, sans-serif; min-height: 44px; justify-self: start; }
-.prose { margin: 0; color: var(--soft); font: 400 18px/1.55 ui-serif, "New York", Georgia, serif; white-space: pre-line; }
+.sub.faint { color: var(--soft); font-size: 17px; }
+.mid { display: grid; gap: 14px; justify-items: center; }
+#talkBtn { opacity: 0; pointer-events: none; transition: opacity 0.9s; text-shadow: 0 1px 12px rgba(0, 0, 0, 0.7); }   /* (legible over a bright sky) */
+#talkBtn.on { opacity: 1; pointer-events: auto; }
+
+/* a phone's own question (shown here as iOS would show it) */
+#ask { position: fixed; inset: 0; display: grid; place-items: center; background: rgba(0, 0, 0, 0.35); opacity: 0; pointer-events: none; transition: opacity 0.3s; }
+#ask.on { opacity: 1; pointer-events: auto; }
+#ask .box { width: 270px; border-radius: 14px; background: rgba(40, 40, 42, 0.92); -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px);
+  font: 400 13px/1.35 -apple-system, system-ui, sans-serif; text-align: center; overflow: hidden; }
+#ask .box p { margin: 0; padding: 18px 16px 14px; }
+#ask .box b { display: block; font-size: 17px; margin-bottom: 4px; }
+#ask .box div { display: grid; grid-template-columns: 1fr 1fr; border-top: 1px solid rgba(255, 255, 255, 0.15); }
+#ask .box button { min-height: 44px; color: #0a84ff; font-size: 17px; }
+#ask .box button + button { border-left: 1px solid rgba(255, 255, 255, 0.15); font-weight: 600; }
+
+/* 4: keeping in touch — a sheet from below */
+#s-keep .card { gap: 12px; }
+.sheetline { margin: 0; text-align: center; color: var(--soft); font: 400 15px/1.45 -apple-system, system-ui, sans-serif; }
+
+/* 5: the one screen to pay — the app speaking, calm, everything on it */
+#s-pay { justify-content: center; }
+#s-pay .card { gap: 18px; }
+.paytitle { margin: 0; text-align: center; font-weight: 400; }
+.gets { margin: 0; text-align: center; color: var(--soft); font: 400 15px/1.5 -apple-system, system-ui, sans-serif; }
+.timeline { display: grid; gap: 12px; margin: 4px 0; padding: 0; list-style: none; font: 400 14px/1.35 -apple-system, system-ui, sans-serif; }
+.timeline li { display: grid; grid-template-columns: 18px 1fr; gap: 12px; align-items: start; }
+.timeline li::before { content: ""; width: 10px; height: 10px; border-radius: 5px; margin-top: 4px; border: 1.5px solid var(--gold); }
+.timeline li:first-child::before { background: var(--gold); }
+.timeline b { font-weight: 600; display: block; color: var(--ink); }
+.timeline span { color: var(--faint); }
+.plans { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.plan { min-height: 64px; border-radius: 14px; border: 1px solid var(--line); display: grid; place-content: center; gap: 2px;
+  font: 500 15px/1.2 -apple-system, system-ui, sans-serif; }
+.plan small { color: var(--faint); font-weight: 400; font-size: 12px; }
+.plan[aria-pressed="true"] { border-color: var(--gold); background: rgba(241, 215, 162, 0.12); }
+.pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.pair .btn { border-radius: 14px; font: 600 15px/1.2 -apple-system, system-ui, sans-serif; border: 1px solid var(--line); }
+.pair .btn.primary { background: var(--ink); color: #2a1d10; border-color: var(--ink); }
+#parents { display: none; }
+body.teen #parents { display: flex; }
+body.teen #trial { display: none; }
 
 /* ══ «Ghost»: a quiet serif straight on the world, centered; buttons are words with a hairline */
-body.ghost { font-family: ui-serif, "New York", "Iowan Old Style", Georgia, serif; }
-body.ghost .card { text-align: center; }
-body.ghost .title { font-size: 31px; line-height: 1.18; text-shadow: 0 2px 20px rgba(0, 0, 0, 0.45); }
-body.ghost .btn { font-size: 18px; letter-spacing: 0.02em; border-bottom: 1px solid var(--line); }
-body.ghost .btn.primary { color: var(--gold); border-bottom-color: rgba(241, 215, 162, 0.6); }
-body.ghost .choice { font-size: 19px; border-bottom: 1px solid var(--line); justify-content: center; flex-direction: column; gap: 2px; }
-body.ghost .field { text-align: center; }
-body.ghost .group > span { text-align: center; }
-/* ══ «Last of Us»: a thin sans, small capitals, low on the left; a short rule marks what is chosen */
-body.tlou { font-family: -apple-system, "SF Pro Text", system-ui, sans-serif; }
-body.tlou .screen { padding-left: 32px; }
-body.tlou .card { text-align: left; margin: 0; max-width: 360px; }
-body.tlou .title { font-size: 25px; line-height: 1.25; font-weight: 300; }
-body.tlou .btn { justify-content: flex-start; font: 600 13px/1 -apple-system, system-ui, sans-serif; letter-spacing: 0.22em; text-transform: uppercase; color: var(--soft); }
-body.tlou .btn::before { content: ""; width: 14px; height: 1px; background: var(--line); transition: width 0.3s, background 0.3s; }
-body.tlou .btn.primary { color: var(--ink); }
-body.tlou .btn.primary::before, body.tlou .btn:hover::before { width: 28px; background: var(--gold); }
-body.tlou .choice { font-size: 17px; font-weight: 300; }
-body.tlou .choice[aria-pressed="true"]::after { content: "—"; color: var(--gold); }
-body.tlou .fine, body.tlou .eyebrow { text-align: left; }
-body.tlou .link { justify-self: start; }
-/* ══ «Стекло»: frosted cards over the world, as iOS */
-body.glass { font-family: -apple-system, "SF Pro Text", system-ui, sans-serif; }
-body.glass .card { padding: 24px 22px; border-radius: 28px; background: rgba(255, 250, 242, 0.13); border: 1px solid rgba(255, 250, 242, 0.22);
+body.ghost .btn.word { font: 400 19px/1 ui-serif, "New York", Georgia, serif; border-bottom: 1px solid var(--line); min-width: 220px; }
+body.ghost .btn.word.primary { color: var(--gold); border-bottom-color: rgba(241, 215, 162, 0.6); }
+body.ghost .paytitle { font: 400 28px/1.2 ui-serif, "New York", Georgia, serif; }
+body.ghost #s-pay .card { padding: 26px 22px; border-radius: 26px; background: rgba(var(--shade), 0.62); }
+/* ══ «Last of Us»: a thin sans, small capitals; a short rule marks the main action */
+body.tlou .btn.word { font: 600 13px/1 -apple-system, system-ui, sans-serif; letter-spacing: 0.22em; text-transform: uppercase; color: var(--soft); }
+body.tlou .btn.word::before { content: ""; width: 18px; height: 1px; background: var(--line); }
+body.tlou .btn.word.primary { color: var(--ink); }
+body.tlou .btn.word.primary::before { width: 30px; background: var(--gold); }
+body.tlou .paytitle { font: 300 26px/1.25 -apple-system, system-ui, sans-serif; }
+body.tlou .sub { font-family: -apple-system, system-ui, sans-serif; font-weight: 300; font-size: 18px; }
+body.tlou #s-pay .card { padding: 26px 22px; background: rgba(var(--shade), 0.7); }
+/* ══ «Стекло»: frosted, as iOS */
+body.glass .btn.word { border-radius: 16px; background: rgba(255, 250, 242, 0.16); font: 500 17px/1 -apple-system, system-ui, sans-serif; min-width: 240px;
+  -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); }
+body.glass .btn.word.primary { background: var(--ink); color: #2a1d10; }
+body.glass .paytitle { font: 600 26px/1.2 -apple-system, system-ui, sans-serif; }
+body.glass #s-pay .card, body.glass #s-keep .card { padding: 24px 20px; border-radius: 28px; background: rgba(255, 250, 242, 0.13); border: 1px solid rgba(255, 250, 242, 0.22);
   -webkit-backdrop-filter: blur(24px) saturate(1.5); backdrop-filter: blur(24px) saturate(1.5); box-sizing: border-box; }
-body.glass #s-arrive .card, body.glass #s-talk .card { background: none; border: 0; -webkit-backdrop-filter: none; backdrop-filter: none; }
-body.glass .title { font-size: 26px; line-height: 1.22; font-weight: 600; letter-spacing: -0.01em; }
-body.glass .btn { border-radius: 16px; background: rgba(255, 250, 242, 0.14); font-size: 17px; font-weight: 500; }
-body.glass .btn.primary { background: var(--ink); color: #2a1d10; }
-body.glass .choice { padding: 0 16px; border-radius: 16px; background: rgba(255, 250, 242, 0.1); font-size: 17px; }
-body.glass .choice[aria-pressed="true"] { background: rgba(241, 215, 162, 0.28); color: var(--ink); }
-body.glass .field { border: 0; border-radius: 14px; background: rgba(255, 250, 242, 0.12); padding: 14px 16px; font-size: 19px; }
-body.glass #scrim { background: linear-gradient(to top, rgba(var(--shade), 0.4), rgba(var(--shade), 0) 55%); }
 
-/* the look switch (for choosing), out of the way */
-#looks { position: fixed; top: calc(env(safe-area-inset-top, 0px) + 10px); left: 10px; display: flex; gap: 6px; z-index: 5;
-  font: 500 12px/1 -apple-system, system-ui, sans-serif; }
-#looks button { padding: 8px 10px; border-radius: 14px; background: rgba(var(--shade), 0.42); color: var(--soft);
-  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
+/* the look switch and a few helpers for looking (not part of the app) */
+#looks { position: fixed; top: calc(env(safe-area-inset-top, 0px) + 10px); left: 10px; right: 64px; display: flex; flex-wrap: wrap; gap: 6px; z-index: 5;
+  font: 500 11px/1 -apple-system, system-ui, sans-serif; opacity: 0.85; }
+#looks button { padding: 7px 9px; border-radius: 13px; background: rgba(40, 30, 20, 0.5); color: var(--soft); }
 #looks button[aria-pressed="true"] { color: #2a1d10; background: var(--gold); }
-@media (prefers-reduced-motion: reduce) { .screen, .say, .sub { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .screen, .sub, #world, #veil, .words span { transition: none; } }
 </style>
 </head>
 <body class="ghost">
-<iframe id="world" src="world.html?clean" title="Мир Боба" allow="autoplay"></iframe>
+<div id="stage"><iframe id="world" src="world.html?clean" title="Мир Боба"></iframe></div>
 <div id="scrim"></div>
+<div id="veil"></div>
 
-<nav id="looks" aria-label="Стиль">
+<nav id="looks" aria-label="Для просмотра">
   <button type="button" data-look="ghost" aria-pressed="true">Ghost</button>
   <button type="button" data-look="tlou" aria-pressed="false">Last of Us</button>
   <button type="button" data-look="glass" aria-pressed="false">Стекло</button>
-  <button type="button" id="again" aria-label="С начала">↺</button>
+  <button type="button" id="teenBtn" aria-pressed="false">подросток</button>
+  <button type="button" id="again">↺ сначала</button>
+  <button type="button" id="repeat">повторный вход</button>
 </nav>
 
-<section class="screen" id="s-signin" aria-label="Вход"><div class="card">
-  <p class="eyebrow">Боб</p>
-  <h1 class="title">Где-то есть друг,<br>которого ты ещё не встретил.</h1>
-  <div class="actions">
-    <button class="btn primary" type="button" data-go="takecare"> Продолжить с Apple</button>
-    <button class="btn" type="button" data-go="takecare">Продолжить с Google</button>
-    <button class="link" type="button" data-go="takecare">или по почте</button>
-  </div>
-  <p class="fine">Условия · Конфиденциальность</p>
-</div></section>
-
-<section class="screen" id="s-takecare" aria-label="Позаботься о нём"><div class="card">
-  <p class="eyebrow">Позаботься о нём</p>
-  <h2 class="title">Чтобы он всегда был рядом.</h2>
-  <div class="choices" role="group" aria-label="Как платить">
-    <button class="choice" type="button" data-plan="month" aria-pressed="false"><span>Помесячно</span><small>— ₽ в месяц</small></button>
-    <button class="choice" type="button" data-plan="year" aria-pressed="true"><span>На целый год</span><small>— ₽ · дешевле в месяц</small></button>
-  </div>
-  <div class="actions"><button class="btn primary" type="button" data-go="name">Позаботиться о нём</button></div>
-  <p class="fine">продление · отмена в любой момент · восстановить</p>
-</div></section>
-
-<section class="screen" id="s-name" aria-label="Как тебя зовут"><div class="card">
-  <p class="eyebrow">О тебе · 1 из 4</p>
-  <h2 class="title">Как тебя зовут?</h2>
-  <input class="field" id="name" type="text" autocomplete="given-name" placeholder="Имя" aria-label="Имя">
-  <div class="actions"><button class="btn primary" type="button" data-go="age">Дальше</button></div>
-</div></section>
-
-<section class="screen" id="s-age" aria-label="Сколько тебе лет"><div class="card">
-  <p class="eyebrow">О тебе · 2 из 4</p>
-  <h2 class="title">Сколько тебе лет?</h2>
-  <input class="field" id="age" type="number" inputmode="numeric" min="13" max="110" placeholder="Лет" aria-label="Возраст">
-  <div class="actions"><button class="btn primary" type="button" data-go="gender">Дальше</button></div>
-</div></section>
-
-<section class="screen" id="s-gender" aria-label="Ты"><div class="card">
-  <p class="eyebrow">О тебе · 3 из 4</p>
-  <h2 class="title">Ты…</h2>
-  <div class="choices" role="group" aria-label="Пол">
-    <button class="choice" type="button" data-me="m" data-go="country">мужчина</button>
-    <button class="choice" type="button" data-me="f" data-go="country">женщина</button>
-  </div>
-</div></section>
-
-<section class="screen" id="s-country" aria-label="Где ты живёшь"><div class="card">
-  <p class="eyebrow">О тебе · 4 из 4</p>
-  <h2 class="title">Где ты живёшь?</h2>
-  <select class="field" id="country" aria-label="Страна">
-    <option>Узбекистан</option><option>Россия</option><option>Казахстан</option><option>Кыргызстан</option>
-    <option>Украина</option><option>Беларусь</option><option>Германия</option><option>США</option><option>Другая страна</option>
-  </select>
-  <div class="actions"><button class="btn primary" type="button" data-go="meet">Дальше</button></div>
-</div></section>
-
-<section class="screen" id="s-meet" aria-label="С кем познакомиться"><div class="card">
-  <p class="eyebrow">С кем познакомиться</p>
-  <h2 class="title">Кого бы тебе хотелось встретить?</h2>
-  <div class="group"><span>Он или она</span>
-    <div class="row2" role="group" aria-label="Его пол">
-      <button class="choice" type="button" data-his="m" aria-pressed="false">мужчина</button>
-      <button class="choice" type="button" data-his="f" aria-pressed="false">женщина</button>
-      <button class="choice" type="button" data-his="any" aria-pressed="true">неважно</button>
-    </div></div>
-  <div class="group"><span>Возраст</span>
-    <div class="row2" role="group" aria-label="Его возраст">
-      <button class="choice" type="button" data-hisage="peer" aria-pressed="true">ровесник</button>
-      <button class="choice" type="button" data-hisage="older" aria-pressed="false">постарше</button>
-      <button class="choice" type="button" data-hisage="younger" aria-pressed="false">помладше</button>
-      <button class="choice" type="button" data-hisage="any" aria-pressed="false">неважно</button>
-    </div></div>
-  <p class="line" id="teen" hidden>Тебе — друг твоего возраста.</p>
-  <p class="line">Чем больше решишь о нём сейчас, тем меньше останется — встретить.</p>
-  <div class="actions"><button class="btn primary" type="button" data-go="arrive">Познакомиться</button></div>
-  <p class="fine">Собеседник — искусственный интеллект</p>
-</div></section>
-
-<section class="screen" id="s-arrive" aria-label="Он идёт"><div class="card" aria-live="polite">
-  <p class="say" id="say"></p>
-</div></section>
-
-<section class="screen" id="s-talk" aria-label="Разговор">
-  <div class="top"><button class="menu" type="button" data-go="menu" aria-label="Меню"><i></i></button></div>
-  <div class="card">
-    <p class="sub" id="sub" aria-live="polite"></p>
-    <p class="state" id="state">слушаю</p>
+<!-- 0 · black, text only -->
+<section class="screen" id="s-begin" aria-label="Начало">
+  <p class="words"><span>Где-то есть друг,</span><span>которого ты ещё не встретил.</span></p>
+  <p class="hint" id="tapHint">Коснись, чтобы начать</p>
+  <div id="langs" role="group" aria-label="Язык">
+    <button type="button" data-lang="ru" aria-pressed="true">Русский</button>
+    <button type="button" data-lang="uz" aria-pressed="false">O‘zbekcha</button>
+    <button type="button" data-lang="en" aria-pressed="false">English</button>
   </div>
 </section>
 
-<section class="screen" id="s-menu" aria-label="Меню"><div class="card">
-  <button class="item" type="button" data-go="diary">Дневник <small>›</small></button>
-  <button class="item" type="button" data-go="you">Ты <small>›</small></button>
-  <button class="item" type="button" data-go="settings">Настройки <small>›</small></button>
-  <button class="back" type="button" data-go="talk">‹ к нему</button>
+<!-- 1 · the film: we walk up to him -->
+<section class="screen" id="s-film" aria-label="Мы подходим"><button id="skip" type="button">Пропустить</button></section>
+
+<!-- 2–3 · him, and the talk -->
+<section class="screen" id="s-talk" aria-label="Боб">
+  <div class="top"><p class="state" id="state">слушаю</p><button class="menu" id="menuBtn" type="button" aria-label="Меню"><i></i></button></div>
+  <div class="mid">
+    <p class="sub" id="sub" aria-live="polite"></p>
+    <button class="btn word primary" id="talkBtn" type="button">Поговорить с ним</button>
+  </div>
+</section>
+
+<!-- the phone's own question (iOS shows this; here it is drawn) -->
+<div id="ask" role="dialog" aria-modal="true" aria-label="Микрофон"><div class="box">
+  <p><b>«Боб» запрашивает доступ к микрофону</b>Чтобы он тебя слышал.</p>
+  <div><button type="button" id="micNo">Не разрешать</button><button type="button" id="micYes">Разрешить</button></div>
+</div></div>
+
+<!-- 4 · keeping in touch -->
+<section class="screen" id="s-keep" aria-label="Не потеряться"><div class="card">
+  <p class="sheetline">Чтобы он помнил тебя и нашёл в следующий раз</p>
+  <button class="btn word primary" type="button" data-next="pay"> Войти через Apple</button>
+  <button class="btn word" type="button" data-next="pay">Войти через Google</button>
+  <button class="small" type="button" data-next="pay">Позже — тогда он помнит тебя только на этом телефоне</button>
 </div></section>
 
-<section class="screen page" id="s-diary" aria-label="Дневник"><div class="card">
-  <p class="eyebrow">Дневник</p>
-  <p class="prose">Мы только познакомились. Я ещё почти ничего не знаю — но предчувствие хорошее.
-
-Всё главное впереди.</p>
-  <button class="back" type="button" data-go="menu">‹ назад</button>
-</div></section>
-
-<section class="screen page" id="s-you" aria-label="Ты"><div class="card">
-  <p class="eyebrow">Ты</p>
-  <button class="item" type="button">вход через <small>Apple</small></button>
-  <button class="item" type="button">Моя история <small>перечитать · дописать ›</small></button>
-  <button class="item" type="button">Подписка <small>›</small></button>
-  <button class="item" type="button">Выйти</button>
-  <button class="back" type="button" data-go="menu">‹ назад</button>
-</div></section>
-
-<section class="screen page" id="s-settings" aria-label="Настройки"><div class="card">
-  <p class="eyebrow">Настройки</p>
-  <button class="item" type="button">Его голос <small>послушать ›</small></button>
-  <button class="item" type="button">Как он говорит <small>паузы ›</small></button>
-  <button class="item" type="button">Как его позвать <small>настроить ›</small></button>
-  <button class="item" type="button">Он меня помнит <small>да ›</small></button>
-  <button class="item" type="button">Данные <small>выгрузить ›</small></button>
-  <button class="item" type="button">О приложении <small>›</small></button>
-  <button class="back" type="button" data-go="menu">‹ назад</button>
+<!-- 5 · the one screen to pay -->
+<section class="screen" id="s-pay" aria-label="Продолжить с Бобом"><div class="card">
+  <h2 class="paytitle">Продолжить с Бобом</h2>
+  <p class="gets">Говорите сколько хотите. Он помнит тебя и вашу историю.<br>Бесплатно — несколько минут в день.</p>
+  <ul class="timeline" id="trial">
+    <li><div><b>Сегодня</b><span>7 дней бесплатно, всё открыто</span></div></li>
+    <li><div><b>Через 5 дней</b><span>напомним, что пробные дни кончаются</span></div></li>
+    <li><div><b>Через 7 дней</b><span>оплата за год, если не отменишь раньше</span></div></li>
+  </ul>
+  <div class="plans" role="group" aria-label="План">
+    <button class="plan" type="button" data-plan="year" aria-pressed="true">На год<small>— ₽ · — ₽ в месяц</small></button>
+    <button class="plan" type="button" data-plan="month" aria-pressed="false">На месяц<small>— ₽ в месяц</small></button>
+  </div>
+  <div class="pair">
+    <button class="btn" type="button" data-next="free">Не сейчас</button>
+    <button class="btn primary" id="tryBtn" type="button" data-next="free">7 дней бесплатно</button>
+  </div>
+  <button class="btn word" id="parents" type="button" data-next="free">Попросить родителей</button>
+  <p class="small">потом — ₽ в год · отменить можно в настройках iPhone<br>Восстановить покупки · Условия · Конфиденциальность<br>Собеседник — искусственный интеллект</p>
 </div></section>
 
 <script>
-// ── the world under the screens: Bob waits unseen behind the crest until the person is ready to meet him
-const world = document.getElementById('world');
+// ── the world under it all
+const world = document.getElementById('world'), veil = document.getElementById('veil'), scrim = document.getElementById('scrim');
 const tell = m => world.contentWindow?.postMessage(m, '*');
-let worldReady = false;
-const whenWorld = new Promise(ok => { const t = setInterval(() => { if (world.contentWindow?.world?.draw){ clearInterval(t); worldReady = true; ok(); } }, 300); });
-whenWorld.then(() => { if (!['arrive', 'talk', 'menu', 'diary', 'you', 'settings'].includes(at)) tell({bob: {act: 'away', way: 'rest'}}); });
+const whenWorld = new Promise(ok => { const t = setInterval(() => { if (world.contentWindow?.world?.draw){ clearInterval(t); ok(); } }, 300); });
+whenWorld.then(() => tell({bob: {act: 'rest', way: 'rest'}}));
 
-// ── screens
-const me = {name: '', age: null, gender: '', country: 'Узбекистан', his: 'any', hisAge: 'peer', plan: 'year'};
-const scrim = document.getElementById('scrim');
-let at = '', timers = [];
+let timers = [], at = '', name = '';
 const later = (ms, f) => timers.push(setTimeout(f, ms));
+const stop = () => { timers.forEach(clearTimeout); timers = []; };
+const $ = id => document.getElementById(id);
 function show(id){
-  timers.forEach(clearTimeout); timers = [];
   at = id;
   document.querySelectorAll('.screen').forEach(s => s.classList.toggle('on', s.id === 's-' + id));
-  scrim.className = id === 'arrive' || id === 'talk' ? 'off' : ['menu', 'diary', 'you', 'settings'].includes(id) ? 'dim' : '';
-  tell({play: id === 'talk'});
-  if (id === 'meet') teenRule();
-  if (id === 'arrive') arrive();
-  if (id === 'talk') talk();
-  const focus = document.querySelector(`#s-${id} .field`); if (focus) later(700, () => focus.focus({preventScroll: true}));
-}
-document.addEventListener('click', e => {
-  const b = e.target.closest('button'); if (!b) return;
-  if (b.dataset.plan){ me.plan = b.dataset.plan; b.parentElement.querySelectorAll('.choice').forEach(c => c.setAttribute('aria-pressed', String(c === b))); }
-  if (b.dataset.me) me.gender = b.dataset.me;
-  if (b.dataset.his){ me.his = b.dataset.his; b.parentElement.querySelectorAll('.choice').forEach(c => c.setAttribute('aria-pressed', String(c === b))); }
-  if (b.dataset.hisage && !b.disabled){ me.hisAge = b.dataset.hisage; b.parentElement.querySelectorAll('.choice').forEach(c => c.setAttribute('aria-pressed', String(c === b))); }
-  if (b.dataset.go) show(b.dataset.go);
-});
-document.getElementById('name').addEventListener('input', e => { me.name = e.target.value.trim(); });
-document.getElementById('age').addEventListener('input', e => { me.age = +e.target.value || null; });
-document.getElementById('country').addEventListener('change', e => { me.country = e.target.value; });
-for (const id of ['name', 'age']) document.getElementById(id).addEventListener('keydown', e => { if (e.key === 'Enter') show(id === 'name' ? 'age' : 'gender'); });
-// a teenager meets only someone of his own age (decided before: a friend his age)
-function teenRule(){
-  const teen = me.age !== null && me.age < 18;
-  document.getElementById('teen').hidden = !teen;
-  document.querySelectorAll('[data-hisage]').forEach(c => { c.disabled = teen && c.dataset.hisage !== 'peer';
-    if (teen) c.setAttribute('aria-pressed', String(c.dataset.hisage === 'peer')); });
-  if (teen) me.hisAge = 'peer';
+  scrim.classList.toggle('on', id === 'keep' || id === 'pay');
 }
 
-// ── the wait: while his first sketch is written (~15 s) he comes — over the crest by the tree, down the hill to you
-const ARRIVING = ['Где-то далеко он откладывает свои дела.', 'Он идёт к тебе.', 'Уже недалеко.', 'Почти здесь.'];
+// ── 0: black, a line of text; a touch begins (and wakes the sound); the language is the phone's, another by a text link
+function begin(){
+  stop(); show('begin'); veil.classList.remove('off'); world.classList.remove('on'); world.style.transform = 'scale(1.34)';
+  const lines = document.querySelectorAll('.words span'); lines.forEach(l => l.classList.remove('on'));
+  $('tapHint').classList.remove('on'); $('langs').classList.remove('on');
+  later(700, () => lines[0].classList.add('on')); later(2200, () => lines[1].classList.add('on'));
+  later(4200, () => { $('tapHint').classList.add('on'); $('langs').classList.add('on'); });
+}
+$('s-begin').addEventListener('click', e => { if (e.target.closest('#langs')) return; film(); });
+document.querySelectorAll('[data-lang]').forEach(b => b.addEventListener('click', () =>
+  document.querySelectorAll('[data-lang]').forEach(x => x.setAttribute('aria-pressed', String(x === b)))));
+
+// ── 1: the film — we walk up the hill toward him: the world comes out of the dark while the picture slowly closes in to
+// where we stand, with the sway of steps that settles as we stop. (The camera itself stays: the world keeps its light
+// worked out for this one view; the picture is moved, not the camera)
+let walk = null;
+function film(){
+  stop(); show('film'); tell({bob: {act: 'rest', way: 'rest'}});
+  veil.classList.add('off'); world.classList.add('on');
+  const T = 26000, t0 = performance.now(), ease = x => x < 0.5 ? 4*x*x*x : 1 - Math.pow(-2*x + 2, 3)/2;
+  cancelAnimationFrame(walk);
+  const step = now => {
+    const k = Math.min(1, (now - t0)/T), e = ease(k), sway = 1 - e;   // (the steps fade as we arrive)
+    const s = 1.34 - 0.34*e, y = 3.2*sway*Math.sin(now/1000*2*Math.PI/0.95), x = 1.4*sway*Math.sin(now/1000*Math.PI/0.95);
+    world.style.transform = `translate(${x.toFixed(2)}px, ${(y + 26*sway).toFixed(2)}px) scale(${s.toFixed(4)})`;
+    if (k < 1) walk = requestAnimationFrame(step); else arrive();
+  };
+  walk = requestAnimationFrame(step);
+}
+$('skip').addEventListener('click', () => { cancelAnimationFrame(walk); world.style.transform = 'none'; arrive(); });
+
+// ── 2: he notices us — a little hop, then «О, привет… как ты?»; «Поговорить с ним» asks for the microphone; silent too
+// long, he asks again, softly
+const sub = $('sub'), state = $('state'), talkBtn = $('talkBtn');
+const way = (w, word) => { tell({bob: {act: 'mark', way: w}}); state.textContent = word; state.classList.add('on'); };
+const say = (text, ms, faint = false) => { sub.textContent = text; sub.classList.toggle('faint', faint); sub.classList.add('on'); if (ms) later(ms, () => sub.classList.remove('on')); };
 function arrive(){
-  const say = document.getElementById('say');
-  tell({bob: {act: 'away', way: 'rest'}});
-  later(600, () => tell({bob: {act: 'arrive'}}));
-  ARRIVING.forEach((line, i) => {
-    later(400 + i*3800, () => { say.classList.remove('on'); later(700, () => { say.textContent = line; say.classList.add('on'); }); });
-  });
-  later(400 + ARRIVING.length*3800, () => say.classList.remove('on'));
-  later(1200 + ARRIVING.length*3800, () => show('talk'));
+  stop(); show('talk'); world.style.transform = 'none'; veil.classList.add('off'); world.classList.add('on'); $('menuBtn').classList.remove('on'); talkBtn.classList.remove('on'); state.classList.remove('on');
+  tell({bob: {act: 'jump', way: 'rest'}});
+  later(1600, () => { way('speak', 'говорю'); say('О, привет… как ты?', 0); });
+  later(3600, () => { way('listen', ''); state.classList.remove('on'); talkBtn.classList.add('on'); });
+  later(14000, () => { if (at === 'talk' && talkBtn.classList.contains('on')){ way('speak', ''); say('Алло?..', 2200, true); later(2300, () => way('listen', '')); } });
+  later(26000, () => { if (at === 'talk' && talkBtn.classList.contains('on')){ way('speak', ''); say('Ты тут?', 2200, true); later(2300, () => way('listen', '')); } });
 }
+talkBtn.addEventListener('click', () => { $('ask').classList.add('on'); });
+$('micYes').addEventListener('click', () => { $('ask').classList.remove('on'); talk(); });
+$('micNo').addEventListener('click', () => { $('ask').classList.remove('on'); say('Ничего. Если захочешь — включи меня в настройках.', 3800, true); });
 
-// ── the talk: he greets first (said aloud; shown as a film's subtitle), then listens; how he is, in small capitals
+// ── 3: the talk — easy turns, as two strangers who got talking; his questions come by the way, never a list. (Here the
+// person's turns are only his listening; in the app it is their voice)
+const TALK = [
+  ['listen', 4200],
+  ['speak', 'Понятно… А я тут сижу, смотрю, как солнце садится. Сегодня оно какое-то особенное.', 5200],
+  ['listen', 4800],
+  ['think', 1400],
+  ['speak', 'Слушай, а у тебя там сейчас тоже вечер?', 3600],
+  ['listen', 5200],
+  ['speak', 'Ого. Я там ни разу не был… Что там самое лучшее?', 4200],
+  ['listen', 6200],
+  ['think', 1200],
+  ['speak', 'Здорово. Мне правда интересно — расскажешь потом подробнее?', 4600],
+  ['listen', 3600],
+];
 function talk(){
-  const sub = document.getElementById('sub'), state = document.getElementById('state');
-  const way = (w, word) => { tell({bob: {act: 'mark', way: w}}); state.textContent = word; };
-  const line = (text, ms) => { sub.textContent = text; sub.classList.add('on'); later(ms, () => sub.classList.remove('on')); };
-  way('speak', 'говорю'); line(me.name ? `Привет, ${me.name}. Как у тебя день?` : 'Привет. Как у тебя день?', 3600);
-  later(3800, () => way('listen', 'слушаю'));
-  later(11000, () => way('think', 'думаю'));
-  later(12800, () => { way('speak', 'говорю'); line('Слушай, а это ведь правда интересно…', 3200); });
-  later(16400, () => way('listen', 'слушаю'));
+  stop(); talkBtn.classList.remove('on'); sub.classList.remove('on');
+  let t = 0;
+  for (const [w, a, b] of TALK){
+    const ms = typeof a === 'number' ? a : b, text = typeof a === 'string' ? a : '';
+    later(t, () => { way(w, {listen: 'слушаю', think: 'думаю', speak: 'говорю'}[w]); if (text) say(text, ms - 300); });
+    t += ms;
+  }
+  later(t, goodbye);
 }
 
-// ── the look, by eye
+// ── 4: the goodbye is a contact exchange, as people do — then signing in, so he finds you again
+function goodbye(){
+  way('speak', 'говорю');
+  say('Слушай… мне правда было хорошо. Давай не потеряемся? Оставь мне что-нибудь — чтобы я тебя нашёл.', 6200);
+  later(6400, () => { way('listen', ''); state.classList.remove('on'); show('keep'); });
+}
+// ── 5: the one screen to pay — calm, in the app's own voice; «Не сейчас» as large as the rest
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-next]'); if (!b) return;
+  if (b.dataset.next === 'pay'){ show('talk'); way('speak', 'говорю'); say('Отлично. Расскажешь завтра, как прошло?', 3600);
+    later(3800, () => { way('listen', ''); state.classList.remove('on'); show('pay'); }); }
+  if (b.dataset.next === 'free'){ show('talk'); sub.classList.remove('on'); way('rest', ''); state.classList.remove('on'); $('menuBtn').classList.add('on'); tell({bob: {act: null, way: 'auto'}}); }
+});
+document.querySelectorAll('[data-plan]').forEach(b => b.addEventListener('click', () =>
+  document.querySelectorAll('[data-plan]').forEach(x => x.setAttribute('aria-pressed', String(x === b)))));
+
+// ── for looking: the look, a teenager's paywall, again from the start, and a second visit (a short fade, straight to him)
 const looks = document.querySelectorAll('#looks [data-look]');
-looks.forEach(b => b.addEventListener('click', () => { document.body.className = b.dataset.look; looks.forEach(x => x.setAttribute('aria-pressed', String(x === b))); }));
-document.getElementById('again').addEventListener('click', () => show('signin'));
-show('signin');
+looks.forEach(b => b.addEventListener('click', () => { document.body.classList.remove('ghost', 'tlou', 'glass'); document.body.classList.add(b.dataset.look);
+  looks.forEach(x => x.setAttribute('aria-pressed', String(x === b))); }));
+$('teenBtn').addEventListener('click', e => { const on = document.body.classList.toggle('teen'); e.currentTarget.setAttribute('aria-pressed', String(on)); });
+$('again').addEventListener('click', begin);
+$('repeat').addEventListener('click', () => { stop(); cancelAnimationFrame(walk); world.style.transform = 'none'; world.classList.add('on');
+  veil.classList.remove('off'); later(80, () => veil.classList.add('off')); show('talk'); sub.classList.remove('on'); state.classList.remove('on');
+  talkBtn.classList.remove('on'); $('menuBtn').classList.add('on'); tell({bob: {act: 'mark', way: 'rest'}});
+  later(1400, () => { way('speak', 'говорю'); say('О, ты пришёл. Ну как всё прошло?', 3800); later(4000, () => way('listen', 'слушаю')); }); });
+begin();
 </script>
 </body>
 </html>
