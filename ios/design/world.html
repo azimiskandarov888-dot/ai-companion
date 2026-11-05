@@ -1606,6 +1606,7 @@ try {
     }
   });
   window.world = {renderer, scene, camera, atmosphere, sun, cascades, pipeline, tree, field, fieldInfo, setSun, windStrength, windDir, parts, hazeDensity, airParts, sunMap, sunCam, sunView, frame, air, airAtlas, drawAir, fieldRT, groundRT, redrawShadows, treeWind, draw, SETTLE, settleKeep, crisp, settle, settled, sharpened, crownParts, treeColour, skyColour, sunSee, sunPeek, setMood, mood, cloudCover, cloudScale, cloudHorizon, cloudThick, cloudMist, cloudFar, cloudGain, cloudTarget, bob, setBob, body, orb, bobLight, pressRT, knockTree, treeKnock, treeShake, fallen, fallWind, skyTarget, skyScene, drawSky, startTest, SWITCHES, lastRun: () => run,
+    whole: () => total >= 60 && !skyFrames && airWarm <= 0,   // (drawn whole — its sky done, its haze warm: the app shows it only then)
     pace, paceReset, paceState: () => ({step: paceStep, off: paceOff, trying: !!paceTry, held: paceHeld, gpuLag, pixels: renderer.getPixelRatio(), target: paceTarget}),
     setExposure: e => { renderer.toneMappingExposure = e; }};   // for checking from the console
 } catch (err) {

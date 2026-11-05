@@ -9,10 +9,12 @@
    living world (world.html under it):
    0 black, text only (the phone's language; another one by a small text link)
    1 a short film: we walk up the hill toward him (the picture slowly closing in, the sway of steps) — skippable
-   2 he notices us: «О, привет… как ты?» — and «Поговорить с ним» (the microphone); silent too long: «Алло?..»
+   2 he notices us: «О, привет… как ты?» — and a third voice, speaking to the person: «Поговори с ним» (the microphone);
+     silent too long: «Алло?..»
    3 the talk: a few easy turns, as two strangers who got talking — never an interview
-   4 the goodbye is a contact exchange, as people do: «давай не потеряемся» → sign in with Apple or Google
-   5 one calm screen to pay, in the app's own voice (never his), with an equally large «Не сейчас»
+   4 midway, a contact exchange, as people do: «давай не потеряемся» → sign in with Apple or Google — and the talk goes on
+   5 never right after signing in: only when today's free minutes are over (a minute's notice in that third voice, his warm
+     «до завтра?», a pause) — one calm screen to pay, in that same third voice (never his), with an equally large «Не сейчас»
    6 back to him. Three looks to compare by eye: «Ghost», «Last of Us», «Стекло». Texts are drafts. */
 :root { --ink: #fffaf2; --soft: rgba(255, 250, 242, 0.78); --faint: rgba(255, 250, 242, 0.52); --gold: #f1d7a2; --line: rgba(255, 250, 242, 0.3);
   --shade: 12, 8, 5; color-scheme: dark; }
@@ -40,7 +42,7 @@ button:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
 
 /* 0: black, text only */
 #s-begin { justify-content: center; text-align: center; cursor: pointer; }
-.words { margin: 0; font: 400 26px/1.35 ui-serif, "New York", Georgia, serif; }
+.words { margin: 0; font: 400 26px/1.35 ui-serif, "New York", Georgia, serif; text-shadow: 0 2px 22px rgba(0, 0, 0, 0.55); }   /* (legible as the world comes up behind) */
 .words span { display: block; opacity: 0; transition: opacity 2.2s ease; }
 .words span.on { opacity: 1; }
 #s-begin .hint { position: absolute; left: 0; right: 0; bottom: calc(env(safe-area-inset-bottom, 0px) + 86px); opacity: 0; transition: opacity 1.6s ease; }
@@ -70,6 +72,9 @@ button:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
   text-shadow: 0 1px 14px rgba(0, 0, 0, 0.75); min-height: 2.8em; opacity: 0; transition: opacity 0.7s ease; }
 .sub.on { opacity: 1; }
 .sub.faint { color: var(--soft); font-size: 17px; }
+.note { margin: 0; color: var(--soft); font: 400 13px/1.3 -apple-system, system-ui, sans-serif; letter-spacing: 0.04em; text-align: center;
+  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.7); opacity: 0; transition: opacity 1.2s ease; }   /* (the third voice, in passing) */
+.note.on { opacity: 1; }
 .mid { display: grid; gap: 14px; justify-items: center; }
 #talkBtn { opacity: 0; pointer-events: none; transition: opacity 0.9s; text-shadow: 0 1px 12px rgba(0, 0, 0, 0.7); }   /* (legible over a bright sky) */
 #talkBtn.on { opacity: 1; pointer-events: auto; }
@@ -90,11 +95,11 @@ button:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
 .sheetline { margin: 0; text-align: center; color: var(--soft); font: 400 15px/1.45 -apple-system, system-ui, sans-serif; }
 
 /* 5: the one screen to pay — the app speaking, calm, everything on it */
-#s-pay { justify-content: center; }
-#s-pay .card { gap: 18px; }
+#s-pay { justify-content: flex-end; }   /* (a sheet from below, as the one to sign in) */
+#s-pay .card { gap: 14px; }
 .paytitle { margin: 0; text-align: center; font-weight: 400; }
 .gets { margin: 0; text-align: center; color: var(--soft); font: 400 15px/1.5 -apple-system, system-ui, sans-serif; }
-.timeline { display: grid; gap: 12px; margin: 4px 0; padding: 0; list-style: none; font: 400 14px/1.35 -apple-system, system-ui, sans-serif; }
+.timeline { display: grid; gap: 10px; margin: 2px 0; padding: 0; list-style: none; font: 400 14px/1.35 -apple-system, system-ui, sans-serif; }
 .timeline li { display: grid; grid-template-columns: 18px 1fr; gap: 12px; align-items: start; }
 .timeline li::before { content: ""; width: 10px; height: 10px; border-radius: 5px; margin-top: 4px; border: 1.5px solid var(--gold); }
 .timeline li:first-child::before { background: var(--gold); }
@@ -174,7 +179,8 @@ body.glass #s-pay .card, body.glass #s-keep .card { padding: 24px 20px; border-r
   <div class="top"><p class="state" id="state">слушаю</p><button class="menu" id="menuBtn" type="button" aria-label="Меню"><i></i></button></div>
   <div class="mid">
     <p class="sub" id="sub" aria-live="polite"></p>
-    <button class="btn word primary" id="talkBtn" type="button">Поговорить с ним</button>
+    <button class="btn word primary" id="talkBtn" type="button">Поговори с ним</button>
+    <p class="note" id="note" aria-live="polite"></p>
   </div>
 </section>
 
@@ -187,18 +193,19 @@ body.glass #s-pay .card, body.glass #s-keep .card { padding: 24px 20px; border-r
 <!-- 4 · keeping in touch -->
 <section class="screen" id="s-keep" aria-label="Не потеряться"><div class="card">
   <p class="sheetline">Чтобы он помнил тебя и нашёл в следующий раз</p>
-  <button class="btn word primary" type="button" data-next="pay"> Войти через Apple</button>
-  <button class="btn word" type="button" data-next="pay">Войти через Google</button>
-  <button class="small" type="button" data-next="pay">Позже — тогда он помнит тебя только на этом телефоне</button>
+  <button class="btn word primary" type="button" data-next="in"> Войти через Apple</button>
+  <button class="btn word" type="button" data-next="in">Войти через Google</button>
+  <button class="small" type="button" data-next="later">Позже — тогда он помнит тебя только на этом телефоне</button>
 </div></section>
 
 <!-- 5 · the one screen to pay -->
-<section class="screen" id="s-pay" aria-label="Продолжить с Бобом"><div class="card">
-  <h2 class="paytitle">Продолжить с Бобом</h2>
-  <p class="gets">Говорите сколько хотите. Он помнит тебя и вашу историю.<br>Бесплатно — несколько минут в день.</p>
+<section class="screen" id="s-pay" aria-label="Говори с ним дальше"><div class="card">
+  <p class="sheetline">На сегодня бесплатные минуты кончились — завтра будут новые.</p>
+  <h2 class="paytitle">Или говори с ним дальше</h2>
+  <p class="gets">Сколько хочешь и когда хочешь. Он будет помнить тебя и вашу историю.</p>
   <ul class="timeline" id="trial">
     <li><div><b>Сегодня</b><span>7 дней бесплатно, всё открыто</span></div></li>
-    <li><div><b>Через 5 дней</b><span>напомним, что пробные дни кончаются</span></div></li>
+    <li><div><b>Через 5 дней</b><span>напомню, что пробные дни кончаются</span></div></li>
     <li><div><b>Через 7 дней</b><span>оплата за год, если не отменишь раньше</span></div></li>
   </ul>
   <div class="plans" role="group" aria-label="План">
@@ -207,9 +214,9 @@ body.glass #s-pay .card, body.glass #s-keep .card { padding: 24px 20px; border-r
   </div>
   <div class="pair">
     <button class="btn" type="button" data-next="free">Не сейчас</button>
-    <button class="btn primary" id="tryBtn" type="button" data-next="free">7 дней бесплатно</button>
+    <button class="btn primary" id="tryBtn" type="button" data-next="more">7 дней бесплатно</button>
   </div>
-  <button class="btn word" id="parents" type="button" data-next="free">Попросить родителей</button>
+  <button class="btn word" id="parents" type="button" data-next="free">Попроси родителей</button>
   <p class="small">потом — ₽ в год · отменить можно в настройках iPhone<br>Восстановить покупки · Условия · Конфиденциальность<br>Собеседник — искусственный интеллект</p>
 </div></section>
 
@@ -232,7 +239,7 @@ function show(id){
 
 // ── 0: black, a line of text; a touch begins (and wakes the sound); the language is the phone's, another by a text link
 function begin(){
-  stop(); show('begin'); veil.classList.remove('off'); world.classList.remove('on'); world.style.transform = 'scale(1.34)';
+  starting = false; runs++; cancelAnimationFrame(walk); stop(); show('begin'); veil.classList.remove('off'); world.classList.remove('on'); world.style.transform = 'scale(1.34)';
   const lines = document.querySelectorAll('.words span'); lines.forEach(l => l.classList.remove('on'));
   $('tapHint').classList.remove('on'); $('langs').classList.remove('on');
   later(700, () => lines[0].classList.add('on')); later(2200, () => lines[1].classList.add('on'));
@@ -245,23 +252,36 @@ document.querySelectorAll('[data-lang]').forEach(b => b.addEventListener('click'
 // ── 1: the film — we walk up the hill toward him: the world comes out of the dark while the picture slowly closes in to
 // where we stand, with the sway of steps that settles as we stop. (The camera itself stays: the world keeps its light
 // worked out for this one view; the picture is moved, not the camera)
-let walk = null;
+let walk = null, starting = false, runs = 0;
+// (the world is shown only once it is whole — its sky drawn, its haze warm; if it cannot say so, after 8 s anyway)
+const whole = () => new Promise(ok => { const t0 = performance.now(), t = setInterval(() => {
+  if (world.contentWindow?.world?.whole?.() || performance.now() - t0 > 8000){ clearInterval(t); ok(); } }, 150); });
 function film(){
-  stop(); show('film'); tell({bob: {act: 'rest', way: 'rest'}});
-  veil.classList.add('off'); world.classList.add('on');
-  const T = 26000, t0 = performance.now(), ease = x => x < 0.5 ? 4*x*x*x : 1 - Math.pow(-2*x + 2, 3)/2;
-  cancelAnimationFrame(walk);
-  const step = now => {
-    const k = Math.min(1, (now - t0)/T), e = ease(k), sway = 1 - e;   // (the steps fade as we arrive)
-    const s = 1.34 - 0.34*e, y = 3.2*sway*Math.sin(now/1000*2*Math.PI/0.95), x = 1.4*sway*Math.sin(now/1000*Math.PI/0.95);
-    world.style.transform = `translate(${x.toFixed(2)}px, ${(y + 26*sway).toFixed(2)}px) scale(${s.toFixed(4)})`;
-    if (k < 1) walk = requestAnimationFrame(step); else arrive();
-  };
-  walk = requestAnimationFrame(step);
+  if (starting) return; starting = true;
+  const run = ++runs;
+  stop(); tell({bob: {act: 'rest', way: 'rest'}});
+  $('tapHint').classList.remove('on'); $('langs').classList.remove('on');
+  // the words stay while the world comes out of the dark behind them (3.2 s); once it is all there, they melt, one line
+  // and then the other — and only then the film is ours (its «Пропустить»)
+  whole().then(() => {
+    if (run !== runs) return;
+    veil.classList.add('off'); world.classList.add('on');
+    later(3600, () => document.querySelectorAll('.words span').forEach((l, i) => later(i*600, () => l.classList.remove('on'))));
+    later(6600, () => show('film'));
+    const T = 26000, t0 = performance.now(), ease = x => x < 0.5 ? 4*x*x*x : 1 - Math.pow(-2*x + 2, 3)/2;
+    cancelAnimationFrame(walk);
+    const step = now => {
+      const k = Math.min(1, (now - t0)/T), e = ease(k), sway = 1 - e;   // (the steps fade as we arrive)
+      const s = 1.34 - 0.34*e, y = 3.2*sway*Math.sin(now/1000*2*Math.PI/0.95), x = 1.4*sway*Math.sin(now/1000*Math.PI/0.95);
+      world.style.transform = `translate(${x.toFixed(2)}px, ${(y + 26*sway).toFixed(2)}px) scale(${s.toFixed(4)})`;
+      if (k < 1) walk = requestAnimationFrame(step); else arrive();
+    };
+    walk = requestAnimationFrame(step);
+  });
 }
 $('skip').addEventListener('click', () => { cancelAnimationFrame(walk); world.style.transform = 'none'; arrive(); });
 
-// ── 2: he notices us — a little hop, then «О, привет… как ты?»; «Поговорить с ним» asks for the microphone; silent too
+// ── 2: he notices us — a little hop, then «О, привет… как ты?»; «Поговори с ним» asks for the microphone; silent too
 // long, he asks again, softly
 const sub = $('sub'), state = $('state'), talkBtn = $('talkBtn');
 const way = (w, word) => { tell({bob: {act: 'mark', way: w}}); state.textContent = word; state.classList.add('on'); };
@@ -293,29 +313,49 @@ const TALK = [
   ['speak', 'Здорово. Мне правда интересно — расскажешь потом подробнее?', 4600],
   ['listen', 3600],
 ];
-function talk(){
-  stop(); talkBtn.classList.remove('on'); sub.classList.remove('on');
+const note = (text, ms = 6000) => { const n = $('note'); n.textContent = text; n.classList.add('on'); later(ms, () => n.classList.remove('on')); };
+const turns = (script, then) => {   // (a 'note' is the third voice, in passing: it takes no turn)
   let t = 0;
-  for (const [w, a, b] of TALK){
+  for (const [w, a, b] of script){
+    if (w === 'note'){ later(t, () => note(a)); continue; }
     const ms = typeof a === 'number' ? a : b, text = typeof a === 'string' ? a : '';
     later(t, () => { way(w, {listen: 'слушаю', think: 'думаю', speak: 'говорю'}[w]); if (text) say(text, ms - 300); });
     t += ms;
   }
-  later(t, goodbye);
-}
+  later(t, then);
+};
+function talk(){ stop(); talkBtn.classList.remove('on'); sub.classList.remove('on'); turns(TALK, keep); }
 
-// ── 4: the goodbye is a contact exchange, as people do — then signing in, so he finds you again
-function goodbye(){
+// ── 4: midway, a contact exchange, as people do — then signing in, so he finds you again; and the talk goes on
+function keep(){
   way('speak', 'говорю');
-  say('Слушай… мне правда было хорошо. Давай не потеряемся? Оставь мне что-нибудь — чтобы я тебя нашёл.', 6200);
+  say('Слушай… мне правда хорошо с тобой. Давай не потеряемся? Оставь мне что-нибудь — чтобы я тебя нашёл.', 6200);
   later(6400, () => { way('listen', ''); state.classList.remove('on'); show('keep'); });
 }
-// ── 5: the one screen to pay — calm, in the app's own voice; «Не сейчас» as large as the rest
+// ── 5: the money never comes right after signing in: the talk goes on, and only when today's free minutes are over —
+// a minute's notice in the third voice, his warm «до завтра?» at a pause — the one calm screen, in that same voice
+const MORE = [
+  ['listen', 4400],
+  ['speak', 'А ты давно там живёшь?', 2800],
+  ['listen', 5200],
+  ['note', 'Сегодня осталась минута'],
+  ['think', 1200],
+  ['speak', 'Понятно… Знаешь, я бы тоже, наверное, никуда не уезжал.', 4400],
+  ['listen', 5600],
+  ['speak', 'Мне сегодня было правда хорошо. До завтра?', 3800],
+];
+function goOn(word){
+  stop(); show('talk'); talkBtn.classList.remove('on'); way('speak', 'говорю'); say(word, 2600);
+  later(2800, () => turns(MORE, () => { way('rest', ''); state.classList.remove('on'); sub.classList.remove('on'); later(2400, () => show('pay')); }));
+}
 document.addEventListener('click', e => {
   const b = e.target.closest('[data-next]'); if (!b) return;
-  if (b.dataset.next === 'pay'){ show('talk'); way('speak', 'говорю'); say('Отлично. Расскажешь завтра, как прошло?', 3600);
-    later(3800, () => { way('listen', ''); state.classList.remove('on'); show('pay'); }); }
-  if (b.dataset.next === 'free'){ show('talk'); sub.classList.remove('on'); way('rest', ''); state.classList.remove('on'); $('menuBtn').classList.add('on'); tell({bob: {act: null, way: 'auto'}}); }
+  const next = b.dataset.next;
+  if (next === 'in') goOn('Вот. Теперь не потеряемся.');
+  if (next === 'later') goOn('Ладно, потом.');
+  if (next === 'free'){ show('talk'); sub.classList.remove('on'); way('rest', ''); state.classList.remove('on'); $('menuBtn').classList.add('on'); tell({bob: {act: null, way: 'auto'}}); }
+  if (next === 'more'){ show('talk'); $('menuBtn').classList.add('on'); way('speak', 'говорю'); say('О, ты ещё здесь?.. Тогда рассказывай.', 3400);
+    later(3600, () => way('listen', 'слушаю')); }
 });
 document.querySelectorAll('[data-plan]').forEach(b => b.addEventListener('click', () =>
   document.querySelectorAll('[data-plan]').forEach(x => x.setAttribute('aria-pressed', String(x === b)))));
