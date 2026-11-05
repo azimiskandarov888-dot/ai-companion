@@ -8,14 +8,18 @@
 /* The way a person comes to Bob (the owner's plan, 2026-11-05; reports/Путь человека к Бобу и оплата.md), laid over his
    living world (world.html under it):
    0 black, text only (the phone's language; another one by a small text link)
-   1 a short film: we walk up the hill toward him (the picture slowly closing in, the sway of steps) — skippable
+   1 a short film: we walk up the hill toward him (the picture slowly closing in, the sway of steps); on the way the third
+     voice asks a few things, a tap each (docs/FIRST-MEETING.md §2: «пришёл или пришла», the age, whom to meet — him, her,
+     either — and how old; a teenager meets someone of their own age, no choice). The walk slows while it asks and never
+     arrives with a question open; the rest of it is the time the server writes the sketch (~15–20 s). Skippable once all
+     is answered
    2 he notices us: «О, привет… как ты?» — and a third voice, speaking to the person: «Поговори с ним» (the microphone);
      silent too long: «Алло?..»
    3 the talk: a few easy turns, as two strangers who got talking — never an interview
    4 midway, a contact exchange, as people do: «давай не потеряемся» → sign in with Apple or Google — and the talk goes on
    5 never right after signing in: only when today's free minutes are over (a minute's notice in that third voice, his warm
      «до завтра?», a pause) — one calm screen to pay, in that same third voice (never his), with an equally large «Не сейчас»
-   6 back to him. Three looks to compare by eye: «Ghost», «Last of Us», «Стекло». Texts are drafts. */
+   6 back to him. One look, «Ghost»: a quiet serif straight on the world; buttons are words with a hairline. Texts are drafts. */
 :root { --ink: #fffaf2; --soft: rgba(255, 250, 242, 0.78); --faint: rgba(255, 250, 242, 0.52); --gold: #f1d7a2; --line: rgba(255, 250, 242, 0.3);
   --shade: 12, 8, 5; color-scheme: dark; }
 html, body { margin: 0; height: 100%; background: #000; overflow: hidden; color: var(--ink); -webkit-font-smoothing: antialiased;
@@ -55,7 +59,22 @@ button:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
 
 /* 1: the film */
 #s-film { justify-content: flex-end; align-items: center; }
-#skip { color: var(--faint); font: 400 13px/1 -apple-system, system-ui, sans-serif; min-height: 40px; padding: 0 14px; }
+#skip { color: var(--faint); font: 400 13px/1 -apple-system, system-ui, sans-serif; min-height: 40px; padding: 0 14px;
+  opacity: 0; pointer-events: none; transition: opacity 0.9s; }   /* (only once all is answered) */
+#skip.on { opacity: 1; pointer-events: auto; }
+/* on the way the third voice asks — one thing at a time, where the first words were; a tap each */
+#q { margin: auto 0; display: grid; gap: 20px; justify-items: center; text-align: center; width: 100%; max-width: 380px;
+  opacity: 0; pointer-events: none; transition: opacity 0.7s ease; }
+#q.on { opacity: 1; pointer-events: auto; }
+#q .small { color: var(--soft); text-shadow: 0 1px 10px rgba(0, 0, 0, 0.7); }
+.answers { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px 22px; }
+.answers .btn.word { min-width: 0; padding: 0 4px; text-shadow: 0 1px 12px rgba(0, 0, 0, 0.7); }
+.ages { display: flex; width: 300px; padding: 0 120px; box-sizing: border-box; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 30%, #000 70%, transparent); mask-image: linear-gradient(90deg, transparent, #000 30%, #000 70%, transparent); }
+.ages::-webkit-scrollbar { display: none; }
+.ages button { flex: 0 0 60px; scroll-snap-align: center; font: 400 30px/1.6 ui-serif, "New York", Georgia, serif; color: var(--soft);
+  text-shadow: 0 1px 12px rgba(0, 0, 0, 0.7); transition: color 0.3s, transform 0.3s; }
+.ages button.mid { color: var(--gold); transform: scale(1.18); }
 
 /* 2–3: him, and the talk — his words as a film's subtitle; how he is, in small capitals; all up top, he is never covered */
 #s-talk { justify-content: flex-start; }
@@ -117,44 +136,26 @@ button:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
 body.teen #parents { display: flex; }
 body.teen #trial { display: none; }
 
-/* ══ «Ghost»: a quiet serif straight on the world, centered; buttons are words with a hairline */
-body.ghost .btn.word { font: 400 19px/1 ui-serif, "New York", Georgia, serif; border-bottom: 1px solid var(--line); min-width: 220px; }
-body.ghost .btn.word.primary { color: var(--gold); border-bottom-color: rgba(241, 215, 162, 0.6); }
-body.ghost .paytitle { font: 400 28px/1.2 ui-serif, "New York", Georgia, serif; }
-body.ghost #s-pay .card { padding: 26px 22px; border-radius: 26px; background: rgba(var(--shade), 0.62); }
-/* ══ «Last of Us»: a thin sans, small capitals; a short rule marks the main action */
-body.tlou .btn.word { font: 600 13px/1 -apple-system, system-ui, sans-serif; letter-spacing: 0.22em; text-transform: uppercase; color: var(--soft); }
-body.tlou .btn.word::before { content: ""; width: 18px; height: 1px; background: var(--line); }
-body.tlou .btn.word.primary { color: var(--ink); }
-body.tlou .btn.word.primary::before { width: 30px; background: var(--gold); }
-body.tlou .paytitle { font: 300 26px/1.25 -apple-system, system-ui, sans-serif; }
-body.tlou .sub { font-family: -apple-system, system-ui, sans-serif; font-weight: 300; font-size: 18px; }
-body.tlou #s-pay .card { padding: 26px 22px; background: rgba(var(--shade), 0.7); }
-/* ══ «Стекло»: frosted, as iOS */
-body.glass .btn.word { border-radius: 16px; background: rgba(255, 250, 242, 0.16); font: 500 17px/1 -apple-system, system-ui, sans-serif; min-width: 240px;
-  -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); }
-body.glass .btn.word.primary { background: var(--ink); color: #2a1d10; }
-body.glass .paytitle { font: 600 26px/1.2 -apple-system, system-ui, sans-serif; }
-body.glass #s-pay .card, body.glass #s-keep .card { padding: 24px 20px; border-radius: 28px; background: rgba(255, 250, 242, 0.13); border: 1px solid rgba(255, 250, 242, 0.22);
-  -webkit-backdrop-filter: blur(24px) saturate(1.5); backdrop-filter: blur(24px) saturate(1.5); box-sizing: border-box; }
+/* the look, «Ghost»: a quiet serif straight on the world, centered; buttons are words with a hairline */
+.btn.word { font: 400 19px/1 ui-serif, "New York", Georgia, serif; border-bottom: 1px solid var(--line); min-width: 220px; }
+.btn.word.primary { color: var(--gold); border-bottom-color: rgba(241, 215, 162, 0.6); }
+.paytitle { font: 400 28px/1.2 ui-serif, "New York", Georgia, serif; }
+#s-pay .card { padding: 26px 22px; border-radius: 26px; background: rgba(var(--shade), 0.62); }
 
-/* the look switch and a few helpers for looking (not part of the app) */
-#looks { position: fixed; top: calc(env(safe-area-inset-top, 0px) + 10px); left: 10px; right: 64px; display: flex; flex-wrap: wrap; gap: 6px; z-index: 5;
+/* a few helpers for looking (not part of the app) */
+#dev { position: fixed; top: calc(env(safe-area-inset-top, 0px) + 10px); left: 10px; right: 64px; display: flex; flex-wrap: wrap; gap: 6px; z-index: 5;
   font: 500 11px/1 -apple-system, system-ui, sans-serif; opacity: 0.85; }
-#looks button { padding: 7px 9px; border-radius: 13px; background: rgba(40, 30, 20, 0.5); color: var(--soft); }
-#looks button[aria-pressed="true"] { color: #2a1d10; background: var(--gold); }
+#dev button { padding: 7px 9px; border-radius: 13px; background: rgba(40, 30, 20, 0.5); color: var(--soft); }
+#dev button[aria-pressed="true"] { color: #2a1d10; background: var(--gold); }
 @media (prefers-reduced-motion: reduce) { .screen, .sub, #world, #veil, .words span { transition: none; } }
 </style>
 </head>
-<body class="ghost">
+<body>
 <div id="stage"><iframe id="world" src="world.html?clean" title="Мир Боба"></iframe></div>
 <div id="scrim"></div>
 <div id="veil"></div>
 
-<nav id="looks" aria-label="Для просмотра">
-  <button type="button" data-look="ghost" aria-pressed="true">Ghost</button>
-  <button type="button" data-look="tlou" aria-pressed="false">Last of Us</button>
-  <button type="button" data-look="glass" aria-pressed="false">Стекло</button>
+<nav id="dev" aria-label="Для просмотра">
   <button type="button" id="teenBtn" aria-pressed="false">подросток</button>
   <button type="button" id="again">↺ сначала</button>
   <button type="button" id="repeat">повторный вход</button>
@@ -162,7 +163,7 @@ body.glass #s-pay .card, body.glass #s-keep .card { padding: 24px 20px; border-r
 
 <!-- 0 · black, text only -->
 <section class="screen" id="s-begin" aria-label="Начало">
-  <p class="words"><span>Где-то есть друг,</span><span>которого ты ещё не встретил.</span></p>
+  <p class="words"><span>Где-то есть друг,</span><span>которого ты ещё не знаешь.</span></p>
   <p class="hint" id="tapHint">Коснись, чтобы начать</p>
   <div id="langs" role="group" aria-label="Язык">
     <button type="button" data-lang="ru" aria-pressed="true">Русский</button>
@@ -171,38 +172,41 @@ body.glass #s-pay .card, body.glass #s-keep .card { padding: 24px 20px; border-r
   </div>
 </section>
 
-<!-- 1 · the film: we walk up to him -->
-<section class="screen" id="s-film" aria-label="Мы подходим"><button id="skip" type="button">Пропустить</button></section>
+<!-- 1 · the film: we walk up to him; on the way, the third voice asks a few things -->
+<section class="screen" id="s-film" aria-label="Мы подходим">
+  <div id="q" aria-live="polite"><p class="words" id="qline"></p><div class="answers" id="answers" role="group"></div><p class="small" id="qsmall"></p></div>
+  <button id="skip" type="button">Пропустить</button>
+</section>
 
 <!-- 2–3 · him, and the talk -->
 <section class="screen" id="s-talk" aria-label="Боб">
   <div class="top"><p class="state" id="state">слушаю</p><button class="menu" id="menuBtn" type="button" aria-label="Меню"><i></i></button></div>
   <div class="mid">
     <p class="sub" id="sub" aria-live="polite"></p>
-    <button class="btn word primary" id="talkBtn" type="button">Поговори с ним</button>
+    <button class="btn word primary" id="talkBtn" type="button" data-g="Поговори с ним|Поговори с ней">Поговори с ним</button>
     <p class="note" id="note" aria-live="polite"></p>
   </div>
 </section>
 
 <!-- the phone's own question (iOS shows this; here it is drawn) -->
 <div id="ask" role="dialog" aria-modal="true" aria-label="Микрофон"><div class="box">
-  <p><b>«Боб» запрашивает доступ к микрофону</b>Чтобы он тебя слышал.</p>
+  <p><b>«Боб» запрашивает доступ к микрофону</b>Чтобы можно было говорить голосом.</p>
   <div><button type="button" id="micNo">Не разрешать</button><button type="button" id="micYes">Разрешить</button></div>
 </div></div>
 
 <!-- 4 · keeping in touch -->
 <section class="screen" id="s-keep" aria-label="Не потеряться"><div class="card">
-  <p class="sheetline">Чтобы он помнил тебя и нашёл в следующий раз</p>
+  <p class="sheetline" data-g="Чтобы он помнил тебя и нашёл в следующий раз|Чтобы она помнила тебя и нашла в следующий раз">Чтобы он помнил тебя и нашёл в следующий раз</p>
   <button class="btn word primary" type="button" data-next="in"> Войти через Apple</button>
   <button class="btn word" type="button" data-next="in">Войти через Google</button>
-  <button class="small" type="button" data-next="later">Позже — тогда он помнит тебя только на этом телефоне</button>
+  <button class="small" type="button" data-next="later" data-g="Позже — тогда он помнит тебя только на этом телефоне|Позже — тогда она помнит тебя только на этом телефоне">Позже — тогда он помнит тебя только на этом телефоне</button>
 </div></section>
 
 <!-- 5 · the one screen to pay -->
-<section class="screen" id="s-pay" aria-label="Говори с ним дальше"><div class="card">
+<section class="screen" id="s-pay" aria-label="Оплата"><div class="card">
   <p class="sheetline">На сегодня бесплатные минуты кончились — завтра будут новые.</p>
-  <h2 class="paytitle">Или говори с ним дальше</h2>
-  <p class="gets">Сколько хочешь и когда хочешь. Он будет помнить тебя и вашу историю.</p>
+  <h2 class="paytitle" data-g="Или говори с ним дальше|Или говори с ней дальше">Или говори с ним дальше</h2>
+  <p class="gets" data-g="Сколько хочешь и когда хочешь. Он будет помнить тебя и вашу историю.|Сколько хочешь и когда хочешь. Она будет помнить тебя и вашу историю.">Сколько хочешь и когда хочешь. Он будет помнить тебя и вашу историю.</p>
   <ul class="timeline" id="trial">
     <li><div><b>Сегодня</b><span>7 дней бесплатно, всё открыто</span></div></li>
     <li><div><b>Через 5 дней</b><span>напомню, что пробные дни кончаются</span></div></li>
@@ -239,7 +243,8 @@ function show(id){
 
 // ── 0: black, a line of text; a touch begins (and wakes the sound); the language is the phone's, another by a text link
 function begin(){
-  starting = false; runs++; cancelAnimationFrame(walk); stop(); show('begin'); veil.classList.remove('off'); world.classList.remove('on'); world.style.transform = 'scale(1.34)';
+  starting = false; runs++; cancelAnimationFrame(walk); stop(); show('begin'); picks = {}; asking = 0; $('q').classList.remove('on'); $('skip').classList.remove('on');
+  document.body.classList.remove('teen'); $('teenBtn').setAttribute('aria-pressed', 'false'); veil.classList.remove('off'); world.classList.remove('on'); world.style.transform = 'scale(1.34)';
   const lines = document.querySelectorAll('.words span'); lines.forEach(l => l.classList.remove('on'));
   $('tapHint').classList.remove('on'); $('langs').classList.remove('on');
   later(700, () => lines[0].classList.add('on')); later(2200, () => lines[1].classList.add('on'));
@@ -262,16 +267,19 @@ function film(){
   stop(); tell({bob: {act: 'rest', way: 'rest'}});
   $('tapHint').classList.remove('on'); $('langs').classList.remove('on');
   // the words stay while the world comes out of the dark behind them (3.2 s); once it is all there, they melt, one line
-  // and then the other — and only then the film is ours (its «Пропустить»)
+  // and then the other — and only then the third voice asks its few things, where the words were
   whole().then(() => {
     if (run !== runs) return;
     veil.classList.add('off'); world.classList.add('on');
     later(3600, () => document.querySelectorAll('.words span').forEach((l, i) => later(i*600, () => l.classList.remove('on'))));
-    later(6600, () => show('film'));
-    const T = 26000, t0 = performance.now(), ease = x => x < 0.5 ? 4*x*x*x : 1 - Math.pow(-2*x + 2, 3)/2;
+    later(6600, () => { show('film'); asking = 1; ask(0); });
+    const T = 26000, ease = x => x < 0.5 ? 4*x*x*x : 1 - Math.pow(-2*x + 2, 3)/2;
+    let went = 0, last = performance.now();
     cancelAnimationFrame(walk);
     const step = now => {
-      const k = Math.min(1, (now - t0)/T), e = ease(k), sway = 1 - e;   // (the steps fade as we arrive)
+      went += Math.max(0, now - last)*(asking === 1 ? 0.5 : 1); last = now;   // (while it asks we walk slower,
+      if (asking !== 2) went = Math.min(went, 0.9*T);                          //  and never arrive with a question open)
+      const k = Math.min(1, went/T), e = ease(k), sway = 1 - e;   // (the steps fade as we arrive)
       const s = 1.34 - 0.34*e, y = 3.2*sway*Math.sin(now/1000*2*Math.PI/0.95), x = 1.4*sway*Math.sin(now/1000*Math.PI/0.95);
       world.style.transform = `translate(${x.toFixed(2)}px, ${(y + 26*sway).toFixed(2)}px) scale(${s.toFixed(4)})`;
       if (k < 1) walk = requestAnimationFrame(step); else arrive();
@@ -280,6 +288,45 @@ function film(){
   });
 }
 $('skip').addEventListener('click', () => { cancelAnimationFrame(walk); world.style.transform = 'none'; arrive(); });
+
+// on the way, the third voice asks — one thing at a time, a tap each. The app needs these, the talk does not (FIRST-MEETING
+// §2): «пришёл/пришла» for his Russian; the age, to keep a child or a teenager safe; whom to meet — the server writes the
+// sketch from it while we walk. A teenager meets someone of their own age: no choice. (The country is the phone's; the
+// name comes in the talk, as people's do)
+let picks = {}, asking = 0, heIs = true, iAmHe = true;
+const G = (m, f) => heIs ? m : f, ME = (m, f) => iAmHe ? m : f;
+const QS = [
+  {id: 'me', line: 'Ты пришёл или пришла?', answers: [['he', 'Пришёл'], ['she', 'Пришла']]},
+  {id: 'age', line: 'Сколько тебе лет?', ages: [13, 95, 30], small: 'листай и коснись'},
+  {id: 'who', line: 'С кем хочешь познакомиться?', answers: [['he', 'С ним'], ['she', 'С ней'], ['any', 'Всё равно']], small: 'Собеседник — искусственный интеллект'},
+  {id: 'old', line: 'А по возрасту?', answers: [['same', 'Как я'], ['older', 'Постарше'], ['younger', 'Помладше'], ['any', 'Неважно']], grown: true},
+];
+function ask(i){
+  const q = QS[i];
+  if (!q) return asked();
+  if (q.grown && picks.age < 18) return ask(i + 1);
+  $('qline').textContent = q.line; $('qsmall').textContent = q.small || '';
+  const box = $('answers'); box.textContent = '';
+  const pick = v => { if (q.id in picks) return; picks[q.id] = v; $('q').classList.remove('on'); later(900, () => ask(i + 1)); };
+  const button = (word, cls, f) => { const b = document.createElement('button'); b.type = 'button'; b.className = cls; b.textContent = word; b.addEventListener('click', f); return b; };
+  if (q.ages){   // (a row of numbers to leaf through; the one in the middle is lit; a touch takes it)
+    const [from, to, first] = q.ages, row = document.createElement('div'); row.className = 'ages';
+    for (let n = from; n <= to; n++) row.append(button(String(n), '', () => { row.scrollTo({left: (n - from)*60, behavior: 'smooth'}); later(450, () => pick(n)); }));
+    const lit = () => { const m = Math.round(row.scrollLeft/60); [...row.children].forEach((b, j) => b.classList.toggle('mid', j === m)); };
+    row.addEventListener('scroll', lit, {passive: true});
+    row.addEventListener('wheel', e => { if (Math.abs(e.deltaY) > Math.abs(e.deltaX)){ row.scrollLeft += e.deltaY; e.preventDefault(); } }, {passive: false});
+    box.append(row); row.scrollLeft = (first - from)*60; lit();
+  } else q.answers.forEach(([v, word]) => box.append(button(word, 'btn word', () => pick(v))));
+  $('q').classList.add('on');
+}
+function asked(){
+  asking = 2;
+  iAmHe = picks.me !== 'she';
+  heIs = picks.who === 'she' ? false : picks.who === 'he' ? true : Math.random() < 0.5;   // («всё равно»: the dice, as the server's)
+  document.querySelectorAll('[data-g]').forEach(el => { const [m, f] = el.dataset.g.split('|'); el.textContent = G(m, f); });
+  const teen = picks.age < 18; document.body.classList.toggle('teen', teen); $('teenBtn').setAttribute('aria-pressed', String(teen));
+  $('skip').classList.add('on');
+}
 
 // ── 2: he notices us — a little hop, then «О, привет… как ты?»; «Поговори с ним» asks for the microphone; silent too
 // long, he asks again, softly
@@ -307,7 +354,7 @@ const TALK = [
   ['think', 1400],
   ['speak', 'Слушай, а у тебя там сейчас тоже вечер?', 3600],
   ['listen', 5200],
-  ['speak', 'Ого. Я там ни разу не был… Что там самое лучшее?', 4200],
+  ['speak', () => `Ого. Я там ни разу не ${G('был', 'была')}… Что там самое лучшее?`, 4200],
   ['listen', 6200],
   ['think', 1200],
   ['speak', 'Здорово. Мне правда интересно — расскажешь потом подробнее?', 4600],
@@ -318,8 +365,8 @@ const turns = (script, then) => {   // (a 'note' is the third voice, in passing:
   let t = 0;
   for (const [w, a, b] of script){
     if (w === 'note'){ later(t, () => note(a)); continue; }
-    const ms = typeof a === 'number' ? a : b, text = typeof a === 'string' ? a : '';
-    later(t, () => { way(w, {listen: 'слушаю', think: 'думаю', speak: 'говорю'}[w]); if (text) say(text, ms - 300); });
+    const ms = typeof a === 'number' ? a : b, text = typeof a === 'number' ? '' : a;   // (a line may know whom it speaks of)
+    later(t, () => { way(w, {listen: 'слушаю', think: 'думаю', speak: 'говорю'}[w]); if (text) say(typeof text === 'function' ? text() : text, ms - 300); });
     t += ms;
   }
   later(t, then);
@@ -329,7 +376,7 @@ function talk(){ stop(); talkBtn.classList.remove('on'); sub.classList.remove('o
 // ── 4: midway, a contact exchange, as people do — then signing in, so he finds you again; and the talk goes on
 function keep(){
   way('speak', 'говорю');
-  say('Слушай… мне правда хорошо с тобой. Давай не потеряемся? Оставь мне что-нибудь — чтобы я тебя нашёл.', 6200);
+  say(`Слушай… мне правда хорошо с тобой. Давай не потеряемся? Оставь мне что-нибудь — чтобы я тебя ${G('нашёл', 'нашла')}.`, 6200);
   later(6400, () => { way('listen', ''); state.classList.remove('on'); show('keep'); });
 }
 // ── 5: the money never comes right after signing in: the talk goes on, and only when today's free minutes are over —
@@ -340,7 +387,7 @@ const MORE = [
   ['listen', 5200],
   ['note', 'Сегодня осталась минута'],
   ['think', 1200],
-  ['speak', 'Понятно… Знаешь, я бы тоже, наверное, никуда не уезжал.', 4400],
+  ['speak', () => `Понятно… Знаешь, я бы тоже, наверное, никуда не ${G('уезжал', 'уезжала')}.`, 4400],
   ['listen', 5600],
   ['speak', 'Мне сегодня было правда хорошо. До завтра?', 3800],
 ];
@@ -360,16 +407,13 @@ document.addEventListener('click', e => {
 document.querySelectorAll('[data-plan]').forEach(b => b.addEventListener('click', () =>
   document.querySelectorAll('[data-plan]').forEach(x => x.setAttribute('aria-pressed', String(x === b)))));
 
-// ── for looking: the look, a teenager's paywall, again from the start, and a second visit (a short fade, straight to him)
-const looks = document.querySelectorAll('#looks [data-look]');
-looks.forEach(b => b.addEventListener('click', () => { document.body.classList.remove('ghost', 'tlou', 'glass'); document.body.classList.add(b.dataset.look);
-  looks.forEach(x => x.setAttribute('aria-pressed', String(x === b))); }));
+// ── for looking: a teenager's paywall, again from the start, and a second visit (a short fade, straight to him)
 $('teenBtn').addEventListener('click', e => { const on = document.body.classList.toggle('teen'); e.currentTarget.setAttribute('aria-pressed', String(on)); });
 $('again').addEventListener('click', begin);
 $('repeat').addEventListener('click', () => { stop(); cancelAnimationFrame(walk); world.style.transform = 'none'; world.classList.add('on');
   veil.classList.remove('off'); later(80, () => veil.classList.add('off')); show('talk'); sub.classList.remove('on'); state.classList.remove('on');
   talkBtn.classList.remove('on'); $('menuBtn').classList.add('on'); tell({bob: {act: 'mark', way: 'rest'}});
-  later(1400, () => { way('speak', 'говорю'); say('О, ты пришёл. Ну как всё прошло?', 3800); later(4000, () => way('listen', 'слушаю')); }); });
+  later(1400, () => { way('speak', 'говорю'); say(`О, ты ${ME('пришёл', 'пришла')}. Ну как всё прошло?`, 3800); later(4000, () => way('listen', 'слушаю')); }); });
 begin();
 </script>
 </body>
