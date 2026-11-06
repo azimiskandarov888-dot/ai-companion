@@ -115,14 +115,14 @@ THREE.GLSLNodeBuilder.prototype.getStructs = function(stage){
 // the numbers of the world
 const CAM = {pos: [0, 2.1, -7], look: [0, 11.4, 43], fov: 25};      // his picture's telephoto view up the hill
 const PLACE = {lon: 140.81, lat: 42.83, height: 300};                // a meadow below Mount Yōtei, Hokkaido
-const SUN = {az: 4.5, el: 12};                                         // degrees from straight ahead (+ to the left), above the horizon:
-                                                                     // low behind the tree: crown and grass glow through the haze (his pick)
+const SUN = {az: -3, el: 6};                                         // degrees from straight ahead (+ to the left), above the horizon:
+                                                                     // low on the right, under the crown's edge, where he watches it set
 // the sky lives as a real one (his wish, 2026-11-03): each visit the sun stands somewhere of its own — behind the crown
 // or out beside it — and drifts on as slowly as a real one (a quarter of a degree a minute), never twice the same; and
 // how low it stands, so the sunset's colour, follows the companion's mood (feeling.py: valence −1…2, arousal −2…2):
 // glad, a golden sun; calm, low and red; sad and tired, the violet dusk. A changed mood moves it there just as slowly,
 // so no one sees it change. Seconds between steps; °/min it may move; where it may stand; the haze's thickening in sadness
-const SKYLIFE = {every: 15, speed: 0.3, az: [-4, 8], el: [-3, 13], haze: 0.4};
+const SKYLIFE = {every: 15, speed: 0.3, az: [-4.5, -1.5], el: [-3, 9], haze: 0.4};   // (above 7–8° it slips behind the leaves; below 4° behind the hill)
 const moodHeight = (valence, arousal) => Math.min(SKYLIFE.el[1], Math.max(SKYLIFE.el[0], 6 + 3.5*valence - 1.5*Math.max(0, -arousal)));
 const EXPOSURE = 7;                                                  // the camera's exposure, for light in physical units
 // the grade, where Ghost puts its art (after the light, never in it): white balance toward his warm evening, more colour;
@@ -132,9 +132,12 @@ const GRADE = {white: [1, 1, 1], saturation: 1.3, tree: 1.3};
 // the sky, as Ghost's local tone mapping keeps it: darker than the light it throws, so its blue stays deep
 const SKY = {exposure: 0.47, saturation: 2};                         // (its colour is given after the film curve: before it, ×2 pushed
                                                                      // a low sun's sky below nothing — flat yellow bands)
-// the sun seen: its disc a little larger than life (as the sky's authors advise), how bright the disc, the tight glow
-// round it and the wide veil a camera's lens spreads (as seen, after the exposure), and how wide each is (radians)
-const SUNSEE = {radius: 0.0065, disc: 12, core: 1.2, veil: 0.12, coreWidth: 0.02, veilWidth: 0.12};
+// the sun seen as an eye sees it (his wish, 2026-11-06: «not a simple circle — rays, hard to look at»; research report
+// «Сияние солнца и Боб у дерева»): its disc a little larger than life (as the sky's authors advise) and how bright; the
+// tight glow round it and how wide (radians); the eye's veil, the light scattered in the eye, falling off as 1/θ² (CIE 135),
+// how strong and how soft its middle (degrees²); the eye's rays — the ciliary corona's fine needles, out to `reach`
+// degrees, and the lens's faint coloured ring at ~3° — how strong, and how fast they slowly turn and shimmer
+const SUNSEE = {radius: 0.0065, disc: 12, core: 12, coreWidth: 0.0105, veil: 7, veilSoft: 0.5, rays: 3, reach: 7, turn: 0.02, shimmer: 1.3};
 // Bob: an orb of light, as Siri's, that lives in the world as a ball would (his choice, 2026-11-04): heavy enough to
 // roll, bounce and knock, alive enough to roll himself. The mark where he comes to listen (x, z, m); his radius (m),
 // how far his glow reaches (in radii), how bright his ribbons and heart; the light he throws; his colour (a hue; paler
@@ -143,16 +146,16 @@ const SUNSEE = {radius: 0.0065, disc: 12, core: 1.2, veil: 0.12, coreWidth: 0.02
 // rolls at most, or charging (m/s); how fast he leaves the ground jumping (m/s); how deep he presses into the grass to
 // hide (m). The grass: how far round him it gives way (in his radii: flat under him, leaning less and less out to
 // there), how far it lies down (1: flat), how long it takes to stand up again (s)
-const BOB = {mark: [-0.5, 10], radius: 0.7, halo: 1.45, solid: 0.92, ribbons: 0.28, heart: 0.8, light: 9, reach: 8, hue: 38, known: 0,
+const BOB = {mark: [1.15, 27.3], radius: 0.7, halo: 1.45, solid: 0.92, ribbons: 0.28, heart: 0.8, light: 9, reach: 8, hue: 38, known: 0,
   g: 9.8, bounce: 0.35, knock: 0.45, drag: 0.9, roll: 0.25, push: 7, top: 4.5, dash: 9, jump: 4.6, hide: 0.32,
-  give: 2, lean: 1, rise: 10};
+  give: 2, lean: 1, rise: 10, sit: 0.15};   // (sit: how deep he settles into the grass where he stays — sitting, not lying on it)
 // how much brighter the camera sees as the sun sinks (EV at a height): the sky loses about 1 EV a degree near the
 // horizon, and at a fixed exposure dusk went black
 const DUSK = [[12, 0], [5, 0.85], [1, 2.1], [0, 2.7], [-2, 4.2], [-4, 6.3], [-6, 8.9]];
 // the tree: where, turned how, how tall; and how it moves in
 // the wind, in metres at the usual wind's mean gust — how far its top leans, a branch swings, a leaf flutters (a strong
 // wind moves it several times more, a breeze far less)
-const TREE = {at: [6.6, 39.43], turn: 90, height: 16.5, wind: {lean: 0.6, branch: 0.25, leaf: 0.05}};
+const TREE = {at: [3, 28], turn: 90, height: 16.5, wind: {lean: 0.6, branch: 0.25, leaf: 0.05}};   // (35 m away; it stood 46 m away till 2026-11-06)
 // its falling leaves (his choice, 2026-10-28: as many as the wind tears off — a few in a breeze, a flurry in a gust —
 // flying off with it across the sky, as in his picture): at most how many, how long one flies (s), how big (m), how
 // fast it sinks (m/s), how fast the wind carries it (m/s in full wind), how far it swings to and fro (m) and in how long (s)
@@ -190,8 +193,10 @@ if (OFFSCREEN){ const mc = new MessageChannel(), waiting = []; let next = 0;
   mc.port1.onmessage = () => { const now = performance.now(); if (now < next){ mc.port2.postMessage(0); return; }
     next = now + 1000/60; const due = waiting.splice(0); due.forEach(cb => cb(now)); };
   window.requestAnimationFrame = cb => { waiting.push(cb); mc.port2.postMessage(0); return waiting.length; }; }
-// for trying values from the address: ?az=…&el=…&exp=…&through=…&haze=…
+// for trying values from the address: ?az=…&el=…&exp=…&through=…&haze=…, and where things stand: ?tree=x,z&turn=…&bob=x,z
 { const q = new URLSearchParams(location.search), n = k => q.has(k) ? +q.get(k) : undefined;
+  const pair = k => q.has(k) ? q.get(k).split(',').map(Number) : undefined;
+  TREE.at = pair('tree') ?? TREE.at; TREE.turn = n('turn') ?? TREE.turn; BOB.mark = pair('bob') ?? BOB.mark;
   const start = rng(Date.now() % 1e9);                                // (a new sky each visit)
   SUN.az = n('az') ?? +(SKYLIFE.az[0] + start()*(SKYLIFE.az[1] - SKYLIFE.az[0])).toFixed(2);
   SUN.el = n('el') ?? +(moodHeight(0.5, 0) + (start() - 0.5)*5).toFixed(2); HAZE.density = n('haze') ?? HAZE.density;
@@ -865,6 +870,7 @@ try {
     // (the pixel's distance read before the branch: a node first worked out inside it is not worked out outside it,
     // and the air, which reads the same, went missing everywhere else)
     const far = select(d.lessThan(0.1), float(1e4), d).toVar();
+    const toSun = normalize(sunAt.sub(orb.at).mul(vec2(orb.span, 1))), sunOnHim = cloudSun.mul(smoothstep(-0.02, 0.05, sunUp)).mul(0.35);
     If(r.lessThan(BOB.halo), () => {
       const t = orb.flow, deep = float(1).sub(r.mul(r)).max(0).sqrt(), inside = float(1).sub(smoothstep(0.95, 1.0, r));
       let rib = vec3(0);
@@ -878,7 +884,8 @@ try {
       // not show through; the ribbons flow in it, a glassy rim, a hot heart)
       const body = rib.mul(BOB.ribbons).add(orb.colour.mul(deep.mul(0.25).add(0.2))).mul(deep.mul(0.7).add(0.3)).mul(inside)
         .add(orb.colour.mul(smoothstep(0.7, 0.97, r).mul(inside).mul(0.25)))                  // (a glassy rim)
-        .add(vec3(1, 0.95, 0.85).mul(exp(r.pow2().mul(-16))).mul(BOB.heart));                  // (the hot heart)
+        .add(vec3(1, 0.95, 0.85).mul(exp(q.sub(toSun.mul(0.22)).dot(q.sub(toSun.mul(0.22))).mul(-16))).mul(BOB.heart))   // (the hot heart, turned to the sun: he watches it)
+        .add(vec3(1, 0.78, 0.5).mul(smoothstep(0.72, 0.98, r).mul(inside).mul(dot(q.div(r.max(1e-3)), toSun).max(0).pow2()).mul(sunOnHim)));   // (the sun behind him lights his edge on its side)
       const halo = orb.colour.mul(exp(r.sub(1).max(0).mul(-6))).mul(0.08).mul(float(1).sub(smoothstep(1, BOB.halo, r)));   // (a breath of glow: his edge is his edge)
       // (hidden only by what stands in front of his surface there — not by blades inside him, which he has bent away)
       const front = orb.far.sub(deep.mul(BOB.radius)), seen = smoothstep(front.sub(0.12), front.add(0.04), far);
@@ -1028,24 +1035,54 @@ try {
     const want = [weather[0] + 0.25*Math.max(0, -mood.valence), weather[1], weather[2]], now = cloudCover.value;
     ['x', 'y', 'z'].forEach((a, i) => { now[a] += Math.max(-0.01, Math.min(0.01, want[i] - now[a])); });
   }, 15000);
+  // how much of it shows, counted once a frame in two pixels: 24 looks inside the disc (so it twinkles as the leaves
+  // move) and 16 out to about 2° round it (what the eye's veil follows: calmer). In spirals (Vogel), never moving: the
+  // only flicker is the leaves'
   const sunPeek = rtt(Fn(() => {
     const lux = getSplitScalarIlluminance(atmosphere.cameraPositionUnit.add(atmosphere.altitudeCorrectionUnit), atmosphere.sunDirectionECEF).get('direct');
-    const shows = float(0).toVar();
-    for (let k = 0; k < 12; k++){
-      const a = k*2.39996, r = Math.sqrt((k + 0.5)/12), at = sunAt.add(vec2(Math.cos(a)*r, Math.sin(a)*r).mul(sunSpan));
-      const inside = at.x.greaterThan(0).and(at.x.lessThan(1)).and(at.y.greaterThan(0)).and(at.y.lessThan(1)), d = dist.sample(at).r;
-      shows.addAssign(select(inside.not().or(d.greaterThan(500)).or(d.lessThan(0.1)), float(1/12), float(0)));
+    const look = (n, spread) => { const shows = float(0).toVar();
+      for (let k = 0; k < n; k++){
+        const a = k*2.39996, r = Math.sqrt((k + 0.5)/n)*spread, at = sunAt.add(vec2(Math.cos(a)*r, Math.sin(a)*r).mul(sunSpan));
+        const inside = at.x.greaterThan(0).and(at.x.lessThan(1)).and(at.y.greaterThan(0)).and(at.y.lessThan(1)), d = dist.sample(at).r;
+        shows.addAssign(select(inside.not().or(d.greaterThan(500)).or(d.lessThan(0.1)), float(1/n), float(0)));
+      }
+      return shows; };
+    const clouds = texture(cloudTarget.texture, sunAt).a;   // (clouds hide it too)
+    return select(uv().x.lessThan(0.5), vec4(lux.div(max(lux.x, max(lux.y, lux.z)).max(1e-6)), look(24, 1.1).mul(clouds)), vec4(look(16, 5.5).mul(clouds), 0, 0, 1));
+  })(), 2, 1);
+  // the eye's rays, drawn once: ~320 fine needles at random angles, brightest near the sun, a few whiter or warmer, out
+  // to `reach` degrees (Spencer 1995: 128–256 lines; the corona reaches ~7°), and the faint coloured ring at ~3°
+  // (bluish inside, reddish outside). The picture's middle is the sun; its edge `reach` degrees off
+  const corona = (() => {
+    const size = 1024, mid = size/2, perDeg = mid/SUNSEE.reach, rand = rng(5051), c = document.createElement('canvas'); c.width = c.height = size;
+    const g = c.getContext('2d'); g.fillStyle = '#000'; g.fillRect(0, 0, size, size); g.globalCompositeOperation = 'lighter';
+    for (let i = 0; i < 320; i++){
+      const a = rand()*2*Math.PI, from = 0.3*perDeg, to = (1 + 4.6*rand()*rand())*perDeg, bright = 0.15 + 0.85*rand()*rand(), warm = 0.9 + 0.2*rand();
+      const x0 = mid + Math.cos(a)*from, y0 = mid + Math.sin(a)*from, x1 = mid + Math.cos(a)*to, y1 = mid + Math.sin(a)*to;
+      const tone = k => `rgb(${Math.round(255*Math.min(1, bright*k*warm))},${Math.round(255*bright*k)},${Math.round(255*Math.min(1, bright*k/warm))})`;
+      const line = g.createLinearGradient(x0, y0, x1, y1); line.addColorStop(0, tone(0)); line.addColorStop(0.12, tone(1)); line.addColorStop(1, tone(0));
+      g.strokeStyle = line; g.lineWidth = 0.6 + 0.9*rand(); g.beginPath(); g.moveTo(x0, y0); g.lineTo(x1, y1); g.stroke();
     }
-    return vec4(lux.div(max(lux.x, max(lux.y, lux.z)).max(1e-6)), shows.mul(texture(cloudTarget.texture, sunAt).a));   // (clouds hide it too)
-  })(), 1, 1);
+    const ring = g.createRadialGradient(mid, mid, 2.5*perDeg, mid, mid, 3.5*perDeg);
+    ring.addColorStop(0, 'rgba(0,0,0,0)'); ring.addColorStop(0.3, 'rgba(70,90,150,1)'); ring.addColorStop(0.55, 'rgba(80,140,80,1)'); ring.addColorStop(0.8, 'rgba(150,70,45,1)'); ring.addColorStop(1, 'rgba(0,0,0,0)');
+    g.globalAlpha = 0.16; g.fillStyle = ring; g.fillRect(0, 0, size, size);
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.NoColorSpace; t.minFilter = THREE.LinearMipmapLinearFilter; t.generateMipmaps = true;
+    return t;
+  })();
   const sunSeen = Fn(() => {
-    const here = sunPeek.sample(vec2(0.5, 0.5)), tint = here.rgb.max(0), shows = here.a;
+    const here = sunPeek.sample(vec2(0.25, 0.5)), tint = here.rgb.max(0), shows = here.a.pow(0.6), round = sunPeek.sample(vec2(0.75, 0.5)).r;   // (even a sliver of it dazzles: a softer law than its share)
     const dir = normalize(eye.world.mul(vec4(getViewPosition(uv(), float(1), clean), 0)).xyz);
     const off = float(1).sub(dot(dir, sunDir)).mul(2).max(0).sqrt();   // the angle from the sun
     const level = mix(float(3), sunSee.disc, smoothstep(0.03, 0.26, sunUp));   // (a low sun dimmer, so the film keeps it red, not white)
     const disc = smoothstep(sunSee.radius.add(0.0008), sunSee.radius.sub(0.0008), off).mul(sharpened.a.negate().max(0)).mul(level).mul(cloudsSeen.a);   // (a cloud in front hides it)
-    const glow = exp(off.div(sunSee.coreWidth).pow2().negate()).mul(sunSee.core).add(exp(off.div(sunSee.veilWidth).negate()).mul(sunSee.veil)).mul(shows);
-    return tint.mul(disc.add(glow)).div(exposureNow).mul(select(sunUp.greaterThan(-0.02), float(1), float(0)));
+    const deg = off.mul(180/Math.PI), dazzle = smoothstep(-0.01, 0.12, sunUp);   // (a red sun on the horizon can be looked at; higher, it dazzles)
+    const core = exp(off.div(sunSee.coreWidth).pow2().negate()).mul(sunSee.core).mul(shows);
+    const veil = sunSee.veil.div(deg.mul(deg).add(sunSee.veilSoft)).mul(round);   // (~1/θ²: the light scattered in the eye, lifting all round it)
+    // the rays: the picture twice, turning slowly opposite ways and fading into each other, so the needles shimmer
+    const sd = uv().sub(sunAt).mul(vec2(orb.span, 1)).mul(CAM.fov), spin = time.mul(sunSee.turn), beat = sin(time.mul(sunSee.shimmer)).mul(0.5).add(0.5);
+    const ray = a => texture(corona, rotate(sd, a).div(2*SUNSEE.reach).add(0.5)).rgb;
+    const rays = mix(ray(spin), ray(spin.negate().add(1.9)), beat).mul(sunSee.rays).mul(shows).mul(smoothstep(SUNSEE.reach, SUNSEE.reach*0.8, length(sd)));
+    return tint.mul(disc.add(core.add(veil).add(rays).mul(dazzle))).div(exposureNow).mul(select(sunUp.greaterThan(-0.02), float(1), float(0)));
   })();
   // ══ Bob's body and his life: a ball of light the size of a big ball, living on the hill as a ball would. Gravity
   // always; the dense leaves under the grass are his ground (softer where he presses in to hide); the grass holds him
@@ -1061,7 +1098,7 @@ try {
   const surfNormal = (x, z, e = 0.15) => new THREE.Vector3(surf(x - e, z) - surf(x + e, z), 2*e, surf(x, z - e) - surf(x, z + e)).normalize();
   const TRUNK = {at: TREE.at, radius: 0.45, high: 7};                 // the trunk, as he meets it (m)
   const home = () => new THREE.Vector3(BOB.mark[0], surf(...BOB.mark) + BOB.radius, BOB.mark[1]);
-  const AREA = {x: [-3, 2.2], z: [7.5, 15]};                          // where he likes to be: in the picture
+  const AREA = {x: [BOB.mark[0] - 3, BOB.mark[0] + 0.6], z: [BOB.mark[1] - 4.5, BOB.mark[1] + 0.5]};   // where he likes to be: by the tree, in front of it
   const anywhere = () => new THREE.Vector3(AREA.x[0] + Math.random()*(AREA.x[1] - AREA.x[0]), 0, AREA.z[0] + Math.random()*(AREA.z[1] - AREA.z[0]));
   const body = {p: home(), v: new THREE.Vector3(), ground: false, aim: null, top: BOB.top, sink: 0, deep: 0, jumpIn: -1, landed: 0};
   const BOBWAYS = {rest: {glow: 1, breath: 0.18}, listen: {glow: 1.3, breath: 0.05}, think: {glow: 1.1, breath: 0.04, shimmer: 0.12},
@@ -1073,7 +1110,8 @@ try {
   const knockDir = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
   function begin(act, t){                                              // an act starts
     actNow = act; actFrom = t; const b = body; b.top = BOB.top; b.sink = 0;
-    if (act === 'rest') b.aim = null;
+    if (act === 'rest'){ b.aim = null; b.sink = BOB.sit; }
+    if (act === 'mark') b.sink = BOB.sit;
     if (act === 'roll') b.aim = anywhere();
     if (act === 'hide'){ b.aim = null; b.sink = BOB.hide; }
     if (act === 'jump'){ b.aim = null; b.jumpIn = 0.25; }
