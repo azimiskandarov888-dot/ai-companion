@@ -230,7 +230,7 @@ body.teen #trial { display: none; }
 <script>
 // ── the world under it all
 const world = document.getElementById('world'), veil = document.getElementById('veil'), scrim = document.getElementById('scrim');
-const tell = m => world.contentWindow?.postMessage(m, '*');
+const tell = m => world.contentWindow?.postMessage(m, location.origin);   // (to our own world only)
 const whenWorld = new Promise(ok => { const t = setInterval(() => { if (world.contentWindow?.world?.draw){ clearInterval(t); ok(); } }, 300); });
 whenWorld.then(() => tell({bob: {act: 'rest', way: 'rest'}}));
 

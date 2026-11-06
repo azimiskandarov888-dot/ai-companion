@@ -38,6 +38,12 @@ targets:
       - path: BobCompanion
         excludes:
           - "App/Info.plist"      # named below instead, never copied as a resource
+          - "World/**"            # the living world: copied whole, as a folder, just below
+      # The living world (built by ios/world: npm run build). A FOLDER reference, so it lands in the app as World/ with
+      # its own paths intact (field-assets/…), served by WorldView.swift through the bobworld:// scheme.
+      - path: BobCompanion/World
+        type: folder
+        buildPhase: resources
     # ADDING A NEW .swift FILE COSTS MORE THAN IT LOOKS. XcodeGen lists source
     # files individually at generate time, so a file added afterwards is
     # invisible to Xcode — the build fails with "Cannot find X in scope" — and
@@ -58,7 +64,7 @@ targets:
         CURRENT_PROJECT_VERSION: "1"
         GENERATE_INFOPLIST_FILE: NO
         SWIFT_VERSION: "5.0"
-        TARGETED_DEVICE_FAMILY: "1"    # iPhone
+        TARGETED_DEVICE_FAMILY: "1,2"  # iPhone and iPad (2026-11-06: every screen)
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         # The eight graded photographs live in

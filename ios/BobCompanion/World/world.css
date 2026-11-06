@@ -1,0 +1,41 @@
+/* one phone-shaped picture in the middle of the screen; a small line of numbers under it for checking; bottom right, a
+   small sun button opens sliders for the sun, the air and the wind (to choose the light by eye) */
+:root { --bg: #0b0d0c; --fg: #d9d4c7; --muted: #8b8778; --glass: rgba(12, 14, 13, 0.62); --line: rgba(255, 255, 255, 0.16); --accent: #e8b46a; }
+html, body { height: 100%; }
+body { background: var(--bg); color: var(--fg); margin: 0; font: 12px/1.4 ui-monospace, "SF Mono", Menlo, monospace; overflow: hidden; }
+#view { display: block; margin: 0 auto; height: 100%; }
+body.clean #hud, body.clean #lightBtn, body.clean #panel { display: none !important; }
+#hud { position: fixed; left: max(12px, env(safe-area-inset-left, 0px)); bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+  right: 64px; color: var(--muted); pointer-events: none; white-space: pre-wrap; font-variant-numeric: tabular-nums; }
+#lightBtn { position: fixed; right: max(12px, env(safe-area-inset-right, 0px)); bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+  width: 44px; height: 44px; border-radius: 22px; border: 1px solid var(--line); background: var(--glass); color: var(--accent);
+  font: 20px/1 system-ui, sans-serif; cursor: pointer; -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
+#lightBtn:focus-visible, #panel input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+#panel { position: fixed; right: max(12px, env(safe-area-inset-right, 0px)); bottom: calc(60px + env(safe-area-inset-bottom, 0px));
+  width: min(280px, calc(100vw - 24px)); padding: 12px 14px; border-radius: 14px; border: 1px solid var(--line); background: var(--glass);
+  -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); font: 13px/1.3 system-ui, -apple-system, sans-serif; display: grid; gap: 10px; }
+#panel[hidden], #panel [hidden] { display: none; }
+#panel label { display: grid; gap: 4px; color: var(--fg); }
+#panel span { color: var(--muted); font-variant-numeric: tabular-nums; }
+#panel input { width: 100%; accent-color: var(--accent); }
+#panel label.check { display: flex; gap: 8px; align-items: center; }
+#panel label.check input { width: auto; }
+#panel select { font: inherit; color: var(--fg); background: rgba(255, 255, 255, 0.08); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; }
+#panel select option { color: #111; }
+#panel .row, #test .row { display: flex; gap: 8px; }
+#panel button, #test button { flex: 1; font: inherit; color: var(--fg); background: rgba(255, 255, 255, 0.08); border: 1px solid var(--line);
+  border-radius: 8px; padding: 8px 6px; cursor: pointer; }
+#panel button:focus-visible, #test button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* the measurement's note: no blur behind it, which would cost the GPU what is being measured */
+#test { position: fixed; left: max(12px, env(safe-area-inset-left, 0px)); right: max(12px, env(safe-area-inset-right, 0px));
+  top: calc(12px + env(safe-area-inset-top, 0px)); max-width: 440px; max-height: calc(100% - 110px); margin: 0 auto; overflow: auto;
+  padding: 12px 14px; border-radius: 14px; border: 1px solid var(--line); background: rgba(12, 14, 13, 0.88);
+  font: 13px/1.4 system-ui, -apple-system, sans-serif; display: grid; gap: 8px; }
+#test[hidden] { display: none; }
+#test p { margin: 0; }
+#test b { color: var(--accent); font-weight: 600; }
+#test table { border-collapse: collapse; font: 11px/1.35 ui-monospace, "SF Mono", Menlo, monospace; font-variant-numeric: tabular-nums; }
+#test td { padding: 1px 0; vertical-align: top; }
+#test td + td { padding-left: 8px; text-align: right; white-space: nowrap; }
+#test textarea { width: 100%; box-sizing: border-box; height: 7em; font: 11px/1.3 ui-monospace, monospace; color: var(--fg);
+  background: rgba(0, 0, 0, 0.35); border: 1px solid var(--line); border-radius: 8px; }

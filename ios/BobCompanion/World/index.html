@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; img-src 'self' data: blob:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'">
+<title>Мир Боба</title>
+<link rel="stylesheet" href="world.css">
+</head>
+<body class="clean">
+<canvas id="view" aria-label="Холм с белой травой и осенним деревом на закате"></canvas>
+<div id="hud">запускаю…</div>
+<button id="lightBtn" type="button" aria-expanded="false" aria-controls="panel" title="Свет">☀</button>
+<div id="panel" hidden>
+  <label>Солнце: где <span id="azOut"></span><input id="az" type="range" min="-100" max="30" step="1"></label>
+  <label>Солнце: высота <span id="elOut"></span><input id="el" type="range" min="-6" max="40" step="0.5"></label>
+  <label>Дымка <span id="hazeOut"></span><input id="haze" type="range" min="0" max="30" step="1"></label>
+  <label>Ветер <span id="windOut"></span><input id="wind" type="range" min="0" max="100" step="1"></label>
+  <label>Настроение Боба: радость <span id="joyOut"></span><input id="joy" type="range" min="-1" max="2" step="0.1"></label>
+  <label>Настроение Боба: бодрость <span id="awakeOut"></span><input id="awake" type="range" min="-2" max="2" step="0.1"></label>
+  <label>Боб <select id="bobWay"><option value="auto">сам живёт</option><option value="rest">покой</option><option value="listen">слушает</option>
+    <option value="think">думает</option><option value="speak">говорит</option><option value="cant">не слышит</option><option value="sleep">спит</option></select></label>
+  <div class="row"><button id="actRoll" type="button">Катиться</button><button id="actJump" type="button">Прыжок</button>
+    <button id="actHide" type="button">Спрятаться</button></div>
+  <div class="row"><button id="actRest" type="button">Лежать</button><button id="actTree" type="button">В дерево!</button></div>
+  <label class="check"><input id="actAuto" type="checkbox" checked> Живёт сам</label>
+  <label>Его цвет <span id="hueOut"></span><input id="bobHue" type="range" min="0" max="359" step="1"></label>
+  <label>Насколько знакомы <span id="knownOut"></span><input id="bobKnown" type="range" min="0" max="3" step="1"></label>
+  <label class="check"><input id="settle" type="checkbox"> Сглаживание (как TAA в Ghost)</label>
+  <div class="row"><button id="testShort" type="button">Замер · 2 мин</button><button id="testLong" type="button">Долгий · 20 мин</button></div>
+</div>
+<div id="test" hidden role="status" aria-live="polite"></div>
+<script type="module" src="world.js"></script>
+</body>
+</html>

@@ -48,3 +48,8 @@ ios/*.xcodeproj
 
 # Logs
 *.log
+
+# The living world's build tools (ios/world): its packages are fetched by `npm install`, pinned in package-lock.json.
+# The built World folder in the app (ios/BobCompanion/World) IS committed, so Xcode runs without Node; its tree files
+# are byte-identical to ios/design/field-assets, so git stores them once.
+ios/world/node_modules/

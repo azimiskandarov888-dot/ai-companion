@@ -90,6 +90,14 @@
     <array>
         <string>UIInterfaceOrientationPortrait</string>
     </array>
+    <!-- An iPad turns, and is resized in its windows: all four ways (Apple, TN3192: iPad apps must support resizing) -->
+    <key>UISupportedInterfaceOrientations~ipad</key>
+    <array>
+        <string>UIInterfaceOrientationPortrait</string>
+        <string>UIInterfaceOrientationPortraitUpsideDown</string>
+        <string>UIInterfaceOrientationLandscapeLeft</string>
+        <string>UIInterfaceOrientationLandscapeRight</string>
+    </array>
     <key>UIRequiresPersistentWiFi</key>
     <true/>
 </dict>

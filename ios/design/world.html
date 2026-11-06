@@ -221,7 +221,7 @@ if (OFFSCREEN){ const mc = new MessageChannel(), waiting = []; let next = 0;
   const start = rng(Date.now() % 1e9);                                // (a new sky each visit)
   SUN.az = n('az') ?? +(SKYLIFE.az[0] + start()*(SKYLIFE.az[1] - SKYLIFE.az[0])).toFixed(2);
   SUN.el = n('el') ?? +(moodHeight(0.5, 0) + (start() - 0.5)*5).toFixed(2); HAZE.density = n('haze') ?? HAZE.density;
-  globalThis.TRY = {exp: n('exp'), through: n('through'), msaa: n('msaa'), steps: n('steps'), noflare: q.has('noflare')}; }   // (noflare: to weigh its cost)
+  globalThis.TRY = {exp: n('exp'), through: n('through'), msaa: n('msaa'), steps: n('steps'), noflare: q.has('noflare'), wide: n('wide')}; }   // (noflare: to weigh its cost)
 
 // one look for every phone, the full one: his iPhone 11 Pro Max, the oldest that runs iOS 26, held 60 frames a second in
 // it, and fewer pixels made it no faster (pace, below, still lowers the sharpness on a phone that cannot keep up).
@@ -232,7 +232,7 @@ if (OFFSCREEN){ const mc = new MessageChannel(), waiting = []; let next = 0;
 const STEPS = {gpu: 'видеокарта', sky: 'небо', field: 'поле', tree: 'дерево', frames: 'первые кадры'};
 const memory = (() => { try { const m = localStorage; m.setItem('bob.check', '1'); m.removeItem('bob.check'); return m; } catch { return null; } })();
 const lastStep = memory?.getItem('bob.world.step');
-const fell = !!lastStep && lastStep !== 'done';
+const fell = (!!lastStep && lastStep !== 'done') || new URLSearchParams(location.search).has('light');   // (?light: the app says its last world fell)
 const step = s => { try { memory?.setItem('bob.world.step', s); } catch {} };
 const LIGHT = fell ? {pixels: 1.5, shadows: true, cascades: 2, shadowMap: 1024, tree: 'jacaranda', maps: '-512', grass: 0.6, air: 0.35}
   : {pixels: 2, shadows: true, cascades: 3, shadowMap: 2048, tree: 'jacaranda', maps: '', grass: 1, air: 0.5};
@@ -269,7 +269,7 @@ try {
   renderer.toneMappingExposure = TRY.exp ?? EXPOSURE;
 
   const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(CAM.fov, 1, 0.5, 600);
+  const camera = new THREE.PerspectiveCamera(CAM.fov, 1, 0.5, 600), fovNow = uniform(CAM.fov);   // (fovNow: the lens's height now, in degrees)
   camera.position.set(...CAM.pos); camera.lookAt(...CAM.look);
 
   // the one sky: where on Earth we stand, and where the sun is
@@ -486,7 +486,11 @@ try {
 
   // where the clumps stand: anywhere the camera looks (the view's half-width per metre, for a phone or wider), denser and
   // finer near us, sparser and coarser farther away, out of the top of the leaf layer
-  const th = Math.tan(THREE.MathUtils.degToRad(CAM.fov)/2)*0.62*1.1 + 0.01, camZ = CAM.pos[2];
+  // (2026-11-06: as wide as this screen can ever show — a phone stays upright, so 0.62, Safari's, is its widest; a tablet
+  // or an unfolded phone turns, so its widest is its screen on its side. The app says it, ?wide=, else it is guessed)
+  const WIDE = Math.min(1.8, Math.max(0.62, innerWidth/innerHeight, TRY.wide ?? (Math.min(screen.width, screen.height) >= 600
+    ? Math.max(screen.width, screen.height)/Math.min(screen.width, screen.height) : 0.62)));
+  const th = Math.tan(THREE.MathUtils.degToRad(CAM.fov)/2)*WIDE*1.1 + 0.01, camZ = CAM.pos[2];
   function instanced(strips, list){
     const g = strips.geometry(), iP = new Float32Array(list.length*4), iS = new Float32Array(list.length*4);
     list.forEach((q, i) => { iP.set(q.p, i*4); iS.set(q.s, i*4); });
@@ -1123,7 +1127,7 @@ try {
     const core = exp(off.div(sunSee.coreWidth).pow2().negate()).mul(sunSee.core).mul(shows);
     const veil = sunSee.veil.div(deg.mul(deg).add(sunSee.veilSoft)).mul(round);   // (~1/θ²: the light scattered in the eye, lifting all round it)
     // the rays: the picture twice, turning slowly opposite ways and fading into each other, so the needles shimmer
-    const sd = uv().sub(sunAt).mul(vec2(orb.span, 1)).mul(CAM.fov), spin = time.mul(sunSee.turn), beat = sin(time.mul(sunSee.shimmer)).mul(0.5).add(0.5);
+    const sd = uv().sub(sunAt).mul(vec2(orb.span, 1)).mul(fovNow), spin = time.mul(sunSee.turn), beat = sin(time.mul(sunSee.shimmer)).mul(0.5).add(0.5);
     const ray = a => texture(corona, rotate(sd, a).div(2*SUNSEE.reach).add(0.5)).rgb;
     const rays = mix(ray(spin), ray(spin.negate().add(1.9)), beat).mul(sunSee.rays).mul(shows).mul(smoothstep(SUNSEE.reach, SUNSEE.reach*0.8, length(sd)));
     // the camera's flare, in his style: streaks round the sun, ghosts along the line through the middle, a halo mirrored
@@ -1286,7 +1290,21 @@ try {
   const setBob = b => { if (b.way || b.state) bob.way = b.way || b.state; if (b.hue !== undefined) bob.hue = +b.hue; if (b.known !== undefined) bob.known = +b.known;
     if (b.act !== undefined) bob.act = b.act || null; if (b.flare !== undefined) setFlare(+b.flare);
     if (b.level !== undefined){ bob.level = Math.max(0, Math.min(1, +b.level)); bob.heard = performance.now()/1000; } };
-  addEventListener('message', e => { const b = e.data?.bob; if (b) setBob(b); if (e.data?.play !== undefined) playable = !!e.data.play; });   // (from the app: {bob: {way, level, hue, known}})
+  // ── what may come in (2026-11-06): only these ways and acts, only numbers in their ranges; anything else is dropped.
+  // In a browser the prototype's own page posts {bob}, {play}, {bobMood} — from this same origin only; in the iOS app
+  // Swift speaks through window.bobWorld (below), which takes the same checked shapes
+  const WAYS = new Set(['auto', 'rest', 'listen', 'think', 'speak', 'cant', 'sleep']), ACTS = new Set(['rest', 'roll', 'jump', 'hide', 'tree', 'mark', 'go', 'away', 'arrive']);
+  const num = (v, lo, hi) => typeof v === 'number' && Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : undefined;
+  function checked(b){
+    if (!b || typeof b !== 'object') return null;
+    const c = {};
+    if (WAYS.has(b.way)) c.way = b.way;
+    if (b.act === null || ACTS.has(b.act)) c.act = b.act;
+    for (const [k, lo, hi] of [['hue', 0, 359], ['known', 0, 3], ['level', 0, 1], ['flare', 0, 3]]){ const v = num(b[k], lo, hi); if (v !== undefined) c[k] = k === 'flare' ? Math.round(v) : v; }
+    return c;
+  }
+  addEventListener('message', e => { if (e.origin !== location.origin) return;
+    const b = checked(e.data?.bob); if (b) setBob(b); if (typeof e.data?.play === 'boolean') playable = e.data.play; });
   // the grade, the film curve (AgX), and after it colour given back: the film holds bright orange near grey, so the tree
   // and the sky get theirs after it (the bright leaves keep the film's paleness); then a soft darkening toward the
   // corners, and, last, a noise of under one step of the screen's 256, so the sky's long gradients show no bands
@@ -1329,9 +1347,14 @@ try {
     sunMoved = 0; later.push(() => drawSky(1), drawSunMap, drawAir, () => { const far = cascades.lights.at(-1); if (far) far.shadow.needsUpdate = true; });
   }; drawSunMap();
 
+  // any screen, filled (2026-11-06, report «Экраны защита и скорость фронтенда»; till then a phone-shaped picture with
+  // dark sides — 43% of an iPad on its side). The picture was made for a phone at 0.6 (width/height): a narrower screen
+  // keeps that width and sees more above and below, so the trunk is never cut; a wider one keeps the height and sees more
+  // at the sides (Hor+, as games do)
+  const FRAME = 0.6, fovFor = a => a >= FRAME ? CAM.fov : 2*THREE.MathUtils.radToDeg(Math.atan(Math.tan(THREE.MathUtils.degToRad(CAM.fov)/2)*FRAME/a));
   function resize(){
-    const box = document.documentElement, h = box.clientHeight, w = Math.min(box.clientWidth, Math.round(h*0.62)), dpr = renderer.getPixelRatio();
-    canvas.style.width = w + 'px'; renderer.setSize(w, h, false); camera.aspect = w/h; camera.updateProjectionMatrix();
+    const box = document.documentElement, h = box.clientHeight, w = box.clientWidth, dpr = renderer.getPixelRatio();
+    canvas.style.width = w + 'px'; renderer.setSize(w, h, false); camera.aspect = w/h; camera.fov = fovFor(w/h); camera.updateProjectionMatrix(); fovNow.value = camera.fov;
     clean.value.copy(camera.projectionMatrixInverse); placeSun();
     airSize(); redrawShadows();
     skyTarget.setSize(Math.round(w*dpr), Math.round(h*dpr)); drawSky();
@@ -1353,7 +1376,7 @@ try {
   // Safari wait
   const PACE = {steps: [1, 0.875, 0.75], window: 2000, retry: 120e3}, CADENCE = {full: 60, cool: 30};
   let paceGaps = [], paceLast = 0, paceFrom = 0, paceStep = 0, paceLate = 0, paceTry = null, paceOff = false, paceTarget = CADENCE.full;
-  let lastDraw = 0, paceCooled = 0, paceHeld = false, gpuLag = null, gpuAsking = false, touched = false;
+  let lastDraw = 0, paceCooled = 0, paceHeld = false, gpuLag = null, gpuAsking = false, touched = false, phoneSays = 0;   // (phoneSays: the app's word — 1 warm or Low Power Mode, 2 hot)
   const inside = window.top !== window;                                // (shown inside another page, as claude.ai shows it)
   addEventListener('pointerdown', () => { touched = true; }, {capture: true, passive: true});
   const setPace = () => { renderer.setPixelRatio(pixelsMax*PACE.steps[paceStep]); airSize(); };
@@ -1366,7 +1389,7 @@ try {
   }
   function pace(now){
     const gap = paceLast ? now - paceLast : 0; paceLast = now;
-    if (paceOff){ if (now - paceCooled > PACE.retry) paceReset(); return; }
+    if (paceOff){ if (!phoneSays && now - paceCooled > PACE.retry) paceReset(); return; }
     if (skyFrames > 0 || shadowFrames > 0 || airWarm > 0 || gap > 250){ paceGaps = []; paceFrom = now; return; }
     paceGaps.push(gap);
     if (paceGaps.length === 20) hearGpu();
@@ -1391,7 +1414,8 @@ try {
   const mood = {valence: 0.5, arousal: 0}, wander = rng(Date.now() % 1e9 + 7);
   let aimAz = SUN.az, hazeMoved = 0;
   function setMood(valence, arousal){ mood.valence = valence; mood.arousal = arousal; }
-  addEventListener('message', e => { const m = e.data?.bobMood; if (m) setMood(+m.valence || 0, +m.arousal || 0); });   // (from the app)
+  addEventListener('message', e => { if (e.origin !== location.origin) return;
+    const m = e.data?.bobMood; if (m && typeof m === 'object') setMood(num(m.valence, -1, 2) ?? 0, num(m.arousal, -2, 2) ?? 0); });
   setInterval(() => {
     if (measure || document.hidden) return;
     const most = SKYLIFE.speed*SKYLIFE.every/60, toward = (from, to) => from + Math.max(-most, Math.min(most, to - from));
@@ -1689,7 +1713,7 @@ try {
   let frames = 0, total = 0, t0 = performance.now();
   const note = (fell ? ` · в прошлый раз закрылось: ${STEPS[lastStep] || lastStep}` : '')
     + (treeTrouble ? ` · дерево не загрузилось: ${treeTrouble}` : '') + (lastTest ? ` · замер прервался: ${lastTest.name}` : '');
-  renderer.setAnimationLoop(now => {
+  const loop = now => {
     if (document.hidden && !OFFSCREEN) return;
     if (lastDraw && now - lastDraw < 750/(measure ? CADENCE.full : paceTarget)) return;   // (¾ of a frame: a screen's uneven beat
                                                                        // must not drop a frame; a 120 Hz one still gets 60)
@@ -1704,11 +1728,28 @@ try {
       hud.textContent = `${Math.round(frames*1000/(now - t0))} кадров/с · ${renderer.backend.isWebGPUBackend ? 'WebGPU' : 'WebGL2'} · солнце ${SUN.az.toFixed(1)}°/${SUN.el.toFixed(1)}°${note}${sharp}`;
       frames = 0; t0 = now;
     }
-  });
+  };
+  renderer.setAnimationLoop(loop);
   window.world = {renderer, scene, camera, atmosphere, sun, cascades, pipeline, tree, field, fieldInfo, setSun, windStrength, windDir, parts, hazeDensity, airParts, sunMap, sunCam, sunView, frame, air, airAtlas, drawAir, fieldRT, groundRT, redrawShadows, treeWind, draw, SETTLE, settleKeep, crisp, settle, settled, sharpened, crownParts, treeColour, skyColour, sunSee, sunPeek, setMood, mood, cloudCover, cloudScale, cloudHorizon, cloudThick, cloudMist, cloudFar, cloudGain, cloudTarget, bob, setBob, body, orb, bobLight, setFlare, FLARES, pressRT, knockTree, treeKnock, treeShake, fallen, fallWind, skyTarget, skyScene, drawSky, startTest, SWITCHES, lastRun: () => run,
     whole: () => total >= 60 && !skyFrames && airWarm <= 0,   // (drawn whole — its sky done, its haze warm: the app shows it only then)
     pace, paceReset, paceState: () => ({step: paceStep, off: paceOff, trying: !!paceTry, held: paceHeld, gpuLag, pixels: renderer.getPixelRatio(), target: paceTarget}),
     setExposure: e => { renderer.toneMappingExposure = e; }};   // for checking from the console
+  // ── the iOS app's door (2026-11-06): the world sits in a closed web view; Swift calls only these, with values that are
+  // checked here again, and hears the world only through the message handler «bob» — first {type: 'ready'}, once the
+  // world is drawn whole (the app lifts its dark only then)
+  const toApp = m => { try { window.webkit?.messageHandlers?.bob?.postMessage(m); } catch {} };
+  window.bobWorld = Object.freeze({
+    set: b => { const c = checked(b); if (c) setBob(c); },
+    mood: (v, a) => setMood(num(v, -1, 2) ?? 0, num(a, -2, 2) ?? 0),
+    pause: () => renderer.setAnimationLoop(null),                      // (a screen of the app's own covers the world)
+    resume: () => { lastDraw = paceLast = 0; renderer.setAnimationLoop(loop); },
+    phone: level => {                                                  // 0 as usual · 1 Low Power Mode or warm · 2 hot
+      phoneSays = Math.round(num(level, 0, 2) ?? 0);
+      if (!phoneSays) return paceReset();
+      paceTarget = CADENCE.cool; paceOff = true; paceCooled = performance.now();
+      if (phoneSays > 1 && paceStep < PACE.steps.length - 1){ paceStep = PACE.steps.length - 1; setPace(); }
+    }});
+  { const t = setInterval(() => { if (total >= 60 && !skyFrames && airWarm <= 0){ clearInterval(t); toApp({type: 'ready'}); } }, 250); }
 } catch (err) {
   hud.textContent = 'Не запустилось: ' + err.message;
   step('done');                                                        // an error it could say, not a fall

@@ -15,8 +15,22 @@ struct BobCompanionApp: App {
     @StateObject private var conversation = ConversationController()
     @Environment(\.scenePhase) private var scenePhase
 
+    #if DEBUG
+    /// Launched with -worldPreview: the living world alone, to look at it on any simulator.
+    private static let worldPreview = ProcessInfo.processInfo.arguments.contains("-worldPreview")
+    #endif
+
     var body: some Scene {
         WindowGroup {
+            #if DEBUG
+            if Self.worldPreview { WorldPreview() } else { flow }
+            #else
+            flow
+            #endif
+        }
+    }
+
+    private var flow: some View {
             AppFlow(conversation: conversation)
                 .environmentObject(app)
                 .preferredColorScheme(.dark)      // the world is always in shade
@@ -41,6 +55,5 @@ struct BobCompanionApp: App {
                     // inactive while it is up — left him permanently deaf.
                     if phase != .active { conversation.suspend() }
                 }
-        }
     }
 }
