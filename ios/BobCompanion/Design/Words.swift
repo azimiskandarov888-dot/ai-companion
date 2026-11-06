@@ -67,6 +67,8 @@ enum Words {
     // MARK: 5 · the one calm screen to pay (the third voice, never his)
     static var payWhy: String { t("На сегодня бесплатные минуты кончились — завтра будут новые.", "Today’s free minutes are over — new ones tomorrow.") }
     static func payTitle(_ he: Bool) -> String { ru ? "Или говори с \(he ? "ним" : "ней") дальше" : "Or keep talking with \(he ? "him" : "her")" }
+    /// (opened from the menu, while today's minutes are not over yet)
+    static func payTitleOpen(_ he: Bool) -> String { ru ? "Говори с \(he ? "ним" : "ней") без ограничений" : "Talk with \(he ? "him" : "her") without limits" }
     static func gets(_ he: Bool) -> String {
         ru ? "Сколько хочешь и когда хочешь. \(he ? "Он будет помнить" : "Она будет помнить") тебя и вашу историю."
            : "As much as you like, whenever you like. \(he ? "He’ll" : "She’ll") remember you and your story."
@@ -99,19 +101,25 @@ enum Words {
     static var subscribed: String { t("Подписка есть", "Subscribed") }
     static var notSubscribed: String { t("Бесплатно: несколько минут в день", "Free: a few minutes a day") }
     static var manage: String { t("Управлять подпиской", "Manage subscription") }
+    static var subscribeRow: String { t("Подписаться — говорить без ограничений", "Subscribe — talk without limits") }
     static var language: String { t("Язык", "Language") }
     static var crisis: String { t("Если тебе плохо — помощь", "If you’re not okay — help") }
     static var crisisText: String {
         t("Если тебе плохо или опасно, позвони. Это бесплатно и в любое время.",
           "If you’re not okay or in danger, call. It’s free, any time.")
     }
-    static var aboutAI: String { t("Кто он: искусственный интеллект", "Who he is: an AI") }
-    static var aboutAIText: String {
-        t("Твой собеседник — искусственный интеллект, не человек. Он помнит то, что ты рассказываешь, но может ошибаться. Он не врач и не заменит помощь людей.",
-          "Your companion is an AI, not a person. It remembers what you tell it, but it can be wrong. It isn’t a doctor and can’t replace help from people.")
+    static func aboutAI(_ he: Bool) -> String { ru ? "Кто \(he ? "он" : "она"): искусственный интеллект" : "Who \(he ? "he" : "she") is: an AI" }
+    static func aboutAITitle(_ he: Bool) -> String { ru ? (he ? "Кто он" : "Кто она") : (he ? "Who he is" : "Who she is") }
+    static func aboutAIText(_ he: Bool) -> String {
+        ru ? (he ? "Твой собеседник — искусственный интеллект, не человек. Он помнит то, что ты рассказываешь, но может ошибаться. Он не врач и не заменит помощь людей."
+                 : "Твоя собеседница — искусственный интеллект, не человек. Она помнит то, что ты рассказываешь, но может ошибаться. Она не врач и не заменит помощь людей.")
+           : "Your companion is an AI, not a person. It remembers what you tell it, but it can be wrong. It isn’t a doctor and can’t replace help from people."
     }
     static var deleteData: String { t("Удалить мои данные", "Delete my data") }
-    static var deleteConfirm: String { t("Удалить всё: его память о тебе, ваши разговоры и вход? Это нельзя отменить.", "Delete everything: his memory of you, your talks and your sign-in? This can’t be undone.") }
+    static func deleteConfirm(_ he: Bool) -> String {
+        ru ? "Удалить всё: \(he ? "его" : "её") память о тебе, ваши разговоры и вход? Это нельзя отменить."
+           : "Delete everything: \(he ? "his" : "her") memory of you, your talks and your sign-in? This can’t be undone."
+    }
     static var delete: String { t("Удалить", "Delete") }
     static var cancel: String { t("Отмена", "Cancel") }
     static var deleted: String { t("Всё удалено.", "Everything is deleted.") }

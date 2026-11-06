@@ -92,6 +92,7 @@ final class World: NSObject, ObservableObject {
     private(set) var webView: WKWebView!
     private var falls = 0
     private var paused = false
+    private var madeAt = Date()                                         // (how long it takes to be drawn whole)
     private var watchers: [NSObjectProtocol] = []
 
     override init() {
@@ -136,6 +137,7 @@ final class World: NSObject, ObservableObject {
         webView = web
         ready = false
         generation += 1
+        madeAt = Date()
 
         var address = URLComponents()
         address.scheme = WorldScheme.scheme
@@ -229,6 +231,9 @@ extension World: WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandler {
         case "ready":
             ready = true
             tellPhone()
+            #if DEBUG
+            print(String(format: "[world] drawn whole after %.1f s", Date().timeIntervalSince(madeAt)))
+            #endif
         default:
             break                                                        // (unknown: dropped)
         }
@@ -260,7 +265,10 @@ private struct WorldHost: UIViewRepresentable {
     }
 
     func updateUIView(_ host: UIView, context: Context) {
-        if world.webView?.superview !== host { attach(to: host) }       // (a new web view after a fall)
+        // only a NEW web view (made after a fall, not in any host yet) is taken in here — never one that another host
+        // holds: SwiftUI may still update a host it is about to remove, and taking the web view back into it lost the
+        // world (2026-11-07)
+        if let web = world.webView, web.superview == nil { attach(to: host) }
     }
 
     private func attach(to host: UIView) {

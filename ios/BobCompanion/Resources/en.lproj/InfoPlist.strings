@@ -1,0 +1,4 @@
+/* What iOS shows when it asks the person — in the phone's own language (the app's switch cannot reach these). */
+"NSMicrophoneUsageDescription" = "So your companion can hear you. The microphone is on only while you talk.";
+"NSSiriUsageDescription" = "So you can call your companion without opening the app.";
+"NSLocalNetworkUsageDescription" = "So the app can reach your companion’s server on your network.";

@@ -25,7 +25,15 @@ final class Purchases: ObservableObject {
     /// Bought, but a parent has to approve it first.
     @Published private(set) var waitingForParent = false
     @Published private(set) var busy = false
-    @Published var notice: String?
+    @Published var notice: Notice?
+
+    /// What the store last said — kept as what happened, so its words follow a language changed afterwards.
+    enum Notice {
+        case restored, nothingToRestore, trouble
+        var text: String {
+            switch self { case .restored: Words.restored; case .nothingToRestore: Words.nothingToRestore; case .trouble: Words.storeTrouble }
+        }
+    }
 
     private var updates: Task<Void, Never>?
 
@@ -47,8 +55,9 @@ final class Purchases: ObservableObject {
             year = products.first { $0.id == Self.yearID }
             month = products.first { $0.id == Self.monthID }
             trialEligible = await year?.subscription?.isEligibleForIntroOffer ?? false
+            if products.isEmpty { notice = .trouble }                       // (no prices came: the buttons cannot work, say why)
         } catch {
-            notice = Words.storeTrouble
+            notice = .trouble
         }
         await refresh()
     }
@@ -60,7 +69,7 @@ final class Purchases: ObservableObject {
         do {
             switch try await product.purchase() {
             case .success(let result):
-                guard case .verified(let transaction) = result else { notice = Words.storeTrouble; return }
+                guard case .verified(let transaction) = result else { notice = .trouble; return }
                 await transaction.finish()
                 await refresh()
             case .pending:
@@ -71,7 +80,7 @@ final class Purchases: ObservableObject {
                 break
             }
         } catch {
-            notice = Words.storeTrouble
+            notice = .trouble
         }
     }
 
@@ -82,9 +91,11 @@ final class Purchases: ObservableObject {
         do {
             try await AppStore.sync()
             await refresh()
-            notice = active ? Words.restored : Words.nothingToRestore
+            notice = active ? .restored : .nothingToRestore
+        } catch StoreKitError.userCancelled {
+            notice = nil                                                   // (the person closed Apple's sign-in: nothing went wrong)
         } catch {
-            notice = Words.storeTrouble
+            notice = .trouble
         }
     }
 

@@ -20,7 +20,17 @@ final class AppConfig {
     /// Wi-Fi (e.g. http://192.168.1.50:8000). For 24/7 use, a hosted server.
     /// Editable from the hidden Settings screen (long-press the face).
     var backendURLString: String {
-        get { defaults.string(forKey: Keys.backendURL) ?? "http://192.168.1.50:8000" }
+        get {
+            #if DEBUG
+            // -backend <url> at launch wins (testing); the simulator reaches this Mac's server at localhost
+            let args = ProcessInfo.processInfo.arguments
+            if let i = args.firstIndex(of: "-backend"), i + 1 < args.count { return args[i + 1] }
+            #if targetEnvironment(simulator)
+            if defaults.string(forKey: Keys.backendURL) == nil { return "http://localhost:8000" }
+            #endif
+            #endif
+            return defaults.string(forKey: Keys.backendURL) ?? "http://192.168.1.50:8000"
+        }
         set { defaults.set(newValue, forKey: Keys.backendURL) }
     }
 

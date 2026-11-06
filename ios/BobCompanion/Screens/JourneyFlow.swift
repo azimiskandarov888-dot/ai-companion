@@ -24,8 +24,23 @@ enum Ghost {
 }
 
 extension View {
-    /// Legible over the moving world, as the prototype's text-shadow.
-    func overWorld(_ radius: CGFloat = 11) -> some View { shadow(color: .black.opacity(0.6), radius: radius, x: 0, y: 1) }
+    /// Legible over the moving world, as the prototype's text-shadow — and a close one, so thin serif strokes keep their
+    /// edge over lit leaves as light as the gold itself.
+    func overWorld(_ radius: CGFloat = 11) -> some View {
+        shadow(color: .black.opacity(0.5), radius: 1.5, x: 0, y: 0.5).shadow(color: .black.opacity(0.6), radius: radius, x: 0, y: 1)
+    }
+}
+
+/// A breath of dusk behind words over the world, seen as evening light, not as a box. A gradient, no blur: nothing to
+/// work out again while the world moves under it.
+struct Scrim: View {
+    var body: some View {
+        EllipticalGradient(colors: [.black.opacity(0.42), .black.opacity(0.2), .clear], center: .center,
+                           startRadiusFraction: 0, endRadiusFraction: 0.5)
+            .padding(.horizontal, -72).padding(.vertical, -56)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+    }
 }
 
 /// A word with a hairline under it. At least 44 points tall (Apple), its words scale with the text size.
@@ -60,7 +75,7 @@ struct JourneyFlow: View {
     @ObservedObject var conversation: ConversationController
     @StateObject private var world = World()
     @StateObject private var store = Purchases()
-    @StateObject private var walk = Walk()
+    @State private var walk = Walk()                                // (held, not observed: only WalkingWorld re-draws as we walk)
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.openURL) private var openURL
     @Environment(\.scenePhase) private var scenePhase
@@ -68,6 +83,7 @@ struct JourneyFlow: View {
     @AppStorage("journey.heIs") private var heIs = true                             // whom the person met
     @AppStorage("journey.iAmHe") private var iAmHe = true                           // for his Russian
     @AppStorage("journey.keepAsked") private var keepAsked = false
+    @AppStorage("journey.payShownDay") private var payShownDay = ""                  // (the calm screen comes once a day, by itself)
 
     enum Stage { case begin, film, talk }
     enum Question { case me, age, who, old }
@@ -98,9 +114,7 @@ struct JourneyFlow: View {
     var body: some View {
         GeometryReader { geo in
             ZStack {
-                WorldView(world: world)
-                    .scaleEffect(walk.scale, anchor: UnitPoint(x: 0.25, y: 0.71))
-                    .offset(x: walk.x, y: walk.y)
+                WalkingWorld(world: world, walk: walk)
                 Color.black.opacity(veil).ignoresSafeArea().allowsHitTesting(false)
                 if stage != .talk { words }
                 switch stage {
@@ -110,22 +124,33 @@ struct JourneyFlow: View {
                 }
             }
         }
-        .id(language)                                                  // (a new language: every word anew)
+        // Every word follows the language: reading it here (as the locale, which Apple's own views follow too) re-draws
+        // the screens over the world when it changes, on every stage. (Not .id(language): that re-made the world's web
+        // view host, and in the swap the old host took the web view back and left with it — a black screen after
+        // changing the language twice, 2026-11-07)
+        .environment(\.locale, Locale(identifier: language))
         .sheet(item: $sheet, onDismiss: sheetClosed) { which in
             switch which {
             case .keep: KeepSheet(he: heIs) { sheet = nil }
-            case .pay:  PaySheet(store: store, he: heIs, teen: app.isTeenager) { sheet = nil }
-            case .menu: MenuSheet(store: store, he: heIs, signIn: { sheet = nil; after(0.6) { sheet = .keep } }) { sheet = nil }
+            case .pay:  PaySheet(store: store, he: heIs, teen: app.isTeenager, rested: conversation.status == .restedForToday) { sheet = nil }
+            case .menu: MenuSheet(store: store, he: heIs, signIn: { sheet = nil; after(0.6) { sheet = .keep } },
+                                  subscribe: { sheet = nil; after(0.6) { sheet = .pay } }) { sheet = nil }
             }
         }
-        .onChange(of: sheet) { _, now in if now != nil { conversation.suspend() } }
+        .onChange(of: sheet) { _, now in
+            if now != nil { conversation.suspend() }
+            now == .menu || now == .pay ? world.pause() : world.resume()   // (these two cover the world: no need to draw it)
+        }
         .onAppear(perform: start)
         .onChange(of: conversation.status) { _, s in hear(s) }
         .onChange(of: conversation.lastReply) { _, reply in heard(reply) }
         .onChange(of: conversation.secondsLeft) { _, left in minuteLeft(left) }
         .onChange(of: app.hasArrived) { _, arrived in if !arrived && stage == .talk { restart() } }   // (his data deleted)
         .onChange(of: scenePhase) { _, phase in
-            if phase == .active, stage == .talk, talking, sheet == nil { conversation.resume() }
+            guard phase == .active, stage == .talk else { return }
+            if talking, sheet == nil, conversation.status != .restedForToday { conversation.resume() }
+            // back from Settings with the microphone now allowed: the button to talk returns
+            if micDenied, AVAudioApplicationGranted.now { withAnimation { micDenied = false; talkOn = true } }
         }
         .preferredColorScheme(.dark)
     }
@@ -265,7 +290,7 @@ struct JourneyFlow: View {
     private var filmScreen: some View {
         VStack(spacing: 20) {
             Spacer()
-            if let q = question { questionView(q).opacity(questionOn ? 1 : 0).allowsHitTesting(questionOn) }
+            if let q = question { questionView(q).background { Scrim() }.opacity(questionOn ? 1 : 0).allowsHitTesting(questionOn) }
             Spacer()
             Button(Words.skip) { walk.finish() }
                 .font(.footnote).foregroundStyle(Ghost.faint).frame(minWidth: 44, minHeight: 44)
@@ -336,30 +361,36 @@ struct JourneyFlow: View {
                 Spacer()
                 Button { sheet = .menu } label: {
                     Image(systemName: "ellipsis").font(.body.weight(.semibold)).foregroundStyle(Ghost.ink)
+                        .dynamicTypeSize(...DynamicTypeSize.accessibility1)    // (the dots grow with the text, but stay in their circle)
                         .frame(width: 44, height: 44).background(.ultraThinMaterial, in: Circle())
                 }
                 .accessibilityLabel(Words.menu)
+                .accessibilityShowsLargeContentViewer()
             }
             .padding(.horizontal, 20)
             Spacer().frame(height: height*0.16)
-            if let said {
-                Text(said)
-                    .font(.system(saidFaint ? .body : .title3, design: .serif))
-                    .foregroundStyle(saidFaint ? Ghost.soft : Ghost.ink)
-                    .multilineTextAlignment(.center).overWorld(14)
-                    .padding(.horizontal, 28).frame(maxWidth: 560)
-                    .transition(.opacity)
-                    .accessibilityAddTraits(.updatesFrequently)
-            }
-            if talkOn && !talking { WordButton(title: Words.talk(heIs), primary: true, action: startTalking).transition(.opacity) }
-            if micDenied {
-                VStack(spacing: 10) {
-                    Text(Words.micDenied(heIs)).font(.subheadline).foregroundStyle(Ghost.soft).multilineTextAlignment(.center).overWorld()
-                    WordButton(title: Words.openSettings) { if let u = URL(string: UIApplication.openSettingsURLString) { openURL(u) } }
+            VStack(spacing: 14) {
+                if let said {
+                    Text(said)
+                        .font(.system(saidFaint ? .body : .title3, design: .serif))
+                        .foregroundStyle(saidFaint ? Ghost.soft : Ghost.ink)
+                        .multilineTextAlignment(.center).overWorld(14)
+                        .padding(.horizontal, 28).frame(maxWidth: 560)
+                        .transition(.opacity)
+                        .accessibilityAddTraits(.updatesFrequently)
                 }
-                .padding(.horizontal, 28)
+                // (not while the microphone is refused: then the way on is Settings, and this would only ask again)
+                if talkOn && !talking && !micDenied { WordButton(title: Words.talk(heIs), primary: true, action: startTalking).transition(.opacity) }
+                if micDenied {
+                    VStack(spacing: 10) {
+                        Text(Words.micDenied(heIs)).font(.subheadline).foregroundStyle(Ghost.soft).multilineTextAlignment(.center).overWorld()
+                        WordButton(title: Words.openSettings) { if let u = URL(string: UIApplication.openSettingsURLString) { openURL(u) } }
+                    }
+                    .padding(.horizontal, 28)
+                }
+                if let note { Text(note).font(.footnote).foregroundStyle(Ghost.soft).overWorld().transition(.opacity) }
             }
-            if let note { Text(note).font(.footnote).foregroundStyle(Ghost.soft).overWorld().transition(.opacity) }
+            .background { Scrim().opacity(said != nil || (talkOn && !talking) || micDenied || note != nil ? 1 : 0) }
             if let alarm = conversation.emergency { helpNow(alarm) }
             Spacer()
         }
@@ -372,14 +403,19 @@ struct JourneyFlow: View {
                 withAnimation { talkOn = false; micDenied = false; talking = true; said = nil }
                 conversation.turnOn()
             } else {
-                withAnimation { micDenied = true }
+                withAnimation { micDenied = true; talkOn = false }
             }
         }
     }
 
-    /// Returning: listen at once if the microphone was allowed before; else the button asks.
+    /// Returning: listen at once if the microphone was allowed before; if it was refused, the way to Settings; else the
+    /// button asks.
     private func listenIfAllowed() {
-        if AVAudioApplicationGranted.now { talking = true; conversation.turnOn() } else { withAnimation { talkOn = true } }
+        switch AVAudioApplication.shared.recordPermission {
+        case .granted: talking = true; conversation.turnOn()
+        case .denied:  withAnimation { micDenied = true }
+        default:       withAnimation { talkOn = true }
+        }
     }
 
     private func hear(_ status: ConversationController.Status) {
@@ -394,7 +430,9 @@ struct JourneyFlow: View {
         case .restedForToday:
             // today's free minutes are over: his warm words came from the server; a pause; the third voice's calm screen
             world.set(way: "rest"); stateWord = ""
-            if !store.active { after(2.4) { sheet = .pay } }
+            // once a day, by itself (after «Не сейчас» he rests till tomorrow; the menu still has «Подписаться»)
+            let today = Self.day.string(from: Date())
+            if !store.active, payShownDay != today { payShownDay = today; after(2.4) { sheet = .pay } }
         }
     }
 
@@ -414,8 +452,10 @@ struct JourneyFlow: View {
     }
 
     private func sheetClosed() {
-        if stage == .talk, talking { conversation.resume() }
+        if stage == .talk, talking, conversation.status != .restedForToday { conversation.resume() }   // (rested: till tomorrow)
     }
+
+    private static let day: DateFormatter = { let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"; return f }()
 
     private func say(_ text: String, for seconds: Double?, faint: Bool = false) {
         withAnimation(.easeInOut(duration: 0.7)) { said = text; saidFaint = faint }
@@ -466,6 +506,19 @@ struct JourneyFlow: View {
     }
 
     private func cancelTimers() { timers.forEach { $0.cancel() }; timers = [] }
+}
+
+/// The world as we walk up to it. Only this view observes the walk, so the screens over it are not re-drawn sixty
+/// times a second during the film.
+private struct WalkingWorld: View {
+    @ObservedObject var world: World
+    @ObservedObject var walk: Walk
+
+    var body: some View {
+        WorldView(world: world)
+            .scaleEffect(walk.scale, anchor: UnitPoint(x: 0.25, y: 0.71))
+            .offset(x: walk.x, y: walk.y)
+    }
 }
 
 import AVFAudio

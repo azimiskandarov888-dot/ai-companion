@@ -1,0 +1,4 @@
+/* What iOS shows when it asks the person — in the phone's own language (the app's switch cannot reach these). */
+"NSMicrophoneUsageDescription" = "Чтобы собеседник тебя слышал. Микрофон работает, только пока ты говоришь.";
+"NSSiriUsageDescription" = "Чтобы позвать собеседника, не открывая приложение.";
+"NSLocalNetworkUsageDescription" = "Чтобы приложение могло связаться с сервером собеседника в твоей сети.";

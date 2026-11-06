@@ -52,6 +52,9 @@ struct KeepSheet: View {
             }
             .signInWithAppleButtonStyle(.white)
             .frame(maxWidth: 360, minHeight: 50, maxHeight: 50)
+            #if DEBUG
+            // (Google's own SDK is not in yet: in a build for people this button would only pretend, so it is shown
+            // only while looking — stage 4)
             Button {
                 Task { do { try await app.signIn(with: "Google"); done() } catch { trouble = Words.signInFailed } }
             } label: {
@@ -59,6 +62,7 @@ struct KeepSheet: View {
                     .background(Ghost.ink.opacity(0.12), in: RoundedRectangle(cornerRadius: 10))
                     .foregroundStyle(Ghost.ink)
             }
+            #endif
             Button(Words.later(he), action: done)
                 .font(.footnote).foregroundStyle(Ghost.faint).multilineTextAlignment(.center).frame(minHeight: 44)
             if let trouble { Text(trouble).font(.footnote).foregroundStyle(Ghost.soft).multilineTextAlignment(.center) }
@@ -76,6 +80,8 @@ struct PaySheet: View {
     @ObservedObject var store: Purchases
     let he: Bool
     let teen: Bool
+    /// Today's free minutes are over (it came by itself); else it was opened from the menu, and says nothing of minutes.
+    let rested: Bool
     let done: () -> Void
     @Environment(\.openURL) private var openURL
     @State private var plan = Purchases.yearID
@@ -86,8 +92,8 @@ struct PaySheet: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 16) {
-                Text(Words.payWhy).font(.subheadline).foregroundStyle(Ghost.soft).multilineTextAlignment(.center)
-                sheetTitle(Words.payTitle(he))
+                if rested { Text(Words.payWhy).font(.subheadline).foregroundStyle(Ghost.soft).multilineTextAlignment(.center) }
+                sheetTitle(rested ? Words.payTitle(he) : Words.payTitleOpen(he))
                 Text(Words.gets(he)).font(.subheadline).foregroundStyle(Ghost.soft).multilineTextAlignment(.center)
                 if store.trialEligible && !teen, let year = store.year { timeline(year) }
                 HStack(spacing: 10) {
@@ -115,7 +121,7 @@ struct PaySheet: View {
                 }
                 .font(.footnote).tint(Ghost.soft)
                 Text(Words.ai).font(.caption).foregroundStyle(Ghost.faint)
-                if let notice = store.notice { Text(notice).font(.footnote).foregroundStyle(Ghost.soft).multilineTextAlignment(.center) }
+                if let notice = store.notice { Text(notice.text).font(.footnote).foregroundStyle(Ghost.soft).multilineTextAlignment(.center) }
             }
             .padding(24)
             .frame(maxWidth: 560)
@@ -125,6 +131,7 @@ struct PaySheet: View {
         .presentationBackground(Ghost.shade.opacity(0.94))
         .sheet(isPresented: $privacy) { PrivacyText() }
         .onChange(of: store.active) { _, paid in if paid { done() } }
+        .onAppear { store.notice = nil }                                   // (no word left over from another time)
         .task { await store.load() }
     }
 
@@ -167,6 +174,7 @@ struct PaySheet: View {
 
 private struct PayButton: ButtonStyle {
     let primary: Bool
+    @Environment(\.isEnabled) private var enabled                       // (no prices from the store: it looks as dead as it is)
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.subheadline.weight(.semibold))
@@ -175,7 +183,7 @@ private struct PayButton: ButtonStyle {
             .foregroundStyle(primary ? Color(red: 0.16, green: 0.11, blue: 0.06) : Ghost.ink)
             .background(primary ? Ghost.ink : .clear, in: RoundedRectangle(cornerRadius: 14))
             .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(primary ? Ghost.ink : Ghost.line))
-            .opacity(configuration.isPressed ? 0.7 : 1)
+            .opacity(configuration.isPressed ? 0.7 : enabled ? 1 : 0.4)
     }
 }
 
@@ -186,6 +194,7 @@ struct MenuSheet: View {
     @ObservedObject var store: Purchases
     let he: Bool
     let signIn: () -> Void
+    let subscribe: () -> Void
     let done: () -> Void
     @Environment(\.openURL) private var openURL
     @AppStorage("appLanguage") private var language = Language.russian.rawValue
@@ -201,9 +210,9 @@ struct MenuSheet: View {
             List {
                 Section(Words.subscription) {
                     Text(store.active ? Words.subscribed : Words.notSubscribed).foregroundStyle(.secondary)
-                    if store.active { Button(Words.manage) { manage = true } }
+                    if store.active { Button(Words.manage) { manage = true } } else { Button(Words.subscribeRow, action: subscribe) }
                     Button(Words.restore) { Task { await store.restore() } }
-                    if let notice = store.notice { Text(notice).font(.footnote).foregroundStyle(.secondary) }
+                    if let notice = store.notice { Text(notice.text).font(.footnote).foregroundStyle(.secondary) }
                 }
                 Section {
                     if app.account == nil { Button(Words.signIn, action: signIn) } else { Text(Words.signedIn).foregroundStyle(.secondary) }
@@ -217,7 +226,7 @@ struct MenuSheet: View {
                 }
                 Section {
                     Button(Words.crisis) { page = .crisis }
-                    Button(Words.aboutAI) { page = .ai }
+                    Button(Words.aboutAI(he)) { page = .ai }
                     Button(Words.microphone) { if let u = URL(string: UIApplication.openSettingsURLString) { openURL(u) } }
                 }
                 Section {
@@ -234,7 +243,10 @@ struct MenuSheet: View {
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button(Words.close, action: done) } }
         }
         .manageSubscriptionsSheet(isPresented: $manage)
-        .confirmationDialog(Words.deleteConfirm, isPresented: $confirmDelete, titleVisibility: .visible) {
+        // (an alert, not a confirmation dialog: on iOS 26 that one comes as a bubble with no «Отмена» in it — and this
+        // cannot be undone, so the way back is a button anyone can see)
+        .alert(Words.deleteConfirm(he), isPresented: $confirmDelete) {
+            Button(Words.cancel, role: .cancel) {}
             Button(Words.delete, role: .destructive) {
                 Task {
                     let ok = await app.deleteEverything()
@@ -242,15 +254,15 @@ struct MenuSheet: View {
                     if ok { done() }
                 }
             }
-            Button(Words.cancel, role: .cancel) {}
         }
         .sheet(item: $page) { which in
             switch which {
             case .privacy: PrivacyText()
-            case .ai: TextPage(title: Words.aboutAI, text: Words.aboutAIText)
+            case .ai: TextPage(title: Words.aboutAITitle(he), text: Words.aboutAIText(he))
             case .crisis: CrisisPage()
             }
         }
+        .onAppear { store.notice = nil }
         .presentationDetents([.large])
     }
 }
@@ -267,6 +279,7 @@ struct CrisisPage: View {
                 ForEach(Crisis.numbers, id: \.self) { number in
                     Button { if let u = URL(string: "tel://\(number)") { openURL(u) } } label: {
                         Text(Strings.helpNowCall(number)()).font(.headline).frame(maxWidth: 360, minHeight: 50)
+                            .foregroundStyle(Color(red: 0.16, green: 0.11, blue: 0.06))   // (dark on the gold: white on it was hard to read)
                     }
                     .buttonStyle(.borderedProminent)
                 }
@@ -302,25 +315,25 @@ struct PrivacyText: View {
         TextPage(title: Words.privacy, text: Strings.language == .russian ? """
         Черновик. Окончательный текст готовит взрослый вместе с юристом.
 
-        Что мы получаем. Твой голос, когда ты говоришь с ним: запись уходит на наш сервер, там превращается в текст и \
-        не хранится как звук. Текст ваших разговоров и то, что он о тебе помнит. Твой возраст и ответы на вопросы в \
-        начале — чтобы подобрать собеседника и беречь подростков. Случайный номер этого телефона, чтобы сервер узнавал \
-        тебя. Если ты вошёл через Apple — имя, которое Apple нам передаст.
+        Что мы получаем. Твой голос, когда ты говоришь с собеседником: запись уходит на наш сервер, там превращается в \
+        текст и не хранится как звук. Текст ваших разговоров и то, что собеседник о тебе помнит. Твой возраст и ответы \
+        на вопросы в начале — чтобы подобрать собеседника и беречь подростков. Случайный номер этого телефона, чтобы \
+        сервер узнавал тебя. При входе через Apple — имя, которое Apple нам передаст.
 
         Чего мы не делаем. Не продаём данные, не показываем рекламу, не передаём разговоры другим людям. Модели \
-        искусственного интеллекта, которые помогают ему говорить, получают текст разговора только для ответа.
+        искусственного интеллекта, которые помогают собеседнику говорить, получают текст разговора только для ответа.
 
         Что ты можешь. Удалить всё в любой момент: Меню → «Удалить мои данные».
         """ : """
         Draft. The final text is prepared by an adult with a lawyer.
 
-        What we receive. Your voice when you talk with him: the recording goes to our server, becomes text there and is \
-        not kept as sound. The text of your talks and what he remembers about you. Your age and answers to the opening \
-        questions, to choose your companion and protect teenagers. A random number for this phone, so the server knows \
-        you. If you sign in with Apple, the name Apple gives us.
+        What we receive. Your voice when you talk with your companion: the recording goes to our server, becomes text \
+        there and is not kept as sound. The text of your talks and what your companion remembers about you. Your age and \
+        answers to the opening questions, to choose your companion and protect teenagers. A random number for this phone, \
+        so the server knows you. If you sign in with Apple, the name Apple gives us.
 
         What we don't do. We don't sell data, show ads or share your talks with other people. The AI models that help \
-        him speak receive the text of a talk only to answer.
+        your companion speak receive the text of a talk only to answer.
 
         What you can do. Delete everything at any time: Menu → “Delete my data”.
         """)

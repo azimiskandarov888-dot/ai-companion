@@ -53,15 +53,15 @@
          docs/BACKGROUND-VOICE-TEST.md — whether his own voice can answer from
          the background is the one thing that decides how far this can go. -->
     <key>NSSiriUsageDescription</key>
-    <string>Чтобы позвать его, не открывая приложение.</string>
+    <string>Чтобы позвать собеседника, не открывая приложение.</string>
 
     <!-- Why we need the mic. He can't be a friend if he can't hear you. -->
     <key>NSMicrophoneUsageDescription</key>
-    <string>Он слушает, только когда вы говорите с ним, чтобы ответить вам вслух.</string>
+    <string>Чтобы собеседник тебя слышал. Микрофон работает, только пока ты говоришь.</string>
 
     <!-- Needed to reach the backend running on your Mac over local Wi-Fi. -->
     <key>NSLocalNetworkUsageDescription</key>
-    <string>Приложение отправляет ваш голос на ваш сервер, чтобы он мог ответить.</string>
+    <string>Чтобы приложение могло связаться с сервером собеседника в твоей сети.</string>
 
     <!-- Keep audio alive. Foreground docked use needs this for reliable capture;
          it's also the foundation for the later background/floating-window layer. -->

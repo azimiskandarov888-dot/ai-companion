@@ -221,7 +221,7 @@ if (OFFSCREEN){ const mc = new MessageChannel(), waiting = []; let next = 0;
   const start = rng(Date.now() % 1e9);                                // (a new sky each visit)
   SUN.az = n('az') ?? +(SKYLIFE.az[0] + start()*(SKYLIFE.az[1] - SKYLIFE.az[0])).toFixed(2);
   SUN.el = n('el') ?? +(moodHeight(0.5, 0) + (start() - 0.5)*5).toFixed(2); HAZE.density = n('haze') ?? HAZE.density;
-  globalThis.TRY = {exp: n('exp'), through: n('through'), msaa: n('msaa'), steps: n('steps'), noflare: q.has('noflare'), wide: n('wide')}; }   // (noflare: to weigh its cost)
+  globalThis.TRY = {exp: n('exp'), through: n('through'), msaa: n('msaa'), steps: n('steps'), noflare: q.has('noflare'), wide: n('wide'), webgl: q.has('webgl')}; }   // (noflare: to weigh its cost; webgl: as an iPhone on iOS 17–18 draws it, without WebGPU)
 
 // one look for every phone, the full one: his iPhone 11 Pro Max, the oldest that runs iOS 26, held 60 frames a second in
 // it, and fewer pixels made it no faster (pace, below, still lowers the sharpness on a phone that cannot keep up).
@@ -260,7 +260,7 @@ const leafTopAt = z => smoothstep(15, 38, z).mul(0.3).add(smoothstep(38, 46, z).
 try {
   if (fell) hud.textContent = `в прошлый раз закрылось на шаге «${STEPS[lastStep] || lastStep}» — в этот раз легче`;
   step('gpu');
-  const renderer = new THREE.WebGPURenderer({canvas, antialias: false});
+  const renderer = new THREE.WebGPURenderer({canvas, antialias: false, forceWebGL: TRY.webgl});
   renderer.setPixelRatio(Math.min(LIGHT.pixels, devicePixelRatio || 1, 1900/document.documentElement.clientHeight));   // no more than a phone's pixels
   const pixelsMax = renderer.getPixelRatio();                          // (fewer, if this phone cannot keep 60 frames a second)
   await renderer.init();
