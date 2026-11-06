@@ -158,7 +158,7 @@ const FLARES = [
   {name: 'чистый', streaks: [16, 3, 0.03, 1.2], own: 0.1, halo: [0.15, [1, 0.8, 0.6]], ghosts: [
     [0.8, 0.012, 0, 0.35, [1, 0.85, 0.6]], [0, 0, 0, 0, [0, 0, 0]], [0, 0, 0, 0, [0, 0, 0]],
     [0, 0, 0, 0, [0, 0, 0]], [0, 0, 0, 0, [0, 0, 0]], [0, 0, 0, 0, [0, 0, 0]]]}];
-const FLARE = +(new URLSearchParams(location.search).get('flare') ?? 0) || 0;   // (which style, till the app says whose: {bob: {flare}})
+const FLARE = (f => f === null ? 3 : +f || 0)(new URLSearchParams(location.search).get('flare'));   // (Bob's own: the fourth, «чистый» — his choice, 2026-11-06; another companion's comes from the app, {bob: {flare}})
 // Bob: an orb of light, as Siri's, that lives in the world as a ball would (his choice, 2026-11-04): heavy enough to
 // roll, bounce and knock, alive enough to roll himself. The mark where he comes to listen (x, z, m); his radius (m),
 // how far his glow reaches (in radii), how bright his ribbons and heart; the light he throws; his colour (a hue; paler

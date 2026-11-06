@@ -161,7 +161,7 @@ body.teen #trial { display: none; }
   <button type="button" id="teenBtn" aria-pressed="false" data-t="devTeen">подросток</button>
   <button type="button" id="again" data-t="devAgain">↺ сначала</button>
   <button type="button" id="repeat" data-t="devRepeat">повторный вход</button>
-  <button type="button" id="flareBtn">☀ 1/4</button>
+  <button type="button" id="flareBtn">☀ 4/4</button>
 </nav>
 
 <!-- 0 · black, text only -->
@@ -412,8 +412,8 @@ function asked(){
   heIs = picks.who === 'she' ? false : picks.who === 'he' ? true : Math.random() < 0.5;   // («всё равно»: the dice, as the server's)
   paint();
   const teen = picks.age < 18; document.body.classList.toggle('teen', teen); $('teenBtn').setAttribute('aria-pressed', String(teen));
-  // (whoever he turns out to be has his own style of the sun's light, as each of GTA V's heroes has; here it falls by chance)
-  flareNow = Math.floor(Math.random()*4); tell({bob: {flare: flareNow}}); $('flareBtn').textContent = `☀ ${flareNow + 1}/4`;
+  // (each companion has his own style of the sun's light, as each of GTA V's heroes has; Bob's is the fourth, «чистый»)
+  flareNow = 3; tell({bob: {flare: flareNow}}); $('flareBtn').textContent = `☀ ${flareNow + 1}/4`;
   $('skip').classList.add('on');
 }
 
@@ -500,7 +500,7 @@ document.querySelectorAll('[data-plan]').forEach(b => b.addEventListener('click'
 $('teenBtn').addEventListener('click', e => { const on = document.body.classList.toggle('teen'); e.currentTarget.setAttribute('aria-pressed', String(on)); });
 $('again').addEventListener('click', begin);
 // (each companion has his own style of the sun's light in the lens, as each of GTA V's heroes has his: here, to compare)
-let flareNow = 0;
+let flareNow = 3;
 $('flareBtn').addEventListener('click', () => { flareNow = (flareNow + 1) % 4; tell({bob: {flare: flareNow}}); $('flareBtn').textContent = `☀ ${flareNow + 1}/4`; });
 $('repeat').addEventListener('click', () => { stop(); cancelAnimationFrame(walk); world.style.transform = 'none'; world.classList.add('on');
   veil.classList.remove('off'); later(80, () => veil.classList.add('off')); show('talk'); sub.classList.remove('on'); state.classList.remove('on');
