@@ -31,6 +31,9 @@ final class ConversationController: ObservableObject {
     /// conversation while testing.
     @Published private(set) var lastReply: String = ""
     @Published private(set) var lastHeard: String = ""
+    /// How much of today's free time is left, as the server last said (nil: it didn't say — a subscriber, or not yet).
+    /// The journey's third voice gives a minute's notice from it, before the calm screen to pay.
+    @Published private(set) var secondsLeft: Int?
     /// THE ONE THING ON THIS SCREEN THAT IS NOT HIM.
     ///
     /// Set when the danger watcher broke in — very rare, and the whole reason
@@ -208,6 +211,7 @@ final class ConversationController: ObservableObject {
             // that return early. Assigned, never unassigned — an alarm that
             // was raised stays raised until somebody deals with it.
             if let raised = response.alarm { emergency = raised }
+            secondsLeft = response.secondsLeft
 
             // The server decides whether he answers, and it has already
             // decided. It says so in his own words — we just stop listening

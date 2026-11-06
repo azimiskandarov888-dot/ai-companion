@@ -16,8 +16,10 @@ struct BobCompanionApp: App {
     @Environment(\.scenePhase) private var scenePhase
 
     #if DEBUG
-    /// Launched with -worldPreview: the living world alone, to look at it on any simulator.
+    /// Launched with -worldPreview: the living world alone, to look at it on any simulator; -oldFlow: the app as it
+    /// was before the journey (photographs, parchment), to compare.
     private static let worldPreview = ProcessInfo.processInfo.arguments.contains("-worldPreview")
+    private static let oldFlow = ProcessInfo.processInfo.arguments.contains("-oldFlow")
     #endif
 
     var body: some Scene {
@@ -30,7 +32,23 @@ struct BobCompanionApp: App {
         }
     }
 
-    private var flow: some View {
+    /// The way a person comes to him, over the living world (2026-11-06). The old photographed flow stays in the code
+    /// until it is deleted with his OK.
+    @ViewBuilder private var flow: some View {
+        #if DEBUG
+        if Self.oldFlow { oldFlow } else { journey }
+        #else
+        journey
+        #endif
+    }
+
+    private var journey: some View {
+        JourneyFlow(conversation: conversation)
+            .environmentObject(app)
+            .onChange(of: scenePhase) { _, phase in if phase != .active { conversation.suspend() } }
+    }
+
+    private var oldFlow: some View {
             AppFlow(conversation: conversation)
                 .environmentObject(app)
                 .preferredColorScheme(.dark)      // the world is always in shade

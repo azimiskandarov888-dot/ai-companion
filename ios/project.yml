@@ -23,6 +23,8 @@ schemes:
         BobCompanion: all
     run:
       config: Debug
+      # the paywall's products in the simulator, without App Store Connect (Store/Purchases.swift)
+      storeKitConfiguration: BobCompanion/Products.storekit
     profile:
       config: Release
     analyze:
@@ -39,6 +41,7 @@ targets:
         excludes:
           - "App/Info.plist"      # named below instead, never copied as a resource
           - "World/**"            # the living world: copied whole, as a folder, just below
+          - "Products.storekit"   # the simulator's App Store (the scheme points at it), not part of the app
       # The living world (built by ios/world: npm run build). A FOLDER reference, so it lands in the app as World/ with
       # its own paths intact (field-assets/…), served by WorldView.swift through the bobworld:// scheme.
       - path: BobCompanion/World
