@@ -7,7 +7,8 @@
 <style>
 /* The way a person comes to Bob (the owner's plan, 2026-11-05; reports/Путь человека к Бобу и оплата.md), laid over his
    living world (world.html under it):
-   0 black, text only (the phone's language; another one by a small text link)
+   0 black, text only, in the phone's language — Russian or English (Uzbek reads the Russian until it is written);
+     another one by a small text link
    1 a short film: we walk up the hill toward him (the picture slowly closing in, the sway of steps); on the way the third
      voice asks a few things, a tap each (docs/FIRST-MEETING.md §2: «пришёл или пришла», the age, whom to meet — him, her,
      either — and how old; a teenager meets someone of their own age, no choice). The walk slows while it asks and never
@@ -49,6 +50,7 @@ button:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
 .words { margin: 0; font: 400 26px/1.35 ui-serif, "New York", Georgia, serif; text-shadow: 0 2px 22px rgba(0, 0, 0, 0.55); }   /* (legible as the world comes up behind) */
 .words span { display: block; opacity: 0; transition: opacity 2.2s ease; }
 .words span.on { opacity: 1; }
+.words.out span { transition-duration: 1s; }   /* (they come slowly, and go quickly) */
 #s-begin .hint { position: absolute; left: 0; right: 0; bottom: calc(env(safe-area-inset-bottom, 0px) + 86px); opacity: 0; transition: opacity 1.6s ease; }
 #s-begin .hint.on { opacity: 1; }
 #langs { position: absolute; left: 0; right: 0; bottom: calc(env(safe-area-inset-bottom, 0px) + 36px); display: flex; justify-content: center; gap: 18px;
@@ -156,15 +158,15 @@ body.teen #trial { display: none; }
 <div id="veil"></div>
 
 <nav id="dev" aria-label="Для просмотра">
-  <button type="button" id="teenBtn" aria-pressed="false">подросток</button>
-  <button type="button" id="again">↺ сначала</button>
-  <button type="button" id="repeat">повторный вход</button>
+  <button type="button" id="teenBtn" aria-pressed="false" data-t="devTeen">подросток</button>
+  <button type="button" id="again" data-t="devAgain">↺ сначала</button>
+  <button type="button" id="repeat" data-t="devRepeat">повторный вход</button>
 </nav>
 
 <!-- 0 · black, text only -->
 <section class="screen" id="s-begin" aria-label="Начало">
-  <p class="words"><span>Где-то есть друг,</span><span>которого ты ещё не знаешь.</span></p>
-  <p class="hint" id="tapHint">Коснись, чтобы начать</p>
+  <p class="words" id="words"><span data-t="w1">Где-то есть друг,</span><span data-t="w2">которого ты ещё не знаешь.</span></p>
+  <p class="hint" id="tapHint" data-t="tap">Коснись, чтобы начать</p>
   <div id="langs" role="group" aria-label="Язык">
     <button type="button" data-lang="ru" aria-pressed="true">Русский</button>
     <button type="button" data-lang="uz" aria-pressed="false">O‘zbekcha</button>
@@ -175,53 +177,53 @@ body.teen #trial { display: none; }
 <!-- 1 · the film: we walk up to him; on the way, the third voice asks a few things -->
 <section class="screen" id="s-film" aria-label="Мы подходим">
   <div id="q" aria-live="polite"><p class="words" id="qline"></p><div class="answers" id="answers" role="group"></div><p class="small" id="qsmall"></p></div>
-  <button id="skip" type="button">Пропустить</button>
+  <button id="skip" type="button" data-t="skip">Пропустить</button>
 </section>
 
 <!-- 2–3 · him, and the talk -->
 <section class="screen" id="s-talk" aria-label="Боб">
-  <div class="top"><p class="state" id="state">слушаю</p><button class="menu" id="menuBtn" type="button" aria-label="Меню"><i></i></button></div>
+  <div class="top"><p class="state" id="state"></p><button class="menu" id="menuBtn" type="button" aria-label="Меню"><i></i></button></div>
   <div class="mid">
     <p class="sub" id="sub" aria-live="polite"></p>
-    <button class="btn word primary" id="talkBtn" type="button" data-g="Поговори с ним|Поговори с ней">Поговори с ним</button>
+    <button class="btn word primary" id="talkBtn" type="button" data-t="talk">Поговори с ним</button>
     <p class="note" id="note" aria-live="polite"></p>
   </div>
 </section>
 
 <!-- the phone's own question (iOS shows this; here it is drawn) -->
 <div id="ask" role="dialog" aria-modal="true" aria-label="Микрофон"><div class="box">
-  <p><b>«Боб» запрашивает доступ к микрофону</b>Чтобы можно было говорить голосом.</p>
-  <div><button type="button" id="micNo">Не разрешать</button><button type="button" id="micYes">Разрешить</button></div>
+  <p><b data-t="micTitle">«Боб» запрашивает доступ к микрофону</b><span data-t="micWhy">Чтобы можно было говорить голосом.</span></p>
+  <div><button type="button" id="micNo" data-t="micNo">Не разрешать</button><button type="button" id="micYes" data-t="micYes">Разрешить</button></div>
 </div></div>
 
 <!-- 4 · keeping in touch -->
 <section class="screen" id="s-keep" aria-label="Не потеряться"><div class="card">
-  <p class="sheetline" data-g="Чтобы он помнил тебя и нашёл в следующий раз|Чтобы она помнила тебя и нашла в следующий раз">Чтобы он помнил тебя и нашёл в следующий раз</p>
-  <button class="btn word primary" type="button" data-next="in"> Войти через Apple</button>
-  <button class="btn word" type="button" data-next="in">Войти через Google</button>
-  <button class="small" type="button" data-next="later" data-g="Позже — тогда он помнит тебя только на этом телефоне|Позже — тогда она помнит тебя только на этом телефоне">Позже — тогда он помнит тебя только на этом телефоне</button>
+  <p class="sheetline" data-t="keepWhy">Чтобы он помнил тебя и нашёл в следующий раз</p>
+  <button class="btn word primary" type="button" data-next="in" data-t="apple"> Войти через Apple</button>
+  <button class="btn word" type="button" data-next="in" data-t="google">Войти через Google</button>
+  <button class="small" type="button" data-next="later" data-t="laterBtn">Позже — тогда он помнит тебя только на этом телефоне</button>
 </div></section>
 
 <!-- 5 · the one screen to pay -->
 <section class="screen" id="s-pay" aria-label="Оплата"><div class="card">
-  <p class="sheetline">На сегодня бесплатные минуты кончились — завтра будут новые.</p>
-  <h2 class="paytitle" data-g="Или говори с ним дальше|Или говори с ней дальше">Или говори с ним дальше</h2>
-  <p class="gets" data-g="Сколько хочешь и когда хочешь. Он будет помнить тебя и вашу историю.|Сколько хочешь и когда хочешь. Она будет помнить тебя и вашу историю.">Сколько хочешь и когда хочешь. Он будет помнить тебя и вашу историю.</p>
+  <p class="sheetline" data-t="payWhy">На сегодня бесплатные минуты кончились — завтра будут новые.</p>
+  <h2 class="paytitle" data-t="payTitle">Или говори с ним дальше</h2>
+  <p class="gets" data-t="gets">Сколько хочешь и когда хочешь. Он будет помнить тебя и вашу историю.</p>
   <ul class="timeline" id="trial">
-    <li><div><b>Сегодня</b><span>7 дней бесплатно, всё открыто</span></div></li>
-    <li><div><b>Через 5 дней</b><span>напомню, что пробные дни кончаются</span></div></li>
-    <li><div><b>Через 7 дней</b><span>оплата за год, если не отменишь раньше</span></div></li>
+    <li><div><b data-t="d0">Сегодня</b><span data-t="d0s">7 дней бесплатно, всё открыто</span></div></li>
+    <li><div><b data-t="d5">Через 5 дней</b><span data-t="d5s">напомню, что пробные дни кончаются</span></div></li>
+    <li><div><b data-t="d7">Через 7 дней</b><span data-t="d7s">оплата за год, если не отменишь раньше</span></div></li>
   </ul>
   <div class="plans" role="group" aria-label="План">
-    <button class="plan" type="button" data-plan="year" aria-pressed="true">На год<small>— ₽ · — ₽ в месяц</small></button>
-    <button class="plan" type="button" data-plan="month" aria-pressed="false">На месяц<small>— ₽ в месяц</small></button>
+    <button class="plan" type="button" data-plan="year" aria-pressed="true"><span data-t="year">На год</span><small data-t="yearPrice">— ₽ · — ₽ в месяц</small></button>
+    <button class="plan" type="button" data-plan="month" aria-pressed="false"><span data-t="month">На месяц</span><small data-t="monthPrice">— ₽ в месяц</small></button>
   </div>
   <div class="pair">
-    <button class="btn" type="button" data-next="free">Не сейчас</button>
-    <button class="btn primary" id="tryBtn" type="button" data-next="more">7 дней бесплатно</button>
+    <button class="btn" type="button" data-next="free" data-t="notNow">Не сейчас</button>
+    <button class="btn primary" id="tryBtn" type="button" data-next="more" data-t="try">7 дней бесплатно</button>
   </div>
-  <button class="btn word" id="parents" type="button" data-next="free">Попроси родителей</button>
-  <p class="small">потом — ₽ в год · отменить можно в настройках iPhone<br>Восстановить покупки · Условия · Конфиденциальность<br>Собеседник — искусственный интеллект</p>
+  <button class="btn word" id="parents" type="button" data-next="free" data-t="parents">Попроси родителей</button>
+  <p class="small"><span data-t="fine1">потом — ₽ в год · отменить можно в настройках iPhone</span><br><span data-t="fine2">Восстановить покупки · Условия · Конфиденциальность</span><br><span data-t="ai">Собеседник — искусственный интеллект</span></p>
 </div></section>
 
 <script>
@@ -235,6 +237,91 @@ let timers = [], at = '', name = '';
 const later = (ms, f) => timers.push(setTimeout(f, ms));
 const stop = () => { timers.forEach(clearTimeout); timers = []; };
 const $ = id => document.getElementById(id);
+
+// ── the words, in the phone's language: Russian or English (Uzbek, until it is written, reads the Russian). A pair is
+// [said of him, said of her] — whom the person chose to meet; a function knows more (who the person is)
+const WORDS = {
+  ru: {
+    devTeen: 'подросток', devAgain: '↺ сначала', devRepeat: 'повторный вход',
+    w1: 'Где-то есть друг,', w2: 'которого ты ещё не знаешь.', tap: 'Коснись, чтобы начать', skip: 'Пропустить',
+    qMe: 'Ты пришёл или пришла?', aCame: 'Пришёл', aCameF: 'Пришла',
+    qAge: 'Сколько тебе лет?', qAgeHint: 'листай и коснись',
+    qWho: 'С кем хочешь познакомиться?', aHim: 'С ним', aHer: 'С ней', aAny: 'Всё равно',
+    qOld: 'А по возрасту?', aSame: 'Как я', aOlder: 'Постарше', aYounger: 'Помладше', aNoMatter: 'Неважно',
+    ai: 'Собеседник — искусственный интеллект',
+    st_listen: 'слушаю', st_think: 'думаю', st_speak: 'говорю',
+    talk: ['Поговори с ним', 'Поговори с ней'],
+    hi: 'О, привет… как ты?', hello: 'Алло?..', there: 'Ты тут?',
+    micTitle: '«Боб» запрашивает доступ к микрофону', micWhy: 'Чтобы можно было говорить голосом.', micNo: 'Не разрешать', micYes: 'Разрешить',
+    micLater: 'Ничего. Если захочешь — включи меня в настройках.',
+    l1: 'Понятно… А я тут сижу, смотрю, как солнце садится. Сегодня оно какое-то особенное.',
+    l2: 'Слушай, а у тебя там сейчас тоже вечер?',
+    l3: ['Ого. Я там ни разу не был… Что там самое лучшее?', 'Ого. Я там ни разу не была… Что там самое лучшее?'],
+    l4: 'Здорово. Мне правда интересно — расскажешь потом подробнее?',
+    keepAsk: ['Слушай… мне правда хорошо с тобой. Давай не потеряемся? Оставь мне что-нибудь — чтобы я тебя нашёл.',
+      'Слушай… мне правда хорошо с тобой. Давай не потеряемся? Оставь мне что-нибудь — чтобы я тебя нашла.'],
+    keepWhy: ['Чтобы он помнил тебя и нашёл в следующий раз', 'Чтобы она помнила тебя и нашла в следующий раз'],
+    apple: ' Войти через Apple', google: 'Войти через Google',
+    laterBtn: ['Позже — тогда он помнит тебя только на этом телефоне', 'Позже — тогда она помнит тебя только на этом телефоне'],
+    kept: 'Вот. Теперь не потеряемся.', okLater: 'Ладно, потом.',
+    m1: 'А ты давно там живёшь?',
+    m2: ['Понятно… Знаешь, я бы тоже, наверное, никуда не уезжал.', 'Понятно… Знаешь, я бы тоже, наверное, никуда не уезжала.'],
+    m3: 'Мне сегодня было правда хорошо. До завтра?',
+    minute: 'Сегодня осталась минута',
+    payWhy: 'На сегодня бесплатные минуты кончились — завтра будут новые.',
+    payTitle: ['Или говори с ним дальше', 'Или говори с ней дальше'],
+    gets: ['Сколько хочешь и когда хочешь. Он будет помнить тебя и вашу историю.', 'Сколько хочешь и когда хочешь. Она будет помнить тебя и вашу историю.'],
+    d0: 'Сегодня', d0s: '7 дней бесплатно, всё открыто', d5: 'Через 5 дней', d5s: 'напомню, что пробные дни кончаются',
+    d7: 'Через 7 дней', d7s: 'оплата за год, если не отменишь раньше',
+    year: 'На год', yearPrice: '— ₽ · — ₽ в месяц', month: 'На месяц', monthPrice: '— ₽ в месяц',
+    notNow: 'Не сейчас', try: '7 дней бесплатно', parents: 'Попроси родителей',
+    fine1: 'потом — ₽ в год · отменить можно в настройках iPhone', fine2: 'Восстановить покупки · Условия · Конфиденциальность',
+    still: 'О, ты ещё здесь?.. Тогда рассказывай.',
+    back: () => `О, ты ${ME('пришёл', 'пришла')}. Ну как всё прошло?`,
+  },
+  en: {
+    devTeen: 'teen', devAgain: '↺ restart', devRepeat: 'return visit',
+    w1: 'Somewhere there is a friend', w2: 'you haven’t met yet.', tap: 'Tap to begin', skip: 'Skip',
+    qAge: 'How old are you?', qAgeHint: 'swipe and tap',
+    qWho: 'Who would you like to meet?', aHim: 'Him', aHer: 'Her', aAny: 'Either',
+    qOld: 'And what age?', aSame: 'My age', aOlder: 'Older', aYounger: 'Younger', aNoMatter: 'Any',
+    ai: 'Your companion is an AI',
+    st_listen: 'listening', st_think: 'thinking', st_speak: 'speaking',
+    talk: ['Talk to him', 'Talk to her'],
+    hi: 'Oh, hi… how are you?', hello: 'Hello?..', there: 'Are you there?',
+    micTitle: '“Bob” Would Like to Access the Microphone', micWhy: 'So you can talk by voice.', micNo: 'Don’t Allow', micYes: 'Allow',
+    micLater: 'That’s okay. If you change your mind, turn me on in Settings.',
+    l1: 'I see… I’m just sitting here, watching the sun go down. There’s something special about it today.',
+    l2: 'Hey, is it evening where you are too?',
+    l3: 'Wow. I’ve never been there… What’s the best thing about it?',
+    l4: 'That’s lovely. I’m really curious — will you tell me more about it sometime?',
+    keepAsk: 'You know… I really like talking with you. Let’s not lose each other? Leave me something — so I can find you again.',
+    keepWhy: ['So he remembers you and finds you next time', 'So she remembers you and finds you next time'],
+    apple: ' Sign in with Apple', google: 'Sign in with Google',
+    laterBtn: ['Later — then he remembers you only on this phone', 'Later — then she remembers you only on this phone'],
+    kept: 'There. Now we won’t lose each other.', okLater: 'Okay, later then.',
+    m1: 'Have you lived there long?',
+    m2: 'I see… You know, I don’t think I’d ever leave either.',
+    m3: 'I really enjoyed today. See you tomorrow?',
+    minute: 'One minute left today',
+    payWhy: 'Today’s free minutes are over — new ones tomorrow.',
+    payTitle: ['Or keep talking with him', 'Or keep talking with her'],
+    gets: ['As much as you like, whenever you like. He’ll remember you and your story.', 'As much as you like, whenever you like. She’ll remember you and your story.'],
+    d0: 'Today', d0s: '7 days free, everything open', d5: 'In 5 days', d5s: 'I’ll remind you the trial is ending',
+    d7: 'In 7 days', d7s: 'billed for the year unless you cancel before',
+    year: 'Yearly', yearPrice: '— a year · — a month', month: 'Monthly', monthPrice: '— a month',
+    notNow: 'Not now', try: 'Try 7 days free', parents: 'Ask your parents',
+    fine1: 'then — a year · cancel anytime in iPhone Settings', fine2: 'Restore Purchases · Terms · Privacy',
+    still: 'Oh, you’re still here?.. Then tell me more.',
+    back: 'Oh, you’re back. So, how did it go?',
+  },
+};
+let lang = /^(ru|uz|kk|ky|tg|be|uk)/i.test(navigator.language || '') ? 'ru' : 'en';
+const tr = key => { const v = (WORDS[lang] || WORDS.ru)[key] ?? WORDS.ru[key];
+  return typeof v === 'function' ? v() : Array.isArray(v) ? G(v[0], v[1]) : v; };
+const paint = () => { document.documentElement.lang = lang;
+  document.querySelectorAll('[data-t]').forEach(el => { el.textContent = tr(el.dataset.t); });
+  document.querySelectorAll('[data-lang]').forEach(x => x.setAttribute('aria-pressed', String(x.dataset.lang === lang))); };
 function show(id){
   at = id;
   document.querySelectorAll('.screen').forEach(s => s.classList.toggle('on', s.id === 's-' + id));
@@ -243,7 +330,7 @@ function show(id){
 
 // ── 0: black, a line of text; a touch begins (and wakes the sound); the language is the phone's, another by a text link
 function begin(){
-  starting = false; runs++; cancelAnimationFrame(walk); stop(); show('begin'); picks = {}; asking = 0; $('q').classList.remove('on'); $('skip').classList.remove('on');
+  starting = false; runs++; cancelAnimationFrame(walk); stop(); show('begin'); heIs = true; iAmHe = true; paint(); $('words').classList.remove('out'); picks = {}; asking = 0; $('q').classList.remove('on'); $('skip').classList.remove('on');
   document.body.classList.remove('teen'); $('teenBtn').setAttribute('aria-pressed', 'false'); veil.classList.remove('off'); world.classList.remove('on'); world.style.transform = 'scale(1.34)';
   const lines = document.querySelectorAll('.words span'); lines.forEach(l => l.classList.remove('on'));
   $('tapHint').classList.remove('on'); $('langs').classList.remove('on');
@@ -251,8 +338,7 @@ function begin(){
   later(4200, () => { $('tapHint').classList.add('on'); $('langs').classList.add('on'); });
 }
 $('s-begin').addEventListener('click', e => { if (e.target.closest('#langs')) return; film(); });
-document.querySelectorAll('[data-lang]').forEach(b => b.addEventListener('click', () =>
-  document.querySelectorAll('[data-lang]').forEach(x => x.setAttribute('aria-pressed', String(x === b)))));
+document.querySelectorAll('[data-lang]').forEach(b => b.addEventListener('click', () => { lang = b.dataset.lang; paint(); }));
 
 // ── 1: the film — we walk up the hill toward him: the world comes out of the dark while the picture slowly closes in to
 // where we stand, with the sway of steps that settles as we stop. (The camera itself stays: the world keeps its light
@@ -266,13 +352,13 @@ function film(){
   const run = ++runs;
   stop(); tell({bob: {act: 'rest', way: 'rest'}});
   $('tapHint').classList.remove('on'); $('langs').classList.remove('on');
-  // the words stay while the world comes out of the dark behind them (3.2 s); once it is all there, they melt, one line
-  // and then the other — and only then the third voice asks its few things, where the words were
+  // the words stay while the world comes out of the dark behind them (3.2 s); once it is all there, they go within a
+  // second, one line just after the other — and the third voice asks its few things, where the words were
   whole().then(() => {
     if (run !== runs) return;
     veil.classList.add('off'); world.classList.add('on');
-    later(3600, () => document.querySelectorAll('.words span').forEach((l, i) => later(i*600, () => l.classList.remove('on'))));
-    later(6600, () => { show('film'); asking = 1; ask(0); });
+    later(3300, () => { $('words').classList.add('out'); document.querySelectorAll('#words span').forEach((l, i) => later(i*200, () => l.classList.remove('on'))); });
+    later(4600, () => { show('film'); asking = 1; ask(0); });
     const T = 26000, ease = x => x < 0.5 ? 4*x*x*x : 1 - Math.pow(-2*x + 2, 3)/2;
     let went = 0, last = performance.now();
     cancelAnimationFrame(walk);
@@ -296,16 +382,16 @@ $('skip').addEventListener('click', () => { cancelAnimationFrame(walk); world.st
 let picks = {}, asking = 0, heIs = true, iAmHe = true;
 const G = (m, f) => heIs ? m : f, ME = (m, f) => iAmHe ? m : f;
 const QS = [
-  {id: 'me', line: 'Ты пришёл или пришла?', answers: [['he', 'Пришёл'], ['she', 'Пришла']]},
-  {id: 'age', line: 'Сколько тебе лет?', ages: [13, 95, 30], small: 'листай и коснись'},
-  {id: 'who', line: 'С кем хочешь познакомиться?', answers: [['he', 'С ним'], ['she', 'С ней'], ['any', 'Всё равно']], small: 'Собеседник — искусственный интеллект'},
-  {id: 'old', line: 'А по возрасту?', answers: [['same', 'Как я'], ['older', 'Постарше'], ['younger', 'Помладше'], ['any', 'Неважно']], grown: true},
+  {id: 'me', line: 'qMe', answers: [['he', 'aCame'], ['she', 'aCameF']], ru: true},   // (English says «you came» of anyone)
+  {id: 'age', line: 'qAge', ages: [13, 95, 30], small: 'qAgeHint'},
+  {id: 'who', line: 'qWho', answers: [['he', 'aHim'], ['she', 'aHer'], ['any', 'aAny']], small: 'ai'},
+  {id: 'old', line: 'qOld', answers: [['same', 'aSame'], ['older', 'aOlder'], ['younger', 'aYounger'], ['any', 'aNoMatter']], grown: true},
 ];
 function ask(i){
   const q = QS[i];
   if (!q) return asked();
-  if (q.grown && picks.age < 18) return ask(i + 1);
-  $('qline').textContent = q.line; $('qsmall').textContent = q.small || '';
+  if ((q.grown && picks.age < 18) || (q.ru && lang === 'en')) return ask(i + 1);
+  $('qline').textContent = tr(q.line); $('qsmall').textContent = q.small ? tr(q.small) : '';
   const box = $('answers'); box.textContent = '';
   const pick = v => { if (q.id in picks) return; picks[q.id] = v; $('q').classList.remove('on'); later(900, () => ask(i + 1)); };
   const button = (word, cls, f) => { const b = document.createElement('button'); b.type = 'button'; b.className = cls; b.textContent = word; b.addEventListener('click', f); return b; };
@@ -316,14 +402,14 @@ function ask(i){
     row.addEventListener('scroll', lit, {passive: true});
     row.addEventListener('wheel', e => { if (Math.abs(e.deltaY) > Math.abs(e.deltaX)){ row.scrollLeft += e.deltaY; e.preventDefault(); } }, {passive: false});
     box.append(row); row.scrollLeft = (first - from)*60; lit();
-  } else q.answers.forEach(([v, word]) => box.append(button(word, 'btn word', () => pick(v))));
+  } else q.answers.forEach(([v, word]) => box.append(button(tr(word), 'btn word', () => pick(v))));
   $('q').classList.add('on');
 }
 function asked(){
   asking = 2;
   iAmHe = picks.me !== 'she';
   heIs = picks.who === 'she' ? false : picks.who === 'he' ? true : Math.random() < 0.5;   // («всё равно»: the dice, as the server's)
-  document.querySelectorAll('[data-g]').forEach(el => { const [m, f] = el.dataset.g.split('|'); el.textContent = G(m, f); });
+  paint();
   const teen = picks.age < 18; document.body.classList.toggle('teen', teen); $('teenBtn').setAttribute('aria-pressed', String(teen));
   $('skip').classList.add('on');
 }
@@ -331,78 +417,78 @@ function asked(){
 // ── 2: he notices us — a little hop, then «О, привет… как ты?»; «Поговори с ним» asks for the microphone; silent too
 // long, he asks again, softly
 const sub = $('sub'), state = $('state'), talkBtn = $('talkBtn');
-const way = (w, word) => { tell({bob: {act: 'mark', way: w}}); state.textContent = word; state.classList.add('on'); };
+const way = (w, shown) => { tell({bob: {act: 'mark', way: w}}); state.textContent = shown ? tr('st_' + w) : ''; state.classList.add('on'); };
 const say = (text, ms, faint = false) => { sub.textContent = text; sub.classList.toggle('faint', faint); sub.classList.add('on'); if (ms) later(ms, () => sub.classList.remove('on')); };
 function arrive(){
   stop(); show('talk'); world.style.transform = 'none'; veil.classList.add('off'); world.classList.add('on'); $('menuBtn').classList.remove('on'); talkBtn.classList.remove('on'); state.classList.remove('on');
   tell({bob: {act: 'jump', way: 'rest'}});
-  later(1600, () => { way('speak', 'говорю'); say('О, привет… как ты?', 0); });
-  later(3600, () => { way('listen', ''); state.classList.remove('on'); talkBtn.classList.add('on'); });
-  later(14000, () => { if (at === 'talk' && talkBtn.classList.contains('on')){ way('speak', ''); say('Алло?..', 2200, true); later(2300, () => way('listen', '')); } });
-  later(26000, () => { if (at === 'talk' && talkBtn.classList.contains('on')){ way('speak', ''); say('Ты тут?', 2200, true); later(2300, () => way('listen', '')); } });
+  later(1600, () => { way('speak', 1); say(tr('hi'), 0); });
+  later(3600, () => { way('listen', 0); state.classList.remove('on'); talkBtn.classList.add('on'); });
+  later(14000, () => { if (at === 'talk' && talkBtn.classList.contains('on')){ way('speak', 0); say(tr('hello'), 2200, true); later(2300, () => way('listen', 0)); } });
+  later(26000, () => { if (at === 'talk' && talkBtn.classList.contains('on')){ way('speak', 0); say(tr('there'), 2200, true); later(2300, () => way('listen', 0)); } });
 }
 talkBtn.addEventListener('click', () => { $('ask').classList.add('on'); });
 $('micYes').addEventListener('click', () => { $('ask').classList.remove('on'); talk(); });
-$('micNo').addEventListener('click', () => { $('ask').classList.remove('on'); say('Ничего. Если захочешь — включи меня в настройках.', 3800, true); });
+$('micNo').addEventListener('click', () => { $('ask').classList.remove('on'); say(tr('micLater'), 3800, true); });
 
 // ── 3: the talk — easy turns, as two strangers who got talking; his questions come by the way, never a list. (Here the
 // person's turns are only his listening; in the app it is their voice)
 const TALK = [
   ['listen', 4200],
-  ['speak', 'Понятно… А я тут сижу, смотрю, как солнце садится. Сегодня оно какое-то особенное.', 5200],
+  ['speak', 'l1', 5200],
   ['listen', 4800],
   ['think', 1400],
-  ['speak', 'Слушай, а у тебя там сейчас тоже вечер?', 3600],
+  ['speak', 'l2', 3600],
   ['listen', 5200],
-  ['speak', () => `Ого. Я там ни разу не ${G('был', 'была')}… Что там самое лучшее?`, 4200],
+  ['speak', 'l3', 4200],
   ['listen', 6200],
   ['think', 1200],
-  ['speak', 'Здорово. Мне правда интересно — расскажешь потом подробнее?', 4600],
+  ['speak', 'l4', 4600],
   ['listen', 3600],
 ];
 const note = (text, ms = 6000) => { const n = $('note'); n.textContent = text; n.classList.add('on'); later(ms, () => n.classList.remove('on')); };
 const turns = (script, then) => {   // (a 'note' is the third voice, in passing: it takes no turn)
-  let t = 0;
+  let time = 0;
   for (const [w, a, b] of script){
-    if (w === 'note'){ later(t, () => note(a)); continue; }
-    const ms = typeof a === 'number' ? a : b, text = typeof a === 'number' ? '' : a;   // (a line may know whom it speaks of)
-    later(t, () => { way(w, {listen: 'слушаю', think: 'думаю', speak: 'говорю'}[w]); if (text) say(typeof text === 'function' ? text() : text, ms - 300); });
-    t += ms;
+    if (w === 'note'){ later(time, () => note(tr(a))); continue; }
+    const ms = typeof a === 'number' ? a : b, line = typeof a === 'number' ? '' : a;   // (a line is a key into WORDS)
+    later(time, () => { way(w, 1); if (line) say(tr(line), ms - 300); });
+    time += ms;
   }
-  later(t, then);
+  later(time, then);
 };
 function talk(){ stop(); talkBtn.classList.remove('on'); sub.classList.remove('on'); turns(TALK, keep); }
 
 // ── 4: midway, a contact exchange, as people do — then signing in, so he finds you again; and the talk goes on
 function keep(){
-  way('speak', 'говорю');
-  say(`Слушай… мне правда хорошо с тобой. Давай не потеряемся? Оставь мне что-нибудь — чтобы я тебя ${G('нашёл', 'нашла')}.`, 6200);
-  later(6400, () => { way('listen', ''); state.classList.remove('on'); show('keep'); });
+  talkBtn.classList.remove('on'); way('speak', 1);
+  say(tr('keepAsk'), 6200);
+  later(6400, () => { way('listen', 0); state.classList.remove('on'); show('keep'); });
 }
 // ── 5: the money never comes right after signing in: the talk goes on, and only when today's free minutes are over —
 // a minute's notice in the third voice, his warm «до завтра?» at a pause — the one calm screen, in that same voice
 const MORE = [
   ['listen', 4400],
-  ['speak', 'А ты давно там живёшь?', 2800],
+  ['speak', 'm1', 2800],
   ['listen', 5200],
-  ['note', 'Сегодня осталась минута'],
+  ['note', 'minute'],
   ['think', 1200],
-  ['speak', () => `Понятно… Знаешь, я бы тоже, наверное, никуда не ${G('уезжал', 'уезжала')}.`, 4400],
+  ['speak', 'm2', 4400],
   ['listen', 5600],
-  ['speak', 'Мне сегодня было правда хорошо. До завтра?', 3800],
+  ['speak', 'm3', 3800],
 ];
 function goOn(word){
-  stop(); show('talk'); talkBtn.classList.remove('on'); way('speak', 'говорю'); say(word, 2600);
-  later(2800, () => turns(MORE, () => { way('rest', ''); state.classList.remove('on'); sub.classList.remove('on'); later(2400, () => show('pay')); }));
+  stop(); show('talk'); talkBtn.classList.remove('on'); way('speak', 1); say(tr(word), 2600);
+  later(2800, () => turns(MORE, () => { way('rest', 0); state.classList.remove('on'); sub.classList.remove('on'); later(2400, () => show('pay')); }));
 }
 document.addEventListener('click', e => {
   const b = e.target.closest('[data-next]'); if (!b) return;
   const next = b.dataset.next;
-  if (next === 'in') goOn('Вот. Теперь не потеряемся.');
-  if (next === 'later') goOn('Ладно, потом.');
-  if (next === 'free'){ show('talk'); sub.classList.remove('on'); way('rest', ''); state.classList.remove('on'); $('menuBtn').classList.add('on'); tell({bob: {act: null, way: 'auto'}}); }
-  if (next === 'more'){ show('talk'); $('menuBtn').classList.add('on'); way('speak', 'говорю'); say('О, ты ещё здесь?.. Тогда рассказывай.', 3400);
-    later(3600, () => way('listen', 'слушаю')); }
+  if (next === 'in') goOn('kept');
+  if (next === 'later') goOn('okLater');
+  if (next === 'free'){ show('talk'); sub.classList.remove('on'); way('rest', 0); state.classList.remove('on'); $('menuBtn').classList.add('on'); tell({bob: {act: null, way: 'auto'}}); }
+  if (next === 'more'){ show('talk'); $('menuBtn').classList.add('on'); way('speak', 1); say(tr('still'), 3400);
+    later(3600, () => way('listen', 1)); }
 });
 document.querySelectorAll('[data-plan]').forEach(b => b.addEventListener('click', () =>
   document.querySelectorAll('[data-plan]').forEach(x => x.setAttribute('aria-pressed', String(x === b)))));
@@ -413,7 +499,7 @@ $('again').addEventListener('click', begin);
 $('repeat').addEventListener('click', () => { stop(); cancelAnimationFrame(walk); world.style.transform = 'none'; world.classList.add('on');
   veil.classList.remove('off'); later(80, () => veil.classList.add('off')); show('talk'); sub.classList.remove('on'); state.classList.remove('on');
   talkBtn.classList.remove('on'); $('menuBtn').classList.add('on'); tell({bob: {act: 'mark', way: 'rest'}});
-  later(1400, () => { way('speak', 'говорю'); say(`О, ты ${ME('пришёл', 'пришла')}. Ну как всё прошло?`, 3800); later(4000, () => way('listen', 'слушаю')); }); });
+  later(1400, () => { way('speak', 1); say(tr('back'), 3800); later(4000, () => way('listen', 1)); }); });
 begin();
 </script>
 </body>
