@@ -26,7 +26,7 @@
 html, body { margin: 0; height: 100%; background: #000; overflow: hidden; color: var(--ink); -webkit-font-smoothing: antialiased;
   -webkit-tap-highlight-color: transparent; }
 #stage { position: fixed; inset: 0; overflow: hidden; background: #000; }
-#world { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; display: block; transform-origin: 40% 72%;   /* (we walk toward him: he sits by the trunk, at 40% across and 72% down) */ opacity: 0;
+#world { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; display: block; transform-origin: 25% 71%;   /* (we walk toward him: he sits by the trunk, about a quarter across and 71% down) */ opacity: 0;
   transition: opacity 3.2s ease; }
 #world.on { opacity: 1; }
 #veil { position: fixed; inset: 0; pointer-events: none; background: #000; opacity: 1; transition: opacity 1.6s ease; }
@@ -50,7 +50,7 @@ button:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
 .words { margin: 0; font: 400 26px/1.35 ui-serif, "New York", Georgia, serif; text-shadow: 0 2px 22px rgba(0, 0, 0, 0.55); }   /* (legible as the world comes up behind) */
 .words span { display: block; opacity: 0; transition: opacity 2.2s ease; }
 .words span.on { opacity: 1; }
-.words.out span { transition-duration: 1s; }   /* (they come slowly, and go quickly) */
+.words.out span { transition-duration: 1.8s; }   /* (they go at an even pace) */
 #s-begin .hint { position: absolute; left: 0; right: 0; bottom: calc(env(safe-area-inset-bottom, 0px) + 86px); opacity: 0; transition: opacity 1.6s ease; }
 #s-begin .hint.on { opacity: 1; }
 #langs { position: absolute; left: 0; right: 0; bottom: calc(env(safe-area-inset-bottom, 0px) + 36px); display: flex; justify-content: center; gap: 18px;
@@ -161,6 +161,7 @@ body.teen #trial { display: none; }
   <button type="button" id="teenBtn" aria-pressed="false" data-t="devTeen">подросток</button>
   <button type="button" id="again" data-t="devAgain">↺ сначала</button>
   <button type="button" id="repeat" data-t="devRepeat">повторный вход</button>
+  <button type="button" id="flareBtn">☀ 1/4</button>
 </nav>
 
 <!-- 0 · black, text only -->
@@ -352,13 +353,13 @@ function film(){
   const run = ++runs;
   stop(); tell({bob: {act: 'rest', way: 'rest'}});
   $('tapHint').classList.remove('on'); $('langs').classList.remove('on');
-  // the words stay while the world comes out of the dark behind them (3.2 s); once it is all there, they go within a
-  // second, one line just after the other — and the third voice asks its few things, where the words were
+  // the world comes out of the dark behind the words (3.2 s); they start to go almost at once — 0.8 s in, at an even
+  // pace (1.8 s), one line just after the other — and once the world is all there, the third voice asks its few things
   whole().then(() => {
     if (run !== runs) return;
     veil.classList.add('off'); world.classList.add('on');
-    later(3300, () => { $('words').classList.add('out'); document.querySelectorAll('#words span').forEach((l, i) => later(i*200, () => l.classList.remove('on'))); });
-    later(4600, () => { show('film'); asking = 1; ask(0); });
+    later(800, () => { $('words').classList.add('out'); document.querySelectorAll('#words span').forEach((l, i) => later(i*300, () => l.classList.remove('on'))); });
+    later(3400, () => { show('film'); asking = 1; ask(0); });
     const T = 26000, ease = x => x < 0.5 ? 4*x*x*x : 1 - Math.pow(-2*x + 2, 3)/2;
     let went = 0, last = performance.now();
     cancelAnimationFrame(walk);
@@ -411,6 +412,8 @@ function asked(){
   heIs = picks.who === 'she' ? false : picks.who === 'he' ? true : Math.random() < 0.5;   // («всё равно»: the dice, as the server's)
   paint();
   const teen = picks.age < 18; document.body.classList.toggle('teen', teen); $('teenBtn').setAttribute('aria-pressed', String(teen));
+  // (whoever he turns out to be has his own style of the sun's light, as each of GTA V's heroes has; here it falls by chance)
+  flareNow = Math.floor(Math.random()*4); tell({bob: {flare: flareNow}}); $('flareBtn').textContent = `☀ ${flareNow + 1}/4`;
   $('skip').classList.add('on');
 }
 
@@ -496,6 +499,9 @@ document.querySelectorAll('[data-plan]').forEach(b => b.addEventListener('click'
 // ── for looking: a teenager's paywall, again from the start, and a second visit (a short fade, straight to him)
 $('teenBtn').addEventListener('click', e => { const on = document.body.classList.toggle('teen'); e.currentTarget.setAttribute('aria-pressed', String(on)); });
 $('again').addEventListener('click', begin);
+// (each companion has his own style of the sun's light in the lens, as each of GTA V's heroes has his: here, to compare)
+let flareNow = 0;
+$('flareBtn').addEventListener('click', () => { flareNow = (flareNow + 1) % 4; tell({bob: {flare: flareNow}}); $('flareBtn').textContent = `☀ ${flareNow + 1}/4`; });
 $('repeat').addEventListener('click', () => { stop(); cancelAnimationFrame(walk); world.style.transform = 'none'; world.classList.add('on');
   veil.classList.remove('off'); later(80, () => veil.classList.add('off')); show('talk'); sub.classList.remove('on'); state.classList.remove('on');
   talkBtn.classList.remove('on'); $('menuBtn').classList.add('on'); tell({bob: {act: 'mark', way: 'rest'}});

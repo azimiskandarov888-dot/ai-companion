@@ -96,7 +96,7 @@ import { pass, context, texture, vec2, vec3, vec4, float, saturation, attribute,
   normalize, cross, dot, uv, Fn, cameraViewMatrix, cos, sin, select, mix, abs, exp, fract, smoothstep, length, Loop, rtt,
   positionGeometry, positionLocal, positionWorld, normalLocal, normalWorld, normalView, positionViewDirection, diffuseColor, BRDF_Lambert, getViewPosition,
   screenUV, mrt, output, positionView, luminance, nodeObject, passTexture, floor, min, max, clamp, renderOutput,
-  hash, instanceIndex, rotate, step as threshold, uint, modelWorldMatrix, mx_worley_noise_float, If, Discard, asin } from 'three/tsl';   // (step: 1 at or over an edge, else 0)
+  hash, instanceIndex, rotate, step as threshold, uint, modelWorldMatrix, mx_worley_noise_float, If, Discard, asin, atan } from 'three/tsl';   // (step: 1 at or over an edge, else 0)
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { CSMShadowNode } from 'three/addons/csm/CSMShadowNode.js';
@@ -138,6 +138,27 @@ const SKY = {exposure: 0.47, saturation: 2};                         // (its col
 // how strong and how soft its middle (degrees²); the eye's rays — the ciliary corona's fine needles, out to `reach`
 // degrees, and the lens's faint coloured ring at ~3° — how strong, and how fast they slowly turn and shimmer
 const SUNSEE = {radius: 0.0065, disc: 12, core: 12, coreWidth: 0.0105, veil: 7, veilSoft: 0.5, rays: 3, reach: 7, turn: 0.02, shimmer: 1.3};
+// and the camera's own light on top, each companion's in a style of its own — as GTA V gives each of its three heroes
+// his own lens flare (lensflare_m/f/t.xml), drawn as sprites: streaks round the sun (12 there) and ghosts along the line
+// from the sun through the middle of the picture, which gather as the sun nears the middle, with a soft halo mirrored
+// in the far corner (Courrèges, «GTA V — Graphics Study», 2015). Per style: the streaks (how many, how long and thin in
+// degrees, how bright); the ghosts — where on that line (0 the sun, 1 the middle), how big (in screen heights), what
+// shape (0 a disc, 1 a ring, 2 a hexagon, the aperture's), how bright, what colour; the mirrored halo; and how much of the
+// companion's own colour runs through it all. Brightness as seen, as the sun's (SUNSEE)
+const FLARES = [
+  {name: 'тёплый', streaks: [8, 5, 0.05, 1.6], own: 0.3, halo: [0.25, [1, 0.6, 0.45]], ghosts: [
+    [0.35, 0.02, 0, 0.7, [1, 0.75, 0.35]], [0.6, 0.045, 0, 0.4, [1, 0.6, 0.45]], [0.85, 0.012, 0, 0.8, [1, 0.85, 0.4]],
+    [1.25, 0.07, 1, 0.35, [1, 0.55, 0.3]], [1.55, 0.03, 0, 0.55, [1, 0.5, 0.2]], [-0.3, 0.015, 0, 0.4, [1, 0.8, 0.4]]]},
+  {name: 'стекло', streaks: [12, 7, 0.04, 1.8], own: 0.25, halo: [0.2, [0.45, 0.65, 1]], ghosts: [
+    [0.3, 0.018, 2, 0.8, [0.4, 1, 0.85]], [0.55, 0.03, 2, 0.55, [0.55, 1, 0.5]], [0.75, 0.012, 2, 1, [0.75, 0.55, 1]],
+    [1.1, 0.05, 2, 0.4, [0.45, 0.9, 1]], [1.4, 0.022, 2, 0.7, [0.4, 0.6, 1]], [1.8, 0.08, 1, 0.3, [0.8, 0.7, 1]]]},
+  {name: 'мечта', streaks: [6, 4, 0.08, 1.1], own: 0.45, halo: [0.18, [0.85, 0.6, 1]], ghosts: [
+    [0.45, 0.06, 1, 0.5, [0.85, 0.65, 1]], [0.9, 0.11, 1, 0.35, [1, 0.6, 0.8]], [1.3, 0.035, 0, 0.55, [1, 0.85, 0.5]],
+    [1.7, 0.16, 1, 0.25, [0.55, 0.85, 1]], [-0.2, 0.025, 0, 0.35, [1, 0.75, 0.9]], [0.7, 0.008, 0, 0.7, [1, 1, 1]]]},
+  {name: 'чистый', streaks: [16, 3, 0.03, 1.2], own: 0.1, halo: [0.15, [1, 0.8, 0.6]], ghosts: [
+    [0.8, 0.012, 0, 0.35, [1, 0.85, 0.6]], [0, 0, 0, 0, [0, 0, 0]], [0, 0, 0, 0, [0, 0, 0]],
+    [0, 0, 0, 0, [0, 0, 0]], [0, 0, 0, 0, [0, 0, 0]], [0, 0, 0, 0, [0, 0, 0]]]}];
+const FLARE = +(new URLSearchParams(location.search).get('flare') ?? 0) || 0;   // (which style, till the app says whose: {bob: {flare}})
 // Bob: an orb of light, as Siri's, that lives in the world as a ball would (his choice, 2026-11-04): heavy enough to
 // roll, bounce and knock, alive enough to roll himself. The mark where he comes to listen (x, z, m); his radius (m),
 // how far his glow reaches (in radii), how bright his ribbons and heart; the light he throws; his colour (a hue; paler
@@ -146,7 +167,7 @@ const SUNSEE = {radius: 0.0065, disc: 12, core: 12, coreWidth: 0.0105, veil: 7, 
 // rolls at most, or charging (m/s); how fast he leaves the ground jumping (m/s); how deep he presses into the grass to
 // hide (m). The grass: how far round him it gives way (in his radii: flat under him, leaning less and less out to
 // there), how far it lies down (1: flat), how long it takes to stand up again (s)
-const BOB = {mark: [1.15, 27.3], radius: 0.7, halo: 1.45, solid: 0.92, ribbons: 0.28, heart: 0.8, light: 9, reach: 8, hue: 38, known: 0,
+const BOB = {mark: [2.35, 27.1], radius: 0.7, halo: 1.45, solid: 0.92, ribbons: 0.28, heart: 0.8, light: 9, reach: 8, hue: 38, known: 0,
   g: 9.8, bounce: 0.35, knock: 0.45, drag: 0.9, roll: 0.25, push: 7, top: 4.5, dash: 9, jump: 4.6, hide: 0.32,
   give: 2, lean: 1, rise: 10, sit: 0.15};   // (sit: how deep he settles into the grass where he stays — sitting, not lying on it)
 // how much brighter the camera sees as the sun sinks (EV at a height): the sky loses about 1 EV a degree near the
@@ -155,7 +176,7 @@ const DUSK = [[12, 0], [5, 0.85], [1, 2.1], [0, 2.7], [-2, 4.2], [-4, 6.3], [-6,
 // the tree: where, turned how, how tall; and how it moves in
 // the wind, in metres at the usual wind's mean gust — how far its top leans, a branch swings, a leaf flutters (a strong
 // wind moves it several times more, a breeze far less)
-const TREE = {at: [3, 28], turn: 90, height: 16.5, wind: {lean: 0.6, branch: 0.25, leaf: 0.05}};   // (35 m away; it stood 46 m away till 2026-11-06)
+const TREE = {at: [4.2, 27.8], turn: 90, height: 16.5, wind: {lean: 0.6, branch: 0.25, leaf: 0.05}};   // (35 m away, its trunk near the left edge; it stood 46 m away till 2026-11-06)
 // its falling leaves (his choice, 2026-10-28: as many as the wind tears off — a few in a breeze, a flurry in a gust —
 // flying off with it across the sky, as in his picture): at most how many, how long one flies (s), how big (m), how
 // fast it sinks (m/s), how fast the wind carries it (m/s in full wind), how far it swings to and fro (m) and in how long (s)
@@ -200,7 +221,7 @@ if (OFFSCREEN){ const mc = new MessageChannel(), waiting = []; let next = 0;
   const start = rng(Date.now() % 1e9);                                // (a new sky each visit)
   SUN.az = n('az') ?? +(SKYLIFE.az[0] + start()*(SKYLIFE.az[1] - SKYLIFE.az[0])).toFixed(2);
   SUN.el = n('el') ?? +(moodHeight(0.5, 0) + (start() - 0.5)*5).toFixed(2); HAZE.density = n('haze') ?? HAZE.density;
-  globalThis.TRY = {exp: n('exp'), through: n('through'), msaa: n('msaa'), steps: n('steps')}; }
+  globalThis.TRY = {exp: n('exp'), through: n('through'), msaa: n('msaa'), steps: n('steps'), noflare: q.has('noflare')}; }   // (noflare: to weigh its cost)
 
 // one look for every phone, the full one: his iPhone 11 Pro Max, the oldest that runs iOS 26, held 60 frames a second in
 // it, and fewer pixels made it no faster (pace, below, still lowers the sharpness on a phone that cannot keep up).
@@ -912,6 +933,29 @@ try {
   // tight core and a wide veil (analytic: no bloom passes), as bright as the sun is unhidden. How much shows is counted
   // once a frame in one pixel, from twelve looks at the frame round the sun. Its colour is the sunlight's here
   const sunSee = Object.fromEntries(Object.entries(SUNSEE).map(([k, v]) => [k, uniform(v)]));
+  const flare = {streaks: uniform(new THREE.Vector4()), own: uniform(new THREE.Vector2()), halo: uniform(new THREE.Vector4()),   // (own: his colour's share; the widest ghost)
+    ghost: [...Array(6)].map(() => uniform(new THREE.Vector4())), colour: [...Array(6)].map(() => uniform(new THREE.Vector3()))};
+  // the streaks, drawn into a picture of their own whenever his style changes (one look a pixel then, not atan, sin
+  // and exp): a picture 2·STAR degrees across, the sun in its middle
+  const STAR = 14, starCanvas = document.createElement('canvas'); starCanvas.width = starCanvas.height = 1024;
+  const star = new THREE.CanvasTexture(starCanvas); star.colorSpace = THREE.NoColorSpace; star.minFilter = THREE.LinearMipmapLinearFilter; star.generateMipmaps = true;
+  function drawStar([count, long, thin, bright]){
+    const g = starCanvas.getContext('2d'), mid = 512, perDeg = mid/STAR;
+    g.globalCompositeOperation = 'source-over'; g.fillStyle = '#000'; g.fillRect(0, 0, 1024, 1024); g.globalCompositeOperation = 'lighter';
+    for (let k = 0; k < count; k++){
+      const a = k*2*Math.PI/count + 0.3, end = Math.min(STAR*0.95, 3*long)*perDeg, x1 = mid + Math.cos(a)*end, y1 = mid + Math.sin(a)*end;
+      const line = g.createLinearGradient(mid, mid, x1, y1);
+      for (let j = 0; j <= 8; j++){ const r = j/8*end/perDeg, v = Math.round(255*Math.min(1, Math.exp(-r/long)*Math.min(1, r/0.4))); line.addColorStop(j/8, `rgb(${v},${v},${v})`); }
+      g.strokeStyle = line; g.lineWidth = Math.max(1, thin*perDeg); g.beginPath(); g.moveTo(mid, mid); g.lineTo(x1, y1); g.stroke();
+    }
+    star.needsUpdate = true;
+  }
+  function setFlare(i){                                                // his style of the sun's light in the lens
+    const f = FLARES[((i % FLARES.length) + FLARES.length) % FLARES.length];
+    flare.streaks.value.set(...f.streaks); flare.own.value.set(f.own, 1.35*Math.max(...f.ghosts.map(g => g[1]))); flare.halo.value.set(...f.halo[1], f.halo[0]); drawStar(f.streaks);
+    f.ghosts.forEach(([t, size, shape, bright, c], k) => { flare.ghost[k].value.set(t, size, shape, bright); flare.colour[k].value.set(...c); });
+  }
+  setFlare(FLARE);
   const clean = uniform(new THREE.Matrix4()), sunAt = uniform(new THREE.Vector2()), sunSpan = uniform(new THREE.Vector2());
   function placeSun(){                                                 // where the sun is on the screen, unshifted
     const p = camera.position.clone().addScaledVector(sunDir.value, 1000).project(camera);
@@ -1082,7 +1126,25 @@ try {
     const sd = uv().sub(sunAt).mul(vec2(orb.span, 1)).mul(CAM.fov), spin = time.mul(sunSee.turn), beat = sin(time.mul(sunSee.shimmer)).mul(0.5).add(0.5);
     const ray = a => texture(corona, rotate(sd, a).div(2*SUNSEE.reach).add(0.5)).rgb;
     const rays = mix(ray(spin), ray(spin.negate().add(1.9)), beat).mul(sunSee.rays).mul(shows).mul(smoothstep(SUNSEE.reach, SUNSEE.reach*0.8, length(sd)));
-    return tint.mul(disc.add(core.add(veil).add(rays).mul(dazzle))).div(exposureNow).mul(select(sunUp.greaterThan(-0.02), float(1), float(0)));
+    // the camera's flare, in his style: streaks round the sun, ghosts along the line through the middle, a halo mirrored
+    const streaks = texture(star, sd.div(2*STAR).add(0.5)).r.mul(flare.streaks.w).mul(smoothstep(STAR, STAR*0.85, length(sd)));
+    const toMid = vec2(0.5).sub(sunAt), ghosts = vec3(0).toVar();
+    // (the ghosts all lie on the line from the sun through the middle: far from it, there is none to work out)
+    const along = toMid.mul(vec2(orb.span, 1)), rel = uv().sub(sunAt).mul(vec2(orb.span, 1));
+    const fromLine = abs(rel.x.mul(along.y).sub(rel.y.mul(along.x))).div(length(along).max(1e-4));
+    If(fromLine.lessThan(flare.own.y), () => { flare.ghost.forEach((g, i) => {
+      const p = uv().sub(sunAt.add(toMid.mul(g.x))).mul(vec2(orb.span, 1)).div(g.y.max(1e-4)).toVar(), u = length(p).toVar();
+      If(u.lessThan(1.3).and(g.w.greaterThan(0)), () => {                 // (most of the picture is far from every ghost)
+        const q = abs(p), disc = float(1).sub(smoothstep(0.75, 1, u)).add(exp(u.sub(0.95).div(0.06).pow2().negate()).mul(0.3)), ring = exp(u.sub(1).div(0.08).pow2().negate());
+        const hex = float(1).sub(smoothstep(0.8, 1, max(q.x.mul(0.866).add(q.y.mul(0.5)), q.y)));
+        ghosts.addAssign(flare.colour[i].mul(select(g.z.lessThan(0.5), disc, select(g.z.lessThan(1.5), ring, hex)).mul(g.w)));
+      });
+    }); });
+    const mirrored = length(uv().sub(vec2(0.5).add(toMid)).mul(vec2(orb.span, 1))).div(0.35);
+    const halo = flare.halo.rgb.mul(float(1).sub(smoothstep(0.3, 1, mirrored)).mul(flare.halo.a));
+    const own = mix(vec3(1), orb.colour.mul(1.6), flare.own.x);   // (his colour runs through it)
+    const lens = tint.mul(streaks).add(ghosts.add(halo).mul(tint.mul(0.5).add(0.5)).mul(own)).mul(shows).mul(dazzle);
+    return tint.mul(disc.add(core.add(veil).add(rays).mul(dazzle))).add(TRY.noflare ? vec3(0) : lens).div(exposureNow).mul(select(sunUp.greaterThan(-0.02), float(1), float(0)));
   })();
   // ══ Bob's body and his life: a ball of light the size of a big ball, living on the hill as a ball would. Gravity
   // always; the dense leaves under the grass are his ground (softer where he presses in to hide); the grass holds him
@@ -1222,7 +1284,7 @@ try {
     pressNow(dt);
   }
   const setBob = b => { if (b.way || b.state) bob.way = b.way || b.state; if (b.hue !== undefined) bob.hue = +b.hue; if (b.known !== undefined) bob.known = +b.known;
-    if (b.act !== undefined) bob.act = b.act || null;
+    if (b.act !== undefined) bob.act = b.act || null; if (b.flare !== undefined) setFlare(+b.flare);
     if (b.level !== undefined){ bob.level = Math.max(0, Math.min(1, +b.level)); bob.heard = performance.now()/1000; } };
   addEventListener('message', e => { const b = e.data?.bob; if (b) setBob(b); if (e.data?.play !== undefined) playable = !!e.data.play; });   // (from the app: {bob: {way, level, hue, known}})
   // the grade, the film curve (AgX), and after it colour given back: the film holds bright orange near grey, so the tree
@@ -1643,7 +1705,7 @@ try {
       frames = 0; t0 = now;
     }
   });
-  window.world = {renderer, scene, camera, atmosphere, sun, cascades, pipeline, tree, field, fieldInfo, setSun, windStrength, windDir, parts, hazeDensity, airParts, sunMap, sunCam, sunView, frame, air, airAtlas, drawAir, fieldRT, groundRT, redrawShadows, treeWind, draw, SETTLE, settleKeep, crisp, settle, settled, sharpened, crownParts, treeColour, skyColour, sunSee, sunPeek, setMood, mood, cloudCover, cloudScale, cloudHorizon, cloudThick, cloudMist, cloudFar, cloudGain, cloudTarget, bob, setBob, body, orb, bobLight, pressRT, knockTree, treeKnock, treeShake, fallen, fallWind, skyTarget, skyScene, drawSky, startTest, SWITCHES, lastRun: () => run,
+  window.world = {renderer, scene, camera, atmosphere, sun, cascades, pipeline, tree, field, fieldInfo, setSun, windStrength, windDir, parts, hazeDensity, airParts, sunMap, sunCam, sunView, frame, air, airAtlas, drawAir, fieldRT, groundRT, redrawShadows, treeWind, draw, SETTLE, settleKeep, crisp, settle, settled, sharpened, crownParts, treeColour, skyColour, sunSee, sunPeek, setMood, mood, cloudCover, cloudScale, cloudHorizon, cloudThick, cloudMist, cloudFar, cloudGain, cloudTarget, bob, setBob, body, orb, bobLight, setFlare, FLARES, pressRT, knockTree, treeKnock, treeShake, fallen, fallWind, skyTarget, skyScene, drawSky, startTest, SWITCHES, lastRun: () => run,
     whole: () => total >= 60 && !skyFrames && airWarm <= 0,   // (drawn whole — its sky done, its haze warm: the app shows it only then)
     pace, paceReset, paceState: () => ({step: paceStep, off: paceOff, trying: !!paceTry, held: paceHeld, gpuLag, pixels: renderer.getPixelRatio(), target: paceTarget}),
     setExposure: e => { renderer.toneMappingExposure = e; }};   // for checking from the console
