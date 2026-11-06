@@ -453,6 +453,14 @@ MAX_REPLY_TOKENS: int = int(os.getenv("MAX_REPLY_TOKENS", "260"))
 # server (see allowance.py), never in the app.
 DAILY_SECONDS: int = int(os.getenv("DAILY_SECONDS", str(3 * 60 * 60)))
 
+# ── a server anyone can reach (guard.py) ──────────────────────────────
+#: BOB_PUBLIC=1: no request without a token, no developer pages, no word-for-word voice. Off on the Mac at home.
+PUBLIC: bool = os.getenv("BOB_PUBLIC", "") == "1"
+#: one uploaded utterance at most (bytes): a minute of speech is well under 1 MB
+MAX_AUDIO_BYTES: int = int(os.getenv("MAX_AUDIO_BYTES", str(4 * 1024 * 1024)))
+#: behind a proxy that sets X-Forwarded-For (and only then: a client can write it itself)
+TRUST_PROXY: bool = os.getenv("TRUST_PROXY", "") == "1"
+
 # Where per-user memory + logs live (git-ignored).
 DATA_DIR: Path = Path(os.getenv("DATA_DIR", Path(__file__).resolve().parent.parent / "data"))
 DATA_DIR.mkdir(parents=True, exist_ok=True)

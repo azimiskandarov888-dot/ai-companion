@@ -79,6 +79,7 @@ from . import (
     erase,
     feeling,
     fit,
+    guard,
     identity,
     intake,
     lang,
@@ -120,16 +121,24 @@ _STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 def _user(authorization: str | None = Header(default=None)) -> str:
     """Whose request this is. The ONLY place identity enters the server.
 
+    On a public server (BOB_PUBLIC=1) a request with no token is refused: the anonymous bucket holds one real
+    person's life from before tokens (identity.py), and must not be readable — or erasable — by anyone who asks.
+
     A missing header is not an error: it means the anonymous user, which is
     how the browser dev page, curl, and every build that predates the token
     keep working. See identity.py for why a *malformed* token is never
     anonymous.
     """
-    return identity.user_id_from_token(authorization)
+    user_id = identity.user_id_from_token(authorization)
+    if config.PUBLIC and identity.is_anonymous(user_id):
+        raise HTTPException(status_code=401, detail="Missing token.")
+    return user_id
 
 
 @app.get("/")
 async def index() -> FileResponse:
+    if config.PUBLIC:
+        raise HTTPException(status_code=404)                          # (a developer page: not on a public server)
     return FileResponse(_STATIC_DIR / "index.html")
 
 
@@ -137,6 +146,8 @@ async def index() -> FileResponse:
 async def live_page() -> FileResponse:
     """The live channel from a browser — how the owner hears it before the
     phone does (a developer tool, like the page above)."""
+    if config.PUBLIC:
+        raise HTTPException(status_code=404)
     return FileResponse(_STATIC_DIR / "live.html")
 
 
@@ -145,6 +156,9 @@ async def live_channel(ws: WebSocket) -> None:
     """The live channel: he hears while you speak and starts on his answer the
     moment you seem to have finished. The protocol and every decision in it —
     live.py."""
+    if not guard.allow_socket(ws):                                    # (opening it too often, from one address)
+        await ws.close(code=1008)
+        return
     await live.serve(ws)
 
 
@@ -859,6 +873,7 @@ async def talk(
     audio: UploadFile = File(...),
     user_id: str = Depends(_user),
     accept: str = Header(default=""),
+    _limited: None = Depends(guard.limit("talk")),
 ):
     """Full voice loop: audio → transcript → reply → spoken audio.
 
@@ -875,9 +890,11 @@ async def talk(
     know, and a client that has never heard of streaming cannot accidentally
     receive one.
     """
-    audio_bytes = await audio.read()
+    audio_bytes = await audio.read(config.MAX_AUDIO_BYTES + 1)
     if not audio_bytes:
         raise HTTPException(status_code=400, detail="Empty audio upload.")
+    if len(audio_bytes) > config.MAX_AUDIO_BYTES:                     # (the ears bill by length)
+        raise HTTPException(status_code=413, detail="Audio too long.")
 
     # Before ANY paid work: has he got the day left, and is he even awake?
     # This is deliberately the first thing that happens — checking after
@@ -962,7 +979,7 @@ async def talk(
 
 
 class SayRequest(BaseModel):
-    text: str
+    text: str = Field(..., max_length=2_000)
     #: Speak the text back EXACTLY, without thinking about it and without
     #: remembering it. Used by the background-voice test, where the question is
     #: only "does his voice come out of a backgrounded app" — a brain round trip
@@ -976,11 +993,19 @@ async def say(
     req: SayRequest,
     background_tasks: BackgroundTasks,
     user_id: str = Depends(_user),
+    _limited: None = Depends(guard.limit("say")),
 ) -> JSONResponse:
     """Text-in voice loop (skips the ears) — for testing brain + memory + mouth."""
     text = req.text.strip()
     if not text:
         raise HTTPException(status_code=400, detail="Empty text.")
+    if req.verbatim and config.PUBLIC:                                # (his voice saying anything, for anyone: not public)
+        raise HTTPException(status_code=403, detail="Not on this server.")
+    # a paid call, metered like every other: without this, text was a way round the day's allowance
+    verdict = allowance.check(user_id)
+    if not verdict.allowed and not req.verbatim:
+        return JSONResponse({"transcript": text, "reply": verdict.reason, "audio_base64": "", "audio_mime": "",
+                             "voice": "client", "state": verdict.code, "seconds_left": verdict.seconds_left})
 
     if req.verbatim:
         if not tts.configured():
@@ -1000,15 +1025,17 @@ async def say(
             "voice": "server",
         })
 
+    started = time.monotonic()
     try:
         result = await _think_and_speak(user_id, text, background_tasks)
     except Exception as e:  # noqa: BLE001
         raise _unavailable("🧠 the brain (Claude) / 🗣️ the voice", e)
+    allowance.spend(user_id, time.monotonic() - started)
     return JSONResponse({"transcript": text, **result})
 
 
 @app.post("/api/hello")
-async def hello(user_id: str = Depends(_user)) -> JSONResponse:
+async def hello(user_id: str = Depends(_user), _limited: None = Depends(guard.limit("hello"))) -> JSONResponse:
     """His first words — on the very first visit, and only then.
 
     Somebody who has just opened the app has nothing to say to a stranger,
@@ -1122,7 +1149,7 @@ class IntakeRequest(BaseModel):
 
 @app.post("/api/intake/next")
 async def intake_next(
-    req: IntakeRequest, user_id: str = Depends(_user)
+    req: IntakeRequest, user_id: str = Depends(_user), _limited: None = Depends(guard.limit("intake"))
 ) -> JSONResponse:
     """The next question in «пока его нет» — the conversation that replaces
     the blank «расскажите о себе» page. See app/intake.py for the design.
@@ -1191,6 +1218,7 @@ async def companion_create(
     req: CreateCompanionRequest,
     background_tasks: BackgroundTasks,
     user_id: str = Depends(_user),
+    _limited: None = Depends(guard.limit("create")),
 ) -> JSONResponse:
     """From the user's own words, and whatever they asked for, the friend walks in.
 
@@ -1198,6 +1226,7 @@ async def companion_create(
     all. However much they specify, he still arrives as his own person, with his
     own name, opinions, and things he honestly doesn't like.
     """
+    guard.limit_person("create-person", user_id)                   # (the dearest door: a few a day for one person too)
     req = req.model_copy(update={"about": req.story()})
     if not req.about.strip():
         raise HTTPException(

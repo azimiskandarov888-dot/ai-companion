@@ -1768,5 +1768,8 @@ async def serve(ws: WebSocket) -> None:
     given = start.get("token")
     token = header if header else (f"Bearer {given}" if isinstance(given, str) and given else None)
     user_id = identity.user_id_from_token(token)
+    if config.PUBLIC and identity.is_anonymous(user_id):              # (guard.py: on a public server, no token, no entry)
+        await ws.close(code=4401)
+        return
     session = Session(ws, user_id, duplex=start.get("duplex") is not False)
     await session.run(hello=bool(start.get("hello")))
