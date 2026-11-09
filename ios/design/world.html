@@ -96,7 +96,7 @@ import { pass, context, texture, vec2, vec3, vec4, float, saturation, attribute,
   normalize, cross, dot, uv, Fn, cameraViewMatrix, cos, sin, select, mix, abs, exp, fract, smoothstep, length, Loop, rtt,
   positionGeometry, positionLocal, positionWorld, normalLocal, normalWorld, normalView, positionViewDirection, diffuseColor, BRDF_Lambert, getViewPosition,
   screenUV, mrt, output, positionView, luminance, nodeObject, passTexture, floor, min, max, clamp, renderOutput,
-  hash, instanceIndex, rotate, step as threshold, uint, modelWorldMatrix, mx_worley_noise_float, If, Discard, asin, atan } from 'three/tsl';   // (step: 1 at or over an edge, else 0)
+  hash, instanceIndex, rotate, step as threshold, uint, modelWorldMatrix, mx_worley_noise_float, If, Discard, asin, atan, toneMappingExposure } from 'three/tsl';   // (step: 1 at or over an edge, else 0)
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { CSMShadowNode } from 'three/addons/csm/CSMShadowNode.js';
@@ -207,6 +207,14 @@ const WIND = {dir: [-0.95, 0.3], strength: 0.55};                    // one wind
 // (per m of crown on the way), what the deepest leaves still get, and how much more the leaves just under the crown's
 // sunlit skin glow (a little: more, and the crown burned like fire)
 const THROUGH = {scale: 0.08, dim: 0.3, least: 0.05, rim: 1.5};
+// the dark places a real evening has (research «Реализм света и листвы по играм», 2026-11-09: the frame had no black,
+// its darkest pixel at L* 20): the haze over the first metres as thin as clear air (a tenth), so the air between us and the tree stops
+// veiling its shade (the far haze stays), out to nearTo (m); a film contrast around middle grey, before AgX (three.js's
+// AgX has no look of its own); the sun through a leaf filtered once more by its pigment, so a backlit leaf is deeper
+// and darker than the sky behind it; and the sky's light inside the crown only as much as the crown lets through (its
+// baked shade, to this power). ?look=old shows the world as it was, to compare
+const LOOK = {near: 0.1, nearTo: 50, contrast: 1.3, pivot: 0.18, pigment: 2, crownSky: 2};
+const LOOK_OLD = {near: 1, contrast: 1, pigment: 1, crownSky: 0};
 // ?offscreen: frames keep coming while the window is hidden or covered (the browser then sends none), so the world
 // can be recorded on the Mac by Claude without anyone watching — not for the phone
 const OFFSCREEN = new URLSearchParams(location.search).has('offscreen');
@@ -221,7 +229,7 @@ if (OFFSCREEN){ const mc = new MessageChannel(), waiting = []; let next = 0;
   const start = rng(Date.now() % 1e9);                                // (a new sky each visit)
   SUN.az = n('az') ?? +(SKYLIFE.az[0] + start()*(SKYLIFE.az[1] - SKYLIFE.az[0])).toFixed(2);
   SUN.el = n('el') ?? +(moodHeight(0.5, 0) + (start() - 0.5)*5).toFixed(2); HAZE.density = n('haze') ?? HAZE.density;
-  globalThis.TRY = {exp: n('exp'), through: n('through'), msaa: n('msaa'), steps: n('steps'), noflare: q.has('noflare'), wide: n('wide'), webgl: q.has('webgl')}; }   // (noflare: to weigh its cost; webgl: as an iPhone on iOS 17–18 draws it, without WebGPU)
+  globalThis.TRY = {exp: n('exp'), through: n('through'), msaa: n('msaa'), steps: n('steps'), noflare: q.has('noflare'), wide: n('wide'), webgl: q.has('webgl'), old: q.get('look') === 'old'}; }   // (noflare: to weigh its cost; webgl: as an iPhone on iOS 17–18 draws it, without WebGPU)
 
 // one look for every phone, the full one: his iPhone 11 Pro Max, the oldest that runs iOS 26, held 60 frames a second in
 // it, and fewer pixels made it no faster (pace, below, still lowers the sharpness on a phone that cannot keep up).
@@ -543,6 +551,11 @@ try {
   // three.js's SSS material); how much sun reaches a leaf inside the crown is set with the sun's view of it (crownLight)
   const translucent = (m, through) => Object.assign(m, {thicknessColorNode: through, thicknessDistortionNode: float(0.25),
     thicknessAmbientNode: float(0), thicknessAttenuationNode: float(0.9), thicknessPowerNode: float(3), thicknessScaleNode: float(TRY.through ?? THROUGH.scale)});
+  // the look's turns (LOOK) as uniforms, so the world can be switched to how it was without a reload (setLook)
+  const lookNow = TRY.old ? {...LOOK, ...LOOK_OLD} : LOOK;
+  const look = {near: uniform(lookNow.near), contrast: uniform(lookNow.contrast), pigment: uniform(lookNow.pigment), crownSky: uniform(lookNow.crownSky)};
+  // the sun through a leaf comes out in its colour filtered once more: its hue (over its brightest channel) to pigment − 1
+  const filtered = map => { const c = texture(map).rgb; return c.mul(c.div(max(c.x, max(c.y, c.z)).max(1e-3)).max(1e-4).pow(look.pigment.sub(1))); };
   // the tree: Jacaranda from Poly Haven (CC0), its leaves turned to autumn (scene/import_tree.py, scene/autumn_leaves.py)
   const tex = new THREE.TextureLoader();
   step('tree');
@@ -614,11 +627,12 @@ try {
   gltf.scene.traverse(o => {
     if (!o.isMesh) return;
     const part = Object.keys(maps).find(k => o.name.includes(k)), leaves = part === 'leaves', [map, normalMap] = texOf[part];
-    const mat = leaves ? translucent(new THREE.MeshSSSNodeMaterial({map, normalMap, roughness: 0.6, side: THREE.DoubleSide}), texture(map).rgb)
+    const mat = leaves ? translucent(new THREE.MeshSSSNodeMaterial({map, normalMap, roughness: 0.6, side: THREE.DoubleSide}), filtered(map))
       : new THREE.MeshStandardNodeMaterial({map, normalMap, roughness: 0.9});
     // the gold of the sunlit field bounced up into the crown, less deep inside it (its depth is in the vertex colour)
     const deep = o.geometry.attributes.color ? attribute('color', 'vec4').x : float(1);
     mat.emissiveNode = texture(map).rgb.mul(groundLight).mul(BOUNCE.field/Math.PI).mul(float(1).sub(normalWorld.y).mul(0.5)).mul(deep);
+    mat.aoNode = deep.pow(look.crownSky);                              // the sky's light only as much as the crown lets through (LOOK)
     mat.mrtNode = mrt({distance: vec4(length(positionView), 1, 0, 1)});   // marked, for its own colour after the film (the grade)
     mat.receivedShadowNode = underClouds;                              // (the leaves' own, below, takes it too)
     if (o.geometry.attributes.color_1 && o.geometry.attributes.color_2) mat.positionNode = swayed();
@@ -700,7 +714,7 @@ try {
     const T = float(1).toVar(), L = vec3(0).toVar(), t = ds.mul(0.5).toVar();
     Loop(TRY.steps ?? HAZE.steps, () => {
       const p = eye.pos.add(dir.mul(t));
-      const sigma = exp(p.y.sub(hillAt(p.x, p.z)).max(0).div(-HAZE.height)).mul(hazeDensity);
+      const sigma = exp(p.y.sub(hillAt(p.x, p.z)).max(0).div(-HAZE.height)).mul(hazeDensity).mul(mix(look.near, float(1), smoothstep(0, LOOK.nearTo, t)));
       const s = sunView.mul(vec4(p, 1)).xyz, su = vec2(s.x.mul(0.5).add(0.5), s.y.mul(-0.5).add(0.5));
       const inside = su.x.greaterThan(0).and(su.x.lessThan(1)).and(su.y.greaterThan(0)).and(su.y.lessThan(1));
       const lit = select(inside.and(texture(sunMap.depthTexture, su).add(0.001).lessThan(s.z)), float(0), float(1));
@@ -1311,7 +1325,10 @@ try {
   // (Gjøl/Playdead: the noise must come before the colours are rounded, not after)
   const treeColour = uniform(GRADE.tree), skyColour = uniform(SKY.saturation), grainFrame = uniform(0);
   pipeline.outputColorTransform = false;
-  const film = renderOutput(vec4(saturation(sharpened.rgb.add(sunSeen).mul(vec3(...GRADE.white)), GRADE.saturation), 1), THREE.AgXToneMapping, THREE.LinearSRGBColorSpace);
+  const seen = saturation(sharpened.rgb.add(sunSeen).mul(vec3(...GRADE.white)), GRADE.saturation);
+  // the film contrast (LOOK): brightness spread around middle grey as the film sees it (after the exposure), hues kept
+  const seenGrey = luminance(seen).mul(toneMappingExposure).max(1e-6).div(LOOK.pivot);
+  const film = renderOutput(vec4(seen.mul(seenGrey.pow(look.contrast.sub(1))), 1), THREE.AgXToneMapping, THREE.LinearSRGBColorSpace);
   const pale = smoothstep(0.55, 0.9, luminance(film.rgb)), onTree = sharpened.a.max(0), onSky = sharpened.a.negate().max(0);
   const graded = saturation(film.rgb, float(1).add(treeColour.sub(1).mul(onTree.mul(float(1).sub(pale)))).add(skyColour.sub(1).mul(onSky)));
   const corner = float(1).sub(smoothstep(0.45, 1.1, length(uv().sub(0.5).mul(vec2(1.2, 1)))).mul(0.22));
@@ -1730,7 +1747,8 @@ try {
     }
   };
   renderer.setAnimationLoop(loop);
-  window.world = {renderer, scene, camera, atmosphere, sun, cascades, pipeline, tree, field, fieldInfo, setSun, windStrength, windDir, parts, hazeDensity, airParts, sunMap, sunCam, sunView, frame, air, airAtlas, drawAir, fieldRT, groundRT, redrawShadows, treeWind, draw, SETTLE, settleKeep, crisp, settle, settled, sharpened, crownParts, treeColour, skyColour, sunSee, sunPeek, setMood, mood, cloudCover, cloudScale, cloudHorizon, cloudThick, cloudMist, cloudFar, cloudGain, cloudTarget, bob, setBob, body, orb, bobLight, setFlare, FLARES, pressRT, knockTree, treeKnock, treeShake, fallen, fallWind, skyTarget, skyScene, drawSky, startTest, SWITCHES, lastRun: () => run,
+  const setLook = old => { const v = old ? {...LOOK, ...LOOK_OLD} : LOOK; for (const k in look) look[k].value = v[k]; drawAir(); };
+  window.world = {look, setLook, renderer, scene, camera, atmosphere, sun, cascades, pipeline, tree, field, fieldInfo, setSun, windStrength, windDir, parts, hazeDensity, airParts, sunMap, sunCam, sunView, frame, air, airAtlas, drawAir, fieldRT, groundRT, redrawShadows, treeWind, draw, SETTLE, settleKeep, crisp, settle, settled, sharpened, crownParts, treeColour, skyColour, sunSee, sunPeek, setMood, mood, cloudCover, cloudScale, cloudHorizon, cloudThick, cloudMist, cloudFar, cloudGain, cloudTarget, bob, setBob, body, orb, bobLight, setFlare, FLARES, pressRT, knockTree, treeKnock, treeShake, fallen, fallWind, skyTarget, skyScene, drawSky, startTest, SWITCHES, lastRun: () => run,
     whole: () => total >= 60 && !skyFrames && airWarm <= 0,   // (drawn whole — its sky done, its haze warm: the app shows it only then)
     pace, paceReset, paceState: () => ({step: paceStep, off: paceOff, trying: !!paceTry, held: paceHeld, gpuLag, pixels: renderer.getPixelRatio(), target: paceTarget}),
     setExposure: e => { renderer.toneMappingExposure = e; }};   // for checking from the console
