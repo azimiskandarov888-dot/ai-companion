@@ -65,7 +65,7 @@ for (const f of ['draco_decoder.js', 'draco_decoder.wasm', 'draco_wasm_wrapper.j
 for (const f of ['jacaranda.gltf.json', 'jacaranda-shadow.gltf.json']) copy(`field-assets/ph/${f}`);
 for (const part of ['trunk', 'branches']) for (const kind of ['diff', 'nor_gl']) for (const size of ['', '-512'])
   copy(`field-assets/ph/jacaranda_tree_${part}_${kind}_1k${size}.jpg`);
-for (const size of ['', '-512']){ copy(`field-assets/ph/jacaranda_leaves_autumn${size}.jpg`); copy(`field-assets/ph/jacaranda_tree_leaves_nor_gl_1k${size}.jpg`); }
+for (const size of ['', '-512']){ copy(`field-assets/ph/jacaranda_leaves_autumn${size}.jpg`); copy(`field-assets/ph/jacaranda_tree_leaves_nor_gl_1k${size}.jpg`); copy(`field-assets/ph/jacaranda_leaves_mask${size}.jpg`); }
 
 writeFileSync(join(out, 'CSP.txt'), CSP + '\n');   // (WorldView.swift sends exactly this as the header)
 const size = f => statSync(join(out, f)).size;

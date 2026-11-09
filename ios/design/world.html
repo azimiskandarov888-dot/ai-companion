@@ -94,7 +94,7 @@ body.clean #hud, body.clean #lightBtn, body.clean #panel { display: none !import
 import * as THREE from 'three/webgpu';
 import { pass, context, texture, vec2, vec3, vec4, float, saturation, attribute, uniform, time, mx_noise_float, cameraPosition,
   normalize, cross, dot, uv, Fn, cameraViewMatrix, cos, sin, select, mix, abs, exp, fract, smoothstep, length, Loop, rtt,
-  positionGeometry, positionLocal, positionWorld, normalLocal, normalWorld, normalView, positionViewDirection, diffuseColor, BRDF_Lambert, getViewPosition,
+  positionGeometry, positionLocal, positionWorld, normalLocal, normalWorld, normalView, normalViewGeometry, positionViewDirection, diffuseColor, BRDF_Lambert, getViewPosition,
   screenUV, mrt, output, positionView, luminance, nodeObject, passTexture, floor, min, max, clamp, renderOutput,
   hash, instanceIndex, rotate, step as threshold, uint, modelWorldMatrix, mx_worley_noise_float, If, Discard, asin, atan, toneMappingExposure } from 'three/tsl';   // (step: 1 at or over an edge, else 0)
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -560,7 +560,7 @@ try {
   const tex = new THREE.TextureLoader();
   step('tree');
   const load = (n, srgb) => tex.loadAsync(`field-assets/ph/${n}${LIGHT.maps}.jpg`).then(t => { if (srgb) t.colorSpace = THREE.SRGBColorSpace;
-    t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 4; return t; });
+    t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 4; t.flipY = false; return t; });
   const maps = {trunk: ['jacaranda_tree_trunk_diff_1k', 'jacaranda_tree_trunk_nor_gl_1k'],
     branches: ['jacaranda_tree_branches_diff_1k', 'jacaranda_tree_branches_nor_gl_1k'],
     leaves: ['jacaranda_leaves_autumn', 'jacaranda_tree_leaves_nor_gl_1k']};
@@ -587,6 +587,9 @@ try {
     fell ? null : loadTree(`field-assets/ph/${LIGHT.tree}-shadow.gltf.json`, new GLTFLoader().setDRACOLoader(draco)).catch(err => { console.error(err); return null; }),
     ...Object.values(maps).flatMap(([c, n]) => [load(c, true), load(n, false)])]);
   const texOf = {}; Object.keys(maps).forEach((k, i) => texOf[k] = [textures[2*i], textures[2*i + 1]]);
+  // glTF's UVs read a map top-down (flipY false, above): flipped, each leaf card showed a piece of another leaf. And the
+  // cards cover the black between the leaflets: the mask keeps only the leaflets (scene/leaf_alpha.py)
+  const leafMask = await load('jacaranda_leaves_mask', false);
   const tree = new THREE.Group();
   // Trunk → welded branch → attached leaf cluster. Pivots are packed into normalized COLOR_1/2 by import_tree.py;
   // second-order Rodrigues rotation preserves branch length without the cost of a full matrix per vertex.
@@ -633,6 +636,9 @@ try {
     const deep = o.geometry.attributes.color ? attribute('color', 'vec4').x : float(1);
     mat.emissiveNode = texture(map).rgb.mul(groundLight).mul(BOUNCE.field/Math.PI).mul(float(1).sub(normalWorld.y).mul(0.5)).mul(deep);
     mat.aoNode = deep.pow(look.crownSky);                              // the sky's light only as much as the crown lets through (LOOK)
+    // only the leaflets (the black between them cut away), and no card seen edge-on: there, in full sun, it was a thin
+    // white streak (cards under |N·V| 0.2 go: such streaks were 1.4 % of the crown's pixels, 0.03 % after)
+    if (leaves){ mat.opacityNode = texture(leafMask).r.mul(smoothstep(0.1, 0.3, abs(dot(normalViewGeometry, positionViewDirection)))); mat.alphaTest = 0.5; }
     mat.mrtNode = mrt({distance: vec4(length(positionView), 1, 0, 1)});   // marked, for its own colour after the film (the grade)
     mat.receivedShadowNode = underClouds;                              // (the leaves' own, below, takes it too)
     if (o.geometry.attributes.color_1 && o.geometry.attributes.color_2) mat.positionNode = swayed();
@@ -642,6 +648,7 @@ try {
   shade?.scene.traverse(o => {                                         // seen only by the sun's shadow (layer 1), swaying the same
     if (!o.isMesh) return;
     const mat = new THREE.MeshBasicNodeMaterial({side: THREE.DoubleSide});
+    if (o.name.includes('leaves')){ mat.opacityNode = texture(leafMask).r; mat.alphaTest = 0.5; }   // the sun sees leaflets, not cards: dappled light
     if (o.geometry.attributes.color_1 && o.geometry.attributes.color_2) mat.positionNode = swayed();
     const mesh = new THREE.Mesh(o.geometry, mat);
     mesh.castShadow = true; mesh.receiveShadow = false; mesh.layers.set(1); tree.add(mesh);
