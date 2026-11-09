@@ -8,16 +8,20 @@ trunk and branches a little less) — and the result is written Draco-compressed
 data inside), which the page's host serves. Use an output name ending in .gltf for the same delivery format without
 thinning; any other output name without keep writes a plain .glb.
 
-Vertex colour (COLOR_0): r = shade deep in the crown, g = branch bend weight, b = branch phase, a = 1 for leaves.
+Vertex colour (COLOR_0): r = sky visibility: the share of the sky that reaches the vertex, traced through the tree (sky_bake.py), g = branch bend weight, b = branch phase, a = 1 for leaves.
 WINDPIVOT holds the branch's attachment and effective length; WINDCLUSTER holds the leaf cluster's branch attachment
 and phase. The page textures each mesh with the tree's own photographed maps; the leaves' colour is turned to autumn by
 scene/autumn_leaves.py.
 """
+import os
 import sys
 
 import bpy
 import numpy as np
 from mathutils.kdtree import KDTree
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import sky_bake  # noqa: E402
 
 args = sys.argv[sys.argv.index('--') + 1:]
 SRC, OUT, HEIGHT = args[0], args[1], float(args[2])
@@ -172,20 +176,6 @@ for i, p in enumerate(cluster_centres):
     leaf_phases[i] = branch_phase[nearest]
 print(f'Wind: {component_count} welded branch components, {count} attached leaf clusters')
 
-# the crown's density on a grid: the more leaves around and above a point, the less sky reaches it
-cell = 0.6
-gmin = leafv.min(0) - cell*3
-gsize = np.ceil((leafv.max(0) + cell*3 - gmin)/cell).astype(int)
-grid = np.zeros(gsize, np.float32)
-idx = ((leafv - gmin)/cell).astype(int)
-np.add.at(grid, (idx[:, 0], idx[:, 1], idx[:, 2]), 1)
-for ax in range(3):                                             # a soft blur, a few cells wide
-    for _ in range(2):
-        grid = (np.roll(grid, 1, ax) + 2*grid + np.roll(grid, -1, ax))/4
-above = np.cumsum(grid[:, :, ::-1], axis=2)[:, :, ::-1]          # leaves above each cell
-dens = grid + 0.35*above
-dens /= np.percentile(dens[dens > 0], 95)
-
 pack_min = np.array([-HEIGHT, 0, -HEIGHT])
 pack_size = np.array([2*HEIGHT, HEIGHT, 2*HEIGHT])
 def pack_wind(values, has_length=False):
@@ -195,11 +185,90 @@ def pack_wind(values, has_length=False):
         packed[:, 3] /= HEIGHT
     return np.round(np.clip(packed, 0, 1)*255)/255
 
+# sky visibility per vertex (sky_bake.py): every triangle is sampled into a 0.1 m grid as an absorber (leaves: their
+# leaflets as a semi-transparent volume, bark nearly opaque); then each vertex traces the sky through the tree
+SKY_CELL = 0.1
+mask_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(sky_bake.__file__))),
+                         'field-assets', 'ph', 'jacaranda_leaves_mask.jpg')
+sky_parts = {}
+for o in parts:
+    me = o.data
+    me.calc_loop_triangles()
+    n = len(me.loop_triangles)
+    tri_v = np.empty(n*3, np.int32); me.loop_triangles.foreach_get('vertices', tri_v)
+    tri_l = np.empty(n*3, np.int32); me.loop_triangles.foreach_get('loops', tri_l)
+    co = np.empty(len(me.vertices)*3, np.float32); me.vertices.foreach_get('co', co)
+    nrm = np.empty(len(me.vertices)*3, np.float32); me.vertices.foreach_get('normal', nrm)
+    uv = np.zeros((len(me.loops), 2), np.float32)
+    if me.uv_layers.active is not None:
+        flat = np.empty(len(me.loops)*2, np.float32); me.uv_layers.active.data.foreach_get('uv', flat)
+        uv = flat.reshape(-1, 2)
+    sky_parts[o] = dict(tv=tri_v.reshape(-1, 3), tl=tri_l.reshape(-1, 3), co=co.reshape(-1, 3), nrm=nrm.reshape(-1, 3), uv=uv)
+
+allco = np.concatenate([sky_parts[o]['co'] for o in parts])
+lo = allco.min(0) - 0.3
+sky_shape = np.ceil((allco.max(0) - allco.min(0) + 0.6)/SKY_CELL).astype(int)
+sigma = np.zeros(sky_shape, np.float32)
+B = sky_bake.subtriangle_bary(4).astype(np.float32)
+
+def samples(o):
+    """Per chunk of triangles: 16 points per triangle (P), their UVs (U), the triangle areas (area)."""
+    s = sky_parts[o]
+    for start in range(0, len(s['tv']), 200000):
+        tv = s['tv'][start:start + 200000]; tl = s['tl'][start:start + 200000]
+        tri = np.stack([s['co'][tv[:, i]] for i in range(3)], 1)
+        area = 0.5*np.linalg.norm(np.cross(tri[:, 1] - tri[:, 0], tri[:, 2] - tri[:, 0]), axis=1)
+        yield np.einsum('kb,nbc->nkc', B, tri), np.einsum('kb,nbc->nkc', B, s['uv'][tl]), area
+
+img = bpy.data.images.load(os.path.abspath(mask_path))
+W, H = img.size
+px = np.empty(W*H*4, np.float32); img.pixels.foreach_get(px)
+bpy.data.images.remove(img)
+px = px.reshape(H, W, 4)                                        # Blender rows run bottom-up, like the UVs
+
+def leaflet(U, flipped):
+    col = np.floor(U[..., 0]*W).astype(np.int64) % W
+    v = 1 - U[..., 1] if flipped else U[..., 1]
+    row = np.floor(v*H).astype(np.int64) % H
+    return px[row, col, 0] > 0.5
+
+direct = flipped = total = 0
+for o in parts:
+    if kinds[o] != 'leaves':
+        continue
+    for P, U, area in samples(o):
+        direct += int(leaflet(U, False).sum()); flipped += int(leaflet(U, True).sum()); total += U.shape[0]*U.shape[1]
+print(f'mask share: direct {direct/total:.3f}, flipped {flipped/total:.3f}')
+use_flip = flipped > direct
+if use_flip:
+    print('mask: the direct reading is the lower one, so the flipped reading is used')
+
+for o in parts:
+    for P, U, area in samples(o):
+        if kinds[o] == 'leaves':
+            w = (area/16)[:, None]*leaflet(U, use_flip)*0.5/SKY_CELL**3
+        elif kinds[o] == 'trunk' or kinds[o] == 'branches':
+            w = np.broadcast_to((area/16)[:, None]*3.0/SKY_CELL**3, P.shape[:2])
+        else:
+            continue
+        sky_bake.deposit(sigma, lo, SKY_CELL, P.reshape(-1, 3), np.asarray(w, np.float64).ravel())
+
+allnrm = np.concatenate([np.zeros_like(sky_parts[o]['nrm']) if kinds[o] == 'leaves' else sky_parts[o]['nrm']
+                         for o in parts])
+V_all = sky_bake.sky_visibility(sigma, lo, SKY_CELL, allco, normals=allnrm, n_dirs=96, offset=1.0)
+sky_v = {}
+at = 0
+for o in parts:
+    m = len(sky_parts[o]['co'])
+    sky_v[o] = V_all[at:at + m]; at += m
+    p5, p50, p95 = np.percentile(sky_v[o], [5, 50, 95])
+    print(f'sky {kinds[o]}: {m} vertices, V p5 {p5:.3f} p50 {p50:.3f} p95 {p95:.3f}')
+del sigma
+
 leaf_offset = 0
 for o in parts:
     V = np.array([v.co for v in o.data.vertices])
-    gi = np.clip(((V - gmin)/cell).astype(int), 0, gsize - 1)
-    ao = np.clip(np.exp(-1.6*dens[gi[:, 0], gi[:, 1], gi[:, 2]]), 0.22, 1)
+    ao = np.clip(sky_v[o], 0.02, 1)
     leaf = kinds[o] == 'leaves'
     if leaf:
         ids = cluster_ids[leaf_offset:leaf_offset + len(V)]
