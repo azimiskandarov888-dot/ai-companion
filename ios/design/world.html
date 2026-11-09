@@ -144,18 +144,20 @@ const SUNSEE = {radius: 0.0065, disc: 12, core: 12, coreWidth: 0.0105, veil: 7, 
 // in the far corner (Courrèges, «GTA V — Graphics Study», 2015). Per style: the streaks (how many, how long and thin in
 // degrees, how bright); the ghosts — where on that line (0 the sun, 1 the middle), how big (in screen heights), what
 // shape (0 a disc, 1 a ring, 2 a hexagon, the aperture's), how bright, what colour; the mirrored halo; and how much of the
-// companion's own colour runs through it all. Brightness as seen, as the sun's (SUNSEE)
+// companion's own colour runs through it all. Brightness as seen, as the sun's (SUNSEE). The halo is faint: it lies over
+// the far side of the picture, where the tree stands, and at 0.15 it lifted the crown's darkest tenth from L* 21 to 39
+// and the trunk's from 30 to 36 — a milky veil over all the tree's shade (2026-11-10, measured; now 0.02: L* 24)
 const FLARES = [
-  {name: 'тёплый', streaks: [8, 5, 0.05, 1.6], own: 0.3, halo: [0.25, [1, 0.6, 0.45]], ghosts: [
+  {name: 'тёплый', streaks: [8, 5, 0.05, 1.6], own: 0.3, halo: [0.033, [1, 0.6, 0.45]], ghosts: [
     [0.35, 0.02, 0, 0.7, [1, 0.75, 0.35]], [0.6, 0.045, 0, 0.4, [1, 0.6, 0.45]], [0.85, 0.012, 0, 0.8, [1, 0.85, 0.4]],
     [1.25, 0.07, 1, 0.35, [1, 0.55, 0.3]], [1.55, 0.03, 0, 0.55, [1, 0.5, 0.2]], [-0.3, 0.015, 0, 0.4, [1, 0.8, 0.4]]]},
-  {name: 'стекло', streaks: [12, 7, 0.04, 1.8], own: 0.25, halo: [0.2, [0.45, 0.65, 1]], ghosts: [
+  {name: 'стекло', streaks: [12, 7, 0.04, 1.8], own: 0.25, halo: [0.027, [0.45, 0.65, 1]], ghosts: [
     [0.3, 0.018, 2, 0.8, [0.4, 1, 0.85]], [0.55, 0.03, 2, 0.55, [0.55, 1, 0.5]], [0.75, 0.012, 2, 1, [0.75, 0.55, 1]],
     [1.1, 0.05, 2, 0.4, [0.45, 0.9, 1]], [1.4, 0.022, 2, 0.7, [0.4, 0.6, 1]], [1.8, 0.08, 1, 0.3, [0.8, 0.7, 1]]]},
-  {name: 'мечта', streaks: [6, 4, 0.08, 1.1], own: 0.45, halo: [0.18, [0.85, 0.6, 1]], ghosts: [
+  {name: 'мечта', streaks: [6, 4, 0.08, 1.1], own: 0.45, halo: [0.024, [0.85, 0.6, 1]], ghosts: [
     [0.45, 0.06, 1, 0.5, [0.85, 0.65, 1]], [0.9, 0.11, 1, 0.35, [1, 0.6, 0.8]], [1.3, 0.035, 0, 0.55, [1, 0.85, 0.5]],
     [1.7, 0.16, 1, 0.25, [0.55, 0.85, 1]], [-0.2, 0.025, 0, 0.35, [1, 0.75, 0.9]], [0.7, 0.008, 0, 0.7, [1, 1, 1]]]},
-  {name: 'чистый', streaks: [16, 3, 0.03, 1.2], own: 0.1, halo: [0.15, [1, 0.8, 0.6]], ghosts: [
+  {name: 'чистый', streaks: [16, 3, 0.03, 1.2], own: 0.1, halo: [0.02, [1, 0.8, 0.6]], ghosts: [
     [0.8, 0.012, 0, 0.35, [1, 0.85, 0.6]], [0, 0, 0, 0, [0, 0, 0]], [0, 0, 0, 0, [0, 0, 0]],
     [0, 0, 0, 0, [0, 0, 0]], [0, 0, 0, 0, [0, 0, 0]], [0, 0, 0, 0, [0, 0, 0]]]}];
 const FLARE = (f => f === null ? 3 : +f || 0)(new URLSearchParams(location.search).get('flare'));   // (Bob's own: the fourth, «чистый» — his choice, 2026-11-06; another companion's comes from the app, {bob: {flare}})
