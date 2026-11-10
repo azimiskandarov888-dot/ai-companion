@@ -27,6 +27,9 @@ args = sys.argv[sys.argv.index('--') + 1:]
 SRC, OUT, HEIGHT = args[0], args[1], float(args[2])
 TURN = float(args[3]) if len(args) > 3 else 0.0
 KEEP = float(args[4]) if len(args) > 4 else 0.0
+# every leaf card grows about its own middle (SpeedTree's Grow Scale): the crown had sky showing through 15 % of its outline
+# (his picture: 9 %), and the leaves on the cards read as specks from 30 m
+LEAF_GROW = 1.35
 
 for o in list(bpy.data.objects):
     bpy.data.objects.remove(o)
@@ -156,6 +159,21 @@ def leaf_middles(o):
     return middle
 
 leaf_middle = np.concatenate([leaf_middles(o) for o in parts if kinds[o] == 'leaves'])
+# grow every leaf card about its own middle; the middles stay put, so the wind data (per card) is unchanged
+leaf_parts = [o for o in parts if kinds[o] == 'leaves']
+grown = []
+at = 0
+for o in leaf_parts:
+    n = len(o.data.vertices)
+    middle = leaf_middle[at:at + n]
+    at += n
+    V0 = np.empty((n, 3), np.float64)
+    o.data.vertices.foreach_get('co', V0.ravel())
+    V1 = middle + LEAF_GROW*(V0 - middle)
+    o.data.vertices.foreach_set('co', V1.astype(np.float32).ravel()); o.data.update()
+    grown.append(V1)
+leafv = np.concatenate(grown)
+print(f'leaf cards grown ×{LEAF_GROW} about their middles: {len(leafv)} vertices')
 cell = 0.55
 cells = np.floor(leaf_middle/cell).astype(np.int64) + 512
 keys = (cells[:, 0] << 42) | (cells[:, 1] << 21) | cells[:, 2]
@@ -189,7 +207,7 @@ def pack_wind(values, has_length=False):
 # leaflets as a semi-transparent volume, bark nearly opaque); then each vertex traces the sky through the tree
 SKY_CELL = 0.1
 mask_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(sky_bake.__file__))),
-                         'field-assets', 'ph', 'jacaranda_leaves_mask.jpg')
+                         'field-assets', 'ph', 'jacaranda_cluster_mask.jpg')
 sky_parts = {}
 for o in parts:
     me = o.data

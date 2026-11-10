@@ -96,7 +96,7 @@ import { pass, context, texture, vec2, vec3, vec4, float, saturation, attribute,
   normalize, cross, dot, uv, Fn, cameraViewMatrix, cos, sin, select, mix, abs, exp, fract, smoothstep, length, Loop, rtt,
   positionGeometry, positionLocal, positionWorld, normalLocal, normalWorld, normalView, normalViewGeometry, positionViewDirection, diffuseColor, BRDF_Lambert, getViewPosition,
   screenUV, mrt, output, positionView, luminance, nodeObject, passTexture, floor, min, max, clamp, renderOutput,
-  hash, instanceIndex, rotate, step as threshold, uint, modelWorldMatrix, mx_worley_noise_float, If, Discard, asin, atan, toneMappingExposure } from 'three/tsl';   // (step: 1 at or over an edge, else 0)
+  hash, instanceIndex, rotate, step as threshold, uint, modelWorldMatrix, mx_worley_noise_float, If, Discard, asin, atan, toneMappingExposure, screenCoordinate } from 'three/tsl';   // (step: 1 at or over an edge, else 0)
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { CSMShadowNode } from 'three/addons/csm/CSMShadowNode.js';
@@ -129,7 +129,7 @@ const EXPOSURE = 7;                                                  // the came
 // and the tree's own colour, given back after the film curve (which holds bright orange near grey) in its shade and
 // middle tones; its bright leaves stay pale, as in his picture (saturated, they burned like fire)
 // a leaf cluster's own shade (its colour, its glow and its bounce times this): deep amber … pale gold
-const LEAF_OWN = {lo: [0.72, 0.52, 0.3], hi: [1.1, 1.08, 1.0]};
+const LEAF_OWN = {lo: [0.88, 0.8, 0.55], hi: [1.06, 1.08, 1.05]};   // (deep amber was too much once the crown had shade: it went copper)
 const GRADE = {white: [1, 1, 1], saturation: 1.3, tree: 1.1};
 // the sky, as Ghost's local tone mapping keeps it: darker than the light it throws, so its blue stays deep
 const SKY = {exposure: 0.47, saturation: 2};                         // (its colour is given after the film curve: before it, ×2 pushed
@@ -217,8 +217,12 @@ const WIND = {dir: [-0.95, 0.3], strength: 0.55};                    // one wind
 // translucency); and, as in a real crown, where light passes leaf after leaf (Beer–Lambert; Monsi and Saeki 1953), a
 // leaf deep inside gets less of it but never none — not all or nothing from the shadow map: how fast the crown dims it
 // (per m of crown on the way), what the deepest leaves still get, and how much more the leaves just under the crown's
-// sunlit skin glow (a little: more, and the crown burned like fire)
-const THROUGH = {scale: 0.08, dim: 0.3, least: 0.05, rim: 1.5};
+// sunlit skin glow (a little: more, and the crown burned like fire); and how the light that passed leaf after leaf turns
+// amber — a gold leaf lets red through best and blue worst, so the light deep in the crown is the leaf's colour taken
+// many times over (each channel's left share to this power). At 0.3 per m the whole crown glowed alike, as if see-through;
+// at 0.7 its inside is in shade and its thin edges glow, as a tree against a low sun does, and what the leaves pass on to
+// each other (least: 0.08) keeps the inside amber, not black — the crown's L* 17.5/34/58, his mj-15's 17/37/62 (2026-11-10)
+const THROUGH = {scale: 0.08, dim: 0.7, least: 0.08, rim: 1, amber: [0.75, 1, 1.6]};
 // the dark places a real evening has (research «Реализм света и листвы по играм», 2026-11-09: the frame had no black,
 // its darkest pixel at L* 20): the haze over the first metres as thin as clear air (a tenth), so the air between us and the tree stops
 // veiling its shade (the far haze stays), out to nearTo (m); a film contrast around middle grey, before AgX (three.js's
@@ -578,14 +582,16 @@ try {
   const look = {near: uniform(lookNow.near), nearTo: uniform(lookNow.nearTo), contrast: uniform(lookNow.contrast), pigment: uniform(lookNow.pigment), crownSky: uniform(lookNow.crownSky)};
   // the sun through a leaf comes out in its colour filtered once more: its hue (over its brightest channel) to pigment − 1
   const filtered = map => { const c = texture(map).rgb; return c.mul(c.div(max(c.x, max(c.y, c.z)).max(1e-3)).max(1e-4).pow(look.pigment.sub(1))); };
-  // the tree: Jacaranda from Poly Haven (CC0), its leaves turned to gold (scene/import_tree.py, scene/gold_leaves.py)
+  // the tree: Jacaranda from Poly Haven (CC0); on its leaf cards, clusters of big gold leaves (scene/import_tree.py,
+  // scene/leaf_clusters.py) — its own feathery leaflets, a centimetre each, were under a pixel from here: the crown read as
+  // a mist of dots, half of them lost at every distance (2026-11-10)
   const tex = new THREE.TextureLoader();
   step('tree');
   const load = (n, srgb) => tex.loadAsync(`field-assets/ph/${n}${LIGHT.maps}.jpg`).then(t => { if (srgb) t.colorSpace = THREE.SRGBColorSpace;
     t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 4; t.flipY = false; return t; });
   const maps = {trunk: ['jacaranda_tree_trunk_diff_1k', 'jacaranda_tree_trunk_nor_gl_1k'],
     branches: ['jacaranda_tree_branches_diff_1k', 'jacaranda_tree_branches_nor_gl_1k'],
-    leaves: ['jacaranda_leaves_gold', 'jacaranda_tree_leaves_nor_gl_1k']};
+    leaves: ['jacaranda_cluster_colour', 'jacaranda_cluster_nor_gl']};
   // the tree's file keeps its binary part as text (an artifact serves no .glb). It is unpacked here into a binary glTF
   // and handed to the loader whole: Safari on the iPhone refuses to fetch a data: address ("Failed to load buffer")
   async function loadTree(url, loader){
@@ -610,9 +616,10 @@ try {
     ...Object.values(maps).flatMap(([c, n]) => [load(c, true), load(n, false)])]);
   const texOf = {}; Object.keys(maps).forEach((k, i) => texOf[k] = [textures[2*i], textures[2*i + 1]]);
   // glTF's UVs read a map top-down (flipY false, above): flipped, each leaf card showed a piece of another leaf. And the
-  // cards cover the black between the leaflets: the mask keeps only the leaflets (scene/leaf_alpha.py)
-  const leafMask = await load('jacaranda_leaves_mask', false);
+  // cards cover the black between the leaflets: the mask keeps only the leaflets (scene/leaf_clusters.py)
+  const leafMask = await load('jacaranda_cluster_mask', false);
   const tree = new THREE.Group();
+  const leafOwn = {lo: uniform(new THREE.Vector3(...LEAF_OWN.lo)), hi: uniform(new THREE.Vector3(...LEAF_OWN.hi))};   // (LEAF_OWN, live)
   // Trunk → welded branch → attached leaf cluster. Pivots are packed into normalized COLOR_1/2 by import_tree.py;
   // second-order Rodrigues rotation preserves branch length without the cost of a full matrix per vertex.
   const treeWind = {lean: uniform(TREE.wind.lean), branch: uniform(TREE.wind.branch), leaf: uniform(TREE.wind.leaf)};
@@ -652,10 +659,12 @@ try {
   gltf.scene.traverse(o => {
     if (!o.isMesh) return;
     const part = Object.keys(maps).find(k => o.name.includes(k)), leaves = part === 'leaves', [map, normalMap] = texOf[part];
+    // (dry autumn leaves are matte: at roughness 0.6 every leaf tilted by its normal map toward the low sun glinted, 1.1 %
+    // of the crown white specks; at 0.95, 0.15 %)
     // each leaf cluster a shade of its own, from deep amber to pale gold, by the cluster's own random number (the one its
     // flutter keys on): one gold all over read as a painted crown
-    const own = leaves && o.geometry.attributes.color_2 ? mix(vec3(...LEAF_OWN.lo), vec3(...LEAF_OWN.hi), attribute('color_2', 'vec4').w) : vec3(1);
-    const mat = leaves ? translucent(new THREE.MeshSSSNodeMaterial({map, normalMap, roughness: 0.6, side: THREE.DoubleSide}), filtered(map).mul(own))
+    const own = leaves && o.geometry.attributes.color_2 ? mix(leafOwn.lo, leafOwn.hi, attribute('color_2', 'vec4').w) : vec3(1);
+    const mat = leaves ? translucent(new THREE.MeshSSSNodeMaterial({map, normalMap, roughness: 0.95, side: THREE.DoubleSide}), filtered(map).mul(own))
       : new THREE.MeshStandardNodeMaterial({map, normalMap, roughness: 0.9});
     if (leaves) mat.colorNode = vec4(texture(map).rgb.mul(own), 1);
     // the gold of the sunlit field bounced up into the crown, less deep inside it (its depth is in the vertex colour)
@@ -713,15 +722,20 @@ try {
   // shaded ones only, the edge flickered as the crown swayed). The map holds the tree at rest, so a leaf looks itself up
   // where it is at rest (the crown in front of it sways with it; looked up where it is now, a leaf swayed toward the sun
   // glared white)
-  const crownParts = {dim: uniform(THROUGH.dim), least: uniform(THROUGH.least), rim: uniform(THROUGH.rim)};
+  const crownParts = {dim: uniform(THROUGH.dim), least: uniform(THROUGH.least), rim: uniform(THROUGH.rim), amber: uniform(new THREE.Vector3(...THROUGH.amber))};
   const crownLight = Fn(() => {
     const s = sunView.mul(vec4(modelWorldMatrix.mul(vec4(positionGeometry, 1)).xyz.toVarying('vRestAt'), 1)).xyz;
     const at = vec2(s.x.mul(0.5).add(0.5), s.y.mul(-0.5).add(0.5)), r = 0.34/(sunCam.right - sunCam.left);
     const left = d => exp(s.z.sub(texture(sunMap.depthTexture, at.add(d))).max(0).mul(sunCam.far - sunCam.near).mul(crownParts.dim).negate());
-    const T = left(vec2(0, 0)).add(left(vec2(r, r))).add(left(vec2(-r, r))).add(left(vec2(r, -r))).add(left(vec2(-r, -r))).mul(0.2);
+    // the four side looks turned by another angle at every pixel and every frame (interleaved gradient noise, Jimenez
+    // 2014), which the smoothing over time averages: held still, the map's 9 cm texels showed as squares of light and
+    // shade once the crown dimmed the sun as fast as a real one (THROUGH.dim)
+    const px = screenCoordinate.xy.add(fract(time.mul(13.7)).mul(97)), turnA = fract(fract(dot(px, vec2(0.06711056, 0.00583715))).mul(52.9829189)).mul(6.2832);
+    const ca = cos(turnA), sa = sin(turnA), turned = (x, y) => vec2(ca.mul(x).sub(sa.mul(y)), sa.mul(x).add(ca.mul(y)));
+    const T = left(vec2(0, 0)).add(left(turned(r, r))).add(left(turned(-r, r))).add(left(turned(r, -r))).add(left(turned(-r, -r))).mul(0.2);
     return vec2(crownParts.least.add(T.mul(float(1).sub(crownParts.least))), T.pow(8).mul(crownParts.rim).add(1));   // what gets through; the glow
   })();
-  const crownLit = shade => mix(crownLight.x, float(1), shade).mul(crownLight.y).mul(cloudSun);   // (for a leaf's shade: 0…1)
+  const crownLit = shade => mix(vec3(crownLight.x).pow(crownParts.amber), vec3(1), shade).mul(crownLight.y).mul(cloudSun);   // (for a leaf's shade: 0…1)
   tree.traverse(o => {
     const m = o.material;
     if (!o.isMesh || !m.thicknessColorNode) return;                   // the leaves
@@ -1781,7 +1795,7 @@ try {
   };
   renderer.setAnimationLoop(loop);
   const setLook = old => { const v = old ? {...LOOK, ...LOOK_OLD} : LOOK; for (const k in look) look[k].value = v[k]; drawAir(); };
-  window.world = {look, setLook, renderer, grassShade, scene, camera, atmosphere, sun, cascades, pipeline, tree, field, fieldInfo, setSun, windStrength, windDir, parts, hazeDensity, airParts, sunMap, sunCam, sunView, frame, air, airAtlas, drawAir, fieldRT, groundRT, redrawShadows, treeWind, draw, SETTLE, settleKeep, crisp, settle, settled, sharpened, crownParts, treeColour, skyColour, sunSee, sunPeek, setMood, mood, cloudCover, cloudScale, cloudHorizon, cloudThick, cloudMist, cloudFar, cloudGain, cloudTarget, bob, setBob, body, orb, bobLight, setFlare, FLARES, pressRT, knockTree, treeKnock, treeShake, fallen, fallWind, skyTarget, skyScene, drawSky, startTest, SWITCHES, lastRun: () => run,
+  window.world = {look, setLook, renderer, grassShade, leafOwn, scene, camera, atmosphere, sun, cascades, pipeline, tree, field, fieldInfo, setSun, windStrength, windDir, parts, hazeDensity, airParts, sunMap, sunCam, sunView, frame, air, airAtlas, drawAir, fieldRT, groundRT, redrawShadows, treeWind, draw, SETTLE, settleKeep, crisp, settle, settled, sharpened, crownParts, treeColour, skyColour, sunSee, sunPeek, setMood, mood, cloudCover, cloudScale, cloudHorizon, cloudThick, cloudMist, cloudFar, cloudGain, cloudTarget, bob, setBob, body, orb, bobLight, setFlare, FLARES, pressRT, knockTree, treeKnock, treeShake, fallen, fallWind, skyTarget, skyScene, drawSky, startTest, SWITCHES, lastRun: () => run,
     whole: () => total >= 60 && !skyFrames && airWarm <= 0,   // (drawn whole — its sky done, its haze warm: the app shows it only then)
     pace, paceReset, paceState: () => ({step: paceStep, off: paceOff, trying: !!paceTry, held: paceHeld, gpuLag, pixels: renderer.getPixelRatio(), target: paceTarget}),
     setExposure: e => { renderer.toneMappingExposure = e; }};   // for checking from the console
