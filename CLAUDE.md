@@ -9,6 +9,14 @@
 - Before accepting any worker's output, run its check yourself. If it fails, send it back with the failure. Never pass on a worker's report unchecked.
 - Start of every session: read CLAUDE.md and the three docs. End of every session: update progress.md, add new decisions and gotchas, and propose skill edits with the evidence from this session (`reflect` skill). The owner approves them before you apply them.
 
+## Verification loop
+Make it → look at the real result → compare with the checklist → fix. Repeat until it passes.
+- "Right" is defined by a checklist in `.claude/checklists/` (backend, ios, world). Pick the one that matches the change.
+- The checker sees the REAL result: test output, simulator screenshots, page screenshots, fps numbers. Never the maker's description of it.
+- The checker is the `reviewer` agent: fresh, read-only, writes PASS or FAIL. Only the reviewer runs `.claude/hooks/verify.sh pass`, and only on PASS.
+- Passing is the only exit: a Stop hook (`verify.sh gate`) blocks finishing while code in `backend/`, `ios/` or `tools/` has uncommitted changes without a PASS. After 3 blocked tries it hands over to the owner — then say plainly what still fails.
+- Don't commit before PASS. The owner looks only at work that passed.
+
 ## Where everything lives
 ```
 CLAUDE.md               this file: what the project is, the rules, the map
@@ -24,6 +32,8 @@ tools/                  helper scripts (voice, world build, asset cutting)
 assets/                 art sources (raw/, cut/, manifest.json)
 .claude/agents/         worker agents, each with model: haiku and one job
 .claude/skills/         one folder per repeatable task, each with a SKILL.md
+.claude/checklists/     what "right" means for backend, ios, world
+.claude/hooks/verify.sh the verification gate (Stop hook)
 ```
 
 ## graphify

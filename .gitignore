@@ -48,3 +48,6 @@ ios/*.xcodeproj
 
 # Logs
 *.log
+
+# Verification gate state
+.claude/verify/
