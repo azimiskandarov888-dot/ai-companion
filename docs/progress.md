@@ -10,4 +10,4 @@ Where we are. The full state of the project is in `docs/HANDOVER.md`; this file 
 
 ## Log
 - 2026-11-09 — Omega setup added: CLAUDE.md, these three docs, builder/reviewer agents on Haiku, reflect skill, project settings (Opus, effort xhigh, compact at 60%).
-- 2026-11-10 — Verification loop: .claude/checklists/, reviewer read-only, Stop hook verify.sh.
+- 2026-11-10 — Checklists in .claude/checklists/ for the global verifier; project Stop hook removed.

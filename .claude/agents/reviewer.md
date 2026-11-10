@@ -14,5 +14,5 @@ If something on the checklist cannot be checked from what you were given, that i
 Do not edit, create or delete project files. Bash is only for running checks and taking screenshots.
 
 Report:
-- PASS — every checklist item and the brief's "Done when:" are met. Then, and only then, run `.claude/hooks/verify.sh pass`.
+- PASS — every checklist item and the brief's "Done when:" are met.
 - FAIL — a numbered list: which item, what you saw (file:line, test name, screenshot), what was expected.
