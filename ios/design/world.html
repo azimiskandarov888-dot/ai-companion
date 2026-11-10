@@ -176,7 +176,7 @@ const BOB = {mark: [2.35, 27.1], radius: 0.7, halo: 1.45, solid: 0.92, ribbons: 
   give: 2, lean: 1, rise: 10, sit: 0.15};   // (sit: how deep he settles into the grass where he stays — sitting, not lying on it)
 // how much brighter the camera sees as the sun sinks (EV at a height): the sky loses about 1 EV a degree near the
 // horizon, and at a fixed exposure dusk went black
-const DUSK = [[12, 0], [5, 0.85], [1, 2.1], [0, 2.7], [-2, 4.2], [-4, 6.3], [-6, 8.9]];
+const DUSK = [[55, -2.1], [20, -1.4], [12, 0], [5, 0.85], [1, 2.1], [0, 2.7], [-2, 4.2], [-4, 6.3], [-6, 8.9]];   // (above 12° added 2026-11-10: the day field came out L* 78–85, not ~65)
 // the tree: where, turned how, how tall; and how it moves in
 // the wind, in metres at the usual wind's mean gust — how far its top leans, a branch swings, a leaf flutters (a strong
 // wind moves it several times more, a breeze far less)
@@ -223,6 +223,14 @@ const WIND = {dir: [-0.95, 0.3], strength: 0.55};                    // one wind
 // at 0.7 its inside is in shade and its thin edges glow, as a tree against a low sun does, and what the leaves pass on to
 // each other (least: 0.08) keeps the inside amber, not black — the crown's L* 17.5/34/58, his mj-15's 17/37/62 (2026-11-10)
 const THROUGH = {scale: 0.08, dim: 0.7, least: 0.08, rim: 1, amber: [0.75, 1, 1.6]};
+// the day's light, as the research «Контраст днём и на закате» (2026-11-10) asks: how much sun a leaf passes through to
+// its other side whatever way we look at it (a gold leaf's diffuse transmittance, through the leaf's colour; Frostbite's
+// translucency keeps this "ambient" part, which we had at 0, so by day a leaf with its sunlit side away from us went black);
+// the sky light inside the crown with the light the leaves pass on to each other, per colour (V to the power √(1−σ):
+// a gold leaf scatters most of the red and green it gets, little blue); and how much lighter the bark is than its map
+// (the through part only where the sun is not low in front of us: looking into a sunset, the forward glow above already
+// carries all the light through the leaves — it was tuned so — and both together lifted the evening crown by 13 L*)
+const DAYLIGHT = {through: 0.3, scatter: [0.5, 0.63, 0.95], bark: 2.5};
 // the dark places a real evening has (research «Реализм света и листвы по играм», 2026-11-09: the frame had no black,
 // its darkest pixel at L* 20): the haze over the first metres as thin as clear air (a tenth), so the air between us and the tree stops
 // veiling its shade (the far haze stays), out to nearTo (m); a film contrast around middle grey, before AgX (three.js's
@@ -307,6 +315,10 @@ try {
   const here = new Geodetic(radians(PLACE.lon), radians(PLACE.lat), PLACE.height).toECEF();
   Ellipsoid.WGS84.getNorthUpEastFrame(here, atmosphere.matrixWorldToECEF.value);   // our x: north, y: up, z: east
   const sunUp = uniform(0), sunDir = uniform(new THREE.Vector3()), exposureNow = uniform(EXPOSURE);    // the sun's height (the sine of its angle), its direction
+  // how much of the film's contrast (LOOK) the sun's place asks for: all of it with a low sun in front of us (looking into a
+  // sunset the scene spans the most), none with the sun behind us or high (by day a leaf hides its own shadow from us,
+  // and the frame should be the softest) — the research «Контраст днём и на закате»
+  const sunGrade = uniform(1);
   let onSun = () => {};                                                // what else follows the sun (the air's shadows)
   // how much of the sun the clouds let through toward us (worked out each frame, into one pixel, with the clouds): a
   // cloud's shadow is hundreds of metres wide, so on our small field it is one number. Every sunlit thing takes it
@@ -319,7 +331,9 @@ try {
     sunUp.value = Math.sin(e);
     const L = new THREE.Vector3(Math.sin(a)*Math.cos(e), Math.sin(e), Math.cos(a)*Math.cos(e));
     sunDir.value.copy(L);
-    const k = DUSK.findIndex(([h]) => h <= el), ev = k < 0 ? DUSK.at(-1)[1] : k === 0 ? 0
+    const ahead = camera.getWorldDirection(new THREE.Vector3()).setY(0).normalize().dot(new THREE.Vector3(L.x, 0, L.z).normalize());
+    sunGrade.value = THREE.MathUtils.smoothstep(ahead, 0, 1)*(1 - THREE.MathUtils.smoothstep(el, 6, 20));
+    const k = DUSK.findIndex(([h]) => h <= el), ev = k < 0 ? DUSK.at(-1)[1] : k === 0 ? DUSK[0][1]
       : THREE.MathUtils.mapLinear(el, DUSK[k - 1][0], DUSK[k][0], DUSK[k - 1][1], DUSK[k][1]);
     exposureNow.value = (TRY.exp ?? EXPOSURE)*2**(0.7*ev);          // (a little less: the field, lit by the sky, came out pale)
     renderer.toneMappingExposure = exposureNow.value;
@@ -575,8 +589,9 @@ try {
 
   // what lets light through — the tree's leaves — glows where the sun is behind it (Frostbite's fast translucency, in
   // three.js's SSS material); how much sun reaches a leaf inside the crown is set with the sun's view of it (crownLight)
+  const daylight = {through: uniform(DAYLIGHT.through), scatter: uniform(new THREE.Vector3(...DAYLIGHT.scatter)), bark: uniform(DAYLIGHT.bark)};   // (DAYLIGHT, live)
   const translucent = (m, through) => Object.assign(m, {thicknessColorNode: through, thicknessDistortionNode: float(0.25),
-    thicknessAmbientNode: float(0), thicknessAttenuationNode: float(0.9), thicknessPowerNode: float(3), thicknessScaleNode: float(TRY.through ?? THROUGH.scale)});
+    thicknessAmbientNode: normalView.dot(cameraViewMatrix.mul(vec4(sunDir, 0)).xyz).negate().max(0).mul(daylight.through).mul(float(1).sub(sunGrade)), thicknessAttenuationNode: float(0.9), thicknessPowerNode: float(3), thicknessScaleNode: float(TRY.through ?? THROUGH.scale)});
   // the look's turns (LOOK) as uniforms, so the world can be switched to how it was without a reload (setLook)
   const lookNow = TRY.old ? {...LOOK, ...LOOK_OLD} : LOOK;
   const look = {near: uniform(lookNow.near), nearTo: uniform(lookNow.nearTo), contrast: uniform(lookNow.contrast), pigment: uniform(lookNow.pigment), crownSky: uniform(lookNow.crownSky)};
@@ -667,11 +682,12 @@ try {
     const mat = leaves ? translucent(new THREE.MeshSSSNodeMaterial({map, normalMap, roughness: 0.95, side: THREE.DoubleSide}), filtered(map).mul(own))
       : new THREE.MeshStandardNodeMaterial({map, normalMap, roughness: 0.9});
     if (leaves) mat.colorNode = vec4(texture(map).rgb.mul(own), 1);
+    else mat.colorNode = vec4(texture(map).rgb.mul(daylight.bark), 1);   // (the bark map's median is 0.038, darker than real bark ~0.1)
     // the gold of the sunlit field bounced up into the crown, as much as the crown below a leaf lets it see the field (the
     // ground's share, traced as the sky's is: low in the crown a leaf sees the bright field, though little sky)
     const deep = o.geometry.attributes.color ? attribute('color', 'vec4').x : float(1), ground = o.geometry.attributes.color ? attribute('color', 'vec4').w : float(1);
     mat.emissiveNode = texture(map).rgb.mul(own).mul(groundLight).mul(BOUNCE.field/Math.PI).mul(float(1).sub(normalWorld.y).mul(0.5)).mul(ground);
-    mat.aoNode = deep.pow(look.crownSky);                              // the sky's light only as much as the crown lets through (LOOK)
+    mat.aoNode = deep.pow(daylight.scatter.mul(look.crownSky));                              // the sky's light only as much as the crown lets through, with what the leaves pass on (LOOK, DAYLIGHT)
     // only the leaflets (the black between them cut away), and no card seen edge-on: there, in full sun, it was a thin
     // white streak (cards under |N·V| 0.2 go: such streaks were 1.4 % of the crown's pixels, 0.03 % after)
     if (leaves){ mat.opacityNode = texture(leafMask).r.mul(smoothstep(0.1, 0.3, abs(dot(normalViewGeometry, positionViewDirection)))); mat.alphaTest = 0.5; }
@@ -1376,7 +1392,7 @@ try {
   const seen = saturation(sharpened.rgb.add(sunSeen).mul(vec3(...GRADE.white)), GRADE.saturation);
   // the film contrast (LOOK): brightness spread around middle grey as the film sees it (after the exposure), hues kept
   const seenGrey = luminance(seen).mul(toneMappingExposure).max(1e-6).div(LOOK.pivot);
-  const film = renderOutput(vec4(seen.mul(seenGrey.pow(look.contrast.sub(1))), 1), THREE.AgXToneMapping, THREE.LinearSRGBColorSpace);
+  const film = renderOutput(vec4(seen.mul(seenGrey.pow(look.contrast.sub(1).mul(sunGrade))), 1), THREE.AgXToneMapping, THREE.LinearSRGBColorSpace);
   const pale = smoothstep(0.55, 0.9, luminance(film.rgb)), onTree = sharpened.a.max(0), onSky = sharpened.a.negate().max(0);
   const graded = saturation(film.rgb, float(1).add(treeColour.sub(1).mul(onTree.mul(float(1).sub(pale)))).add(skyColour.sub(1).mul(onSky)));
   const corner = float(1).sub(smoothstep(0.45, 1.1, length(uv().sub(0.5).mul(vec2(1.2, 1)))).mul(0.22));
@@ -1796,7 +1812,7 @@ try {
   };
   renderer.setAnimationLoop(loop);
   const setLook = old => { const v = old ? {...LOOK, ...LOOK_OLD} : LOOK; for (const k in look) look[k].value = v[k]; drawAir(); };
-  window.world = {look, setLook, renderer, grassShade, leafOwn, scene, camera, atmosphere, sun, cascades, pipeline, tree, field, fieldInfo, setSun, windStrength, windDir, parts, hazeDensity, airParts, sunMap, sunCam, sunView, frame, air, airAtlas, drawAir, fieldRT, groundRT, redrawShadows, treeWind, draw, SETTLE, settleKeep, crisp, settle, settled, sharpened, crownParts, treeColour, skyColour, sunSee, sunPeek, setMood, mood, cloudCover, cloudScale, cloudHorizon, cloudThick, cloudMist, cloudFar, cloudGain, cloudTarget, bob, setBob, body, orb, bobLight, setFlare, FLARES, pressRT, knockTree, treeKnock, treeShake, fallen, fallWind, skyTarget, skyScene, drawSky, startTest, SWITCHES, lastRun: () => run,
+  window.world = {look, setLook, renderer, grassShade, leafOwn, daylight, sunGrade, scene, camera, atmosphere, sun, cascades, pipeline, tree, field, fieldInfo, setSun, windStrength, windDir, parts, hazeDensity, airParts, sunMap, sunCam, sunView, frame, air, airAtlas, drawAir, fieldRT, groundRT, redrawShadows, treeWind, draw, SETTLE, settleKeep, crisp, settle, settled, sharpened, crownParts, treeColour, skyColour, sunSee, sunPeek, setMood, mood, cloudCover, cloudScale, cloudHorizon, cloudThick, cloudMist, cloudFar, cloudGain, cloudTarget, bob, setBob, body, orb, bobLight, setFlare, FLARES, pressRT, knockTree, treeKnock, treeShake, fallen, fallWind, skyTarget, skyScene, drawSky, startTest, SWITCHES, lastRun: () => run,
     whole: () => total >= 60 && !skyFrames && airWarm <= 0,   // (drawn whole — its sky done, its haze warm: the app shows it only then)
     pace, paceReset, paceState: () => ({step: paceStep, off: paceOff, trying: !!paceTry, held: paceHeld, gpuLag, pixels: renderer.getPixelRatio(), target: paceTarget}),
     setExposure: e => { renderer.toneMappingExposure = e; }};   // for checking from the console
