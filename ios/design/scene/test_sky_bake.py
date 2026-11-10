@@ -67,4 +67,18 @@ assert np.all(B >= 0)
 assert np.allclose(B.sum(1), 1)
 assert np.allclose(B.mean(0), 1/3, atol=0.02)
 
+# ground share (down=True): the same point looks at the lower hemisphere; a slab above it does not block that,
+# a slab below it does
+above = np.zeros((40, 40, 40), np.float32)
+above[:, :, 30:34] = 100
+below = np.zeros((40, 40, 40), np.float32)
+below[:, :, 2:6] = 100
+P = np.array([(2, 2, 1.0)])
+G_above = sb.sky_visibility(above, ORIGIN, CELL, P, down=True)[0]
+G_below = sb.sky_visibility(below, ORIGIN, CELL, P, down=True)[0]
+print('ground: slab above', G_above, 'slab below', G_below)
+assert G_above > 0.97, G_above
+assert G_below < 0.35, G_below
+assert G_below < G_above, (G_below, G_above)
+
 print('all ok')

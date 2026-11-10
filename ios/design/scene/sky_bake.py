@@ -102,8 +102,9 @@ def trilinear(grid, origin, cell, pts):
     return out
 
 
-def sky_visibility(sigma, origin, cell, points, normals=None, n_dirs=96, offset=1.0):
-    """Share of the sky reaching each point, float32 in [0, 1].
+def sky_visibility(sigma, origin, cell, points, normals=None, n_dirs=96, offset=1.0, down=False):
+    """Share of the sky reaching each point, float32 in [0, 1]. With down=True the same over the lower hemisphere: the
+    share of the ground (the field below) seen through the tree.
 
     Without normals: up-weighted over the hemisphere (weight d_z). With normals (zero row = none): weighted by
     max(0, n·d) for that row, falling back to the up-weighting where the normal sees no sampled direction.
@@ -111,6 +112,8 @@ def sky_visibility(sigma, origin, cell, points, normals=None, n_dirs=96, offset=
     points = np.asarray(points, np.float64)
     M = len(points)
     dirs = hemisphere_dirs(n_dirs)
+    if down:
+        dirs = dirs*np.array([1.0, 1.0, -1.0])
     A_up = np.zeros(M, np.float64)
     W_up = 0.0
     if normals is not None:
@@ -125,14 +128,14 @@ def sky_visibility(sigma, origin, cell, points, normals=None, n_dirs=96, offset=
     for k, d in enumerate(dirs):
         tau = optical_depth(sigma, cell, d)
         T = np.exp(-trilinear(tau, origin, cell, points + d*offset*cell)).astype(np.float64)
-        A_up += T*d[2]
-        W_up += d[2]
+        A_up += T*abs(d[2])
+        W_up += abs(d[2])
         if normals is not None:
             w = np.maximum(0, nn @ d)
             A_n += T*w
             W_n += w
         if (k + 1) % 16 == 0:
-            print(f'  sky: {k + 1}/{n_dirs} directions, {time.time() - t0:.1f} s')
+            print(f'  {"ground" if down else "sky"}: {k + 1}/{n_dirs} directions, {time.time() - t0:.1f} s')
     V = A_up/W_up
     if normals is not None:
         use = has_n & (W_n > 1e-3)

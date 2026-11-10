@@ -649,8 +649,8 @@ try {
     const leafTurn = axis.mul(leafAmount).add(vec3(0, leafAmount.mul(0.45), 0));
     return {at: clusterB.add(turn(pB.sub(clusterB), leafTurn)), trunk, smaller: branchTurn.add(leafTurn)};
   }
-  const swayed = Fn(() => {
-    const col = attribute('color', 'vec4'), p = positionGeometry;
+  const swayed = Fn(([leaf]) => {                                     // (leaf: 1 for the leaves' mesh, 0 for the bark's)
+    const col = vec4(attribute('color', 'vec4').xyz, leaf), p = positionGeometry;   // (the colour's 4th number is the ground's share now)
     const branch = branchOf(attribute('color_1', 'vec4')), cluster = clusterOf(attribute('color_2', 'vec4'));
     const push = pushOf(fieldAt(vec2(...TREE.at)).r).add(treeShake), moved = treeMotion(p, branch, cluster, col, time, push, windHere, treeKnock);
     normalLocal.assign(normalize(turnNormal(turnNormal(normalLocal, moved.trunk), moved.smaller)));
@@ -667,16 +667,17 @@ try {
     const mat = leaves ? translucent(new THREE.MeshSSSNodeMaterial({map, normalMap, roughness: 0.95, side: THREE.DoubleSide}), filtered(map).mul(own))
       : new THREE.MeshStandardNodeMaterial({map, normalMap, roughness: 0.9});
     if (leaves) mat.colorNode = vec4(texture(map).rgb.mul(own), 1);
-    // the gold of the sunlit field bounced up into the crown, less deep inside it (its depth is in the vertex colour)
-    const deep = o.geometry.attributes.color ? attribute('color', 'vec4').x : float(1);
-    mat.emissiveNode = texture(map).rgb.mul(own).mul(groundLight).mul(BOUNCE.field/Math.PI).mul(float(1).sub(normalWorld.y).mul(0.5)).mul(deep);
+    // the gold of the sunlit field bounced up into the crown, as much as the crown below a leaf lets it see the field (the
+    // ground's share, traced as the sky's is: low in the crown a leaf sees the bright field, though little sky)
+    const deep = o.geometry.attributes.color ? attribute('color', 'vec4').x : float(1), ground = o.geometry.attributes.color ? attribute('color', 'vec4').w : float(1);
+    mat.emissiveNode = texture(map).rgb.mul(own).mul(groundLight).mul(BOUNCE.field/Math.PI).mul(float(1).sub(normalWorld.y).mul(0.5)).mul(ground);
     mat.aoNode = deep.pow(look.crownSky);                              // the sky's light only as much as the crown lets through (LOOK)
     // only the leaflets (the black between them cut away), and no card seen edge-on: there, in full sun, it was a thin
     // white streak (cards under |N·V| 0.2 go: such streaks were 1.4 % of the crown's pixels, 0.03 % after)
     if (leaves){ mat.opacityNode = texture(leafMask).r.mul(smoothstep(0.1, 0.3, abs(dot(normalViewGeometry, positionViewDirection)))); mat.alphaTest = 0.5; }
     mat.mrtNode = mrt({distance: vec4(length(positionView), 1, 0, 1)});   // marked, for its own colour after the film (the grade)
     mat.receivedShadowNode = underClouds;                              // (the leaves' own, below, takes it too)
-    if (o.geometry.attributes.color_1 && o.geometry.attributes.color_2) mat.positionNode = swayed();
+    if (o.geometry.attributes.color_1 && o.geometry.attributes.color_2) mat.positionNode = swayed(float(leaves ? 1 : 0));
     const mesh = new THREE.Mesh(o.geometry, mat);
     mesh.castShadow = !shade; mesh.receiveShadow = true; tree.add(mesh);
   });
@@ -684,7 +685,7 @@ try {
     if (!o.isMesh) return;
     const mat = new THREE.MeshBasicNodeMaterial({side: THREE.DoubleSide});
     if (o.name.includes('leaves')){ mat.opacityNode = texture(leafMask).r; mat.alphaTest = 0.5; }   // the sun sees leaflets, not cards: dappled light
-    if (o.geometry.attributes.color_1 && o.geometry.attributes.color_2) mat.positionNode = swayed();
+    if (o.geometry.attributes.color_1 && o.geometry.attributes.color_2) mat.positionNode = swayed(float(o.name.includes('leaves') ? 1 : 0));
     const mesh = new THREE.Mesh(o.geometry, mat);
     mesh.castShadow = true; mesh.receiveShadow = false; mesh.layers.set(1); tree.add(mesh);
   });

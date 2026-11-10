@@ -8,7 +8,7 @@ trunk and branches a little less) — and the result is written Draco-compressed
 data inside), which the page's host serves. Use an output name ending in .gltf for the same delivery format without
 thinning; any other output name without keep writes a plain .glb.
 
-Vertex colour (COLOR_0): r = sky visibility: the share of the sky that reaches the vertex, traced through the tree (sky_bake.py), g = branch bend weight, b = branch phase, a = 1 for leaves.
+Vertex colour (COLOR_0): r = sky visibility: the share of the sky that reaches the vertex, traced through the tree (sky_bake.py), g = branch bend weight, b = branch phase, a = the ground's share: the field below seen through the tree, traced the same way.
 WINDPIVOT holds the branch's attachment and effective length; WINDCLUSTER holds the leaf cluster's branch attachment
 and phase. The page textures each mesh with the tree's own photographed maps; the leaves' colour is turned to autumn by
 scene/autumn_leaves.py.
@@ -274,13 +274,17 @@ for o in parts:
 allnrm = np.concatenate([np.zeros_like(sky_parts[o]['nrm']) if kinds[o] == 'leaves' else sky_parts[o]['nrm']
                          for o in parts])
 V_all = sky_bake.sky_visibility(sigma, lo, SKY_CELL, allco, normals=allnrm, n_dirs=96, offset=1.0)
+G_all = sky_bake.sky_visibility(sigma, lo, SKY_CELL, allco, normals=allnrm, n_dirs=48, offset=1.0, down=True)
 sky_v = {}
+ground_v = {}
 at = 0
 for o in parts:
     m = len(sky_parts[o]['co'])
-    sky_v[o] = V_all[at:at + m]; at += m
+    sky_v[o] = V_all[at:at + m]; ground_v[o] = G_all[at:at + m]; at += m
     p5, p50, p95 = np.percentile(sky_v[o], [5, 50, 95])
     print(f'sky {kinds[o]}: {m} vertices, V p5 {p5:.3f} p50 {p50:.3f} p95 {p95:.3f}')
+    g5, g50, g95 = np.percentile(ground_v[o], [5, 50, 95])
+    print(f'ground {kinds[o]}: {m} vertices, G p5 {g5:.3f} p50 {g50:.3f} p95 {g95:.3f}')
 del sigma
 
 leaf_offset = 0
@@ -304,7 +308,7 @@ for o in parts:
         clusters = np.zeros((len(V), 4), np.float32)
         weights = np.zeros(len(V), np.float32)
         phases = np.zeros(len(V), np.float32)
-    col = np.stack([ao, weights, phases, np.full(len(V), float(leaf))], 1).astype(np.float32)
+    col = np.stack([ao, weights, phases, np.clip(ground_v[o], 0.02, 1)], 1).astype(np.float32)
     for a in list(o.data.color_attributes):
         o.data.color_attributes.remove(a)
     ca = o.data.color_attributes.new(name='Col', type='BYTE_COLOR', domain='POINT')
