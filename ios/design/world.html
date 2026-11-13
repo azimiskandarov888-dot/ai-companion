@@ -226,11 +226,14 @@ const THROUGH = {scale: 0.08, dim: 0.7, least: 0.08, rim: 1, amber: [0.75, 1, 1.
 // the day's light, as the research «Контраст днём и на закате» (2026-11-10) asks: how much sun a leaf passes through to
 // its other side whatever way we look at it (a gold leaf's diffuse transmittance, through the leaf's colour; Frostbite's
 // translucency keeps this "ambient" part, which we had at 0, so by day a leaf with its sunlit side away from us went black);
-// the sky light inside the crown with the light the leaves pass on to each other, per colour (V to the power √(1−σ):
-// a gold leaf scatters most of the red and green it gets, little blue); and how much lighter the bark is than its map
+// the sky light inside the crown with the light the leaves pass on to each other (V to the power √(1−σ), σ ≈ 0.7 for a
+// gold leaf — one power for all colours: three.js keeps a material's occlusion as one number, so a power per colour, as the
+// research has it, came out as its red one for all three; the warmth inside comes from the leaves' own gold); by day,
+// how much of the sun the leaves pass on to each other inside the crown (the sunset keeps THROUGH.least: there the forward
+// glow was tuned to carry it); and how much lighter the bark is than its map (its median 0.038; real bark ~0.1)
 // (the through part only where the sun is not low in front of us: looking into a sunset, the forward glow above already
 // carries all the light through the leaves — it was tuned so — and both together lifted the evening crown by 13 L*)
-const DAYLIGHT = {through: 0.3, scatter: [0.5, 0.63, 0.95], bark: 2.5};
+const DAYLIGHT = {through: 0.3, scatter: 0.55, least: 0.5, bark: 2.5};
 // the dark places a real evening has (research «Реализм света и листвы по играм», 2026-11-09: the frame had no black,
 // its darkest pixel at L* 20): the haze over the first metres as thin as clear air (a tenth), so the air between us and the tree stops
 // veiling its shade (the far haze stays), out to nearTo (m); a film contrast around middle grey, before AgX (three.js's
@@ -589,7 +592,7 @@ try {
 
   // what lets light through — the tree's leaves — glows where the sun is behind it (Frostbite's fast translucency, in
   // three.js's SSS material); how much sun reaches a leaf inside the crown is set with the sun's view of it (crownLight)
-  const daylight = {through: uniform(DAYLIGHT.through), scatter: uniform(new THREE.Vector3(...DAYLIGHT.scatter)), bark: uniform(DAYLIGHT.bark)};   // (DAYLIGHT, live)
+  const daylight = {through: uniform(DAYLIGHT.through), scatter: uniform(DAYLIGHT.scatter), least: uniform(DAYLIGHT.least), bark: uniform(DAYLIGHT.bark)};   // (DAYLIGHT, live)
   const translucent = (m, through) => Object.assign(m, {thicknessColorNode: through, thicknessDistortionNode: float(0.25),
     thicknessAmbientNode: normalView.dot(cameraViewMatrix.mul(vec4(sunDir, 0)).xyz).negate().max(0).mul(daylight.through).mul(float(1).sub(sunGrade)), thicknessAttenuationNode: float(0.9), thicknessPowerNode: float(3), thicknessScaleNode: float(TRY.through ?? THROUGH.scale)});
   // the look's turns (LOOK) as uniforms, so the world can be switched to how it was without a reload (setLook)
@@ -686,8 +689,8 @@ try {
     // the gold of the sunlit field bounced up into the crown, as much as the crown below a leaf lets it see the field (the
     // ground's share, traced as the sky's is: low in the crown a leaf sees the bright field, though little sky)
     const deep = o.geometry.attributes.color ? attribute('color', 'vec4').x : float(1), ground = o.geometry.attributes.color ? attribute('color', 'vec4').w : float(1);
-    mat.emissiveNode = texture(map).rgb.mul(own).mul(groundLight).mul(BOUNCE.field/Math.PI).mul(float(1).sub(normalWorld.y).mul(0.5)).mul(ground);
-    mat.aoNode = deep.pow(daylight.scatter.mul(look.crownSky));                              // the sky's light only as much as the crown lets through, with what the leaves pass on (LOOK, DAYLIGHT)
+    mat.emissiveNode = texture(map).rgb.mul(own).mul(leaves ? float(1) : daylight.bark).mul(groundLight).mul(BOUNCE.field/Math.PI).mul(float(1).sub(normalWorld.y).mul(0.5)).mul(ground);
+    mat.aoNode = deep.pow(daylight.scatter.mul(look.crownSky));       // the sky's light only as much as the crown lets through, with what the leaves pass on (LOOK, DAYLIGHT)
     // only the leaflets (the black between them cut away), and no card seen edge-on: there, in full sun, it was a thin
     // white streak (cards under |N·V| 0.2 go: such streaks were 1.4 % of the crown's pixels, 0.03 % after)
     if (leaves){ mat.opacityNode = texture(leafMask).r.mul(smoothstep(0.1, 0.3, abs(dot(normalViewGeometry, positionViewDirection)))); mat.alphaTest = 0.5; }
@@ -750,7 +753,8 @@ try {
     const px = screenCoordinate.xy.add(fract(time.mul(13.7)).mul(97)), turnA = fract(fract(dot(px, vec2(0.06711056, 0.00583715))).mul(52.9829189)).mul(6.2832);
     const ca = cos(turnA), sa = sin(turnA), turned = (x, y) => vec2(ca.mul(x).sub(sa.mul(y)), sa.mul(x).add(ca.mul(y)));
     const T = left(vec2(0, 0)).add(left(turned(r, r))).add(left(turned(-r, r))).add(left(turned(r, -r))).add(left(turned(-r, -r))).mul(0.2);
-    return vec2(crownParts.least.add(T.mul(float(1).sub(crownParts.least))), T.pow(8).mul(crownParts.rim).add(1));   // what gets through; the glow
+    const least = mix(daylight.least, crownParts.least, sunGrade);   // (by day the leaves pass on more of the sun: DAYLIGHT)
+    return vec2(least.add(T.mul(float(1).sub(least))), T.pow(8).mul(crownParts.rim).add(1));   // what gets through; the glow
   })();
   const crownLit = shade => mix(vec3(crownLight.x).pow(crownParts.amber), vec3(1), shade).mul(crownLight.y).mul(cloudSun);   // (for a leaf's shade: 0…1)
   tree.traverse(o => {
